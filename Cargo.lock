@@ -3056,7 +3056,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "luiz-shell"
+name = "lumo-shell"
 version = "0.1.0"
 dependencies = [
  "gpui",

@@ -412,19 +412,28 @@ fn render_stagger(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
 }
 
 // ============================================================
-// Demo 4 -- Hover lift
+// Demo 4 -- Hover lift (state-driven via on_hover listener)
 // ============================================================
-fn render_hover_lift(_g: &Gallery, _cx: &mut Context<Gallery>) -> gpui::AnyElement {
+fn render_hover_lift(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
+    let hovered = g.tilt.hovered; // reuso state — separar depois
+    let _ = g;
+
     div()
         .id("lift-card")
         .w(px(280.)).h(px(160.))
-        .rounded_lg().bg(rgb(C_PANEL))
-        .border_1().border_color(rgba(C_BORDER))
+        .rounded_lg()
+        .bg(if hovered { rgb(C_PANEL_HI) } else { rgb(C_PANEL) })
+        .border_1()
+        .border_color(if hovered { rgb(C_ACCENT) } else { rgba(C_BORDER) })
         .flex().flex_col().items_center().justify_center().gap_2()
-        .cursor_pointer()
-        .hover(|s| s.border_color(rgb(C_ACCENT)).bg(rgb(C_PANEL_HI)).shadow_lg())
+        .mt(if hovered { px(-6.) } else { px(0.) })
+        .shadow_lg()
         .child(div().text_lg().text_color(rgb(C_TEXT)).child("Hover aqui"))
         .child(div().text_xs().text_color(rgb(C_MUTED)).child("Border accent + elevacao"))
+        .on_hover(cx.listener(|t, is_hovered: &bool, _, cx| {
+            t.tilt.hovered = *is_hovered;
+            cx.notify();
+        }))
         .into_any_element()
 }
 
@@ -492,6 +501,7 @@ fn render_modal_trigger(_g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEle
                 .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
                     t.modal.open = true;
                     t.modal.tick = t.modal.tick.wrapping_add(1);
+                    cx.stop_propagation();
                     cx.notify();
                 })),
         )
@@ -513,6 +523,7 @@ fn render_sheet_trigger(_g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEle
                 .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
                     t.sheet.open = true;
                     t.sheet.tick = t.sheet.tick.wrapping_add(1);
+                    cx.stop_propagation();
                     cx.notify();
                 })),
         )
@@ -704,57 +715,72 @@ fn render_skeleton(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
 }
 
 // ============================================================
-// Demo 11 -- Bounce list (rubber band ao chegar no fim)
+// Demo 11 -- Bounce list (scroll real + bounce wheel ao tentar passar do fim)
 // ============================================================
 fn render_bounce_list(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
     let tick_id: SharedString = format!("bounce-{}", g.bounce.tick).into();
 
     let mut list = div()
+        .id("bounce-list")
         .flex().flex_col().gap_2()
-        .h(px(180.))
+        .h(px(220.))
         .w(px(280.))
         .p_2()
         .rounded_md()
         .border_1().border_color(rgba(C_BORDER))
         .bg(rgb(C_PANEL))
-        .overflow_hidden();
+        .overflow_y_scroll();
 
-    for i in 1..=10 {
+    for i in 1..=20 {
         let row = div()
             .px_3().py_2().rounded_sm()
             .bg(rgb(C_PANEL_HI))
             .text_xs().text_color(rgb(C_TEXT))
+            .flex_shrink_0()
             .child(format!("Item {}", i));
         list = list.child(row);
     }
 
-    // Bounce indicator (translate Y simulando overscroll)
-    let animated = if g.bounce.bounced {
-        list.with_animation(
-            ElementId::Name(tick_id),
-            Animation::new(DUR_BOUNCE).with_easing(ease_in_out),
-            |elem, delta| {
-                let t = (delta * std::f32::consts::PI).sin();
-                let dy = t * -12.0;
-                elem.mt(px(dy))
-            },
-        ).into_any_element()
-    } else {
-        list.into_any_element()
-    };
+    let bounced = g.bounce.bounced;
+    let dy: f32 = if bounced { -16.0 } else { 0.0 };
 
-    let trigger = div()
-        .id("bounce-fire")
-        .px_4().py_2().mt_4().rounded_md()
-        .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_xs()
-        .cursor_pointer().child("Simular overscroll")
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.bounce.bounced = !t.bounce.bounced;
-            t.bounce.tick = t.bounce.tick.wrapping_add(1);
-            cx.notify();
+    let list_with_anim = list.with_animation(
+        ElementId::Name(tick_id),
+        Animation::new(DUR_BOUNCE).with_easing(ease_in_out),
+        move |elem, delta| {
+            let progress = delta.clamp(0.0, 1.0);
+            let current = dy * (1.0 - progress);
+            elem.mt(px(current))
+        },
+    );
+
+    // Wrapper externo captura wheel — trigger bounce ao tentar overscroll
+    let area = div()
+        .id("bounce-area")
+        .flex().flex_col().items_center().gap_3()
+        .child(list_with_anim)
+        .child(div().text_xs().text_color(rgb(C_MUTED)).child("Scroll real + bounce no overscroll"))
+        .on_scroll_wheel(cx.listener(|t, ev: &gpui::ScrollWheelEvent, _, cx| {
+            // delta Y > 0 = scroll down (mouse wheel down)
+            let dy = ev.delta.pixel_delta(px(20.0)).y;
+            // Dispara bounce em wheel down forte. Heuristica: simula overscroll.
+            if dy < px(-25.0) && !t.bounce.bounced {
+                t.bounce.bounced = true;
+                t.bounce.tick = t.bounce.tick.wrapping_add(1);
+                cx.notify();
+                cx.spawn(async move |this, cx| {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(500))
+                        .await;
+                    this.update(cx, |g, cx| {
+                        g.bounce.bounced = false;
+                        cx.notify();
+                    }).ok();
+                }).detach();
+            }
         }));
 
-    div().flex().flex_col().items_center().gap_2().child(animated).child(trigger).into_any_element()
+    area.into_any_element()
 }
 
 // ============================================================
@@ -845,13 +871,19 @@ fn render_carousel(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
     let card_w = 200.0;
     let cards: &[&str] = &["Card 1", "Card 2", "Card 3", "Card 4", "Card 5"];
 
-    let mut strip = div().flex().flex_row().gap_3();
+    let mut strip = div()
+        .id("car-strip")
+        .flex().flex_row().gap_3()
+        .w(px(420.))
+        .py_2().px_2()
+        .overflow_x_scroll();
     for (i, label) in cards.iter().enumerate() {
         let active = i == idx;
         let item_id: SharedString = format!("car-item-{}", i).into();
         let card = div()
             .id(ElementId::Name(item_id))
             .w(px(card_w)).h(px(120.))
+            .flex_shrink_0()
             .rounded_lg()
             .bg(if active { rgb(C_ACCENT) } else { rgb(C_PANEL) })
             .border_1()
@@ -899,9 +931,26 @@ fn render_carousel(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
         .w(px(cards.len() as f32 * (pill_w + dot_gap) - dot_gap))
         .child(pill);
 
-    div().flex().flex_col().items_center().gap_4()
+    let max_idx = cards.len() - 1;
+    div()
+        .id("carousel-area")
+        .flex().flex_col().items_center().gap_4()
         .child(strip)
         .child(dots)
+        .on_scroll_wheel(cx.listener(move |t, ev: &gpui::ScrollWheelEvent, _, cx| {
+            let dx = ev.delta.pixel_delta(px(20.0)).x;
+            if dx < px(-30.0) && t.carousel.idx < max_idx {
+                t.carousel.prev_idx = t.carousel.idx;
+                t.carousel.idx += 1;
+                t.carousel.tick = t.carousel.tick.wrapping_add(1);
+                cx.notify();
+            } else if dx > px(30.0) && t.carousel.idx > 0 {
+                t.carousel.prev_idx = t.carousel.idx;
+                t.carousel.idx -= 1;
+                t.carousel.tick = t.carousel.tick.wrapping_add(1);
+                cx.notify();
+            }
+        }))
         .into_any_element()
 }
 
@@ -1127,6 +1176,9 @@ fn render_long_press(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement
                     if g.long_press.holding {
                         g.long_press.completed = true;
                         g.long_press.holding = false;
+                        // Abre context menu ao completar hold
+                        g.ctx_menu.open = true;
+                        g.ctx_menu.tick = g.ctx_menu.tick.wrapping_add(1);
                         cx.notify();
                     }
                 }).ok();
@@ -1149,11 +1201,29 @@ fn render_long_press(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement
             t.long_press.holding = false;
             t.long_press.completed = false;
             t.long_press.tick = t.long_press.tick.wrapping_add(1);
+            t.ctx_menu.open = false;
             cx.notify();
         }));
 
     let mut col = div().flex().flex_col().items_center().gap_2().child(btn);
     if let Some(p) = progress { col = col.child(p); }
+
+    if completed && g.ctx_menu.open {
+        let menu = div()
+            .mt_4()
+            .w(px(220.))
+            .rounded_md()
+            .bg(rgb(C_PANEL_HI))
+            .border_1().border_color(rgba(C_BORDER))
+            .shadow_lg()
+            .flex().flex_col()
+            .child(menu_item("Acao 1", cx))
+            .child(menu_item("Acao 2", cx))
+            .child(menu_divider())
+            .child(menu_item_danger("Cancelar", cx));
+        col = col.child(menu);
+    }
+
     col = col.child(reset);
     col.into_any_element()
 }
@@ -1263,11 +1333,13 @@ fn render_modal_overlay(g: &Gallery, cx: &mut Context<Gallery>) -> Option<gpui::
                 .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_xs()
                 .cursor_pointer().child("Fechar")
                 .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-                    t.modal.open = false; cx.notify();
+                    t.modal.open = false;
+                    cx.stop_propagation();
+                    cx.notify();
                 })),
         )
-        // P0 #2 — stop propagation: clique no card NAO fecha modal
-        .on_mouse_down(MouseButton::Left, |_: &MouseDownEvent, _, _| {})
+        // P0 #2 — stop propagation real: clique no card NAO fecha modal
+        .on_mouse_down(MouseButton::Left, |_: &MouseDownEvent, _, cx| { cx.stop_propagation(); })
         .with_animation(
             ElementId::Name(tick_id),
             Animation::new(DUR_MODAL).with_easing(ease_in_out),
@@ -1294,16 +1366,19 @@ fn render_sheet_overlay(g: &Gallery, cx: &mut Context<Gallery>) -> Option<gpui::
 
     let card = div()
         .id("sheet-card")
-        .absolute().bottom_0().left_0().w_full()
-        .px_6().pt_4().pb_8()
+        .absolute().bottom_0().left_0().right_0()
+        .h(px(220.))
+        .px_6().py_5()
         .bg(rgb(C_PANEL_HI))
         .border_t_1().border_color(rgba(C_BORDER))
-        .flex().flex_col().gap_3()
-        .child(div().w(px(40.)).h(px(4.)).rounded_full().bg(rgb(C_MUTED)).opacity(0.5))
+        .flex().flex_col().justify_start().gap_3()
+        .child(
+            div().flex().w_full().justify_center()
+                .child(div().w(px(40.)).h(px(4.)).rounded_full().bg(rgb(C_MUTED)).opacity(0.5))
+        )
         .child(div().text_lg().text_color(rgb(C_TEXT)).child("Bottom sheet"))
         .child(div().text_xs().text_color(rgb(C_MUTED)).child("Esc ou clique fora pra fechar"))
-        // P0 #2 — stop prop
-        .on_mouse_down(MouseButton::Left, |_: &MouseDownEvent, _, _| {})
+        .on_mouse_down(MouseButton::Left, |_: &MouseDownEvent, _, cx| { cx.stop_propagation(); })
         .with_animation(
             ElementId::Name(tick_id),
             Animation::new(DUR_BOUNCE).with_easing(ease_in_out),
@@ -1315,7 +1390,6 @@ fn render_sheet_overlay(g: &Gallery, cx: &mut Context<Gallery>) -> Option<gpui::
             .id("sheet-backdrop")
             .absolute().top_0().left_0().w_full().h_full()
             .bg(rgba(C_BACKDROP_SOFT))
-            .relative()
             .child(card)
             .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
                 t.sheet.open = false; cx.notify();
