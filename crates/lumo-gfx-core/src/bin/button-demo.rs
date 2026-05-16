@@ -1,22 +1,19 @@
-//! quad-shadow: demo da Layer 4.1.6 (`lumo-gfx-core`).
+//! button-demo: Layer 4.1.8 — primeiro widget Lumo (Button).
 //!
-//! **Layer 4.1.8 update**: fundo trocado de INK_DEEP -> PEARL pra dar
-//! contraste com sombras pretas. Em fundo escuro a sombra preta sumia
-//! (preto sobre preto). Estilo Apple Big Sur+ cards flutuantes.
+//! 3 botoes empilhados verticalmente sobre fundo pearl:
+//!   - primary "Pressione" (bg emerald-600, label pearl)
+//!   - ghost   "Cancelar"  (border emerald-500, bg transparente, label emerald)
+//!   - danger  "Apagar"    (bg danger, label pearl, shadow vermelho)
 //!
-//! 4 cards 200x140 num grid 2x2, gap 32, canvas 800x600:
-//!
-//!   [1] emerald-600   shadow black 0.15  offset (0,4)  radius 12  // botao padrao
-//!   [2] panel-hi      shadow black 0.20  offset (0,8)  radius 20  // card flutuante
-//!   [3] pearl bg      border emerald-500 + shadow black 0.10      // outlined
-//!   [4] emerald-500   shadow accent 0.30  offset (0,6) radius 16  // colored shadow
+//! Cada botao usa `widget::Button` que compoe quad + text. Renderer
+//! orquestra: QuadRenderer draw -> TextRenderer flush (LoadOp::Load) no
+//! mesmo frame.
 
 use std::sync::Arc;
 use std::time::Instant;
 
 use lumo_gfx_core::{
-    color, px_center_to_ndc, px_offset_to_ndc, px_size_to_ndc, px_to_ndc_radius,
-    GlobalUniforms, QuadInstance, QuadRenderer, PEARL_CLEAR,
+    text::TextRenderer, widget::Button, GlobalUniforms, QuadInstance, QuadRenderer, PEARL_CLEAR,
 };
 use winit::{
     application::ApplicationHandler,
@@ -26,85 +23,24 @@ use winit::{
     window::{Window, WindowId},
 };
 
-const CANVAS_W: f32 = 800.0;
-const CANVAS_H: f32 = 600.0;
-const VIEWPORT: [f32; 2] = [CANVAS_W, CANVAS_H];
-
-fn build_scene() -> Vec<QuadInstance> {
-    // Grid 2x2 com gap 32px:
-    //   cards 200x140
-    //   col_left  cx = 232, col_right cx = 568
-    //   row_top   cy = 230, row_bot   cy = 370
-    let card_size = px_size_to_ndc(200.0, 140.0, VIEWPORT);
-    let full_size = [card_size[0] * 2.0, card_size[1] * 2.0];
-    let r = px_to_ndc_radius(14.0, CANVAS_H);
-
-    // Helper local pra reduzir verbosity nas 4 instancias.
-    let center = |cx: f32, cy: f32| px_center_to_ndc(cx, cy, VIEWPORT);
-    let off = |dx: f32, dy: f32| px_offset_to_ndc(dx, dy, VIEWPORT);
-    let rpx = |px: f32| px_to_ndc_radius(px, CANVAS_H);
-
-    vec![
-        // [1] emerald-600 button-like + shadow black leve.
-        QuadInstance::new(
-            center(232.0, 230.0),
-            full_size,
-            color::EMERALD_600,
-            color::TRANSPARENT,
-            0.0,
-            r,
-        )
-        .with_shadow([0.0, 0.0, 0.0, 0.15], off(0.0, 4.0), rpx(12.0)),
-
-        // [2] panel-hi card flutuante + shadow forte.
-        QuadInstance::new(
-            center(568.0, 230.0),
-            full_size,
-            color::PANEL_HI,
-            color::TRANSPARENT,
-            0.0,
-            r,
-        )
-        .with_shadow([0.0, 0.0, 0.0, 0.20], off(0.0, 8.0), rpx(20.0)),
-
-        // [3] pearl bg + border emerald-500 + shadow black leve (outlined).
-        QuadInstance::new(
-            center(232.0, 370.0),
-            full_size,
-            color::PEARL,
-            color::EMERALD_500,
-            rpx(1.5),
-            r,
-        )
-        .with_shadow([0.0, 0.0, 0.0, 0.10], off(0.0, 4.0), rpx(10.0)),
-
-        // [4] emerald-500 + shadow accent (colored).
-        QuadInstance::new(
-            center(568.0, 370.0),
-            full_size,
-            color::EMERALD_500,
-            color::TRANSPARENT,
-            0.0,
-            r,
-        )
-        .with_shadow(color::SHADOW_ACCENT, off(0.0, 6.0), rpx(16.0)),
-    ]
-}
+const CANVAS_W: f32 = 480.0;
+const CANVAS_H: f32 = 360.0;
 
 // ----------------------------------------------------------------------------
 // Renderer leve dedicado ao demo.
 // ----------------------------------------------------------------------------
-struct ShadowRenderer {
+struct ButtonDemo {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     quads: QuadRenderer,
+    text: TextRenderer,
     start: Instant,
     _window: Arc<Window>,
 }
 
-impl ShadowRenderer {
+impl ButtonDemo {
     async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
         let size = PhysicalSize {
@@ -133,7 +69,7 @@ impl ShadowRenderer {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    label: Some("quad-shadow::device"),
+                    label: Some("button-demo::device"),
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults()
                         .using_resolution(adapter.limits()),
@@ -164,9 +100,8 @@ impl ShadowRenderer {
         };
         surface.configure(&device, &config);
 
-        let mut quads = QuadRenderer::new(&device, surface_format, 16);
-        let scene = build_scene();
-        quads.update_instances(&device, &queue, &scene);
+        let quads = QuadRenderer::new(&device, surface_format, 16);
+        let text = TextRenderer::new(&device, &queue, surface_format);
 
         Self {
             surface,
@@ -174,6 +109,7 @@ impl ShadowRenderer {
             queue,
             config,
             quads,
+            text,
             start: Instant::now(),
             _window: window,
         }
@@ -189,14 +125,49 @@ impl ShadowRenderer {
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        // Atualiza globals com viewport size atual + tempo decorrido.
-        let globals = GlobalUniforms {
-            viewport_size: [self.config.width as f32, self.config.height as f32],
-            time: self.start.elapsed().as_secs_f32(),
-            _pad: 0.0,
-        };
-        self.quads.update_globals(&self.queue, globals);
+        let viewport = [self.config.width as f32, self.config.height as f32];
 
+        // --- monta a UI ---------------------------------------------------------
+        let primary = Button::primary().with_label("Pressione");
+        let ghost = Button::ghost().with_label("Cancelar");
+        let danger = Button::danger().with_label("Apagar");
+
+        // Layout: 3 botoes empilhados, centro horizontal, gap 16px.
+        let buttons = [&primary, &ghost, &danger];
+        let measured: Vec<[f32; 2]> =
+            buttons.iter().map(|b| b.measure(&mut self.text)).collect();
+        let total_h: f32 = measured.iter().map(|s| s[1]).sum::<f32>() + 16.0 * 2.0;
+        let start_y = (viewport[1] - total_h) * 0.5;
+
+        let mut quad_instances: Vec<QuadInstance> = Vec::with_capacity(3);
+        let mut y = start_y;
+        for (i, b) in buttons.iter().enumerate() {
+            let w = measured[i][0];
+            let x = (viewport[0] - w) * 0.5;
+            b.queue(
+                &mut quad_instances,
+                &mut self.text,
+                &self.device,
+                &self.queue,
+                [x, y],
+                viewport,
+            );
+            y += measured[i][1] + 16.0;
+        }
+
+        // --- atualiza GPU buffers ----------------------------------------------
+        self.quads.update_globals(
+            &self.queue,
+            GlobalUniforms {
+                viewport_size: viewport,
+                time: self.start.elapsed().as_secs_f32(),
+                _pad: 0.0,
+            },
+        );
+        self.quads
+            .update_instances(&self.device, &self.queue, &quad_instances);
+
+        // --- draw --------------------------------------------------------------
         let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture
@@ -204,12 +175,13 @@ impl ShadowRenderer {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("quad-shadow::encoder"),
+                label: Some("button-demo::encoder"),
             });
 
+        // Pass 1: clear pearl + draw quads.
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("quad-shadow::main-pass"),
+                label: Some("button-demo::quads-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
@@ -222,9 +194,12 @@ impl ShadowRenderer {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-
             self.quads.draw(&mut pass);
         }
+
+        // Pass 2: text flush por cima (LoadOp::Load preserva os quads).
+        self.text
+            .flush(&self.device, &self.queue, &mut encoder, &view, viewport);
 
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
@@ -237,7 +212,7 @@ impl ShadowRenderer {
 // ----------------------------------------------------------------------------
 struct App {
     window: Option<Arc<Window>>,
-    renderer: Option<ShadowRenderer>,
+    renderer: Option<ButtonDemo>,
 }
 
 impl ApplicationHandler for App {
@@ -246,14 +221,14 @@ impl ApplicationHandler for App {
             return;
         }
         let attrs = Window::default_attributes()
-            .with_title("lumo-gfx-core quad-shadow")
+            .with_title("lumo-gfx-core button-demo")
             .with_inner_size(LogicalSize::new(CANVAS_W, CANVAS_H));
         let window = Arc::new(
             event_loop
                 .create_window(attrs)
                 .expect("create_window"),
         );
-        let renderer = pollster::block_on(ShadowRenderer::new(window.clone()));
+        let renderer = pollster::block_on(ButtonDemo::new(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
     }

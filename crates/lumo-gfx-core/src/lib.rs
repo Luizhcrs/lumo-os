@@ -1,6 +1,6 @@
 //! lumo-gfx-core
 //!
-//! Framework grafico do Lumo OS (Layer 4.1, 4.1.5 e 4.1.6).
+//! Framework grafico do Lumo OS (Layer 4.1, 4.1.5, 4.1.6, 4.1.7 e 4.1.8).
 //! Backend: wgpu (cross-platform sobre Vulkan/Metal/DX12).
 //! Em Layer 4.2 trocamos wgpu por Vulkan raw via `ash`.
 //!
@@ -8,6 +8,21 @@
 //! - 4.1   (this lib.rs): Renderer + Vertex + triangle primitive
 //! - 4.1.5 (this lib.rs): QuadRenderer com SDF rounded corners + border instanced
 //! - 4.1.6 (this lib.rs): viewport uniform + drop shadow + AA pixel-precise via `fwidth`
+//! - 4.1.7 (text.rs):     cosmic-text + atlas R8 + glyph instanced
+//! - 4.1.8 (widget.rs):   Button widget primitive (quad + text composto)
+//!
+//! # Color space gotcha (Layer 4.1.8)
+//!
+//! O surface do wgpu usa `Bgra8UnormSrgb` (sRGB). Isso significa que o
+//! hardware aplica `linear -> sRGB` automaticamente ao escrever o fragment
+//! color no framebuffer. Portanto **as cores enviadas ao shader devem estar
+//! em linear space**, nao em sRGB. Antes do A5.5 estavamos passando cores
+//! sRGB (`0xRR / 255.0`), o que causava double-gamma e tornava o texto
+//! emerald-600 quase branco.
+//!
+//! As constantes em `color::*` ja saem **linearizadas** (pre-computadas
+//! offline). Para casos de runtime (e.g. parsing de hex do usuario), use
+//! `color::srgb_to_linear`.
 
 use bytemuck::{Pod, Zeroable};
 use std::sync::Arc;
@@ -18,51 +33,154 @@ use winit::{dpi::PhysicalSize, window::Window};
 // poluir o lib.rs principal; a API publica esta em `text::*`.
 pub mod text;
 
+// Widgets (Layer 4.1.8). Primeiro widget: Button. Composto por quad +
+// label de texto. API publica em `widget::*`.
+pub mod widget;
+
 // ---------------------------------------------------------------------------
 // Color tokens (single source of truth, Layer 4.1.5 + 4.1.6 expansion)
 // ---------------------------------------------------------------------------
 
-/// Tokens de cor do Lumo OS. Os valores estao em RGBA `[f32; 4]` ja prontos
-/// para upload em buffers GPU. Hex de referencia entre parenteses; conversao
-/// hex / 255 (sRGB nominal), o surface format sRGB do wgpu faz a curva final.
+/// Tokens de cor do Lumo OS.
+///
+/// **Importante (Layer 4.1.8)**: os valores em `[f32; 4]` aqui ja estao em
+/// **linear space**, prontos para serem escritos por um shader cuja saida
+/// alimenta um surface sRGB (que aplica a curva inversa no hardware).
+///
+/// As versoes `_SRGB` preservam os valores nominais do design system
+/// (`hex / 255.0`) para debug / referencia / parsing humano. Use
+/// `srgb_to_linear` quando precisar converter um valor sRGB runtime.
 pub mod color {
-    /// `#0a0a0c` ink deep (background do shell)
-    pub const INK_DEEP: [f32; 4] = [0.039_215_688, 0.039_215_688, 0.047_058_82, 1.0];
-    /// `#1a1a21` panel-hi (cards, surfaces elevadas)
-    pub const PANEL_HI: [f32; 4] = [0.101_960_786, 0.101_960_786, 0.129_411_77, 1.0];
-    /// `#131318` panel base (surface neutra)
-    pub const PANEL: [f32; 4] = [0.074_509_805, 0.074_509_805, 0.094_117_65, 1.0];
-    /// `#059669` emerald-600 (accent primario)
-    pub const EMERALD_600: [f32; 4] = [0.019_607_844, 0.588_235_3, 0.411_764_7, 1.0];
-    /// `#10b981` emerald-500 (accent secundario / hover)
-    pub const EMERALD_500: [f32; 4] = [0.062_745_1, 0.725_490_2, 0.505_882_36, 1.0];
-    /// `#f5f5f7` quasi-white (texto, borders fortes)
-    pub const PEARL: [f32; 4] = [0.960_784_3, 0.960_784_3, 0.968_627_5, 1.0];
-    /// Transparente puro
+    // -- sRGB references (design system originals; debug / reference) -----------
+    /// `#0a0a0c` ink deep — sRGB normalizado.
+    pub const INK_DEEP_SRGB:    [f32; 4] = [0.039_215_688, 0.039_215_688, 0.047_058_82, 1.0];
+    /// `#1a1a21` panel-hi — sRGB normalizado.
+    pub const PANEL_HI_SRGB:    [f32; 4] = [0.101_960_786, 0.101_960_786, 0.129_411_77, 1.0];
+    /// `#131318` panel — sRGB normalizado.
+    pub const PANEL_SRGB:       [f32; 4] = [0.074_509_805, 0.074_509_805, 0.094_117_65, 1.0];
+    /// `#059669` emerald-600 — sRGB normalizado.
+    pub const EMERALD_600_SRGB: [f32; 4] = [0.019_607_844, 0.588_235_3, 0.411_764_7, 1.0];
+    /// `#10b981` emerald-500 — sRGB normalizado.
+    pub const EMERALD_500_SRGB: [f32; 4] = [0.062_745_1, 0.725_490_2, 0.505_882_36, 1.0];
+    /// `#f5f5f7` pearl — sRGB normalizado.
+    pub const PEARL_SRGB:       [f32; 4] = [0.960_784_3, 0.960_784_3, 0.968_627_5, 1.0];
+    /// `#9596a0` muted — sRGB normalizado.
+    pub const MUTED_SRGB:       [f32; 4] = [0.585_0, 0.586_0, 0.627_0, 1.0];
+    /// `#f87171` danger (red-400) — sRGB normalizado.
+    pub const DANGER_SRGB:      [f32; 4] = [0.972_549, 0.443_137, 0.443_137, 1.0];
+
+    // -- Linear (GPU-ready) -----------------------------------------------------
+    // Pre-computado offline via `srgb_to_linear(c)` para evitar runtime cost
+    // por frame e manter `const`. Se algum hex mudar, recalcular e atualizar.
+
+    /// `#0a0a0c` ink deep (background do shell) — linear.
+    pub const INK_DEEP:    [f32; 4] = [0.003_035_3, 0.003_035_3, 0.003_676_5, 1.0];
+    /// `#1a1a21` panel-hi (cards, surfaces elevadas) — linear.
+    pub const PANEL_HI:    [f32; 4] = [0.010_329_8, 0.010_329_8, 0.015_208_5, 1.0];
+    /// `#131318` panel base (surface neutra) — linear.
+    pub const PANEL:       [f32; 4] = [0.006_512_1, 0.006_512_1, 0.009_134_1, 1.0];
+    /// `#059669` emerald-600 (accent primario) — linear.
+    pub const EMERALD_600: [f32; 4] = [0.001_517_6, 0.304_987_3, 0.141_263_3, 1.0];
+    /// `#10b981` emerald-500 (accent secundario / hover) — linear.
+    pub const EMERALD_500: [f32; 4] = [0.005_181_5, 0.485_149_9, 0.219_526_2, 1.0];
+    /// `#f5f5f7` quasi-white (texto, borders fortes) — linear.
+    pub const PEARL:       [f32; 4] = [0.913_098_6, 0.913_098_6, 0.930_111_0, 1.0];
+    /// `#9596a0` muted (text de baixa enfase) — linear.
+    pub const MUTED:       [f32; 4] = [0.301_318_7, 0.302_449_8, 0.350_975_3, 1.0];
+    /// `#f87171` danger / red-400 — linear.
+    pub const DANGER:      [f32; 4] = [0.938_685_7, 0.165_132_2, 0.165_132_2, 1.0];
+
+    /// Transparente puro.
     pub const TRANSPARENT: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
-    /// `#9596a0` muted (text de baixa enfase)
-    pub const MUTED: [f32; 4] = [0.585, 0.586, 0.627, 1.0];
 
     // -- shadow tokens (Layer 4.1.6) ------------------------------------------
-    /// Sombra preta neutra (drop shadow padrao de cards).
+    /// Sombra preta neutra (drop shadow padrao de cards). RGB linear (0,0,0)
+    /// dispensa conversao; alpha controla intensidade.
     pub const SHADOW_BLACK: [f32; 4] = [0.0, 0.0, 0.0, 0.4];
-    /// Sombra accent translucida (cards emerald, glow controlado).
-    pub const SHADOW_ACCENT: [f32; 4] = [0.0196, 0.5882, 0.4118, 0.3];
+    /// Sombra accent translucida (cards emerald, glow controlado) — RGB linear.
+    pub const SHADOW_ACCENT: [f32; 4] = [0.001_517_0, 0.304_947_2, 0.141_288_9, 0.3];
+    /// Sombra danger leve (botoes destrutivos) — RGB linear.
+    pub const SHADOW_DANGER: [f32; 4] = [0.938_685_7, 0.165_132_2, 0.165_132_2, 0.25];
+
+    // -- conversion helpers ---------------------------------------------------
+    /// Converte 1 canal sRGB normalizado (0..1) para linear (0..1).
+    /// Curva oficial IEC 61966-2-1. Usar em runtime quando carregar cor
+    /// de usuario (hex picker, theme override, etc.).
+    pub fn srgb_to_linear_channel(c: f32) -> f32 {
+        if c <= 0.040_45 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    /// Converte uma cor sRGB `[f32; 4]` para linear (alpha passa intacto).
+    /// As constantes acima ja sao o resultado de `srgb_to_linear(*_SRGB)`.
+    pub fn srgb_to_linear(s: [f32; 4]) -> [f32; 4] {
+        [
+            srgb_to_linear_channel(s[0]),
+            srgb_to_linear_channel(s[1]),
+            srgb_to_linear_channel(s[2]),
+            s[3],
+        ]
+    }
 }
 
-/// Clear color do compositor (INK_DEEP em escala wgpu::Color).
-/// Mantemos `wgpu::Color` separado de `color::INK_DEEP` porque o clear value
-/// do attachment passa antes da curva sRGB do surface; estes numeros estao
-/// pre-linearizados para combinar com o `color::INK_DEEP` no shader.
+/// Clear color do compositor (INK_DEEP em escala wgpu::Color, linear).
+/// `LoadOp::Clear` pula a curva sRGB do surface (o clear vai direto pro
+/// framebuffer sRGB), entao precisamos passar linear igual ao que o shader
+/// passa em `color::INK_DEEP`.
 pub const INK_DEEP: wgpu::Color = wgpu::Color {
-    r: 0.003_677,
-    g: 0.003_677,
-    b: 0.004_777,
+    r: 0.003_035_3,
+    g: 0.003_035_3,
+    b: 0.003_676_5,
     a: 1.0,
 };
 
-/// Compat shim para Layer 4.1 (callers antigos importam de raiz).
-pub const EMERALD_600: [f32; 3] = [0.019_607_844, 0.588_235_3, 0.411_764_7];
+/// Clear color pearl (`#f5f5f7`) em linear — usado em demos de fundo claro
+/// como `quad-shadow` e `button-demo`.
+pub const PEARL_CLEAR: wgpu::Color = wgpu::Color {
+    r: 0.913_098_6,
+    g: 0.913_098_6,
+    b: 0.930_111_0,
+    a: 1.0,
+};
+
+/// Compat shim para Layer 4.1 (callers antigos importam de raiz). Linear.
+pub const EMERALD_600: [f32; 3] = [0.001_517_6, 0.304_987_3, 0.141_263_3];
+
+// ---------------------------------------------------------------------------
+// Pixel <-> NDC helpers (Layer 4.1.8)
+// ---------------------------------------------------------------------------
+//
+// O QuadRenderer trabalha em NDC `[-1..+1]`. Widgets / demos pensam em
+// pixels top-left. Estas funcoes encapsulam a conversao para nao ser
+// re-implementada em cada bin. `viewport` e o tamanho do canvas em pixels.
+
+/// Converte um tamanho (largura, altura) em pixels para **half-size** em NDC.
+/// `QuadInstance::new` aceita size completo, entao multiplique por 2 ao usar.
+pub fn px_size_to_ndc(w_px: f32, h_px: f32, viewport: [f32; 2]) -> [f32; 2] {
+    [w_px / (viewport[0] * 0.5), h_px / (viewport[1] * 0.5)]
+}
+
+/// Converte um centro em pixels (origem top-left, y cresce pra baixo) em NDC.
+pub fn px_center_to_ndc(cx_px: f32, cy_px: f32, viewport: [f32; 2]) -> [f32; 2] {
+    let x = (cx_px / (viewport[0] * 0.5)) - 1.0;
+    let y = 1.0 - (cy_px / (viewport[1] * 0.5));
+    [x, y]
+}
+
+/// Converte um offset CSS-style (positivo = direita/baixo) para NDC.
+pub fn px_offset_to_ndc(dx_px: f32, dy_px: f32, viewport: [f32; 2]) -> [f32; 2] {
+    [dx_px / (viewport[0] * 0.5), dy_px / (viewport[1] * 0.5)]
+}
+
+/// Converte um raio (border / corner / shadow) em pixels para NDC. Usa o
+/// eixo Y como base — eixo curto em telas 4:3 / 16:9 — mantendo a "feel"
+/// consistente com unidades CSS px.
+pub fn px_to_ndc_radius(px: f32, viewport_height: f32) -> f32 {
+    px / (viewport_height * 0.5)
+}
 
 // ---------------------------------------------------------------------------
 // Triangle primitive (Layer 4.1) -- mantido para regressao visual e A/B

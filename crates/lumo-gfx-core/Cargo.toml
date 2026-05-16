@@ -36,3 +36,7 @@ version = "0.2"
 [[bin]]
 name = "quad-shadow"
 path = "src/bin/quad-shadow.rs"
+
+[[bin]]
+name = "button-demo"
+path = "src/bin/button-demo.rs"

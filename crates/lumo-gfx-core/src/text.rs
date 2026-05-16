@@ -373,6 +373,14 @@ impl TextRenderer {
         }
     }
 
+    /// Acessor mutavel ao `FontSystem` interno. Usado por widgets (e.g.
+    /// `widget::Button::measure`) que precisam fazer shaping antes de
+    /// posicionar elementos. Mantemos privado o atlas / cache / pending
+    /// e expomos so o shaping engine.
+    pub fn font_system_mut(&mut self) -> &mut cosmic_text::FontSystem {
+        &mut self.font_system
+    }
+
     /// Shape a string com `cosmic-text` e empilha as instancias de glyph
     /// no buffer pendente. Chame `flush` para fazer o draw.
     pub fn queue_text(
@@ -496,7 +504,7 @@ impl TextRenderer {
     }
 
     /// Mesmo que `flush` mas grava num pass ja aberto pelo chamador.
-    /// O pass precisa estar com pipeline disponivel — esta funcao seta
+    /// O pass precisa estar com pipeline disponivel � esta funcao seta
     /// o seu proprio pipeline / bind group / vertex buffer.
     pub fn draw_into_pass<'a>(
         &'a mut self,
