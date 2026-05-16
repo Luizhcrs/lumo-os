@@ -70,6 +70,9 @@ pub struct LumoState {
     // Desktop / window mgmt
     pub space: Space<Window>,
     pub popups: PopupManager,
+
+    // Frame counter pra invalidar SolidColorRenderElements (ex: cursor que se move).
+    pub frame_counter: u64,
 }
 
 impl LumoState {
@@ -129,6 +132,7 @@ impl LumoState {
             pointer_location: (0.0, 0.0).into(),
             space: Space::default(),
             popups: PopupManager::default(),
+            frame_counter: 0,
         }
     }
 

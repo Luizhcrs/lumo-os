@@ -1,7 +1,19 @@
 //! lumo-wm entry point - inicia Wayland display, socket nested,
 //! backend winit, registra handlers e roda event loop.
+//!
+//! Fase 5.3: dispatch_clients periodico via timer pra evitar
+//! peer-reset em clientes idle. Antes o dispatch so rodava apos um
+//! event source disparar - clientes que enviavam request enquanto o
+//! loop estava em sleep ficavam pendentes ate o proximo evento.
+//! Agora um Timer 4ms forca `dispatch_clients + flush_clients`,
+//! cortando latencia de protocolo.
+
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::Duration;
 
 use anyhow::Result;
+use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::EventLoop;
 use smithay::reexports::wayland_server::Display;
 
@@ -15,7 +27,7 @@ fn main() -> Result<()> {
         )
         .init();
 
-    tracing::info!("Lumo WM 0.1.0 - Fase 5.2 (render + layer-shell + input)");
+    tracing::info!("Lumo WM 0.1.0 - Fase 5.3 (lumo overlay + cursor + dispatch fix)");
 
     let mut event_loop: EventLoop<'static, LumoState> = EventLoop::try_new()?;
     let display: Display<LumoState> = Display::new()?;
@@ -35,23 +47,46 @@ fn main() -> Result<()> {
 
     let mut state = LumoState::new(display_handle, event_loop.handle(), socket_name.clone());
 
-    // Init winit ANTES de exportar WAYLAND_DISPLAY do socket nosso;
-    // winit precisa conectar no compositor host (Hyprland).
     let _winit_data = lumo_wm::backend::winit::init(event_loop.handle(), &mut state)?;
 
-    // Agora sim setar pro proprio processo (clientes filhos veem o nosso socket).
     if let Some(s) = socket_name.as_ref() {
         std::env::set_var("WAYLAND_DISPLAY", s);
     }
 
-    let display = std::cell::RefCell::new(display);
+    // Display em Rc<RefCell<...>> pra compartilhar entre o timer de
+    // dispatch + o callback do event_loop.
+    let display = Rc::new(RefCell::new(display));
+
+    // Timer pra dispatch_clients periodico (4ms = 250Hz). Garante
+    // que requests/responses Wayland fluem mesmo quando nao tem
+    // events na fila (calloop em sleep aguardando timer maior).
+    // Sem isso clientes idle podem disparar timeout interno e
+    // bater "Connection reset by peer" no compositor.
+    let display_for_timer = display.clone();
+    event_loop
+        .handle()
+        .insert_source(
+            Timer::from_duration(Duration::from_millis(4)),
+            move |_, _, state: &mut LumoState| {
+                if !state.running {
+                    return TimeoutAction::Drop;
+                }
+                let mut d = display_for_timer.borrow_mut();
+                if let Err(err) = d.dispatch_clients(state) {
+                    tracing::warn!(?err, "dispatch_clients periodico falhou");
+                }
+                let _ = d.flush_clients();
+                TimeoutAction::ToDuration(Duration::from_millis(4))
+            },
+        )
+        .map_err(|e| anyhow::anyhow!("falha ao registrar timer dispatch: {e}"))?;
+
+    let display_for_loop = display.clone();
     event_loop.run(None, &mut state, move |state| {
         if !state.running {
-            // Sair do loop suavemente.
             return;
         }
-        // Flush display - garante que respostas Wayland saem.
-        let mut d = display.borrow_mut();
+        let mut d = display_for_loop.borrow_mut();
         let _ = d.dispatch_clients(state);
         let _ = d.flush_clients();
     })?;

@@ -1,6 +1,13 @@
 //! Backend winit - roda lumo-wm como cliente Wayland dentro do Hyprland.
 //!
-//! Fase 5.2: render loop + input dispatch.
+//! Fase 5.3: background Lumo ink_deep + brand dot emerald + cursor
+//! server-side + frame-timing fix.
+//!
+//! Estrategia (caminho B - decisao A6.3): GlesRenderer continua sendo o
+//! renderer "real" pros clientes; overlay Lumo (brand dot + cursor) sai
+//! como `SolidColorRenderElement` custom passado pra `render_output`.
+//! Sem ponte wgpu->smithay - mantemos lumo-gfx-core focado em UI shell
+//! (lumo-bar, gallery), nao em compositor.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -8,21 +15,35 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use smithay::backend::renderer::damage::OutputDamageTracker;
-use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
+use smithay::backend::renderer::element::solid::SolidColorRenderElement;
+use smithay::backend::renderer::element::{Id, Kind};
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::renderer::Color32F;
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
-use smithay::desktop::space::{render_output, SpaceRenderElements};
+use smithay::desktop::space::render_output;
 use smithay::output::{Mode, Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::LoopHandle;
-use smithay::utils::Transform;
+use smithay::utils::{Point, Rectangle, Transform};
 
 use crate::state::LumoState;
 
 const OUTPUT_NAME: &str = "lumo-winit-0";
 const REFRESH_MHZ: i32 = 60_000;
-const CLEAR: [f32; 4] = [0.04, 0.05, 0.07, 1.0];
+
+// Lumo ink_deep (#0a0a0c) em sRGB linear (gamma 2.4 approx)
+const CLEAR_INK_DEEP: [f32; 4] = [0.0030, 0.0030, 0.0037, 1.0];
+
+// Lumo emerald (#10b981) -> linear
+const BRAND_EMERALD: [f32; 4] = [0.0049, 0.4885, 0.2190, 1.0];
+
+// Cursor cinza claro (#d4d4d8) -> linear
+const CURSOR_COLOR: [f32; 4] = [0.6588, 0.6588, 0.6745, 1.0];
+
+const BRAND_DOT_SIZE: i32 = 8;
+const BRAND_DOT_MARGIN: i32 = 12;
+const CURSOR_W: i32 = 10;
+const CURSOR_H: i32 = 14;
 
 pub struct WinitData {
     pub backend: Rc<RefCell<WinitGraphicsBackend<GlesRenderer>>>,
@@ -133,35 +154,82 @@ pub fn init(
     })
 }
 
+/// Brand dot emerald 8x8 fixo no canto top-left.
+fn brand_dot_element() -> SolidColorRenderElement {
+    let geo: Rectangle<i32, smithay::utils::Physical> = Rectangle::new(
+        Point::from((BRAND_DOT_MARGIN, BRAND_DOT_MARGIN)),
+        (BRAND_DOT_SIZE, BRAND_DOT_SIZE).into(),
+    );
+    SolidColorRenderElement::new(
+        Id::new(),
+        geo,
+        0,
+        Color32F::new(
+            BRAND_EMERALD[0],
+            BRAND_EMERALD[1],
+            BRAND_EMERALD[2],
+            BRAND_EMERALD[3],
+        ),
+        Kind::Unspecified,
+    )
+}
+
+/// Cursor server-side stub: bloco solido 10x14 no pointer_location.
+/// Sem xcursor theme - MVP suficiente pra "ter cursor visivel" ate a
+/// fase 5.4 que tras o cursor surface completo + tema.
+fn cursor_element(state: &LumoState, output_scale: f64) -> SolidColorRenderElement {
+    let px = (state.pointer_location.x * output_scale).round() as i32;
+    let py = (state.pointer_location.y * output_scale).round() as i32;
+    let geo: Rectangle<i32, smithay::utils::Physical> =
+        Rectangle::new(Point::from((px, py)), (CURSOR_W, CURSOR_H).into());
+    SolidColorRenderElement::new(
+        Id::new(),
+        geo,
+        state.frame_counter as usize,
+        Color32F::new(
+            CURSOR_COLOR[0],
+            CURSOR_COLOR[1],
+            CURSOR_COLOR[2],
+            CURSOR_COLOR[3],
+        ),
+        Kind::Cursor,
+    )
+}
+
 fn redraw(
     backend: &mut WinitGraphicsBackend<GlesRenderer>,
     damage_tracker: &mut OutputDamageTracker,
     output: &Output,
     state: &mut LumoState,
 ) -> Result<()> {
+    state.frame_counter = state.frame_counter.wrapping_add(1);
+    let trace = std::env::var("LUMO_TRACE_FRAMES").is_ok();
+
     let (renderer, mut framebuffer) = backend
         .bind()
         .map_err(|e| anyhow!("bind framebuffer: {e:?}"))?;
 
     let space_iter = std::iter::once(&state.space);
-    let custom: Vec<SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>> =
-        Vec::new();
 
-    let render_result = render_output::<
-        _,
-        SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
-        _,
-        _,
-    >(
+    // Overlay Lumo (custom elements ficam em cima dos space elements).
+    let overlay: Vec<SolidColorRenderElement> =
+        vec![cursor_element(state, 1.0), brand_dot_element()];
+
+    let render_result = render_output::<_, SolidColorRenderElement, _, _>(
         output,
         renderer,
         &mut framebuffer,
         1.0,
         0,
         space_iter,
-        &custom,
+        &overlay,
         damage_tracker,
-        Color32F::new(CLEAR[0], CLEAR[1], CLEAR[2], CLEAR[3]),
+        Color32F::new(
+            CLEAR_INK_DEEP[0],
+            CLEAR_INK_DEEP[1],
+            CLEAR_INK_DEEP[2],
+            CLEAR_INK_DEEP[3],
+        ),
     )
     .map_err(|e| anyhow!("render_output: {e:?}"))?;
 
@@ -177,11 +245,23 @@ fn redraw(
     }
 
     // Frame callbacks pros clientes que pediram.
+    // Fix peer-reset: throttle Some(16ms) pra agrupar callbacks. Throttle
+    // ZERO em 5.2 fazia flood -> alguns clientes (foot) dropavam
+    // callbacks rapidamente e confundiam commit-vs-callback ordering.
+    // Smithay docs recomendam throttle = refresh interval do output.
     let time = state.start_time.elapsed();
+    let throttle = Some(Duration::from_millis(16));
+    let mut sent = 0usize;
     for window in state.space.elements() {
-        window.send_frame(output, time, Some(Duration::ZERO), |_, _| {
-            Some(output.clone())
-        });
+        window.send_frame(output, time, throttle, |_, _| Some(output.clone()));
+        sent += 1;
+    }
+    if trace {
+        tracing::debug!(
+            frame = state.frame_counter,
+            sent_to = sent,
+            "frame callbacks dispatched"
+        );
     }
 
     Ok(())
