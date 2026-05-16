@@ -2,7 +2,7 @@
 name = "lumo-gfx-core"
 version = "0.1.0"
 edition = "2021"
-description = "Lumo GFX core - wgpu-backed graphics primitives for Lumo OS Layer 4.1 MVP"
+description = "Lumo GFX core - wgpu-backed graphics primitives for Lumo OS Layer 4.1+"
 
 [lib]
 path = "src/lib.rs"
@@ -10,6 +10,10 @@ path = "src/lib.rs"
 [[bin]]
 name = "triangle"
 path = "src/bin/triangle.rs"
+
+[[bin]]
+name = "quad-gallery"
+path = "src/bin/quad-gallery.rs"
 
 [dependencies]
 wgpu = "23"
