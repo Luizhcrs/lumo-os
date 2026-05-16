@@ -37,6 +37,12 @@ pub mod text;
 // label de texto. API publica em `widget::*`.
 pub mod widget;
 
+// Input (Layer 4.1.9): event types + winit bridge.
+pub mod input;
+
+// Animation (Layer 4.1.9): Spring physics.
+pub mod anim;
+
 // ---------------------------------------------------------------------------
 // Color tokens (single source of truth, Layer 4.1.5 + 4.1.6 expansion)
 // ---------------------------------------------------------------------------
