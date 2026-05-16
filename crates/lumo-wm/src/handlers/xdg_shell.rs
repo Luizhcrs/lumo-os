@@ -1,12 +1,10 @@
-//! xdg_shell delegate - top-level windows + popups (menus, tooltips).
-//!
-//! MVP: aceita toplevels, faz commit inicial vazio (cliente decide
-//! tamanho), mapeia em `Space` na origem. Tiling/posicionamento
-//! refinado entra na Fase 5.2.
+//! xdg_shell delegate - top-level windows + popups.
 
-use smithay::desktop::Window;
+use smithay::desktop::{PopupKind, Window};
 use smithay::reexports::wayland_server::protocol::wl_seat::WlSeat;
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::Serial;
+use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::shell::xdg::{
     PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
 };
@@ -19,26 +17,61 @@ impl XdgShellHandler for LumoState {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let window = Window::new_wayland_window(surface);
-        self.space
-            .map_element(window, (0, 0), true);
+        let window = Window::new_wayland_window(surface.clone());
+        let pos = self.next_tile_position();
+        self.space.map_element(window.clone(), pos, true);
+
+        // Configure inicial: cliente decide tamanho mas anunciamos
+        // estado Activated.
+        surface.with_pending_state(|state| {
+            state.states.set(
+                smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State::Activated,
+            );
+        });
+        surface.send_configure();
+
+        // Foco de teclado pra nova janela.
+        if let Some(wl) = window.wl_surface() {
+            let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+            let surf: WlSurface = wl.into_owned();
+            let kb = self.keyboard.clone();
+            kb.set_focus(self, Some(surf), serial);
+        }
     }
 
-    fn new_popup(&mut self, _surface: PopupSurface, _positioner: PositionerState) {
-        // Popup positioning entra com PopupManager na Fase 5.2.
+    fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {
+        surface.with_pending_state(|state| {
+            state.geometry = positioner.get_geometry();
+        });
+        if let Err(err) = self.popups.track_popup(PopupKind::from(surface)) {
+            tracing::warn!(?err, "Falha ao registrar popup xdg");
+        }
     }
 
-    fn grab(&mut self, _surface: PopupSurface, _seat: WlSeat, _serial: Serial) {
-        // Popup grab handling - placeholder.
+    fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
+        let to_remove = self
+            .space
+            .elements()
+            .find(|w| w.toplevel().map(|t| t == &surface).unwrap_or(false))
+            .cloned();
+        if let Some(window) = to_remove {
+            self.space.unmap_elem(&window);
+        }
     }
+
+    fn grab(&mut self, _surface: PopupSurface, _seat: WlSeat, _serial: Serial) {}
 
     fn reposition_request(
         &mut self,
-        _surface: PopupSurface,
-        _positioner: PositionerState,
-        _token: u32,
+        surface: PopupSurface,
+        positioner: PositionerState,
+        token: u32,
     ) {
-        // Reposition handling - placeholder.
+        surface.with_pending_state(|state| {
+            state.geometry = positioner.get_geometry();
+            state.positioner = positioner;
+        });
+        surface.send_repositioned(token);
     }
 }
 

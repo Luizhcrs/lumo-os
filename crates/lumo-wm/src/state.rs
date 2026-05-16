@@ -1,30 +1,40 @@
-//! LumoState - top-level compositor state for lumo-wm MVP.
+//! LumoState - top-level compositor state for lumo-wm.
 //!
-//! Fase 5.1: estrutura minima necessaria pra Smithay despachar requests
-//! Wayland em um event loop calloop. Sem renderer custom, sem tiling
-//! avancado, sem layer-shell ainda. So o esqueleto que compila e aceita
-//! clientes via socket nested.
+//! Fase 5.2: alem do esqueleto da 5.1 agora carregamos:
+//! - layer_shell_state (pra futuros lumo-bar + status surfaces)
+//! - primary_selection_state (Ctrl+Shift+C / middle-click paste)
+//! - xdg_activation_state (request_activation entre apps)
+//! - fractional_scale_manager_state (stub scale=1)
+//! - cursor_shape_manager_state (stub - cursor server-side vira depois)
+//! - xdg_toplevel_icon_manager (stub)
+//! - PopupManager pra ciclo de vida dos popups xdg
+//! - estado de input (pointer pos, foco, layout horizontal de janelas)
 
 use std::sync::Arc;
 use std::time::Instant;
 
-use smithay::desktop::{Space, Window};
+use smithay::desktop::{PopupManager, Space, Window};
+use smithay::input::keyboard::KeyboardHandle;
+use smithay::input::pointer::PointerHandle;
 use smithay::input::{Seat, SeatState};
 use smithay::reexports::calloop::LoopHandle;
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::DisplayHandle;
-use smithay::utils::{Clock, Monotonic};
+use smithay::utils::{Clock, Logical, Monotonic, Point};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
+use smithay::wayland::cursor_shape::CursorShapeManagerState;
+use smithay::wayland::fractional_scale::FractionalScaleManagerState;
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
+use smithay::wayland::selection::primary_selection::PrimarySelectionState;
+use smithay::wayland::shell::wlr_layer::WlrLayerShellState;
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 use smithay::wayland::socket::ListeningSocketSource;
+use smithay::wayland::xdg_activation::XdgActivationState;
+use smithay::wayland::xdg_toplevel_icon::XdgToplevelIconManager;
 
 /// Estado raiz do Lumo WM.
-///
-/// Smithay nao impoe uma struct fixa; voce escolhe quais protocols
-/// implementar e cola via `delegate_*!` macros. Esses sao os minimos
-/// pra um nested compositor MVP rodar.
 pub struct LumoState {
     pub start_time: Instant,
     pub display_handle: DisplayHandle,
@@ -32,10 +42,9 @@ pub struct LumoState {
     pub socket_name: Option<String>,
     pub running: bool,
 
-    // Clocks
     pub clock: Clock<Monotonic>,
 
-    // Smithay state pieces
+    // Core protocols
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
     pub shm_state: ShmState,
@@ -43,11 +52,24 @@ pub struct LumoState {
     pub seat_state: SeatState<Self>,
     pub data_device_state: DataDeviceState,
 
+    // Fase 5.2: novos protocols
+    pub layer_shell_state: WlrLayerShellState,
+    pub primary_selection_state: PrimarySelectionState,
+    pub xdg_activation_state: XdgActivationState,
+    pub fractional_scale_state: FractionalScaleManagerState,
+    pub cursor_shape_state: CursorShapeManagerState,
+    #[allow(dead_code)]
+    pub xdg_toplevel_icon_manager: XdgToplevelIconManager,
+
     // Input
     pub seat: Seat<Self>,
+    pub keyboard: KeyboardHandle<Self>,
+    pub pointer: PointerHandle<Self>,
+    pub pointer_location: Point<f64, Logical>,
 
     // Desktop / window mgmt
     pub space: Space<Window>,
+    pub popups: PopupManager,
 }
 
 impl LumoState {
@@ -61,14 +83,26 @@ impl LumoState {
         let compositor_state = CompositorState::new::<Self>(&display_handle);
         let xdg_shell_state = XdgShellState::new::<Self>(&display_handle);
         let shm_state = ShmState::new::<Self>(&display_handle, vec![]);
-        let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&display_handle);
+        let output_manager_state =
+            OutputManagerState::new_with_xdg_output::<Self>(&display_handle);
         let mut seat_state = SeatState::new();
         let data_device_state = DataDeviceState::new::<Self>(&display_handle);
 
+        // Fase 5.2 protocols
+        let layer_shell_state = WlrLayerShellState::new::<Self>(&display_handle);
+        let primary_selection_state = PrimarySelectionState::new::<Self>(&display_handle);
+        let xdg_activation_state = XdgActivationState::new::<Self>(&display_handle);
+        let fractional_scale_state =
+            FractionalScaleManagerState::new::<Self>(&display_handle);
+        let cursor_shape_state = CursorShapeManagerState::new::<Self>(&display_handle);
+        let xdg_toplevel_icon_manager =
+            XdgToplevelIconManager::new::<Self>(&display_handle);
+
         let mut seat = seat_state.new_wl_seat(&display_handle, "lumo-seat-0");
-        // Keyboard + pointer mais tarde (Fase 5.1 entrega o esqueleto).
-        let _ = seat.add_keyboard(Default::default(), 200, 25);
-        let _ = seat.add_pointer();
+        let keyboard = seat
+            .add_keyboard(Default::default(), 200, 25)
+            .expect("falha ao adicionar keyboard");
+        let pointer = seat.add_pointer();
 
         Self {
             start_time: Instant::now(),
@@ -83,9 +117,42 @@ impl LumoState {
             output_manager_state,
             seat_state,
             data_device_state,
+            layer_shell_state,
+            primary_selection_state,
+            xdg_activation_state,
+            fractional_scale_state,
+            cursor_shape_state,
+            xdg_toplevel_icon_manager,
             seat,
+            keyboard,
+            pointer,
+            pointer_location: (0.0, 0.0).into(),
             space: Space::default(),
+            popups: PopupManager::default(),
         }
+    }
+
+    /// Encontra a surface sob a posicao global do ponteiro.
+    pub fn surface_under(
+        &self,
+        pos: Point<f64, Logical>,
+    ) -> Option<(WlSurface, Point<i32, Logical>)> {
+        if let Some((window, win_loc)) = self.space.element_under(pos) {
+            let rel = pos - win_loc.to_f64();
+            if let Some((surface, surf_off)) =
+                window.surface_under(rel, smithay::desktop::WindowSurfaceType::ALL)
+            {
+                return Some((surface, win_loc + surf_off));
+            }
+        }
+        None
+    }
+
+    /// Calcula proxima posicao de tile horizontal. MVP: 620px de passo,
+    /// y fixo 40.
+    pub fn next_tile_position(&self) -> Point<i32, Logical> {
+        let count = self.space.elements().count() as i32;
+        ((count * 620).min(1280 - 600), 40).into()
     }
 }
 

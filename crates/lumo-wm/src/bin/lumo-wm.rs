@@ -11,11 +11,11 @@ fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "lumo_wm=debug,smithay=info".into()),
+                .unwrap_or_else(|_| "lumo_wm=info,smithay=warn,wgpu=warn".into()),
         )
         .init();
 
-    tracing::info!("Lumo WM 0.1.0 - Fase 5.1 (nested winit)");
+    tracing::info!("Lumo WM 0.1.0 - Fase 5.2 (render + layer-shell + input)");
 
     let mut event_loop: EventLoop<'static, LumoState> = EventLoop::try_new()?;
     let display: Display<LumoState> = Display::new()?;
@@ -30,13 +30,19 @@ fn main() -> Result<()> {
     };
 
     if let Some(s) = socket_name.as_ref() {
-        tracing::info!(socket = %s, "Lumo WM aceitando clientes Wayland");
-        std::env::set_var("WAYLAND_DISPLAY", s);
+        tracing::info!(socket = %s, "Lumo WM aceitando clientes Wayland em WAYLAND_DISPLAY={}", s);
     }
 
-    let mut state = LumoState::new(display_handle, event_loop.handle(), socket_name);
+    let mut state = LumoState::new(display_handle, event_loop.handle(), socket_name.clone());
 
+    // Init winit ANTES de exportar WAYLAND_DISPLAY do socket nosso;
+    // winit precisa conectar no compositor host (Hyprland).
     let _winit_data = lumo_wm::backend::winit::init(event_loop.handle(), &mut state)?;
+
+    // Agora sim setar pro proprio processo (clientes filhos veem o nosso socket).
+    if let Some(s) = socket_name.as_ref() {
+        std::env::set_var("WAYLAND_DISPLAY", s);
+    }
 
     let display = std::cell::RefCell::new(display);
     event_loop.run(None, &mut state, move |state| {

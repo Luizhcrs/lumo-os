@@ -4,6 +4,9 @@
 
 pub mod compositor;
 pub mod data_device;
+pub mod input;
+pub mod layer_shell;
+pub mod misc;
 pub mod output;
 pub mod seat;
 pub mod shm;

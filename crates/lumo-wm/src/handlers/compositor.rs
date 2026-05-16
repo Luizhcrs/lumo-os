@@ -1,6 +1,4 @@
-//! wl_compositor delegate - aceita clientes Wayland, gerencia surfaces
-//! e seu ciclo de commit. MVP: roteia commits pra Space pra serem
-//! desenhados, sem damage tracking refinado.
+//! wl_compositor delegate.
 
 use smithay::backend::renderer::utils::on_commit_buffer_handler;
 use smithay::reexports::wayland_server::protocol::{wl_buffer::WlBuffer, wl_surface::WlSurface};
@@ -9,13 +7,12 @@ use smithay::wayland::buffer::BufferHandler;
 use smithay::wayland::compositor::{
     get_parent, is_sync_subsurface, CompositorClientState, CompositorHandler, CompositorState,
 };
+use smithay::wayland::seat::WaylandFocus;
 
 use crate::state::{ClientState, LumoState};
 
 impl BufferHandler for LumoState {
-    fn buffer_destroyed(&mut self, _buffer: &WlBuffer) {
-        // MVP: nada a fazer. Buffers GLES sao tracked pelo renderer.
-    }
+    fn buffer_destroyed(&mut self, _buffer: &WlBuffer) {}
 }
 
 impl CompositorHandler for LumoState {
@@ -33,15 +30,25 @@ impl CompositorHandler for LumoState {
     fn commit(&mut self, surface: &WlSurface) {
         on_commit_buffer_handler::<Self>(surface);
 
-        // Pula sub-surfaces sync: so processa quando o root commitar.
         if !is_sync_subsurface(surface) {
             let mut root = surface.clone();
             while let Some(parent) = get_parent(&root) {
                 root = parent;
             }
-            // Aqui entraria scheduling de redraw da janela que contem
-            // o surface root. MVP: deixar Space::refresh no loop tick.
+            if let Some(window) = self
+                .space
+                .elements()
+                .find(|w| {
+                    w.wl_surface()
+                        .map(|s| s.as_ref() == &root)
+                        .unwrap_or(false)
+                })
+                .cloned()
+            {
+                window.on_commit();
+            }
         }
+        self.popups.commit(surface);
         self.space.refresh();
     }
 }
