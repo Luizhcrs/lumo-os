@@ -27,7 +27,9 @@ fn main() -> Result<()> {
         )
         .init();
 
-    tracing::info!("Lumo WM 0.1.0 - Fase 5.3 (lumo overlay + cursor + dispatch fix)");
+    tracing::info!(
+        "Lumo WM 0.1.0 - Fase 5.4 (cursor unico + SUPER keybinds + lumo-bar configure)"
+    );
 
     let mut event_loop: EventLoop<'static, LumoState> = EventLoop::try_new()?;
     let display: Display<LumoState> = Display::new()?;

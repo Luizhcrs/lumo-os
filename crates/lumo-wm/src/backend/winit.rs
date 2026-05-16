@@ -1,7 +1,7 @@
 //! Backend winit - roda lumo-wm como cliente Wayland dentro do Hyprland.
 //!
-//! Fase 5.3: background Lumo ink_deep + brand dot emerald + cursor
-//! server-side + frame-timing fix.
+//! Fase 5.4: alem de 5.3 (overlay + cursor + dispatch), oculta o
+//! cursor do host na janela winit pra eliminar "cursor duplo".
 //!
 //! Estrategia (caminho B - decisao A6.3): GlesRenderer continua sendo o
 //! renderer "real" pros clientes; overlay Lumo (brand dot + cursor) sai
@@ -57,6 +57,12 @@ pub fn init(
 ) -> Result<WinitData> {
     let (backend, winit_loop) = winit::init::<GlesRenderer>()
         .map_err(|e| anyhow!("falha init winit backend: {e:?}"))?;
+
+    // Fix 1 (5.4): oculta cursor do host (Hyprland) dentro da nossa
+    // janela. Nosso cursor stub server-side (CURSOR_W x CURSOR_H) eh
+    // renderizado pelo lumo-wm; sem esse set_cursor_visible(false) o
+    // cursor do host aparece sobreposto = "cursor duplo".
+    backend.window().set_cursor_visible(false);
 
     let size = backend.window_size();
     let mode = Mode {

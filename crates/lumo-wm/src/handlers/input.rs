@@ -1,14 +1,28 @@
 //! Input dispatch - converte WinitEvent::Input em eventos pra Seat.
+//!
+//! Fase 5.4: adiciona keybinds SUPER (logo) interceptados antes do
+//! forward pro cliente focado:
+//!   SUPER+Q ou SUPER+Return -> spawn `foot`
+//!   SUPER+L                 -> sai do compositor (debug)
+//!   SUPER+1..9              -> placeholder workspaces (no-op)
 
 use smithay::backend::input::{
-    AbsolutePositionEvent, ButtonState, Event as _, InputBackend, InputEvent,
+    AbsolutePositionEvent, ButtonState, Event as _, InputBackend, InputEvent, KeyState,
     KeyboardKeyEvent, PointerButtonEvent,
 };
-use smithay::input::keyboard::FilterResult;
+use smithay::input::keyboard::{FilterResult, Keysym};
 use smithay::input::pointer::{ButtonEvent, MotionEvent};
 use smithay::utils::SERIAL_COUNTER;
 
 use crate::state::LumoState;
+
+/// Acao interceptada por keybind do compositor. Retornada como
+/// FilterResult::Intercept pro evento NAO ser encaminhado ao cliente.
+enum Action {
+    SpawnFoot,
+    Quit,
+    Workspace(u8),
+}
 
 impl LumoState {
     pub fn handle_input<I: InputBackend>(&mut self, event: InputEvent<I>) {
@@ -19,14 +33,67 @@ impl LumoState {
                 let keycode = event.key_code();
                 let state = event.state();
                 let keyboard = self.keyboard.clone();
-                keyboard.input::<(), _>(
+                let socket_name = self.socket_name.clone();
+                let press = state == KeyState::Pressed;
+                let action = keyboard.input::<Action, _>(
                     self,
                     keycode,
                     state,
                     serial,
                     time,
-                    |_state, _mods, _kh| FilterResult::Forward,
+                    |_state, mods, kh| {
+                        // So intercepta no press; release sempre forward.
+                        if !press {
+                            return FilterResult::Forward;
+                        }
+                        if !mods.logo {
+                            return FilterResult::Forward;
+                        }
+                        let sym = kh.modified_sym();
+                        match sym {
+                            Keysym::q | Keysym::Q | Keysym::Return => {
+                                FilterResult::Intercept(Action::SpawnFoot)
+                            }
+                            Keysym::l | Keysym::L => FilterResult::Intercept(Action::Quit),
+                            Keysym::_1 => FilterResult::Intercept(Action::Workspace(1)),
+                            Keysym::_2 => FilterResult::Intercept(Action::Workspace(2)),
+                            Keysym::_3 => FilterResult::Intercept(Action::Workspace(3)),
+                            Keysym::_4 => FilterResult::Intercept(Action::Workspace(4)),
+                            Keysym::_5 => FilterResult::Intercept(Action::Workspace(5)),
+                            Keysym::_6 => FilterResult::Intercept(Action::Workspace(6)),
+                            Keysym::_7 => FilterResult::Intercept(Action::Workspace(7)),
+                            Keysym::_8 => FilterResult::Intercept(Action::Workspace(8)),
+                            Keysym::_9 => FilterResult::Intercept(Action::Workspace(9)),
+                            _ => FilterResult::Forward,
+                        }
+                    },
                 );
+                if let Some(action) = action {
+                    match action {
+                        Action::SpawnFoot => {
+                            let mut cmd = std::process::Command::new("foot");
+                            if let Some(sock) = socket_name.as_deref() {
+                                cmd.env("WAYLAND_DISPLAY", sock);
+                            }
+                            // Detach: nao queremos zumbi quando foot encerra.
+                            match cmd.spawn() {
+                                Ok(child) => {
+                                    tracing::info!(pid = child.id(), "spawn foot");
+                                }
+                                Err(err) => {
+                                    tracing::warn!(?err, "Falha spawn foot");
+                                }
+                            }
+                        }
+                        Action::Quit => {
+                            tracing::info!("SUPER+L -> sair");
+                            self.running = false;
+                        }
+                        Action::Workspace(n) => {
+                            tracing::debug!(workspace = n, "switch workspace (no-op)");
+                        }
+                    }
+                }
             }
 
             InputEvent::PointerMotionAbsolute { event } => {
