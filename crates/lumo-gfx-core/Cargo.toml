@@ -1,0 +1,20 @@
+[package]
+name = "lumo-gfx-core"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo GFX core - wgpu-backed graphics primitives for Lumo OS Layer 4.1 MVP"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "triangle"
+path = "src/bin/triangle.rs"
+
+[dependencies]
+wgpu = "23"
+winit = "0.30"
+bytemuck = { version = "1", features = ["derive"] }
+pollster = "0.4"
+log = "0.4"
+env_logger = "0.11"
