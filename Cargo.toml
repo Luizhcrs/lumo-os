@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "shell",
     "crates/lumo-gfx-core",
+    "crates/lumo-wm",
 ]
 
 [profile.release]
