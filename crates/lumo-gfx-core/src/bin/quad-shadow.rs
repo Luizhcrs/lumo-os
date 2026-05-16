@@ -1,10 +1,15 @@
-//! quad-gallery: demo da Layer 4.1.5 (`lumo-gfx-core`).
+//! quad-shadow: demo da Layer 4.1.6 (`lumo-gfx-core`).
 //!
-//! Renderiza um grid 2x2 de quads testando: solid fill, border, corner radius,
-//! e contraste de cores do design system Lumo. Clear color INK_DEEP.
+//! Renderiza 4 cards 200x150px no canvas 800x600 com drop shadow estilo Apple:
 //!
-//! Layer 4.1.6 nao quebra essa demo: shadow_color zero = sem sombra, e
-//! GlobalUniforms agora e atualizado por frame (pre-requisito do bind group).
+//!   [1] panel-hi   shadow preto leve   offset (0,4)  radius 16
+//!   [2] emerald    shadow accent       offset (0,6)  radius 16
+//!   [3] panel      shadow forte        offset (0,12) radius 20
+//!   [4] panel-hi   sem shadow (controle)
+//!
+//! Conversao px -> NDC: dx = (px / 400), dy = (px / 300). Eixo Y do shadow
+//! offset segue convencao CSS (positivo = baixo); o shader inverte o sinal
+//! pra alinhar com NDC.
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -20,54 +25,102 @@ use winit::{
     window::{Window, WindowId},
 };
 
-// ----------------------------------------------------------------------------
-// Cena: 4 quads num grid 2x2.
-//
-//   [1] solid emerald, sem border, radius 0
-//   [2] emerald, border pearl 2px, radius 0.05
-//   [3] panel-hi, border emerald 1px, radius 0.10
-//   [4] ink-deep, border emerald-500 2px, radius 0.18
-//
-// Coordenadas em NDC. Cada quad ocupa 0.4 x 0.4 (cabe folgado no quadrante).
-// ----------------------------------------------------------------------------
+const CANVAS_W: f32 = 800.0;
+const CANVAS_H: f32 = 600.0;
+
+/// Converte largura/altura em pixels para half-size NDC.
+fn px_size_to_ndc(w_px: f32, h_px: f32) -> [f32; 2] {
+    [w_px / (CANVAS_W * 0.5), h_px / (CANVAS_H * 0.5)]
+}
+
+/// Converte centro em pixels (origem top-left) para NDC.
+fn px_center_to_ndc(cx_px: f32, cy_px: f32) -> [f32; 2] {
+    let x = (cx_px / (CANVAS_W * 0.5)) - 1.0;
+    let y = 1.0 - (cy_px / (CANVAS_H * 0.5));
+    [x, y]
+}
+
+/// Converte offset em pixels (CSS-style: positivo = direita/baixo) para NDC.
+fn px_offset_to_ndc(dx_px: f32, dy_px: f32) -> [f32; 2] {
+    [dx_px / (CANVAS_W * 0.5), dy_px / (CANVAS_H * 0.5)]
+}
+
+/// Converte raio em pixels para NDC (usa eixo Y como base — eixo curto em 4:3).
+fn px_to_ndc_radius(px: f32) -> f32 {
+    px / (CANVAS_H * 0.5)
+}
+
 fn build_scene() -> Vec<QuadInstance> {
+    // Grid 2x2 com gap 40px:
+    //   col_left = 200, col_right = 600  (centros X)
+    //   row_top  = 200, row_bot   = 400  (centros Y)
+    // Cards 200x150, radius 16, sem border (foco em shadow).
+    let card_size = px_size_to_ndc(200.0, 150.0);
+    let r = px_to_ndc_radius(16.0);
+    let r_big = px_to_ndc_radius(20.0);
+
     vec![
+        // [1] panel-hi, shadow preto leve.
         QuadInstance::new(
-            [-0.5,  0.5], [0.4, 0.4],
+            px_center_to_ndc(200.0, 200.0),
+            [card_size[0] * 2.0, card_size[1] * 2.0],
+            color::PANEL_HI,
+            color::TRANSPARENT,
+            0.0,
+            r,
+        )
+        .with_shadow(
+            color::SHADOW_BLACK,
+            px_offset_to_ndc(0.0, 4.0),
+            px_to_ndc_radius(12.0),
+        ),
+
+        // [2] emerald-600, shadow accent translucido.
+        QuadInstance::new(
+            px_center_to_ndc(600.0, 200.0),
+            [card_size[0] * 2.0, card_size[1] * 2.0],
             color::EMERALD_600,
             color::TRANSPARENT,
             0.0,
+            r,
+        )
+        .with_shadow(
+            color::SHADOW_ACCENT,
+            px_offset_to_ndc(0.0, 6.0),
+            px_to_ndc_radius(16.0),
+        ),
+
+        // [3] panel, shadow forte (card "elevado").
+        QuadInstance::new(
+            px_center_to_ndc(200.0, 400.0),
+            [card_size[0] * 2.0, card_size[1] * 2.0],
+            color::PANEL,
+            color::TRANSPARENT,
             0.0,
+            r_big,
+        )
+        .with_shadow(
+            [0.0, 0.0, 0.0, 0.6],
+            px_offset_to_ndc(0.0, 12.0),
+            px_to_ndc_radius(24.0),
         ),
+
+        // [4] panel-hi com border accent leve, sem shadow (controle visual).
         QuadInstance::new(
-            [ 0.5,  0.5], [0.4, 0.4],
-            color::EMERALD_600,
-            color::PEARL,
-            0.008,
-            0.05,
-        ),
-        QuadInstance::new(
-            [-0.5, -0.5], [0.4, 0.4],
+            px_center_to_ndc(600.0, 400.0),
+            [card_size[0] * 2.0, card_size[1] * 2.0],
             color::PANEL_HI,
             color::EMERALD_600,
-            0.004,
-            0.10,
-        ),
-        QuadInstance::new(
-            [ 0.5, -0.5], [0.4, 0.4],
-            color::INK_DEEP,
-            color::EMERALD_500,
-            0.008,
-            0.18,
+            px_to_ndc_radius(1.0),
+            r,
         ),
     ]
 }
 
 // ----------------------------------------------------------------------------
-// Renderer leve dedicado ao demo. Configura wgpu manualmente para nao
-// arrastar o pipeline de triangle do `lumo_gfx_core::Renderer`.
+// Renderer leve dedicado ao demo.
 // ----------------------------------------------------------------------------
-struct GalleryRenderer {
+struct ShadowRenderer {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -77,7 +130,7 @@ struct GalleryRenderer {
     _window: Arc<Window>,
 }
 
-impl GalleryRenderer {
+impl ShadowRenderer {
     async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
         let size = PhysicalSize {
@@ -106,7 +159,7 @@ impl GalleryRenderer {
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    label: Some("quad-gallery::device"),
+                    label: Some("quad-shadow::device"),
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::downlevel_defaults()
                         .using_resolution(adapter.limits()),
@@ -162,7 +215,7 @@ impl GalleryRenderer {
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        // Layer 4.1.6: globals atualizado por frame (viewport + time).
+        // Atualiza globals com viewport size atual + tempo decorrido.
         let globals = GlobalUniforms {
             viewport_size: [self.config.width as f32, self.config.height as f32],
             time: self.start.elapsed().as_secs_f32(),
@@ -177,12 +230,12 @@ impl GalleryRenderer {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("quad-gallery::encoder"),
+                label: Some("quad-shadow::encoder"),
             });
 
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("quad-gallery::main-pass"),
+                label: Some("quad-shadow::main-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
@@ -206,11 +259,11 @@ impl GalleryRenderer {
 }
 
 // ----------------------------------------------------------------------------
-// winit ApplicationHandler boilerplate (mesmo padrao do binario `triangle`).
+// winit ApplicationHandler boilerplate.
 // ----------------------------------------------------------------------------
 struct App {
     window: Option<Arc<Window>>,
-    renderer: Option<GalleryRenderer>,
+    renderer: Option<ShadowRenderer>,
 }
 
 impl ApplicationHandler for App {
@@ -219,14 +272,14 @@ impl ApplicationHandler for App {
             return;
         }
         let attrs = Window::default_attributes()
-            .with_title("lumo-gfx-core quad-gallery")
-            .with_inner_size(LogicalSize::new(800, 600));
+            .with_title("lumo-gfx-core quad-shadow")
+            .with_inner_size(LogicalSize::new(CANVAS_W, CANVAS_H));
         let window = Arc::new(
             event_loop
                 .create_window(attrs)
                 .expect("create_window"),
         );
-        let renderer = pollster::block_on(GalleryRenderer::new(window.clone()));
+        let renderer = pollster::block_on(ShadowRenderer::new(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
     }
