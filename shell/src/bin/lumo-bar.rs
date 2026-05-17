@@ -110,14 +110,14 @@ const SEP_DOT_RADIUS: f32 = 2.0;
 
 /// Font sizes (px). Conteudo de pill todo em 13px (compact uniform).
 const FONT_PILL: f32 = 13.0;
-const FONT_DATE: f32 = 11.0;
+const FONT_DATE: f32 = 13.0; // A19.14 igual clock
 
 /// Wifi icone 16x16 (compact pra caber dentro de pill 28h).
 const WIFI_SIZE: f32 = 16.0;
 
 /// Bateria icone 14x8 (proporcional a 28h pill).
-const BAT_BODY_W: f32 = 18.0; // A19.5 maior + visivel
-const BAT_BODY_H: f32 = 10.0;
+const BAT_BODY_W: f32 = 22.0; // A19.14 mais larga Mac-style
+const BAT_BODY_H: f32 = 11.0;
 
 // ============================================================
 // Color helpers.
@@ -504,11 +504,11 @@ fn draw_wifi(canvas: &mut PixmapMut, x: f32, y: f32, on: bool, fg: Color, fg_sub
 fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, fg: Color, accent: Color) {
     let body_w = BAT_BODY_W;
     let body_h = BAT_BODY_H;
-    stroke_rrect(canvas, x + 0.5, y + 0.5, body_w - 1.0, body_h - 1.0, 1.6, fg, 1.0);
-    fill_rrect(canvas, x + body_w + 0.6, y + body_h * 0.3, 1.8, body_h * 0.4, 0.6, fg);
-    // A19.8: branco quando cheio, laranja medio, vermelho baixo + inset_y maior (linha de baixo desapareceu)
-    let inset_x = 1.5f32;
-    let inset_y = 2.8f32; // mais pra baixo ainda
+    stroke_rrect(canvas, x + 0.5, y + 0.5, body_w - 1.0, body_h - 1.0, 2.2, fg, 1.2);
+    fill_rrect(canvas, x + body_w + 0.8, y + body_h * 0.28, 2.0, body_h * 0.44, 0.8, fg);
+    // A19.14: bateria Mac-style refinada (22x11 body, inset 2px = fill cheio e centralizado)
+    let inset_x = 2.0f32;
+    let inset_y = 2.0f32;
     let inner_w = body_w - inset_x * 2.0;
     let inner_h = body_h - inset_y * 2.0;
     let fw = (pct as f32 / 100.0).clamp(0.0, 1.0) * inner_w;
@@ -521,12 +521,12 @@ fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, fg: Color, acce
             opaque(0xEF4444) // red-500 baixo
         };
         let _ = accent;
-        fill_rrect(canvas, x + inset_x, y + inset_y, fw, inner_h, 0.8, fill_color);
+        fill_rrect(canvas, x + inset_x, y + inset_y, fw, inner_h, 1.2, fill_color);
     }
 }
 
 fn battery_total_width() -> f32 {
-    BAT_BODY_W + 1.4
+    BAT_BODY_W + 2.5
 }
 
 // ============================================================
