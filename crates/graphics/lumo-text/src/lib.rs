@@ -204,7 +204,7 @@ impl TextRenderer {
 
         // --- atlas texture R8 ---
         let atlas_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("lumo-gfx-core::text-atlas"),
+            label: Some("lumo-text-atlas"),
             size: wgpu::Extent3d {
                 width: ATLAS_SIZE,
                 height: ATLAS_SIZE,
@@ -220,7 +220,7 @@ impl TextRenderer {
         let atlas_view = atlas_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let atlas_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("lumo-gfx-core::text-sampler"),
+            label: Some("lumo-text-sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -237,7 +237,7 @@ impl TextRenderer {
 
         // --- bind group layout (uniforms + atlas + sampler) ---
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("lumo-gfx-core::text-bgl"),
+            label: Some("lumo-text-bgl"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -269,7 +269,7 @@ impl TextRenderer {
         });
 
         let uniforms_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("lumo-gfx-core::text-uniforms"),
+            label: Some("lumo-text-uniforms"),
             contents: bytemuck::bytes_of(&Uniforms {
                 viewport: [1.0, 1.0],
                 _pad: [0.0, 0.0],
@@ -278,7 +278,7 @@ impl TextRenderer {
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("lumo-gfx-core::text-bg"),
+            label: Some("lumo-text-bg"),
             layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -298,18 +298,18 @@ impl TextRenderer {
 
         // --- pipeline ---
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("lumo-gfx-core::text-shader"),
+            label: Some("lumo-text-shader"),
             source: wgpu::ShaderSource::Wgsl(TEXT_SHADER_SRC.into()),
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("lumo-gfx-core::text-pl"),
+            label: Some("lumo-text-pl"),
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("lumo-gfx-core::text-pipeline"),
+            label: Some("lumo-text-pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -347,7 +347,7 @@ impl TextRenderer {
         });
 
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("lumo-gfx-core::text-instances"),
+            label: Some("lumo-text-instances"),
             size: (INITIAL_INSTANCE_CAPACITY * std::mem::size_of::<GlyphInstance>())
                 as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
@@ -478,7 +478,7 @@ impl TextRenderer {
 
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("lumo-gfx-core::text-pass"),
+                label: Some("lumo-text-pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: target,
                     resolve_target: None,
@@ -540,7 +540,7 @@ impl TextRenderer {
         if self.pending.len() > self.instance_capacity {
             let new_cap = self.pending.len().next_power_of_two();
             self.instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("lumo-gfx-core::text-instances"),
+                label: Some("lumo-text-instances"),
                 size: (new_cap * std::mem::size_of::<GlyphInstance>()) as wgpu::BufferAddress,
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
@@ -647,7 +647,7 @@ impl TextRenderer {
     /// Re-cria o bind group apos resize / recriacao de surface (opcional).
     pub fn rebuild_bind_group(&mut self, device: &wgpu::Device) {
         self.bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("lumo-gfx-core::text-bg"),
+            label: Some("lumo-text-bg"),
             layout: &self.bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -666,3 +666,10 @@ impl TextRenderer {
         });
     }
 }
+
+// ----------------------------------------------------------------------------
+// LT* aliases (A9-rename) -- Apple CoreText-style namespace.
+// ----------------------------------------------------------------------------
+
+/// Alias Apple-style. Prefira `LTRenderer` em call sites novos.
+pub type LTRenderer = TextRenderer;

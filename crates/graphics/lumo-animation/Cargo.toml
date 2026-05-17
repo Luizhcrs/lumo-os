@@ -1,0 +1,10 @@
+[package]
+name = "lumo-animation"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Animation: spring physics 1D. Apple CoreAnimation-style namespace."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

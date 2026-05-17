@@ -1,0 +1,15 @@
+[package]
+name = "lumo-beam"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Beam: wgpu device + surface + triangle primitive. 'Feixe de luz rasteriza pixels'. Apple Metal-style namespace."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+wgpu = "23"
+winit = "0.30"
+bytemuck = { version = "1", features = ["derive"] }
+log = "0.4"
+lumo-foundation = { path = "../../foundation/lumo-foundation" }

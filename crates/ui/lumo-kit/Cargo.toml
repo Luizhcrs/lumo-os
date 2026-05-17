@@ -1,0 +1,17 @@
+[package]
+name = "lumo-kit"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Kit: widget primitives (Button + state machine). Apple AppKit-style namespace."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+wgpu = "23"
+cosmic-text = "0.12"
+lumo-foundation = { path = "../../foundation/lumo-foundation" }
+lumo-graphics = { path = "../../graphics/lumo-graphics" }
+lumo-text = { path = "../../graphics/lumo-text" }
+lumo-animation = { path = "../../graphics/lumo-animation" }
+lumo-input = { path = "../lumo-input" }

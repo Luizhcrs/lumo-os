@@ -1,0 +1,11 @@
+[package]
+name = "lumo-input"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Input: winit events -> LumoEvent bridge."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+winit = "0.30"

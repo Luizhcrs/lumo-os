@@ -1,0 +1,15 @@
+[package]
+name = "lumo-text"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Text: cosmic-text + atlas R8 + glyph instanced. Apple CoreText-style namespace."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+wgpu = "23"
+bytemuck = { version = "1", features = ["derive"] }
+log = "0.4"
+cosmic-text = "0.12"
+etagere = "0.2"

@@ -18,14 +18,13 @@ use std::time::Instant;
 
 use cosmic_text::{Attrs, Buffer, Family, Metrics, Shaping, Weight};
 
-use crate::{
-    anim::Spring,
-    color,
-    input::{LumoEvent, MouseButton},
-    px_center_to_ndc, px_offset_to_ndc, px_size_to_ndc, px_to_ndc_radius,
-    text::{TextRenderer, TextStyle},
-    QuadInstance,
+use lumo_animation::Spring;
+use lumo_foundation::{
+    color, px_center_to_ndc, px_offset_to_ndc, px_size_to_ndc, px_to_ndc_radius,
 };
+use lumo_graphics::QuadInstance;
+use lumo_input::{LumoEvent, MouseButton};
+use lumo_text::{TextRenderer, TextStyle};
 
 // ============================================================================
 // Rect + hit testing (Layer 4.1.9)
@@ -610,11 +609,26 @@ fn visual_for_state(
 
 // ============================================================================
 // Tests
+
+
+// ----------------------------------------------------------------------------
+// LK* aliases (A9-rename) -- Apple AppKit-style namespace.
+// ----------------------------------------------------------------------------
+
+/// Alias Apple-style. Prefira `LKButton` em call sites novos.
+pub type LKButton = Button;
+/// Alias Apple-style. Prefira `LKButtonHandle` em call sites novos.
+pub type LKButtonHandle = ButtonHandle;
+/// Alias Apple-style. Prefira `LKRect` em call sites novos.
+pub type LKRect = Rect;
+/// Alias Apple-style. Prefira `LKWidgetState` em call sites novos.
+pub type LKWidgetState = WidgetState;
+
 // ============================================================================
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::input::MouseButton as Mb;
+    use lumo_input::MouseButton as Mb;
 
     fn ev_move(x: f32, y: f32) -> LumoEvent {
         LumoEvent::PointerMove { position: [x, y] }

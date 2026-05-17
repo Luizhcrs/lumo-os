@@ -2,9 +2,16 @@
 resolver = "2"
 members = [
     "shell",
+    "crates/foundation/lumo-foundation",
+    "crates/graphics/lumo-beam",
+    "crates/graphics/lumo-graphics",
+    "crates/graphics/lumo-text",
+    "crates/graphics/lumo-animation",
+    "crates/ui/lumo-input",
+    "crates/ui/lumo-kit",
+    "crates/compositor/lumo-wm",
+    "crates/compositor/lumo-ipc",
     "crates/lumo-gfx-core",
-    "crates/lumo-wm",
-    "crates/lumo-ipc",
 ]
 
 [profile.release]

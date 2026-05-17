@@ -2,10 +2,26 @@
 name = "lumo-gfx-core"
 version = "0.1.0"
 edition = "2021"
-description = "Lumo GFX core - wgpu-backed graphics primitives for Lumo OS Layer 4.1+"
+description = "Lumo GFX umbrella: re-exporta foundation + beam + graphics + text + animation + input + kit. Mantem um ponto unico de teste (bins demo)."
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies]
+wgpu = "23"
+winit = "0.30"
+bytemuck = { version = "1", features = ["derive"] }
+pollster = "0.4"
+log = "0.4"
+env_logger = "0.11"
+cosmic-text = "0.12"
+lumo-foundation = { path = "../foundation/lumo-foundation" }
+lumo-beam = { path = "../graphics/lumo-beam" }
+lumo-graphics = { path = "../graphics/lumo-graphics" }
+lumo-text = { path = "../graphics/lumo-text" }
+lumo-animation = { path = "../graphics/lumo-animation" }
+lumo-input = { path = "../ui/lumo-input" }
+lumo-kit = { path = "../ui/lumo-kit" }
 
 [[bin]]
 name = "triangle"
@@ -15,23 +31,9 @@ path = "src/bin/triangle.rs"
 name = "quad-gallery"
 path = "src/bin/quad-gallery.rs"
 
-[dependencies]
-wgpu = "23"
-winit = "0.30"
-bytemuck = { version = "1", features = ["derive"] }
-pollster = "0.4"
-log = "0.4"
-env_logger = "0.11"
-
 [[bin]]
 name = "text-demo"
 path = "src/bin/text-demo.rs"
-
-[dependencies.cosmic-text]
-version = "0.12"
-
-[dependencies.etagere]
-version = "0.2"
 
 [[bin]]
 name = "quad-shadow"

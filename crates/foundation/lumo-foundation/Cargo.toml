@@ -1,0 +1,10 @@
+[package]
+name = "lumo-foundation"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Foundation: design tokens, color helpers, geometry primitives."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

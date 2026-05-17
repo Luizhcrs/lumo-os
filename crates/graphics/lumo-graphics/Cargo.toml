@@ -1,0 +1,14 @@
+[package]
+name = "lumo-graphics"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Graphics: quad SDF + drop shadow + rounded corners primitive. Apple CoreGraphics-style namespace."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+wgpu = "23"
+bytemuck = { version = "1", features = ["derive"] }
+lumo-foundation = { path = "../../foundation/lumo-foundation" }
+lumo-beam = { path = "../lumo-beam" }

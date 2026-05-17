@@ -3581,16 +3581,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumo-animation"
+version = "0.1.0"
+
+[[package]]
+name = "lumo-beam"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "log",
+ "lumo-foundation",
+ "wgpu 23.0.1",
+ "winit",
+]
+
+[[package]]
+name = "lumo-foundation"
+version = "0.1.0"
+
+[[package]]
 name = "lumo-gfx-core"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
  "cosmic-text 0.12.1",
  "env_logger",
- "etagere",
  "log",
+ "lumo-animation",
+ "lumo-beam",
+ "lumo-foundation",
+ "lumo-graphics",
+ "lumo-input",
+ "lumo-kit",
+ "lumo-text",
  "pollster 0.4.0",
  "wgpu 23.0.1",
+ "winit",
+]
+
+[[package]]
+name = "lumo-graphics"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "lumo-beam",
+ "lumo-foundation",
+ "wgpu 23.0.1",
+]
+
+[[package]]
+name = "lumo-input"
+version = "0.1.0"
+dependencies = [
  "winit",
 ]
 
@@ -3600,6 +3642,19 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "lumo-kit"
+version = "0.1.0"
+dependencies = [
+ "cosmic-text 0.12.1",
+ "lumo-animation",
+ "lumo-foundation",
+ "lumo-graphics",
+ "lumo-input",
+ "lumo-text",
+ "wgpu 23.0.1",
 ]
 
 [[package]]
@@ -3613,6 +3668,17 @@ dependencies = [
  "serde_json",
  "smithay-client-toolkit",
  "tiny-skia",
+]
+
+[[package]]
+name = "lumo-text"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "cosmic-text 0.12.1",
+ "etagere",
+ "log",
+ "wgpu 23.0.1",
 ]
 
 [[package]]
