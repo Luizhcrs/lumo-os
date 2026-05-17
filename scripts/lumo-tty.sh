@@ -30,6 +30,11 @@
 
 set -euo pipefail
 
+# Log desde primeira linha (capturar TUDO)
+exec > >(tee /tmp/lumo-wm-tty.log) 2>&1
+echo "=== lumo-tty.sh inicio $(date) tty=$(tty) ==="
+
+
 # ============================================================
 # Safety 1: rejeitar se nao for TTY real (SSH, pts, etc).
 # ============================================================
@@ -103,10 +108,15 @@ fi
 # Terminar sessoes logind de outros TTYs (Hyprland zombie etc)
 echo "[info] terminando sessoes logind de outros TTYs..."
 MY_TTY=$(tty | sed "s|/dev/||")
-loginctl list-sessions --no-legend | awk '{print $1, $6}' | while read sid stty; do
-    if [[ -n "$stty" && "$stty" != "$MY_TTY" && "$stty" != "-" ]]; then
-        echo "  terminando session $sid (tty=$stty)"
-        sudo loginctl terminate-session "$sid" 2>/dev/null || true
+echo "  MY_TTY=$MY_TTY"
+# Pega session id via loginctl show-session por SID, evita awk de colunas
+for SID in $(loginctl list-sessions --no-legend | awk '{print $1}'); do
+    STTY=$(loginctl show-session "$SID" --property=TTY --value 2>/dev/null)
+    if [[ -n "$STTY" && "$STTY" != "$MY_TTY" ]]; then
+        echo "  terminando session $SID (tty=$STTY)"
+        sudo loginctl terminate-session "$SID" 2>/dev/null || true
+    else
+        echo "  preservando session $SID (tty=$STTY, my_tty=$MY_TTY)"
     fi
 done
 sleep 1
@@ -187,4 +197,6 @@ post_exit() {
 }
 trap post_exit EXIT
 
-./target/release/lumo-wm 2>&1 | tee /tmp/lumo-wm-tty.log
+./target/release/lumo-wm
+LUMO_EC=$?
+echo "[final] lumo-wm exit code=$LUMO_EC"
