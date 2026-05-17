@@ -4,6 +4,12 @@
 //!
 //! Fase 5.5 (A8): seleciona backend por env. DRM precisa feature
 //! `drm-backend` no build; winit eh sempre o default seguro.
+//!
+//! A9.2C: Display agora vira Rc<RefCell> antes do dispatch de backend,
+//! pra que o path DRM possa registrar seu proprio timer dispatch_clients
+//! dentro do event loop que ele controla (run() bloqueia ate exit).
+//! Antes, o timer dispatch_clients ficava no main pos-backend init, mas
+//! em DRM esse main nunca chega no path -- run() segura o thread.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -74,6 +80,16 @@ fn main() -> Result<()> {
         }
     }
 
+    // WAYLAND_DISPLAY exportado pra clients filhos (foot, lumo-bar) que
+    // herdam env. Setado antes do dispatch porque DRM bloqueia.
+    if let Some(s) = socket_name.as_ref() {
+        std::env::set_var("WAYLAND_DISPLAY", s);
+    }
+
+    // Display em Rc<RefCell> -- compartilhado entre path winit (timer
+    // do main pos-init) e path DRM (timer dentro do run).
+    let display = Rc::new(RefCell::new(display));
+
     // Backend dispatch.
     match backend {
         BackendChoice::Winit => {
@@ -82,10 +98,13 @@ fn main() -> Result<()> {
         BackendChoice::Drm => {
             #[cfg(feature = "drm-backend")]
             {
-                lumo_wm::backend::drm::run(&mut event_loop, &mut state)?;
+                lumo_wm::backend::drm::run(&mut event_loop, &mut state, display.clone())?;
                 // run() bloqueia tudo; em DRM o proprio backend
                 // orquestra o event loop. Saimos aqui depois.
                 tracing::info!("Lumo WM saiu do backend DRM");
+                if let Some(path) = state.ipc.socket_path.take() {
+                    let _ = std::fs::remove_file(path);
+                }
                 return Ok(());
             }
             #[cfg(not(feature = "drm-backend"))]
@@ -99,13 +118,8 @@ fn main() -> Result<()> {
         }
     }
 
-    if let Some(s) = socket_name.as_ref() {
-        std::env::set_var("WAYLAND_DISPLAY", s);
-    }
-
-    let display = Rc::new(RefCell::new(display));
-
-    // Timer 4ms: dispatch Wayland + tick IPC.
+    // Timer 4ms: dispatch Wayland + tick IPC (so winit path -- DRM tem
+    // o seu proprio dentro de drm::run).
     let display_for_timer = display.clone();
     event_loop
         .handle()

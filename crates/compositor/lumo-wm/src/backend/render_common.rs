@@ -5,6 +5,11 @@
 //! winit.rs; agora drm.rs reusa o mesmo pipeline visual (lapidado,
 //! sem duplicar codigo).
 //!
+//! Etapa 2C (A9): adiciona variant `Space=SpaceRenderElements<...>`
+//! pra carregar toplevels reais (xdg_shell) + layer-shell (background,
+//! bottom, top, overlay) dentro do mesmo enum de elementos. DRM agora
+//! renderiza clients de verdade, nao so chrome (cursor/cantos/sombras).
+//!
 //! Memory feedback_zero_neon_glow: sombras preto/transparente puro,
 //! sem nenhum glow colorido. Cantos = quad preto solido.
 //! Memory feedback_design_lapidado: cada constante justificada,
@@ -15,20 +20,35 @@ use smithay::backend::renderer::element::memory::{
     MemoryRenderBuffer, MemoryRenderBufferRenderElement,
 };
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
+use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::element::{render_elements, Id, Kind};
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::{Color32F, ImportMem};
+use smithay::backend::renderer::Color32F;
+use smithay::desktop::space::{space_render_elements, SpaceRenderElements};
 use smithay::desktop::{Space, Window};
+use smithay::output::Output;
 use smithay::utils::{Logical, Physical, Point, Rectangle};
 
 use crate::cursor::LoadedCursor;
 
-// Wrapper combinando SolidColor (cursor fallback / sombras / corner mask)
-// e MemoryRenderBuffer (cursor xcursor real).
+// Wrapper combinando SolidColor (cursor fallback / sombras / corner mask),
+// MemoryRenderBuffer (cursor xcursor real) e SpaceRenderElements
+// (toplevels xdg + layer-shell).
+//
+// Variant Space ja cobre layer-shell upper (top/overlay) + space toplevels
+// + layer-shell lower (background/bottom) na ordem certa, porque
+// `space_render_elements` faz esse Z-order internamente.
+//
+// Concreto sobre GlesRenderer porque SpaceRenderElements<R, ...> exige
+// R: ImportAll (= ImportMemWl + ImportDmaWl + ImportEgl) no proprio
+// enum, e o macro `render_elements!` so propaga bounds pro impl, nao
+// pro enum em si. winit e drm usam GlesRenderer mesmo, entao concretizar
+// nao perde nada.
 render_elements! {
-    pub LumoCustomElement<R> where R: ImportMem;
+    pub LumoCustomElement<=GlesRenderer>;
     Solid=SolidColorRenderElement,
-    Memory=MemoryRenderBufferRenderElement<R>,
+    Memory=MemoryRenderBufferRenderElement<GlesRenderer>,
+    Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
 }
 
 // Cursor solid fallback (10x14 cinza claro). Usado quando xcursor falha.
@@ -162,12 +182,14 @@ pub struct OverlayInputs<'a> {
 }
 
 /// Constroi overlay completo (cursor + corner mask + shadows).
-/// Usado por ambos backends. Output em scale 1.0 (HiDPI = futuro).
+/// Usado pelo backend winit, que ja recebe space_iter separado em
+/// `render_output` -- aqui so coletamos chrome (cursor/cantos/sombras).
+/// Output em scale 1.0 (HiDPI = futuro).
 pub fn build_overlay(
     renderer: &mut GlesRenderer,
     inputs: &OverlayInputs<'_>,
-) -> Vec<LumoCustomElement<GlesRenderer>> {
-    let mut overlay: Vec<LumoCustomElement<GlesRenderer>> = Vec::with_capacity(16);
+) -> Vec<LumoCustomElement> {
+    let mut overlay: Vec<LumoCustomElement> = Vec::with_capacity(16);
 
     // 1. Cursor (em cima).
     if let Some(elem) = cursor_xcursor_element(
@@ -197,4 +219,88 @@ pub fn build_overlay(
     }
 
     overlay
+}
+
+/// Args agrupados pra collect_drm_elements -- evita too_many_arguments
+/// e mantem chamada legivel no render_drm.
+pub struct DrmCollectInputs<'a> {
+    pub space: &'a Space<Window>,
+    pub output: &'a Output,
+    pub pointer_location: Point<f64, Logical>,
+    pub frame_counter: u64,
+    pub cursor: Option<&'a LoadedCursor>,
+    pub cursor_buffer: Option<&'a MemoryRenderBuffer>,
+    pub output_w: i32,
+    pub output_h: i32,
+}
+
+/// Coleta TODOS elementos pra render direto no DrmCompositor: chrome
+/// (cursor, cantos, sombras) + Space (layer-shell + toplevels).
+///
+/// Ordem (stack baixo -> cima):
+/// 1. Mascara dos 4 cantos pretos.
+/// 2. Cursor (Kind::Cursor pra DrmCompositor poder mover pra HW plane
+///    no futuro -- Etapa 2D).
+/// 3. Sombras pretas atras de cada toplevel.
+/// 4. SpaceRenderElements: layer top/overlay -> toplevels space ->
+///    layer background/bottom (ordem interna garantida pelo smithay).
+///
+/// Como `render_frame` desenha de tras pra frente recebendo elementos
+/// em ordem **front-first**, a lista vai do mais alto pro mais baixo:
+/// cursor primeiro, sombras + space depois, cantos por ultimo (cobrem
+/// pixels nos 4 cantos). Cor de clear (ink_deep) preenche resto.
+pub fn collect_drm_elements(
+    renderer: &mut GlesRenderer,
+    inputs: &DrmCollectInputs<'_>,
+) -> Vec<LumoCustomElement> {
+    let mut out: Vec<LumoCustomElement> = Vec::with_capacity(64);
+
+    // 1. Cursor primeiro (mais alto na pilha visual).
+    if let Some(elem) = cursor_xcursor_element(
+        renderer,
+        inputs.pointer_location,
+        inputs.cursor,
+        inputs.cursor_buffer,
+        1.0,
+    ) {
+        out.push(LumoCustomElement::Memory(elem));
+    } else {
+        out.push(LumoCustomElement::Solid(cursor_solid_fallback(
+            inputs.pointer_location,
+            inputs.frame_counter,
+            1.0,
+        )));
+    }
+
+    // 2. Mascara de cantos (cobre pixels dos cantos por cima de tudo
+    //    que vier do space, antes do clear preto preencher fora).
+    for elem in corner_mask_elements(inputs.output_w, inputs.output_h) {
+        out.push(LumoCustomElement::Solid(elem));
+    }
+
+    // 3. Sombras pretas atras das toplevels.
+    for elem in shadow_elements(inputs.space) {
+        out.push(LumoCustomElement::Solid(elem));
+    }
+
+    // 4. Toplevels + layer-shell via space_render_elements.
+    //    Smithay ja ordena: layer top/overlay -> space windows ->
+    //    layer bottom/background (front->back).
+    match space_render_elements::<_, Window, _>(
+        renderer,
+        std::iter::once(inputs.space),
+        inputs.output,
+        1.0,
+    ) {
+        Ok(elements) => {
+            for el in elements {
+                out.push(LumoCustomElement::Space(el));
+            }
+        }
+        Err(err) => {
+            tracing::warn!(?err, "space_render_elements falhou no DRM path");
+        }
+    }
+
+    out
 }

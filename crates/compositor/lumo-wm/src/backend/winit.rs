@@ -168,7 +168,7 @@ fn redraw(
     };
     let overlay = build_overlay(renderer, &inputs);
 
-    let render_result = render_output::<_, LumoCustomElement<GlesRenderer>, _, _>(
+    let render_result = render_output::<_, LumoCustomElement, _, _>(
         output,
         renderer,
         &mut framebuffer,

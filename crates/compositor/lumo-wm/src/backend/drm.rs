@@ -17,16 +17,28 @@
 //!   [done] reuse render_common (cursor/cantos/sombras) -- mesmo visual
 //!          que winit, sem duplicar codigo (memory feedback_design_lapidado)
 //!
-//! Pendente Etapa 2C (futuro):
+//! ETAPA 2C (A9): toplevels reais + dispatch clients.
+//!   [done] timer dispatch_clients 4ms dentro do event loop DRM
+//!          (antes ficava no main loop pos-run() que NUNCA chega no
+//!          path DRM, deixando socket Wayland sem dispatch)
+//!   [done] collect_drm_elements -> SpaceRenderElements pra toplevels +
+//!          layer-shell na ordem certa
+//!   [done] LumoCustomElement::Space variant cobrindo xdg/layer
+//!
+//! Pendente Etapa 2D (futuro):
 //!   [todo] cursor HW plane (overlay scan-out direct)
 //!   [todo] linux-dmabuf-v1 pra clients
 //!   [todo] hot-plug real (atualmente so loga)
 //!   [todo] VRR (Galaxy U300 nao tem painel VRR; skipped)
 //!   [todo] HiDPI scale tracking (output_scale != 1.0)
+//!   [todo] damage tracker -> skip queue_frame quando damage vazio
 //!
 //! Memory feedback_input_feedback_imediato: frame loop 60Hz +
-//! libinput dispatch entre frames = lag deve ficar < 16ms.
+//! libinput dispatch entre frames + dispatch_clients 4ms = lag total
+//! ficar < 16ms.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
@@ -48,11 +60,12 @@ use smithay::reexports::calloop::EventLoop;
 use smithay::reexports::drm::control::{connector, crtc, Device as ControlDevice, ModeTypeFlags};
 use smithay::reexports::drm::node::{DrmNode, NodeType};
 use smithay::reexports::rustix;
+use smithay::reexports::wayland_server::Display;
 use smithay::utils::DeviceFd;
 
 use crate::state::LumoState;
 
-use super::render_common::{build_overlay, LumoCustomElement, OverlayInputs, CLEAR_INK_DEEP};
+use super::render_common::{collect_drm_elements, DrmCollectInputs, LumoCustomElement, CLEAR_INK_DEEP};
 
 /// Watchdog: sem dispatch da event loop em 5s -> assumir DRM stall
 /// e exit code 2. Recovery: kernel ja garante VT switch via Ctrl+Alt+F1.
@@ -92,11 +105,16 @@ pub struct DrmBackendData {
 }
 
 /// Entry point do backend DRM. Bloqueia ate sair.
+///
+/// Etapa 2C: recebe `display` (Rc<RefCell>) pra agendar dispatch_clients
+/// dentro do mesmo event loop -- antes o dispatch ficava no main pos-run,
+/// que nunca era alcancado no path DRM (run bloqueia ate exit).
 pub fn run(
     event_loop: &mut EventLoop<'static, LumoState>,
     state: &mut LumoState,
+    display: Rc<RefCell<Display<LumoState>>>,
 ) -> Result<()> {
-    tracing::info!("DRM backend Etapa 2B: render path real ativo");
+    tracing::info!("DRM backend Etapa 2C: render toplevels ativo");
 
     // ============================================================
     // 1. Session libseat.
@@ -306,7 +324,7 @@ pub fn run(
     // 8. initialize_output -> cria DrmOutput (page-flip-ready surface).
     // ============================================================
     let drm_output = output_manager
-        .initialize_output::<_, LumoCustomElement<GlesRenderer>>(
+        .initialize_output::<_, LumoCustomElement>(
             crtc_handle,
             picked_mode,
             &[picked_info.handle()],
@@ -427,13 +445,47 @@ pub fn run(
         .map_err(|e| anyhow!("insert frame timer: {e}"))?;
 
     // ============================================================
+    // 13b. Display dispatch_clients timer 4ms (Etapa 2C).
+    //      Sem isso, clients Wayland (foot, lumo-bar) conectam socket
+    //      mas nunca recebem eventos -- compositor responde so
+    //      enquanto pixels rolam mas protocolo fica mudo.
+    //      4ms = mesmo intervalo do path winit.
+    // ============================================================
+    let display_for_dispatch = display.clone();
+    event_loop
+        .handle()
+        .insert_source(
+            Timer::immediate(),
+            move |_, _, state: &mut LumoState| {
+                if !state.running {
+                    return TimeoutAction::Drop;
+                }
+                let mut d = display_for_dispatch.borrow_mut();
+                if let Err(err) = d.dispatch_clients(state) {
+                    tracing::warn!(?err, "DRM dispatch_clients falhou");
+                }
+                let _ = d.flush_clients();
+                drop(d);
+                // Tick IPC pra workspaces (broadcast pra lumo-bar quando
+                // Super+1..9 chega via libinput).
+                crate::ipc::tick(state);
+                TimeoutAction::ToDuration(Duration::from_millis(4))
+            },
+        )
+        .map_err(|e| anyhow!("insert DRM dispatch timer: {e}"))?;
+
+    // ============================================================
     // 14. Event loop principal.
     // ============================================================
-    tracing::info!("DRM Etapa 2B: entrando event loop com render real");
+    tracing::info!("DRM Etapa 2C: entrando event loop com toplevels reais");
     while state.running {
         if let Err(err) = event_loop.dispatch(Some(Duration::from_millis(16)), state) {
             tracing::warn!(?err, "dispatch DRM event loop falhou");
         }
+        // Flush extra pos-dispatch garante que respostas synchrnous geradas
+        // por handlers (ex: configure events em xdg_shell) vao pro wire
+        // antes do proximo tick.
+        let _ = display.borrow_mut().flush_clients();
         state.watchdog_deadline =
             Some(Instant::now() + Duration::from_millis(WATCHDOG_MS));
     }
@@ -519,32 +571,24 @@ fn render_drm(state: &mut LumoState) {
     });
     let (ow, oh) = (mode.size.w, mode.size.h);
 
-    // Coleta space elements (toplevels). DrmCompositor recebe lista
-    // unica de RenderElements; intercalamos overlay (cursor/cantos/
-    // sombras) com space elements.
-    // Borrows: pegamos referencias imutaveis de state.* ANTES de borrow
-    // mut em backend.renderer pra evitar conflito.
-    let inputs = OverlayInputs {
+    // Etapa 2C: coleta chrome (cursor/cantos/sombras) + Space (toplevels +
+    // layer-shell) em uma lista unica. collect_drm_elements ja respeita
+    // ordem de stack -- cursor primeiro (front), cantos, sombras, depois
+    // SpaceRenderElements vindos do smithay com z-order interno correto.
+    let collect_inputs = DrmCollectInputs {
+        space,
+        output: &surface.output,
         pointer_location,
         frame_counter,
         cursor: cursor.as_ref(),
         cursor_buffer: cursor_buffer.as_ref(),
-        space,
         output_w: ow,
         output_h: oh,
     };
-
-    let overlay = build_overlay(&mut backend.renderer, &inputs);
-    let all_elements: Vec<LumoCustomElement<GlesRenderer>> = overlay;
-
-    // TODO Etapa 2C: integrar space_render_elements aqui. Requer wrap
-    // de WaylandSurfaceRenderElement em LumoCustomElement (variante
-    // adicional no render_elements! macro). Por agora 2B prova o
-    // pipeline com overlay (cursor + cantos + sombras) -- toplevels
-    // viram na proxima iteracao com display dispatch ligado.
+    let all_elements = collect_drm_elements(&mut backend.renderer, &collect_inputs);
 
     // Render frame.
-    let render_result = surface.drm_output.render_frame::<_, LumoCustomElement<GlesRenderer>>(
+    let render_result = surface.drm_output.render_frame::<_, LumoCustomElement>(
         &mut backend.renderer,
         &all_elements,
         Color32F::new(
