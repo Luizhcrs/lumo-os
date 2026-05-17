@@ -89,9 +89,9 @@ const BRAND_DOT_RADIUS: f32 = 4.0;
 const BRAND_GAP: f32 = 14.0;
 
 /// Font sizes (px). Menus 13, status 12, data 11 (Apple-grade hierarchy).
-const FONT_MENU: f32 = 13.0;
-const FONT_STATUS: f32 = 12.0;
-const FONT_DATE: f32 = 11.0;
+const FONT_MENU: f32 = 14.0;
+const FONT_STATUS: f32 = 13.0;
+const FONT_DATE: f32 = 12.0;
 
 /// Wifi icone tamanho (A15: 18 era 14).
 const WIFI_SIZE: f32 = 18.0;

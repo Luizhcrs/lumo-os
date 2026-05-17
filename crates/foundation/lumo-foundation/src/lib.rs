@@ -248,8 +248,8 @@ impl LumoColors {
             bg_subtle:     0x00F0F0F2, // hover stretch
             fg:            0x0018181B, // ink claro (Tailwind zinc-900)
             fg_subtle:     0x006B7280, // zinc-500
-            accent:        0x00059669, // emerald-600
-            accent_subtle: 0x00D1FAE5, // emerald-100 (hover wash)
+            accent:        0x0010B981, // emerald-500 (mais vibrante pra contraste com bg light)
+            accent_subtle: 0x00A7F3D0, // emerald-200 (hover wash mais visivel)
             border:        0x00E5E7EB, // zinc-200
             shadow:        0x00000000, // alpha aplicado on use
         }
