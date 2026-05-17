@@ -282,6 +282,14 @@ impl LumoColors {
     pub fn hex_to_linear(hex: u32) -> [f32; 4] {
         LFColor::srgb_to_linear(Self::hex_to_srgb(hex))
     }
+
+    /// Background do tema atual ja em linear `[f32; 4]`. A14 helper:
+    /// corner mask pinta cantos na MESMA cor do clear, somando
+    /// "invisivel". Antes era preto fixo -> em light theme aparecia
+    /// ponto preto nos cantos (Luiz reportou).
+    pub fn bg_as_linear_rgba(&self) -> [f32; 4] {
+        Self::hex_to_linear(self.bg)
+    }
 }
 
 /// Le `LUMO_THEME` do env. Default = Light (decisao A13).
@@ -307,9 +315,21 @@ pub fn clear_color_linear() -> [f32; 4] {
     LumoColors::hex_to_linear(current_colors().bg)
 }
 
-/// Cor da mascara de cantos do output. **Sempre preto neutro** -- nao
-/// muda com tema (eh moldura fisica do display, nao chrome).
-/// Alpha 1.0 pra opacificar cantos arredondados.
+/// Cor da mascara de cantos do output. A14: ANTES era preto hardcoded
+/// -> em light theme aparecia ponto preto nos cantos (Luiz reportou).
+/// AGORA: pinta cantos na MESMA cor do clear background -> some sobre
+/// o fundo do compositor em qualquer tema.
+///
+/// Funcao runtime (le tema corrente) em vez de constante, porque tema
+/// vem do env. Custo: 1 env lookup + 4 multiplicacoes por frame —
+/// desprezivel.
+pub fn corner_mask_color_linear() -> [f32; 4] {
+    current_colors().bg_as_linear_rgba()
+}
+
+/// Legacy constante mantida pra compat. Aponta pra preto neutro mas
+/// novos call sites devem usar `corner_mask_color_linear()` runtime.
+#[deprecated(note = "use corner_mask_color_linear() pra theme-aware")]
 pub const CORNER_MASK_COLOR_LINEAR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 // Flat aliases para retro-compat com call sites antigos.

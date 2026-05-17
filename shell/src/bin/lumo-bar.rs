@@ -1,34 +1,33 @@
 //! lumo-bar - top bar Lumo OS via wlr-layer-shell + SHM + tiny-skia.
 //!
-//! A13 redesign: paleta light default (Luiz reportou bar feia + dark
-//! indesejado). Theme switchable via `LUMO_THEME=dark|light` env.
+//! A14 redesign: Apple-style top bar (menus topo + status compacto).
+//! Workspaces removidos (vao pro dock futuro). Power button removido
+//! (vai pro menu Lumo dropdown futuro).
 //!
-//! Layout lapidado (32px alt, full width):
+//! Layout (28px alt, full width):
 //!
-//!   [brand dot 8px]   1  2  3  4  5     [wifi] [bat] HH:MM  [⏻]
+//!   [dot] Lumo  Editar  Visualizar  Ajuda          wifi 73% 13:45 sex 17 mai
 //!
 //! Slots:
-//!   - Esquerda  (PAD_X=16): brand dot 8px circulo emerald.
-//!   - Centro:   workspaces 1..=5, pill 22x22 r=6, ativo=accent fill com
-//!               fg invertido, inativo=transparente com border 1px.
-//!   - Direita  (PAD_X=16, gap=12px): wifi (3 arcos) -> bateria (rect com
-//!               fill horizontal proporcional a %) -> clock HH:MM ->
-//!               power (circulo aberto + linha vertical no topo).
+//!   - Esquerda (PAD_X=14, gap=16px entre items): brand dot 8px circulo
+//!     emerald + menus text 12px (Lumo BOLD, restantes regular).
+//!   - Direita (PAD_X=14, gap=12px): wifi (3 arcos) -> bateria texto
+//!     "73%" + icone -> clock HH:MM mono -> data abrev pt-br "sex 17 mai"
+//!     (fg_subtle).
 //!
-//! Tipografia: 7-segment digits desenhados via tiny-skia (Geist Mono ja
-//! visualmente proxima de mono compact; quando font rendering rolar via
-//! cosmic-text trocamos). Sem dependencia de Nerd Font / emoji
-//! (memory feedback_zero_emoji).
+//! Tipografia: bitmap font 5x7 pixel-perfect desenhado via tiny-skia
+//! com paint anti_alias=false (texto eh pixel-art, AA borra) + coords
+//! arredondadas. Glyphs definidos inline (memory feedback_zero_emoji
+//! nao usa Nerd Font / emoji). Bold = double-stroke (mesmo glyph
+//! desenhado duas vezes com offset 1px).
 //!
 //! Border bottom: 1px linha cor `border` (sutil). ZERO box-shadow colorido
-//! (memory feedback_zero_neon_glow). Pode haver fileira de 1px preto
-//! rgba(0,0,0,0.04) abaixo como separacao visual sutil (commented inline).
+//! (memory feedback_zero_neon_glow).
 //!
-//! Memory feedback_input_feedback_imediato: click em workspace pill aplica
-//! local imediato + envia IPC; refresh bat/wifi a cada 15s; clock a cada
-//! 1s. Drop de clicks burst < 100ms pra evitar double-fire.
+//! IPC consumer (drain_ipc) mantido vivo pra futuro use mas state de
+//! workspace nao alimenta mais render.
 
-use std::io::{ErrorKind, Read, Write};
+use std::io::{ErrorKind, Read};
 use std::os::unix::net::UnixStream;
 use std::sync::{
     atomic::{AtomicU8, Ordering},
@@ -36,7 +35,7 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-use chrono::Local;
+use chrono::{Datelike, Local, Timelike};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_layer, delegate_output, delegate_pointer, delegate_registry,
@@ -65,32 +64,36 @@ use smithay_client_toolkit::reexports::client::{
 };
 
 use lumo_foundation::{current_colors, LumoColors, LumoTheme};
-use lumo_ipc::{default_socket_path, LumoCommand, LumoEvent, MAX_WORKSPACES};
+use lumo_ipc::{default_socket_path, LumoEvent, MAX_WORKSPACES};
 
 // ============================================================
 // Layout constants (lapidado: cada valor justificado).
 // ============================================================
 
-/// Altura fixa da bar. 32px = aprox 8 grid units Apple HIG densidade media.
-const BAR_HEIGHT: u32 = 32;
+/// Altura fixa da bar. 28px = Apple macOS densidade (era 32 antes do A14).
+const BAR_HEIGHT: u32 = 28;
 
-/// Padding horizontal nas duas pontas. 16px = 1rem.
-const PAD_X: f32 = 16.0;
+/// Padding horizontal nas duas pontas. 14px (Apple ~14).
+const PAD_X: f32 = 14.0;
 
-/// Gap default entre slots da direita (wifi/bat/clock/power).
+/// Gap entre menus do slot esquerdo (apos brand dot).
+const MENU_GAP: f32 = 16.0;
+
+/// Gap entre items do slot direito (wifi/bat/clock/data).
 const SEG_GAP: f32 = 12.0;
-
-/// Quantidade de workspaces (vem do IPC).
-const WORKSPACE_COUNT: u32 = MAX_WORKSPACES as u32;
-
-/// Pill workspace: 22x22 com radius 6. Quadrado-ish lapidado.
-const WS_PILL_SIZE: f32 = 22.0;
-const WS_PILL_RADIUS: f32 = 6.0;
-const WS_PILL_GAP: f32 = 4.0;
-const WS_PILL_STEP: f32 = WS_PILL_SIZE + WS_PILL_GAP;
 
 /// Brand dot diametro. 8px = atomo visual estavel.
 const BRAND_DOT_RADIUS: f32 = 4.0;
+
+/// Espacamento entre brand dot e primeiro menu.
+const BRAND_GAP: f32 = 14.0;
+
+/// Tamanho do pixel do glyph. 5x7 char * pixel_size = tamanho final.
+/// `1` = 5x7 (tiny). `2` = 10x14 (legivel @ 12px equivalente).
+const FONT_PX: f32 = 2.0;
+
+/// Espacamento entre glyphs (1 col pixel @ FONT_PX).
+const FONT_SPACING: f32 = 1.0;
 
 // ============================================================
 // Color helpers (hex 0xRRGGBB -> tiny_skia Color via theme).
@@ -112,9 +115,17 @@ fn opaque(hex: u32) -> Color {
 // ============================================================
 // Vector primitives (tiny-skia paths).
 // ============================================================
+//
+// A14 fix serrilhado: TODOS path-based primitives usam anti_alias=true.
+// Coords passadas pelos callers sao arredondadas com `.round()` antes
+// de chamar para evitar sub-pixel offset acumulado nas bordas (que
+// gerava "linha serrilhada" visivel nas pills).
 
 fn fill_circle(canvas: &mut PixmapMut, cx: f32, cy: f32, r: f32, color: Color) {
-    let path = PathBuilder::from_circle(cx, cy, r).unwrap();
+    let path = match PathBuilder::from_circle(cx.round(), cy.round(), r) {
+        Some(p) => p,
+        None => return,
+    };
     let mut p = Paint::default();
     p.set_color(color);
     p.anti_alias = true;
@@ -122,6 +133,8 @@ fn fill_circle(canvas: &mut PixmapMut, cx: f32, cy: f32, r: f32, color: Color) {
 }
 
 fn fill_rrect(canvas: &mut PixmapMut, x: f32, y: f32, w: f32, h: f32, r: f32, color: Color) {
+    let x = x.round();
+    let y = y.round();
     let r = r.min(w / 2.0).min(h / 2.0);
     let mut pb = PathBuilder::new();
     pb.move_to(x + r, y);
@@ -134,7 +147,10 @@ fn fill_rrect(canvas: &mut PixmapMut, x: f32, y: f32, w: f32, h: f32, r: f32, co
     pb.line_to(x, y + r);
     pb.quad_to(x, y, x + r, y);
     pb.close();
-    let path = pb.finish().unwrap();
+    let path = match pb.finish() {
+        Some(p) => p,
+        None => return,
+    };
     let mut p = Paint::default();
     p.set_color(color);
     p.anti_alias = true;
@@ -151,6 +167,8 @@ fn stroke_rrect(
     color: Color,
     sw: f32,
 ) {
+    let x = x.round();
+    let y = y.round();
     let r = r.min(w / 2.0).min(h / 2.0);
     let mut pb = PathBuilder::new();
     pb.move_to(x + r, y);
@@ -163,7 +181,10 @@ fn stroke_rrect(
     pb.line_to(x, y + r);
     pb.quad_to(x, y, x + r, y);
     pb.close();
-    let path = pb.finish().unwrap();
+    let path = match pb.finish() {
+        Some(p) => p,
+        None => return,
+    };
     let mut p = Paint::default();
     p.set_color(color);
     p.anti_alias = true;
@@ -191,7 +212,6 @@ fn stroke_arc(
     let p0 = (cx + r * to_rad(start_deg).cos(), cy + r * to_rad(start_deg).sin());
     let p1 = (cx + r * to_rad(end_deg).cos(), cy + r * to_rad(end_deg).sin());
     let mid = (start_deg + end_deg) * 0.5;
-    // Magic-1.0 nao serve pra arco; usa magic dependente do delta angular.
     let delta = (end_deg - start_deg).abs().to_radians();
     let k = ((delta / 2.0).cos()).max(0.0001);
     let r_ctl = r / k;
@@ -219,62 +239,496 @@ fn fill_rect_color(pixmap: &mut Pixmap, x: f32, y: f32, w: f32, h: f32, color: C
     let mut p = Paint::default();
     p.set_color(color);
     p.anti_alias = false;
-    if let Some(r) = Rect::from_xywh(x, y, w, h) {
+    if let Some(r) = Rect::from_xywh(x.round(), y.round(), w, h) {
         pixmap.fill_rect(r, &p, Transform::identity(), None);
     }
 }
 
+/// fill_rect dentro de canvas (PixmapMut). Pixel-art, AA off.
+fn fill_rect_px(canvas: &mut PixmapMut, x: f32, y: f32, w: f32, h: f32, color: Color) {
+    let mut p = Paint::default();
+    p.set_color(color);
+    p.anti_alias = false;
+    if let Some(r) = Rect::from_xywh(x.round(), y.round(), w, h) {
+        canvas.fill_rect(r, &p, Transform::identity(), None);
+    }
+}
+
 // ============================================================
-// Glyph rendering (7-seg digits + dot separator).
+// Bitmap font 5x7 pixel-perfect (subset ASCII).
 // ============================================================
 //
-// Lumo nao usa Nerd Font / emoji (memory feedback_zero_emoji). Digitos
-// renderizados por 7 segmentos vetoriais. Pixel-perfect a 11pt visual.
+// Memory feedback_zero_emoji: zero Nerd Font / emoji. Glyphs definidos
+// inline via mascara de bits 5 colunas x 7 linhas. Cada `[u8; 7]` eh
+// uma linha do glyph; bit `0b10000` = coluna 0 (esquerda), `0b00001` =
+// coluna 4 (direita). Bit 1 = pixel ligado.
 //
-//     _
-//    |_|     w=7  h=11  thickness=1.6
-//    |_|
-//
-fn draw_digit(canvas: &mut PixmapMut, x: f32, y: f32, d: u8, color: Color) {
-    let segs: [bool; 7] = match d {
-        0 => [true, true, true, true, true, true, false],
-        1 => [false, true, true, false, false, false, false],
-        2 => [true, true, false, true, true, false, true],
-        3 => [true, true, true, true, false, false, true],
-        4 => [false, true, true, false, false, true, true],
-        5 => [true, false, true, true, false, true, true],
-        6 => [true, false, true, true, true, true, true],
-        7 => [true, true, true, false, false, false, false],
-        8 => [true, true, true, true, true, true, true],
-        9 => [true, true, true, true, false, true, true],
-        _ => [false; 7],
+// Subset: a-z minusculo + 0-9 + ' ' + ':' + '%' + L V E A (maiusculos
+// usados nos menus). Suficiente pra "Lumo Editar Visualizar Ajuda" +
+// data abrev pt-br + clock + bateria.
+
+type Glyph = [u8; 7];
+
+/// Retorna a mascara 5x7 do char, ou None se nao suportado.
+fn glyph_of(c: char) -> Option<Glyph> {
+    // Formato: 5 bits por linha, 7 linhas (top->bottom).
+    // 0b11111 = linha cheia, 0b10001 = bordas, etc.
+    Some(match c {
+        // ----- letras maiusculas (so as que aparecem em menus) -----
+        'L' => [
+            0b10000,
+            0b10000,
+            0b10000,
+            0b10000,
+            0b10000,
+            0b10000,
+            0b11111,
+        ],
+        'V' => [
+            0b10001,
+            0b10001,
+            0b10001,
+            0b10001,
+            0b10001,
+            0b01010,
+            0b00100,
+        ],
+        'E' => [
+            0b11111,
+            0b10000,
+            0b10000,
+            0b11110,
+            0b10000,
+            0b10000,
+            0b11111,
+        ],
+        'A' => [
+            0b01110,
+            0b10001,
+            0b10001,
+            0b11111,
+            0b10001,
+            0b10001,
+            0b10001,
+        ],
+
+        // ----- letras minusculas a-z (subset usado) -----
+        'a' => [
+            0b00000,
+            0b00000,
+            0b01110,
+            0b00001,
+            0b01111,
+            0b10001,
+            0b01111,
+        ],
+        'b' => [
+            0b10000,
+            0b10000,
+            0b10110,
+            0b11001,
+            0b10001,
+            0b10001,
+            0b11110,
+        ],
+        'c' => [
+            0b00000,
+            0b00000,
+            0b01110,
+            0b10001,
+            0b10000,
+            0b10001,
+            0b01110,
+        ],
+        'd' => [
+            0b00001,
+            0b00001,
+            0b01101,
+            0b10011,
+            0b10001,
+            0b10001,
+            0b01111,
+        ],
+        'e' => [
+            0b00000,
+            0b00000,
+            0b01110,
+            0b10001,
+            0b11111,
+            0b10000,
+            0b01110,
+        ],
+        'f' => [
+            0b00110,
+            0b01001,
+            0b01000,
+            0b11110,
+            0b01000,
+            0b01000,
+            0b01000,
+        ],
+        'g' => [
+            0b00000,
+            0b00000,
+            0b01111,
+            0b10001,
+            0b01111,
+            0b00001,
+            0b01110,
+        ],
+        'h' => [
+            0b10000,
+            0b10000,
+            0b10110,
+            0b11001,
+            0b10001,
+            0b10001,
+            0b10001,
+        ],
+        'i' => [
+            0b00100,
+            0b00000,
+            0b01100,
+            0b00100,
+            0b00100,
+            0b00100,
+            0b01110,
+        ],
+        'j' => [
+            0b00010,
+            0b00000,
+            0b00110,
+            0b00010,
+            0b00010,
+            0b10010,
+            0b01100,
+        ],
+        'k' => [
+            0b10000,
+            0b10000,
+            0b10010,
+            0b10100,
+            0b11000,
+            0b10100,
+            0b10010,
+        ],
+        'l' => [
+            0b01100,
+            0b00100,
+            0b00100,
+            0b00100,
+            0b00100,
+            0b00100,
+            0b01110,
+        ],
+        'm' => [
+            0b00000,
+            0b00000,
+            0b11010,
+            0b10101,
+            0b10101,
+            0b10001,
+            0b10001,
+        ],
+        'n' => [
+            0b00000,
+            0b00000,
+            0b10110,
+            0b11001,
+            0b10001,
+            0b10001,
+            0b10001,
+        ],
+        'o' => [
+            0b00000,
+            0b00000,
+            0b01110,
+            0b10001,
+            0b10001,
+            0b10001,
+            0b01110,
+        ],
+        'p' => [
+            0b00000,
+            0b00000,
+            0b11110,
+            0b10001,
+            0b11110,
+            0b10000,
+            0b10000,
+        ],
+        'q' => [
+            0b00000,
+            0b00000,
+            0b01111,
+            0b10001,
+            0b01111,
+            0b00001,
+            0b00001,
+        ],
+        'r' => [
+            0b00000,
+            0b00000,
+            0b10110,
+            0b11001,
+            0b10000,
+            0b10000,
+            0b10000,
+        ],
+        's' => [
+            0b00000,
+            0b00000,
+            0b01111,
+            0b10000,
+            0b01110,
+            0b00001,
+            0b11110,
+        ],
+        't' => [
+            0b01000,
+            0b01000,
+            0b11110,
+            0b01000,
+            0b01000,
+            0b01001,
+            0b00110,
+        ],
+        'u' => [
+            0b00000,
+            0b00000,
+            0b10001,
+            0b10001,
+            0b10001,
+            0b10011,
+            0b01101,
+        ],
+        'v' => [
+            0b00000,
+            0b00000,
+            0b10001,
+            0b10001,
+            0b10001,
+            0b01010,
+            0b00100,
+        ],
+        'w' => [
+            0b00000,
+            0b00000,
+            0b10001,
+            0b10001,
+            0b10101,
+            0b10101,
+            0b01010,
+        ],
+        'x' => [
+            0b00000,
+            0b00000,
+            0b10001,
+            0b01010,
+            0b00100,
+            0b01010,
+            0b10001,
+        ],
+        'y' => [
+            0b00000,
+            0b00000,
+            0b10001,
+            0b10001,
+            0b01111,
+            0b00001,
+            0b01110,
+        ],
+        'z' => [
+            0b00000,
+            0b00000,
+            0b11111,
+            0b00010,
+            0b00100,
+            0b01000,
+            0b11111,
+        ],
+
+        // ----- digitos 0-9 -----
+        '0' => [
+            0b01110,
+            0b10001,
+            0b10011,
+            0b10101,
+            0b11001,
+            0b10001,
+            0b01110,
+        ],
+        '1' => [
+            0b00100,
+            0b01100,
+            0b00100,
+            0b00100,
+            0b00100,
+            0b00100,
+            0b01110,
+        ],
+        '2' => [
+            0b01110,
+            0b10001,
+            0b00001,
+            0b00010,
+            0b00100,
+            0b01000,
+            0b11111,
+        ],
+        '3' => [
+            0b11111,
+            0b00010,
+            0b00100,
+            0b00010,
+            0b00001,
+            0b10001,
+            0b01110,
+        ],
+        '4' => [
+            0b00010,
+            0b00110,
+            0b01010,
+            0b10010,
+            0b11111,
+            0b00010,
+            0b00010,
+        ],
+        '5' => [
+            0b11111,
+            0b10000,
+            0b11110,
+            0b00001,
+            0b00001,
+            0b10001,
+            0b01110,
+        ],
+        '6' => [
+            0b00110,
+            0b01000,
+            0b10000,
+            0b11110,
+            0b10001,
+            0b10001,
+            0b01110,
+        ],
+        '7' => [
+            0b11111,
+            0b00001,
+            0b00010,
+            0b00100,
+            0b01000,
+            0b01000,
+            0b01000,
+        ],
+        '8' => [
+            0b01110,
+            0b10001,
+            0b10001,
+            0b01110,
+            0b10001,
+            0b10001,
+            0b01110,
+        ],
+        '9' => [
+            0b01110,
+            0b10001,
+            0b10001,
+            0b01111,
+            0b00001,
+            0b00010,
+            0b01100,
+        ],
+
+        // ----- pontuacao -----
+        ' ' => [0; 7],
+        ':' => [
+            0b00000,
+            0b00100,
+            0b00100,
+            0b00000,
+            0b00100,
+            0b00100,
+            0b00000,
+        ],
+        '%' => [
+            0b11001,
+            0b11010,
+            0b00010,
+            0b00100,
+            0b01000,
+            0b01011,
+            0b10011,
+        ],
+
+        _ => return None,
+    })
+}
+
+/// Largura visual em pixels do char rendered com FONT_PX e spacing.
+fn glyph_width_px() -> f32 {
+    5.0 * FONT_PX + FONT_SPACING * FONT_PX
+}
+
+/// Altura visual em pixels do char.
+fn glyph_height_px() -> f32 {
+    7.0 * FONT_PX
+}
+
+/// Desenha um char numa posicao (top-left x,y). Pixels via rects sem AA
+/// (pixel-art puro, AA borraria).
+fn draw_glyph(canvas: &mut PixmapMut, x: f32, y: f32, c: char, color: Color, bold: bool) {
+    let glyph = match glyph_of(c) {
+        Some(g) => g,
+        None => return,
     };
-    let w = 7.0;
-    let h = 11.0;
-    let t = 1.6;
-    let hh = h / 2.0;
-    // 0=top, 1=upper-right, 2=lower-right, 3=bottom, 4=lower-left,
-    // 5=upper-left, 6=middle.
-    if segs[0] {
-        fill_rrect(canvas, x, y, w, t, t * 0.5, color);
+    let px = FONT_PX;
+    let x = x.round();
+    let y = y.round();
+    for (row, mask) in glyph.iter().enumerate() {
+        for col in 0..5 {
+            // bit MSB (col 0) -> bit 4; col 4 -> bit 0.
+            let bit = 1 << (4 - col);
+            if mask & bit != 0 {
+                let gx = x + (col as f32) * px;
+                let gy = y + (row as f32) * px;
+                fill_rect_px(canvas, gx, gy, px, px, color);
+                if bold {
+                    // Bold = desenha glyph deslocado +1px x (duplica trazo
+                    // horizontal). Tradeoff: simples, sem font weight real.
+                    fill_rect_px(canvas, gx + 1.0, gy, px, px, color);
+                }
+            }
+        }
     }
-    if segs[1] {
-        fill_rrect(canvas, x + w - t, y, t, hh, t * 0.5, color);
+}
+
+/// Largura total em pixels de uma string com font e spacing atual.
+fn text_width_px(s: &str, bold: bool) -> f32 {
+    let mut w = 0.0;
+    for (i, c) in s.chars().enumerate() {
+        if glyph_of(c).is_some() {
+            w += 5.0 * FONT_PX;
+            if i + 1 < s.chars().count() {
+                w += FONT_SPACING * FONT_PX;
+            }
+        }
     }
-    if segs[2] {
-        fill_rrect(canvas, x + w - t, y + hh, t, hh, t * 0.5, color);
+    if bold {
+        w += 1.0;
     }
-    if segs[3] {
-        fill_rrect(canvas, x, y + h - t, w, t, t * 0.5, color);
-    }
-    if segs[4] {
-        fill_rrect(canvas, x, y + hh, t, hh, t * 0.5, color);
-    }
-    if segs[5] {
-        fill_rrect(canvas, x, y, t, hh, t * 0.5, color);
-    }
-    if segs[6] {
-        fill_rrect(canvas, x, y + hh - t * 0.5, w, t, t * 0.5, color);
+    w
+}
+
+/// Desenha string em x,y (top-left), avancando glyph_width_px por char.
+fn draw_text(canvas: &mut PixmapMut, x: f32, y: f32, s: &str, color: Color, bold: bool) {
+    let mut cx = x;
+    let advance = glyph_width_px();
+    for c in s.chars() {
+        if glyph_of(c).is_some() {
+            draw_glyph(canvas, cx, y, c, color, bold);
+            cx += advance;
+        }
     }
 }
 
@@ -286,116 +740,84 @@ fn draw_brand_dot(canvas: &mut PixmapMut, cx: f32, cy: f32, color: Color) {
 }
 
 // ============================================================
-// Workspace pill (22x22 r=6).
-// ============================================================
-fn draw_workspace(canvas: &mut PixmapMut, x: f32, y: f32, n: u8, active: bool, palette: &LumoColors, theme: LumoTheme) {
-    if active {
-        // Ativo: fill accent solido.
-        fill_rrect(canvas, x, y, WS_PILL_SIZE, WS_PILL_SIZE, WS_PILL_RADIUS, opaque(palette.accent));
-        // fg invertido: light theme -> branco; dark -> preto.
-        let fg = match theme {
-            LumoTheme::Light => Color::from_rgba(1.0, 1.0, 1.0, 1.0).unwrap(),
-            LumoTheme::Dark => Color::from_rgba(0.0, 0.0, 0.0, 1.0).unwrap(),
-        };
-        // Digito centralizado: 7x11, pill 22x22 -> margin (22-7)/2 = 7.5 x, (22-11)/2 = 5.5 y.
-        draw_digit(canvas, x + 7.5, y + 5.5, n, fg);
-    } else {
-        // Inativo: border 1px, fg muted.
-        stroke_rrect(
-            canvas,
-            x + 0.5,
-            y + 0.5,
-            WS_PILL_SIZE - 1.0,
-            WS_PILL_SIZE - 1.0,
-            WS_PILL_RADIUS,
-            opaque(palette.border),
-            1.0,
-        );
-        draw_digit(canvas, x + 7.5, y + 5.5, n, opaque(palette.fg_subtle));
-    }
-}
-
-// ============================================================
 // Wifi glyph (3 arcos concentricos).
 // ============================================================
-//
-// Origem (x,y) = top-left de uma caixa 16x16. Arcos sao quartos de
-// circulo virados pra cima (start=-135deg, end=-45deg).
 fn draw_wifi(canvas: &mut PixmapMut, x: f32, y: f32, on: bool, palette: &LumoColors) {
     let color = if on {
         opaque(palette.fg)
     } else {
         opaque(palette.fg_subtle)
     };
-    let cx = x + 8.0;
-    // Centro vertical mais baixo pra arcos curvarem visualmente "saindo"
-    // de baixo, como wifi antenna pattern.
-    let cy = y + 12.0;
-    // 3 arcos: 8, 5, 2.5 radii.
-    for (radius, sw) in [(7.5, 1.3), (5.0, 1.2), (2.5, 1.1)] {
+    let cx = x + 7.0;
+    let cy = y + 11.0;
+    for (radius, sw) in [(6.5, 1.2), (4.3, 1.1), (2.2, 1.0)] {
         stroke_arc(canvas, cx, cy, radius, -135.0, -45.0, color, sw);
     }
-    // Dot na base.
-    fill_circle(canvas, cx, cy, 1.0, color);
+    fill_circle(canvas, cx, cy, 0.9, color);
 }
 
 // ============================================================
-// Battery glyph (16x10 com fill horizontal proporcional + cap).
+// Battery glyph (14x10 com fill horizontal proporcional + cap).
 // ============================================================
 fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, palette: &LumoColors) {
-    // Body 16x10, cap 1.5x4.
-    let body_w = 16.0;
-    let body_h = 10.0;
+    let body_w = 14.0;
+    let body_h = 8.0;
     let stroke = opaque(palette.fg);
-    stroke_rrect(canvas, x + 0.5, y + 0.5, body_w - 1.0, body_h - 1.0, 1.6, stroke, 1.0);
-    // Cap (terminal +) na direita.
-    fill_rrect(canvas, x + body_w, y + 3.5, 1.5, 3.0, 0.6, stroke);
-    // Fill interno proporcional, com inset de 2px.
+    stroke_rrect(canvas, x + 0.5, y + 0.5, body_w - 1.0, body_h - 1.0, 1.4, stroke, 1.0);
+    fill_rrect(canvas, x + body_w, y + 2.5, 1.3, 3.0, 0.5, stroke);
     let inner_w = body_w - 4.0;
     let fw = (pct as f32 / 100.0).clamp(0.0, 1.0) * inner_w;
     if fw > 0.2 {
-        // Cor do fill: accent se > 20%, danger se < 20%.
-        // Como palette nao tem "danger" direto, usamos accent invertido
-        // (saturado mais claro pra dark, mais escuro pra light) seria
-        // overkill. Mantemos accent solido p/ >20%, e pra <=20% usamos um
-        // tom vermelho hardcoded fixo entre temas (signal universal).
+        // A14: accent se >20%, red signal universal se <=20%.
         let fill_color = if pct > 20 {
             opaque(palette.accent)
         } else {
-            // Red-500 (#ef4444) — universal alert.
             opaque(0xEF4444)
         };
-        fill_rrect(canvas, x + 2.0, y + 2.0, fw, body_h - 4.0, 0.8, fill_color);
+        fill_rrect(canvas, x + 2.0, y + 2.0, fw, body_h - 4.0, 0.7, fill_color);
     }
 }
 
 // ============================================================
-// Clock HH:MM via 7-seg digits.
+// Date abreviada pt-br (sex 17 mai).
 // ============================================================
-fn draw_clock(canvas: &mut PixmapMut, x: f32, y: f32, hh: u8, mm: u8, color: Color) {
-    let dx = 9.0;
-    draw_digit(canvas, x, y, hh / 10, color);
-    draw_digit(canvas, x + dx, y, hh % 10, color);
-    // Separator dots (verticalmente alinhados meio do glyph 11px).
-    let sep_x = x + dx * 2.0 + 1.0;
-    fill_rrect(canvas, sep_x, y + 3.0, 1.6, 1.6, 0.8, color);
-    fill_rrect(canvas, sep_x, y + 6.8, 1.6, 1.6, 0.8, color);
-    draw_digit(canvas, x + dx * 2.0 + 5.0, y, mm / 10, color);
-    draw_digit(canvas, x + dx * 3.0 + 5.0, y, mm % 10, color);
+fn weekday_abbr_pt(dt: &chrono::DateTime<Local>) -> &'static str {
+    match dt.weekday() {
+        chrono::Weekday::Mon => "seg",
+        chrono::Weekday::Tue => "ter",
+        chrono::Weekday::Wed => "qua",
+        chrono::Weekday::Thu => "qui",
+        chrono::Weekday::Fri => "sex",
+        chrono::Weekday::Sat => "sab",
+        chrono::Weekday::Sun => "dom",
+    }
 }
 
-// ============================================================
-// Power glyph (circulo aberto + linha vertical no topo).
-// ============================================================
-fn draw_power(canvas: &mut PixmapMut, x: f32, y: f32, palette: &LumoColors) {
-    let cx = x + 8.0;
-    let cy = y + 9.0;
-    let r = 5.5;
-    let color = opaque(palette.fg);
-    // Arco quase fechado, gap no topo.
-    stroke_arc(canvas, cx, cy, r, 70.0, 110.0 + 360.0, color, 1.3);
-    // Linha vertical no topo.
-    fill_rrect(canvas, cx - 0.7, cy - r - 2.2, 1.4, 5.0, 0.6, color);
+fn month_abbr_pt(m: u32) -> &'static str {
+    match m {
+        1 => "jan",
+        2 => "fev",
+        3 => "mar",
+        4 => "abr",
+        5 => "mai",
+        6 => "jun",
+        7 => "jul",
+        8 => "ago",
+        9 => "set",
+        10 => "out",
+        11 => "nov",
+        12 => "dez",
+        _ => "???",
+    }
+}
+
+fn format_date_pt(dt: &chrono::DateTime<Local>) -> String {
+    format!(
+        "{} {:02} {}",
+        weekday_abbr_pt(dt),
+        dt.day(),
+        month_abbr_pt(dt.month())
+    )
 }
 
 // ============================================================
@@ -404,18 +826,13 @@ fn draw_power(canvas: &mut PixmapMut, x: f32, y: f32, palette: &LumoColors) {
 struct BarSnapshot {
     width: u32,
     height: u32,
-    active_workspace: u32,
     battery_pct: u8,
     wifi_on: bool,
-    theme: LumoTheme,
     palette: LumoColors,
-}
-
-/// Calcula x inicial dos pills. Reusado por hit-test + paint_frame.
-fn workspace_layout_origin_x(bar_width: u32) -> f32 {
-    let ws_total =
-        (WORKSPACE_COUNT as f32) * WS_PILL_SIZE + (WORKSPACE_COUNT as f32 - 1.0) * WS_PILL_GAP;
-    (bar_width as f32 - ws_total) / 2.0
+    theme: LumoTheme,
+    clock_hh: u8,
+    clock_mm: u8,
+    date_abbr: String,
 }
 
 fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
@@ -423,74 +840,83 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
     pixmap.fill(opaque(palette.bg));
     let h = snap.height as f32;
     let cy = h / 2.0;
+    // Texto 7px glyph @ FONT_PX=2 = 14px alt. Top y = cy - 7.
+    let text_top = (cy - glyph_height_px() / 2.0).round();
 
-    // ===== Esquerda: brand dot =====
+    // ===== Esquerda: brand dot + menus =====
     {
         let mut canvas = pixmap.as_mut();
-        draw_brand_dot(&mut canvas, PAD_X, cy, opaque(palette.accent));
-    }
+        let mut lx = PAD_X;
+        draw_brand_dot(&mut canvas, lx + BRAND_DOT_RADIUS, cy, opaque(palette.accent));
+        lx += BRAND_DOT_RADIUS * 2.0 + BRAND_GAP;
 
-    // ===== Centro: workspaces =====
-    let mut wx = workspace_layout_origin_x(snap.width);
-    let wy = cy - WS_PILL_SIZE / 2.0;
-    {
-        let mut canvas = pixmap.as_mut();
-        for i in 1..=WORKSPACE_COUNT {
-            draw_workspace(&mut canvas, wx, wy, i as u8, i == snap.active_workspace, palette, snap.theme);
-            wx += WS_PILL_STEP;
+        // Menus: Lumo bold, restantes regular. fg cor padrao.
+        let menus: &[(&str, bool)] = &[
+            ("Lumo", true),
+            ("Editar", false),
+            ("Visualizar", false),
+            ("Ajuda", false),
+        ];
+        let menu_color = opaque(palette.fg);
+        for (text, bold) in menus {
+            draw_text(&mut canvas, lx, text_top, text, menu_color, *bold);
+            let w = text_width_px(text, *bold);
+            lx += w + MENU_GAP;
         }
     }
 
-    // ===== Direita: power, clock, bat, wifi (do mais a direita pra esquerda) =====
+    // ===== Direita: data, clock, bat (texto + icone), wifi =====
+    // Ordem render: da direita pra esquerda (subtraindo de rx).
     let mut rx = snap.width as f32 - PAD_X;
 
-    // Power 16x16.
-    rx -= 16.0;
+    // -- Data abrev (rightmost). cor fg_subtle.
+    let date_w = text_width_px(&snap.date_abbr, false);
+    rx -= date_w;
     {
         let mut canvas = pixmap.as_mut();
-        draw_power(&mut canvas, rx, cy - 8.0, palette);
+        draw_text(&mut canvas, rx, text_top, &snap.date_abbr, opaque(palette.fg_subtle), false);
     }
     rx -= SEG_GAP;
 
-    // Clock HH:MM. Largura ~= 9*4 + 5 separator + 1 margin = 42px.
-    let now = Local::now();
-    let hh = now.format("%H").to_string().parse::<u8>().unwrap_or(0);
-    let mm = now.format("%M").to_string().parse::<u8>().unwrap_or(0);
-    let clock_w = 41.0;
+    // -- Clock HH:MM (Geist Mono equivalent: usa mesma font 5x7).
+    let clock_s = format!("{:02}:{:02}", snap.clock_hh, snap.clock_mm);
+    let clock_w = text_width_px(&clock_s, false);
     rx -= clock_w;
     {
         let mut canvas = pixmap.as_mut();
-        draw_clock(&mut canvas, rx, cy - 5.5, hh, mm, opaque(palette.fg));
+        draw_text(&mut canvas, rx, text_top, &clock_s, opaque(palette.fg), false);
     }
     rx -= SEG_GAP;
 
-    // Battery 17.5x10 (body 16 + cap 1.5).
-    rx -= 17.5;
+    // -- Bateria: "73%" texto + icone 14x8.
+    let bat_text = format!("{}%", snap.battery_pct);
+    let bat_text_w = text_width_px(&bat_text, false);
+    let bat_icon_w = 15.3; // body 14 + cap 1.3.
+    let bat_gap = 4.0;
+    rx -= bat_text_w + bat_gap + bat_icon_w;
     {
         let mut canvas = pixmap.as_mut();
-        draw_battery(&mut canvas, rx, cy - 5.0, snap.battery_pct, palette);
+        let bat_color = if snap.battery_pct > 20 {
+            opaque(palette.accent)
+        } else {
+            opaque(palette.fg)
+        };
+        draw_text(&mut canvas, rx, text_top, &bat_text, bat_color, false);
+        draw_battery(&mut canvas, rx + bat_text_w + bat_gap, cy - 4.0, snap.battery_pct, palette);
     }
     rx -= SEG_GAP;
 
-    // Wifi 16x16.
-    rx -= 16.0;
+    // -- Wifi icone 14x14.
+    rx -= 14.0;
     {
         let mut canvas = pixmap.as_mut();
-        draw_wifi(&mut canvas, rx, cy - 8.0, snap.wifi_on, palette);
+        draw_wifi(&mut canvas, rx, cy - 7.0, snap.wifi_on, palette);
     }
+
+    let _ = snap.theme; // theme nao usado pra render (so palette).
 
     // Border-bottom 1px (sutil, cor border palette).
     fill_rect_color(pixmap, 0.0, h - 1.0, snap.width as f32, 1.0, opaque(palette.border));
-    // Sombra preta neutra adicional 1px rgba(0,0,0,0.04) — separacao visual.
-    // Memory feedback_zero_neon_glow: alpha baixissimo, RGB puro preto.
-    fill_rect_color(
-        pixmap,
-        0.0,
-        h - 0.5,
-        snap.width as f32,
-        0.5,
-        rgba_hex(0x000000, 10),
-    );
 }
 
 // ============================================================
@@ -528,6 +954,9 @@ fn read_wifi() -> bool {
 // ============================================================
 // IPC client - lumo-wm.sock
 // ============================================================
+//
+// A14: mantido conectado pra futuro use (dock vai consumir workspaces),
+// mas state NAO alimenta mais render da bar (workspaces removidos).
 
 fn connect_ipc() -> Option<UnixStream> {
     let path = default_socket_path()?;
@@ -567,6 +996,8 @@ fn drain_ipc(stream: &mut UnixStream, rx_buf: &mut Vec<u8>, active_ws: &Arc<Atom
             if let Ok(ev) = serde_json::from_str::<LumoEvent>(s.trim()) {
                 match ev {
                     LumoEvent::Workspaces { active, .. } => {
+                        // A14: ainda tracked pra futuro use (dock), mas nao
+                        // alimenta render.
                         active_ws.store(active.clamp(1, MAX_WORKSPACES), Ordering::Relaxed);
                     }
                 }
@@ -574,13 +1005,6 @@ fn drain_ipc(stream: &mut UnixStream, rx_buf: &mut Vec<u8>, active_ws: &Arc<Atom
         }
     }
     alive
-}
-
-fn send_switch(stream: &mut UnixStream, to: u8) -> bool {
-    let cmd = LumoCommand::Switch { to };
-    let mut payload = serde_json::to_string(&cmd).unwrap_or_default();
-    payload.push('\n');
-    stream.write_all(payload.as_bytes()).is_ok()
 }
 
 // ============================================================
@@ -595,6 +1019,7 @@ struct LumoBar {
     pool: SlotPool,
     width: u32,
     height: u32,
+    /// Tracked pra futuro use no dock; nao alimenta render A14.
     active_workspace: Arc<AtomicU8>,
     battery_pct: u8,
     wifi_on: bool,
@@ -604,11 +1029,7 @@ struct LumoBar {
     pointer_x: f32,
     ipc_stream: Option<UnixStream>,
     ipc_rx_buf: Vec<u8>,
-    last_drawn_ws: u8,
-    last_click_instant: Option<Instant>,
-    /// Paleta cacheada (lida 1x no init/configure). Trocar tema requer
-    /// reiniciar a bar — comportamento sane: a bar nao precisa hot-reload
-    /// de tema, e cache evita lookup env por frame.
+    /// Paleta cacheada (lida 1x no init). Trocar tema requer reiniciar bar.
     theme: LumoTheme,
     palette: LumoColors,
 }
@@ -619,22 +1040,18 @@ impl LumoBar {
         self.wifi_on = read_wifi();
     }
 
-    fn current_active(&self) -> u8 {
-        self.active_workspace.load(Ordering::Relaxed)
-    }
-
     fn redraw(&mut self, _qh: &QueueHandle<Self>) {
-        // Snapshot ANTES de pegar borrow mut do pool (E0502 evite).
-        let active = self.current_active().clamp(1, MAX_WORKSPACES) as u32;
-        self.last_drawn_ws = active as u8;
+        let now = Local::now();
         let snap = BarSnapshot {
             width: self.width,
             height: self.height,
-            active_workspace: active,
             battery_pct: self.battery_pct,
             wifi_on: self.wifi_on,
-            theme: self.theme,
             palette: self.palette,
+            theme: self.theme,
+            clock_hh: now.hour() as u8,
+            clock_mm: now.minute() as u8,
+            date_abbr: format_date_pt(&now),
         };
 
         let stride = self.width as i32 * 4;
@@ -673,44 +1090,6 @@ impl LumoBar {
         surface.damage_buffer(0, 0, self.width as i32, self.height as i32);
         buffer.attach_to(surface).ok();
         surface.commit();
-    }
-
-    fn hit_workspace(&self, px: f32, py: f32) -> Option<u8> {
-        let bar_h = self.height as f32;
-        let cy = bar_h / 2.0;
-        let wy = cy - WS_PILL_SIZE / 2.0;
-        if py < wy || py > wy + WS_PILL_SIZE {
-            return None;
-        }
-        let origin = workspace_layout_origin_x(self.width);
-        for i in 0..WORKSPACE_COUNT {
-            let x = origin + (i as f32) * WS_PILL_STEP;
-            if px >= x && px <= x + WS_PILL_SIZE {
-                return Some((i + 1) as u8);
-            }
-        }
-        None
-    }
-
-    fn handle_click(&mut self, qh: &QueueHandle<Self>) {
-        let py = self.height as f32 / 2.0;
-        let now = Instant::now();
-        if let Some(last) = self.last_click_instant {
-            if now.duration_since(last) < Duration::from_millis(100) {
-                return;
-            }
-        }
-        self.last_click_instant = Some(now);
-        if let Some(target) = self.hit_workspace(self.pointer_x, py) {
-            self.active_workspace.store(target, Ordering::Relaxed);
-            self.redraw(qh);
-            if let Some(stream) = self.ipc_stream.as_mut() {
-                if !send_switch(stream, target) {
-                    eprintln!("[lumo-bar] send_switch falhou; drop ipc");
-                    self.ipc_stream = None;
-                }
-            }
-        }
     }
 }
 
@@ -835,19 +1214,15 @@ impl PointerHandler for LumoBar {
     fn pointer_frame(
         &mut self,
         _: &Connection,
-        qh: &QueueHandle<Self>,
+        _qh: &QueueHandle<Self>,
         _: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
+        // A14: sem workspaces, sem power -> sem click handler ativo.
+        // Tracking pointer_x mantido pra hover futuro (menus dropdown).
         for ev in events {
-            match ev.kind {
-                PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
-                    self.pointer_x = ev.position.0 as f32;
-                }
-                PointerEventKind::Press { button: 0x110, .. } => {
-                    self.handle_click(qh);
-                }
-                _ => {}
+            if let PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } = ev.kind {
+                self.pointer_x = ev.position.0 as f32;
             }
         }
     }
@@ -894,7 +1269,7 @@ fn main() {
     let theme = lumo_foundation::current_theme();
     let palette = current_colors();
     eprintln!(
-        "[lumo-bar] tema = {:?}, accent = #{:06X}, bg = #{:06X}",
+        "[lumo-bar] A14 Apple-style; tema = {:?}, accent = #{:06X}, bg = #{:06X}",
         theme, palette.accent, palette.bg
     );
 
@@ -916,8 +1291,6 @@ fn main() {
         pointer_x: 0.0,
         ipc_stream: connect_ipc(),
         ipc_rx_buf: Vec::with_capacity(256),
-        last_drawn_ws: 1,
-        last_click_instant: None,
         theme,
         palette,
     };
@@ -931,7 +1304,8 @@ fn main() {
             .blocking_dispatch(&mut state)
             .expect("dispatch fail");
 
-        // IPC drain @ 125Hz (~8ms).
+        // IPC drain @ 125Hz (~8ms). State nao alimenta render mas drena
+        // socket pra evitar buffer fill.
         if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
             last_ipc_tick = Instant::now();
             if let Some(mut s) = state.ipc_stream.take() {
@@ -942,22 +1316,16 @@ fn main() {
                     eprintln!("[lumo-bar] IPC peer fechou; bar continua standalone");
                 }
             }
-            let now_ws = state.current_active();
-            if now_ws != state.last_drawn_ws {
-                state.redraw(&qh);
-            }
         }
 
-        // Clock tick @ 1s.
+        // Clock tick @ 1s (minuto pode rolar).
         if last_clock_tick.elapsed() >= Duration::from_secs(1) {
             last_clock_tick = Instant::now();
             state.redraw(&qh);
         }
 
-        // Sensors refresh @ 15s (memory feedback_design_lapidado: ev.30s
-        // spec, mas 15s da feedback mais responsivo sem custo
-        // perceptivel).
-        if last_tick.elapsed() >= Duration::from_secs(15) {
+        // Sensors refresh @ 30s (memory feedback_design_lapidado).
+        if last_tick.elapsed() >= Duration::from_secs(30) {
             state.refresh();
             state.redraw(&qh);
             last_tick = Instant::now();

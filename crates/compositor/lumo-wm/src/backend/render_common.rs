@@ -56,10 +56,18 @@ pub const CURSOR_COLOR: [f32; 4] = [0.6588, 0.6588, 0.6745, 1.0];
 pub const CURSOR_W: i32 = 10;
 pub const CURSOR_H: i32 = 14;
 
-// Moldura desktop: corner radius simulado por quad preto. NAO muda com
-// tema (eh moldura fisica do display, neutra).
+// Moldura desktop: corner radius simulado por quad pintado na mesma cor
+// do clear background. A14: ANTES era preto fixo -> em light theme
+// aparecia ponto preto visivel; AGORA acompanha tema via
+// `lumo_foundation::corner_mask_color_linear()` runtime.
 pub const CORNER_RADIUS: i32 = 10;
-pub const CORNER_COLOR: [f32; 4] = lumo_foundation::CORNER_MASK_COLOR_LINEAR;
+
+/// Cor da mascara de cantos. Runtime (le tema corrente) — necessario
+/// porque const eval nao consegue chamar `current_colors()`. Custo
+/// desprezivel (4 mults + env lookup por frame, igual `clear_color_linear`).
+pub fn corner_color() -> [f32; 4] {
+    lumo_foundation::corner_mask_color_linear()
+}
 
 // Sombras pretas neutras atras de toplevels (independente de tema).
 pub const SHADOW_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.4];
@@ -131,17 +139,16 @@ pub fn cursor_xcursor_element(
     .ok()
 }
 
-/// Quatro quads pretos cobrindo os cantos do output -- simula corner
-/// radius sem custom shader (memory feedback_design_lapidado:
-/// reduzir custo de manutencao do path principal).
+/// Quatro quads cobrindo os cantos do output, pintados na MESMA cor do
+/// clear background (theme-aware). Simula corner radius sem custom
+/// shader. A14: theme-aware (era preto fixo).
+///
+/// Memory feedback_design_lapidado: reduzir custo de manutencao do path
+/// principal.
 pub fn corner_mask_elements(output_w: i32, output_h: i32) -> [SolidColorRenderElement; 4] {
     let r = CORNER_RADIUS;
-    let color = Color32F::new(
-        CORNER_COLOR[0],
-        CORNER_COLOR[1],
-        CORNER_COLOR[2],
-        CORNER_COLOR[3],
-    );
+    let cc = corner_color();
+    let color = Color32F::new(cc[0], cc[1], cc[2], cc[3]);
     let make = |x: i32, y: i32| -> SolidColorRenderElement {
         let geo: Rectangle<i32, Physical> =
             Rectangle::new(Point::from((x, y)), (r, r).into());
