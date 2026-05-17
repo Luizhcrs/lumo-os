@@ -273,7 +273,7 @@ impl LumoColors {
             // A18 pill spec: pill escuro #1F1F22 alpha EE -> contraste
             // invertido sobre bg pearl, vira destaque tipo Dynamic Island.
             pill_bg:           0x001F1F22,
-            pill_bg_alpha:     0xFF, // A19.2 opaco real (sem blend gamma bug)
+            pill_bg_alpha:     0xE0, // A19.15 transparencia leve (shader demultiply correto)
             pill_fg:           0x00F5F5F7, // pearl sobre pill escuro
             pill_shadow_alpha: 0x40,       // 25% preto neutro
             pill_sep:          0x00FFFFFF, // dot middle separator
@@ -295,7 +295,7 @@ impl LumoColors {
             // A18 pill spec dark: pearl alpha 0x22 sutil sobre AMOLED.
             // Pill bg quase invisivel — relevo dado pela sombra preta neutra.
             pill_bg:           0x00FFFFFF,
-            pill_bg_alpha:     0xCC, // dark visivel sobre AMOLED
+            pill_bg_alpha:     0xCC, // A19.15 dark mantem 80%
             pill_fg:           0x00F5F5F7,
             pill_shadow_alpha: 0x40,
             pill_sep:          0x00FFFFFF,
