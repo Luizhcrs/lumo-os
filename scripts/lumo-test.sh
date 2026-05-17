@@ -12,6 +12,8 @@ LOG=/tmp/lumo-wm.log
 > "$LOG"
 
 echo "[2/4] Inicia lumo-wm em background..."
+# A13: theme default LIGHT (override com LUMO_THEME=dark ./scripts/lumo-test.sh).
+export LUMO_THEME="${LUMO_THEME:-light}"
 RUST_LOG=lumo_wm=info,smithay=warn ./target/release/lumo-wm >"$LOG" 2>&1 &
 LUMO_PID=$!
 trap "kill $LUMO_PID 2>/dev/null; pkill -P $LUMO_PID 2>/dev/null; echo Fechado." EXIT

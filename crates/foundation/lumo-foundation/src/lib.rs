@@ -200,6 +200,118 @@ impl LFGeometry {
     }
 }
 
+// ---------------------------------------------------------------------------
+// LumoTheme -- runtime light/dark switch (A13)
+// ---------------------------------------------------------------------------
+//
+// Decisao A13: Luiz reportou bar visualmente ruim + tema escuro indesejado.
+// Default agora eh LIGHT (memory feedback_zero_neon_glow: validar AMBOS
+// temas mentalmente; sombras pretas neutras sem glow colorido).
+//
+// Cores armazenadas como hex 0xRRGGBB (sem alpha). Alpha aplicado on use.
+// Render layer converte hex -> sRGB -> linear via `LFColor` quando precisa
+// alimentar GPU.
+
+/// Enum binario: Light (default) ou Dark.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LumoTheme {
+    Light,
+    Dark,
+}
+
+/// Paleta completa pra um tema. Hex 0xRRGGBB.
+#[derive(Debug, Clone, Copy)]
+pub struct LumoColors {
+    /// Background principal (bar, painel).
+    pub bg: u32,
+    /// Hover background (sutil).
+    pub bg_subtle: u32,
+    /// Texto principal.
+    pub fg: u32,
+    /// Texto secundario / muted.
+    pub fg_subtle: u32,
+    /// Accent emerald (workspace ativo, dot brand).
+    pub accent: u32,
+    /// Accent hover / fundo emerald translucido.
+    pub accent_subtle: u32,
+    /// 1px linha sutil (border-bottom da bar).
+    pub border: u32,
+    /// Sombra preta neutra. Alpha aplicado quando usada.
+    pub shadow: u32,
+}
+
+impl LumoColors {
+    /// Tema light -- pearl muito claro, ink ainda legivel, emerald-600 saturado.
+    pub const fn light() -> Self {
+        Self {
+            bg:            0x00FAFAFA, // pearl muito claro (#FAFAFA)
+            bg_subtle:     0x00F0F0F2, // hover stretch
+            fg:            0x0018181B, // ink claro (Tailwind zinc-900)
+            fg_subtle:     0x006B7280, // zinc-500
+            accent:        0x00059669, // emerald-600
+            accent_subtle: 0x00D1FAE5, // emerald-100 (hover wash)
+            border:        0x00E5E7EB, // zinc-200
+            shadow:        0x00000000, // alpha aplicado on use
+        }
+    }
+
+    /// Tema dark -- ink_deep, pearl no fg, emerald-500 mais vivo.
+    pub const fn dark() -> Self {
+        Self {
+            bg:            0x000A0A0C, // ink_deep
+            bg_subtle:     0x001F2024, // hover panel
+            fg:            0x00F5F5F7, // pearl
+            fg_subtle:     0x009CA3AF, // zinc-400
+            accent:        0x0010B981, // emerald-500 (mais vibrante no escuro)
+            accent_subtle: 0x00064E3B, // emerald-900
+            border:        0x002A2A2E, // hairline
+            shadow:        0x00000000,
+        }
+    }
+
+    /// Converte hex 0xRRGGBB pra `[f32; 4]` sRGB normalizado com alpha 1.0.
+    /// Util pra interop com tiny-skia/wgpu sem precisar inline math no caller.
+    pub fn hex_to_srgb(hex: u32) -> [f32; 4] {
+        let r = ((hex >> 16) & 0xff) as f32 / 255.0;
+        let g = ((hex >> 8) & 0xff) as f32 / 255.0;
+        let b = (hex & 0xff) as f32 / 255.0;
+        [r, g, b, 1.0]
+    }
+
+    /// Hex 0xRRGGBB -> linear `[f32; 4]` pronto pra surface sRGB.
+    pub fn hex_to_linear(hex: u32) -> [f32; 4] {
+        LFColor::srgb_to_linear(Self::hex_to_srgb(hex))
+    }
+}
+
+/// Le `LUMO_THEME` do env. Default = Light (decisao A13).
+pub fn current_theme() -> LumoTheme {
+    match std::env::var("LUMO_THEME").as_deref() {
+        Ok("dark") | Ok("Dark") | Ok("DARK") => LumoTheme::Dark,
+        _ => LumoTheme::Light,
+    }
+}
+
+/// Paleta resolvida do tema atual. Lida do env a cada chamada -- caller
+/// pode cachear se hot path (geralmente init/redraw eh ok).
+pub fn current_colors() -> LumoColors {
+    match current_theme() {
+        LumoTheme::Light => LumoColors::light(),
+        LumoTheme::Dark => LumoColors::dark(),
+    }
+}
+
+/// Clear color do compositor em linear `[f32; 4]`. DRM/winit usam.
+/// Centralizado aqui pra trocar com env -- nao duplicar em backend.
+pub fn clear_color_linear() -> [f32; 4] {
+    LumoColors::hex_to_linear(current_colors().bg)
+}
+
+/// Cor da mascara de cantos do output. **Sempre preto neutro** -- nao
+/// muda com tema (eh moldura fisica do display, nao chrome).
+/// Alpha 1.0 pra opacificar cantos arredondados.
+pub const CORNER_MASK_COLOR_LINEAR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+
 // Flat aliases para retro-compat com call sites antigos.
 pub use LFGeometry as _Geom;
 

@@ -56,17 +56,32 @@ pub const CURSOR_COLOR: [f32; 4] = [0.6588, 0.6588, 0.6745, 1.0];
 pub const CURSOR_W: i32 = 10;
 pub const CURSOR_H: i32 = 14;
 
-// Moldura desktop: corner radius simulado por quad preto.
+// Moldura desktop: corner radius simulado por quad preto. NAO muda com
+// tema (eh moldura fisica do display, neutra).
 pub const CORNER_RADIUS: i32 = 10;
-pub const CORNER_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+pub const CORNER_COLOR: [f32; 4] = lumo_foundation::CORNER_MASK_COLOR_LINEAR;
 
-// Sombras pretas neutras atras de toplevels.
+// Sombras pretas neutras atras de toplevels (independente de tema).
 pub const SHADOW_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.4];
 pub const SHADOW_OFFSET_Y: i32 = 8;
 pub const SHADOW_BLEED: i32 = 4;
 
-// Lumo ink_deep (#0a0a0c) em sRGB linear -- cor de clear do framebuffer.
-pub const CLEAR_INK_DEEP: [f32; 4] = [0.0030, 0.0030, 0.0037, 1.0];
+/// Cor de clear do framebuffer. Le LUMO_THEME do env e devolve linear
+/// pronto pra surface sRGB. A13: substitui constante `CLEAR_INK_DEEP`
+/// pra suportar light/dark dinamico.
+///
+/// Memory feedback_design_lapidado: nao cachear (chamada acontece a cada
+/// frame mas custo eh 1 lookup env + 4 multiplicacoes — desprezivel).
+pub fn clear_color_linear() -> [f32; 4] {
+    lumo_foundation::clear_color_linear()
+}
+
+/// Legacy compat: aponta pra `clear_color_linear()` em runtime. Mantido
+/// como nome esperado por call-sites antigos durante migracao.
+#[deprecated(note = "use clear_color_linear() dinamico")]
+pub fn legacy_clear_ink_deep() -> [f32; 4] {
+    clear_color_linear()
+}
 
 pub fn cursor_solid_fallback(
     pointer_location: Point<f64, Logical>,

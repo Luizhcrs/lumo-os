@@ -22,7 +22,7 @@ use smithay::utils::Transform;
 
 use crate::state::LumoState;
 
-use super::render_common::{build_overlay, LumoCustomElement, OverlayInputs, CLEAR_INK_DEEP};
+use super::render_common::{build_overlay, clear_color_linear, LumoCustomElement, OverlayInputs};
 
 const OUTPUT_NAME: &str = "lumo-winit-0";
 const REFRESH_MHZ: i32 = 60_000;
@@ -234,12 +234,10 @@ fn redraw(
         space_iter,
         &overlay,
         damage_tracker,
-        Color32F::new(
-            CLEAR_INK_DEEP[0],
-            CLEAR_INK_DEEP[1],
-            CLEAR_INK_DEEP[2],
-            CLEAR_INK_DEEP[3],
-        ),
+        {
+            let c = clear_color_linear();
+            Color32F::new(c[0], c[1], c[2], c[3])
+        },
     )
     .map_err(|e| anyhow!("render_output: {e:?}"))?;
 

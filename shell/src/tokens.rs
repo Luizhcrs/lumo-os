@@ -1,11 +1,26 @@
-//! Design tokens — Luiz Shell
-//! Single source of truth pra cores, durations, sizing
-//! Replica de Shell Proprio/03 - Design Tokens.md no Obsidian
+//! Design tokens — Lumo Shell
+//!
+//! A13: adicionado bridge pra `lumo-foundation` theme system (light/dark
+//! switchable via `LUMO_THEME` env). Constantes legacy `C_*` continuam
+//! existindo pro lumo-shell Gallery demo (dark-only intentional) — sao a
+//! materializacao da paleta `LumoColors::dark()` em ARGB packed pra
+//! consumo direto por GPUI/`rgb()`/`rgba()`.
+//!
+//! `current_*` helpers expoem a paleta theme-aware pra qualquer caller
+//! que queira respeitar `LUMO_THEME` (lumo-bar usa).
+//!
+//! Memory feedback_zero_neon_glow: nenhum token aqui carrega box-shadow
+//! colorido; sombras vem via overlays no compositor.
 
 use std::time::Duration;
 
+// Re-export theme-aware API.
+pub use lumo_foundation::{current_colors, current_theme, LumoColors, LumoTheme};
+
 // ============================================================
-// Colors (dark default — sem alpha)
+// Gallery legacy palette (dark, fixed) — Apple-fluid demo show-off.
+// Mantido por design: Gallery sempre dark intencional. Caller que quiser
+// theme-aware usa `current_colors()`.
 // ============================================================
 pub const C_BG: u32         = 0x0a0a0c;
 pub const C_PANEL: u32      = 0x131318;

@@ -183,6 +183,10 @@ export XDG_CURRENT_DESKTOP=lumo
 export WAYLAND_DISPLAY=wayland-lumo
 export RUST_LOG="${RUST_LOG:-lumo_wm=info,smithay=warn,wgpu=warn}"
 
+# A13: theme default LIGHT (Luiz pediu). Override com:
+#   LUMO_THEME=dark ./scripts/lumo-tty.sh
+export LUMO_THEME="${LUMO_THEME:-light}"
+
 echo "[2/3] TTY = $current_tty, user = $(id -un)"
 echo "[3/3] Iniciando lumo-wm DRM..."
 echo ""

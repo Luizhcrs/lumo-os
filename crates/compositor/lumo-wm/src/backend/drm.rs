@@ -76,7 +76,7 @@ use smithay::utils::DeviceFd;
 
 use crate::state::LumoState;
 
-use super::render_common::{collect_drm_elements, DrmCollectInputs, LumoCustomElement, CLEAR_INK_DEEP};
+use super::render_common::{clear_color_linear, collect_drm_elements, DrmCollectInputs, LumoCustomElement};
 
 /// Watchdog: sem dispatch da event loop em 5s -> assumir DRM stall
 /// e exit code 2. Recovery: kernel ja garante VT switch via Ctrl+Alt+F1.
@@ -664,15 +664,11 @@ fn render_drm(state: &mut LumoState) {
     let all_elements = collect_drm_elements(&mut backend.renderer, &collect_inputs);
 
     // Render frame.
+    let clear = clear_color_linear();
     let render_result = surface.drm_output.render_frame::<_, LumoCustomElement>(
         &mut backend.renderer,
         &all_elements,
-        Color32F::new(
-            CLEAR_INK_DEEP[0],
-            CLEAR_INK_DEEP[1],
-            CLEAR_INK_DEEP[2],
-            CLEAR_INK_DEEP[3],
-        ),
+        Color32F::new(clear[0], clear[1], clear[2], clear[3]),
         FrameFlags::DEFAULT,
     );
 

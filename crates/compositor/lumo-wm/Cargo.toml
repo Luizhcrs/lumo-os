@@ -40,6 +40,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 xcursor = "0.3"
 lumo-ipc = { path = "../lumo-ipc" }
+lumo-foundation = { path = "../../foundation/lumo-foundation" }
 
 # DRM backend optional deps (so puxados com --features drm-backend).
 input = { version = "0.9", default-features = false, features = ["libinput_1_19"], optional = true }
