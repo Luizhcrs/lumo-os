@@ -898,10 +898,11 @@ impl LayerShellHandler for LumoBar {
         _: u32,
     ) {
         let (w, h) = cfg.new_size;
-        self.width = if w == 0 { 1920 } else { w }; // A19.10 Galaxy nativo
-        self.height = if h == 0 { BAR_HEIGHT } else { h };
+        // A19.13: forca 1920 sempre (compositor passa width parcial as vezes)
+        self.width = 1920;
+        self.height = BAR_HEIGHT;
         self.first_configured = true;
-        eprintln!("[lumo-bar] configured cfg_size=({},{}) effective_size=({},{})", w, h, self.width, self.height);
+        eprintln!("[lumo-bar] configured cfg_size=({},{}) FORCED width=1920 height={}", w, h, self.height);
         self.refresh();
         self.redraw(qh);
     }
