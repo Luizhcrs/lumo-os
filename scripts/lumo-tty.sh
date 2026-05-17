@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # lumo-tty.sh - Lumo full session em TTY proprio (sem Hyprland em volta).
 #
-# A9 ETAPA 2A: session + libinput + DRM enumeration real (nao tem
-# render path completo ainda, ver crates/compositor/lumo-wm/src/backend/drm.rs
-# header). Mesmo assim ja roda em TTY3 e captura input via libinput.
+# A9 ETAPA 2B: render path real ligado. Lumo precisa ser DRM master --
+# Hyprland host nao pode rodar simultaneo. Este script detecta Hyprland
+# em execucao e pede pra terminar antes de subir Lumo. Quando Lumo sair,
+# da hint pra usuario reabrir Hyprland.
 #
 # Preparacao (uma vez):
 #   sudo pacman -S seatd libseat libinput
@@ -17,14 +18,15 @@
 #
 # Como SAIR se travou:
 #   Ctrl+Alt+Backspace  -> exit clean do lumo-wm
-#   Ctrl+Alt+F1         -> volta pro TTY1 (Hyprland host)
-#   Ctrl+Alt+F2         -> volta pro TTY2 (display manager)
+#   Ctrl+Alt+F1         -> volta pro TTY1 (Hyprland host -- mas voce
+#                          matou ele, vai cair em console; relogue)
+#   Ctrl+Alt+F2         -> display manager
 #   ssh de outra maquina:
 #     sudo pkill -9 lumo-wm
 #
 # Memory feedback_validar_local_antes_push: build antes de rodar.
-# Memory feedback_design_lapidado: rejeita SSH/pts pra evitar corromper
-# sessao grafica ativa.
+# Memory feedback_design_lapidado: rejeita SSH/pts; warning explicito
+# antes de matar Hyprland (3s pra cancelar).
 
 set -euo pipefail
 
@@ -45,20 +47,61 @@ if [[ "$current_tty" =~ pts ]]; then
 fi
 
 # ============================================================
-# Safety 2: rejeitar se ja existe sessao grafica ativa.
+# Safety 2: detecta Hyprland host e oferece matar.
+# Lumo precisa DRM master; se outro compositor segura, render falha.
+# ============================================================
+HYPRLAND_PID=$(pgrep -x Hyprland || true)
+HYPR_WAS_RUNNING=false
+
+if [[ -n "$HYPRLAND_PID" ]]; then
+    echo ""
+    echo "================================================================"
+    echo " AVISO: Hyprland host detectado (PID $HYPRLAND_PID)."
+    echo " Lumo precisa de DRM master; Hyprland esta segurando."
+    echo " Vou matar Hyprland em 3s pra subir Lumo."
+    echo " Cancele com Ctrl+C agora se nao quiser perder o estado."
+    echo "================================================================"
+    sleep 3
+
+    HYPR_WAS_RUNNING=true
+
+    # Tentativa 1: hyprctl exit (saida limpa, salva estado).
+    if command -v hyprctl >/dev/null && hyprctl dispatch exit 2>/dev/null; then
+        echo "[info] hyprctl exit chamado"
+    else
+        # Tentativa 2: SIGTERM (default graceful shutdown).
+        kill "$HYPRLAND_PID" 2>/dev/null || true
+        echo "[info] SIGTERM enviado pra PID $HYPRLAND_PID"
+    fi
+
+    # Aguarda Hyprland sair (ate 5s).
+    for i in {1..10}; do
+        if ! pgrep -x Hyprland >/dev/null; then
+            echo "[info] Hyprland encerrado"
+            break
+        fi
+        sleep 0.5
+    done
+
+    # Tentativa 3: SIGKILL (forca bruta).
+    if pgrep -x Hyprland >/dev/null; then
+        echo "[warn] Hyprland resistente, SIGKILL"
+        pkill -KILL -x Hyprland || true
+        sleep 1
+    fi
+fi
+
+# ============================================================
+# Safety 3: warn se ainda tem outras sessoes wayland/x11 ativas.
 # ============================================================
 if [[ -n "${WAYLAND_DISPLAY:-}" ]] && [[ "${WAYLAND_DISPLAY}" != "wayland-lumo" ]]; then
-    echo "ATENCAO: WAYLAND_DISPLAY=$WAYLAND_DISPLAY ja setado."
-    echo "Aparenta que voce esta dentro de outra sessao Wayland."
-    echo "Saia primeiro com Ctrl+Alt+F3 ou similar antes de continuar."
-    read -p "Continuar mesmo assim? [y/N] " yn
-    [[ "${yn:-N}" == "y" ]] || exit 1
+    echo "[warn] WAYLAND_DISPLAY=$WAYLAND_DISPLAY ainda setado (limpando)."
+    unset WAYLAND_DISPLAY
 fi
 
 if [[ -n "${DISPLAY:-}" ]]; then
-    echo "ATENCAO: DISPLAY=$DISPLAY ja setado (sessao X11 ativa)."
-    read -p "Continuar mesmo assim? [y/N] " yn
-    [[ "${yn:-N}" == "y" ]] || exit 1
+    echo "[warn] DISPLAY=$DISPLAY (X11 antigo, limpando)."
+    unset DISPLAY
 fi
 
 cd "$(dirname "$0")/.."
@@ -80,14 +123,33 @@ export XDG_CURRENT_DESKTOP=lumo
 export WAYLAND_DISPLAY=wayland-lumo
 export RUST_LOG="${RUST_LOG:-lumo_wm=info,smithay=warn,wgpu=warn}"
 
-echo "[2/3] TTY = $current_tty, user = $(id -un), groups = $(id -Gn)"
+echo "[2/3] TTY = $current_tty, user = $(id -un)"
 echo "[3/3] Iniciando lumo-wm DRM..."
 echo ""
-echo "  Sair limpo:        Ctrl+Alt+Backspace"
-echo "  Voltar Hyprland:   Ctrl+Alt+F1"
-echo "  Display manager:   Ctrl+Alt+F2"
+echo "  Sair limpo:           Ctrl+Alt+Backspace"
+echo "  Voltar TTY1:          Ctrl+Alt+F1 (Hyprland esta morto, vai dar console)"
+echo "  Display manager:      Ctrl+Alt+F2"
 echo ""
 
-trap 'ec=$?; echo "lumo-wm saiu com code=$ec"; exit $ec' EXIT
+# ============================================================
+# Trap de saida: reabrir Hyprland se foi morto, OU pelo menos avisar.
+# ============================================================
+post_exit() {
+    ec=$?
+    echo ""
+    echo "================================================================"
+    echo "lumo-wm saiu com code=$ec"
+    if [[ "$HYPR_WAS_RUNNING" == "true" ]]; then
+        echo ""
+        echo " Hyprland foi morto pra subir Lumo. Pra reabrir:"
+        echo "   1. Ctrl+Alt+F1 + login fresh (recomendado, sessao limpa)"
+        echo "   2. OU rode: nohup Hyprland > /tmp/hypr.log 2>&1 &"
+        echo ""
+    fi
+    echo "Log completo: /tmp/lumo-wm-tty.log"
+    echo "================================================================"
+    exit $ec
+}
+trap post_exit EXIT
 
-exec ./target/release/lumo-wm
+./target/release/lumo-wm 2>&1 | tee /tmp/lumo-wm-tty.log

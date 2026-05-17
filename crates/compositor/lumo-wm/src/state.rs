@@ -99,6 +99,18 @@ pub struct LumoState {
     #[cfg(feature = "drm-backend")]
     pub session: Option<smithay::backend::session::libseat::LibSeatSession>,
 
+    /// Backend data DRM (renderer, output_manager, surface). So no DRM path.
+    /// Movido pra state pra que callbacks calloop (page-flip, frame timer)
+    /// possam mutar via &mut state sem capturas Rc<RefCell>.
+    #[cfg(feature = "drm-backend")]
+    pub drm_backend: Option<crate::backend::drm::DrmBackendData>,
+
+    /// Forca repaint imediato no proximo render_drm tick. Setado em
+    /// SessionEvent::ActivateSession (volta de VT switch) e em mudanca
+    /// de mode/output. Reset apos render.
+    #[cfg(feature = "drm-backend")]
+    pub drm_force_repaint: bool,
+
     /// True quando outro VT esta ativo (SessionEvent::PauseSession).
     /// Watchdog ignora paused; render path skip enquanto paused.
     pub paused: bool,
@@ -188,6 +200,10 @@ impl LumoState {
             active_workspace: 1,
             #[cfg(feature = "drm-backend")]
             session: None,
+            #[cfg(feature = "drm-backend")]
+            drm_backend: None,
+            #[cfg(feature = "drm-backend")]
+            drm_force_repaint: false,
             paused: false,
             watchdog_deadline: None,
             exit_code: 0,

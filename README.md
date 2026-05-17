@@ -199,3 +199,68 @@ Em ordem de preferencia:
 - VT switch real (`session.change_vt(n)`) - hoje so log
 - Sombras render order: usar `space.render_elements()` separadamente
 - Watchdog 5s DRM render stalled -> exit code 2
+
+## A9 etapa 2B - DRM render path real + Hyprland-aware
+
+Lumo agora renderiza de verdade no DRM/KMS. Pipeline completo: GbmDevice ->
+EGLDisplay+EGLContext -> GlesRenderer -> DrmOutputManager -> DrmOutput.
+Frame timer 60Hz dispara render; page-flip event marca submitted.
+
+### Como testar Lumo TTY3 (com Hyprland parado)
+
+Lumo precisa ser DRM master. Hyprland host nao pode rodar simultaneo.
+
+Workflow dev:
+
+1. Hyprland tty1 normal.
+2. `Ctrl+Alt+F3` -> autologin (se ativo) -> rode `./scripts/lumo-tty.sh`.
+3. Script detecta Hyprland em execucao, avisa em 3s, mata via `hyprctl
+   dispatch exit` (limpo) ou SIGTERM/SIGKILL (fallback).
+4. Espera Hyprland sair, build idempotente, sobe lumo-wm DRM master.
+5. Tela esperada: fundo `ink_deep` (#0a0a0c) escuro + cursor cinza Adwaita
+   + 4 quads pretos nos cantos (simulando borda arredondada). Toplevels
+   reais (terminais, apps) virao na Etapa 2C quando o display dispatch
+   estiver wireado no event loop DRM.
+6. Sair: `Ctrl+Alt+Backspace` (lumo-wm exit clean).
+7. Reabrir Hyprland: script da hint final; geralmente `Ctrl+Alt+F1` +
+   login fresh OU rodar `nohup Hyprland > /tmp/hypr.log 2>&1 &`.
+
+### Re-ativar autologin TTY3 (opcional)
+
+Foi movido pra `/tmp/autologin.conf.bak` em diagnostico anterior. Pra
+re-aplicar quando quiser:
+
+```
+sudo cp /tmp/autologin.conf.bak /etc/systemd/system/getty@tty3.service.d/autologin.conf
+sudo systemctl daemon-reload
+sudo systemctl restart getty@tty3.service
+```
+
+### Mudancas tecnicas etapa 2B
+
+- `crates/compositor/lumo-wm/src/backend/render_common.rs` (novo, ~150 LoC):
+  cursor (xcursor + solid fallback), corner mask, shadows -- consumidos
+  por winit.rs e drm.rs. Memory feedback_design_lapidado: zero duplicacao,
+  visual consistente entre Lumo nested e Lumo TTY.
+- `drm.rs`: 280 -> ~470 LoC. Pipeline real ativo. `DrmOutputManager` +
+  `DrmOutput` encapsulam alocador GBM + framebuffer exporter + swapchain.
+- `winit.rs`: refatorado pra usar `render_common`. Visual identico ao 2A.
+- Frame timer 60Hz (16ms) + page-flip event source -> input lag deve
+  ficar < 16ms (memory feedback_input_feedback_imediato: libinput dispatch
+  entre frames).
+- VRR skipped (Galaxy U300 painel 60Hz fixo).
+- Cursor HW plane skipped (low priority; software fallback via xcursor
+  MemoryRenderBuffer ja funciona).
+- Toplevels reais (xdg-shell render) ficam pra Etapa 2C: requer estender
+  o `LumoCustomElement` (render_elements! macro) com variante `Space` que
+  wrappa `WaylandSurfaceRenderElement`, e ligar display dispatch dentro
+  do event loop DRM (hoje o main.rs so dispatcha em winit path).
+
+### Pendente A9 etapa 2C
+
+- LumoCustomElement::Space -> render de toplevels reais
+- Display dispatch dentro do event loop DRM (clients Wayland precisam ser
+  servidos durante session DRM)
+- linux-dmabuf-v1 pra clients GPU
+- Hot-plug real (atualmente so loga)
+- Cursor HW plane (overlay scan-out direct, low priority)
