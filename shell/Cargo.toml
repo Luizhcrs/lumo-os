@@ -12,6 +12,8 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 lumo-ipc = { path = "../crates/compositor/lumo-ipc" }
 lumo-foundation = { path = "../crates/foundation/lumo-foundation" }
 serde_json = "1"
+cosmic-text = "0.12"
+fontdb = "0.18"
 
 [[bin]]
 name = "lumo-shell"

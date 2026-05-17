@@ -2014,6 +2014,20 @@ dependencies = [
 
 [[package]]
 name = "fontdb"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e32eac81c1135c1df01d4e6d4233c47ba11f6a6d07f33e0bba09d18797077770"
+dependencies = [
+ "fontconfig-parser",
+ "log",
+ "memmap2 0.9.10",
+ "slotmap",
+ "tinyvec",
+ "ttf-parser 0.21.1",
+]
+
+[[package]]
+name = "fontdb"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "457e789b3d1202543297a350643cf459f836cade38934e7a4cf6a39e7cde2905"
@@ -3662,6 +3676,8 @@ name = "lumo-shell"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "cosmic-text 0.12.1",
+ "fontdb 0.18.0",
  "gpui",
  "gpui_platform",
  "lumo-foundation",
