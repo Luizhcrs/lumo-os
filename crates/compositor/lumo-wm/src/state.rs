@@ -270,7 +270,10 @@ impl LumoState {
                     if let Some((surface, surf_off)) =
                         layer.surface_under(rel, WindowSurfaceType::ALL)
                     {
+                        if trace { eprintln!("[trace] FOUND layer namespace={:?} surface_alive={}", layer.namespace(), true); }
                         return Some((surface, geo.loc + surf_off));
+                    } else if trace {
+                        eprintln!("[trace] layer Top contains pos mas surface_under retornou None namespace={:?}", layer.namespace());
                     }
                 }
             }
