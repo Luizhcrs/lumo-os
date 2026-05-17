@@ -630,7 +630,7 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
         cx += bat_icon_w + PILL_GAP;
         draw_wifi(&mut canvas, cx, pill_cy - WIFI_SIZE / 2.0, snap.wifi_on, pill_fg, pill_fg_subtle);
         cx += WIFI_SIZE + PILL_GAP;
-        draw_text(&mut canvas, cx, text_top + 1.0, &snap.date_str, FONT_DATE, pill_fg_subtle, false);
+        draw_text(&mut canvas, cx, text_top, &snap.date_str, FONT_DATE, pill_fg, false);
         cx += date_w + 8.0;
         draw_text(&mut canvas, cx, text_top, &clock_s, FONT_PILL, pill_fg, false);
     }
