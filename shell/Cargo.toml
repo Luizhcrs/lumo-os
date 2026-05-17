@@ -6,6 +6,9 @@ edition = "2021"
 [dependencies]
 gpui = { git = "https://github.com/zed-industries/zed", branch = "main" }
 gpui_platform = { git = "https://github.com/zed-industries/zed", branch = "main", features = ["wayland", "x11"] }
+smithay-client-toolkit = "0.19"
+tiny-skia = "0.11"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [[bin]]
 name = "lumo-shell"

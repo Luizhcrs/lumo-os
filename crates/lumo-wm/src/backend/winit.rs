@@ -45,12 +45,15 @@ const REFRESH_MHZ: i32 = 60_000;
 const CLEAR_INK_DEEP: [f32; 4] = [0.0030, 0.0030, 0.0037, 1.0];
 
 // Lumo emerald (#10b981) -> linear
+#[allow(dead_code)]
 const BRAND_EMERALD: [f32; 4] = [0.0049, 0.4885, 0.2190, 1.0];
 
 // Cursor cinza claro (#d4d4d8) -> linear
 const CURSOR_COLOR: [f32; 4] = [0.6588, 0.6588, 0.6745, 1.0];
 
+#[allow(dead_code)]
 const BRAND_DOT_SIZE: i32 = 8;
+#[allow(dead_code)]
 const BRAND_DOT_MARGIN: i32 = 12;
 const CURSOR_W: i32 = 10;
 const CURSOR_H: i32 = 14;
@@ -171,6 +174,7 @@ pub fn init(
 }
 
 /// Brand dot emerald 8x8 fixo no canto top-left.
+#[allow(dead_code)]
 fn brand_dot_element() -> SolidColorRenderElement {
     let geo: Rectangle<i32, smithay::utils::Physical> = Rectangle::new(
         Point::from((BRAND_DOT_MARGIN, BRAND_DOT_MARGIN)),
@@ -260,7 +264,9 @@ fn redraw(
     } else {
         overlay.push(LumoCustomElement::Solid(cursor_solid_fallback(state, 1.0)));
     }
-    overlay.push(LumoCustomElement::Solid(brand_dot_element()));
+    // A7: brand dot removido do overlay do compositor; agora e responsabilidade
+    // do lumo-bar exibir identidade visual. Antes confundia usuario quando bar
+    // nao subia (parecia que so o dot estava na tela).
 
     let render_result = render_output::<_, LumoCustomElement<GlesRenderer>, _, _>(
         output,

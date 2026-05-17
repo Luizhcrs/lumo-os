@@ -71,7 +71,20 @@ impl LumoState {
                 if let Some(action) = action {
                     match action {
                         Action::SpawnFoot => {
+                            // A7 fix bug 3: propaga env explicito pro foot
+                            // achar foot.ini (tema Lumo emerald/ink_deep)
+                            // mesmo quando lumo-wm e lancado de contexto
+                            // sem XDG_CONFIG_HOME populado.
+                            let home = std::env::var("HOME")
+                                .unwrap_or_else(|_| "/root".to_string());
+                            let xdg = std::env::var("XDG_CONFIG_HOME")
+                                .unwrap_or_else(|_| format!("{home}/.config"));
+                            let foot_cfg = format!("{home}/.config/foot/foot.ini");
                             let mut cmd = std::process::Command::new("foot");
+                            cmd.arg("-c").arg(&foot_cfg);
+                            cmd.env("HOME", &home);
+                            cmd.env("XDG_CONFIG_HOME", &xdg);
+                            cmd.env("LC_CTYPE", "C.UTF-8");
                             if let Some(sock) = socket_name.as_deref() {
                                 cmd.env("WAYLAND_DISPLAY", sock);
                             }

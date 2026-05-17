@@ -402,15 +402,11 @@ impl TextRenderer {
                 Family::Name(&style.family)
             }
         };
+        // Cor NAO entra no Attrs (faz parte do CacheKey, causaria miss
+        // a cada mudanca de cor). Cor vai via GlyphInstance::color no shader.
         let attrs = Attrs::new()
             .family(family)
-            .weight(style.weight)
-            .color(CtColor::rgba(
-                (style.color[0] * 255.0) as u8,
-                (style.color[1] * 255.0) as u8,
-                (style.color[2] * 255.0) as u8,
-                (style.color[3] * 255.0) as u8,
-            ));
+            .weight(style.weight);
 
         buffer.set_size(&mut self.font_system, Some(4096.0), Some(style.size * 2.0));
         buffer.set_text(&mut self.font_system, text, attrs, Shaping::Advanced);
@@ -420,17 +416,19 @@ impl TextRenderer {
         // top da linha; somamos para chegar na origem do shape.
         for run in buffer.layout_runs() {
             for glyph in run.glyphs.iter() {
-                let physical = glyph.physical((position[0], position[1]), 1.0);
+                let physical = glyph.physical((0.0, 0.0), 1.0);
+                let off_x = position[0].round();
+                let off_y = position[1].round();
 
                 let entry = self.cache_glyph(device, queue, physical.cache_key);
                 let Some(entry) = entry else { continue };
 
                 // physical.x/y e o "pen position" da origin do glyph em pixels.
                 // Atlas offset corrige o canto top-left do bitmap.
-                let px = physical.x as f32 + entry.px_offset[0];
+                let px = off_x + physical.x as f32 + entry.px_offset[0];
                 // run.line_y e o baseline da linha em coordenadas top-left
                 // (cosmic-text), entao somamos.
-                let py = physical.y as f32 + run.line_y + entry.px_offset[1];
+                let py = off_y + physical.y as f32 + run.line_y + entry.px_offset[1];
 
                 self.pending.push(GlyphInstance {
                     pos: [px, py],

@@ -119,7 +119,7 @@ impl LumoState {
             use smithay::utils::Transform;
             MemoryRenderBuffer::from_slice(
                 &c.pixels,
-                Fourcc::Argb8888,
+                Fourcc::Abgr8888,
                 (c.width as i32, c.height as i32),
                 1,
                 Transform::Normal,

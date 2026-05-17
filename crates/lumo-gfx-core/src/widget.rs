@@ -532,7 +532,7 @@ impl Button {
             queue,
             &self.label,
             &TextStyle {
-                size: self.font_size * scale,
+                size: self.font_size,
                 color: label_final,
                 family: self.font_family.clone(),
                 weight: self.font_weight,
