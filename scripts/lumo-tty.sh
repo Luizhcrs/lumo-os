@@ -100,16 +100,29 @@ fi
 #
 # Fix: lista quem usa, mata todos os processos com fd aberto, espera.
 # ============================================================
-if command -v lsof >/dev/null && command -v fuser >/dev/null; then
-    echo "[info] verificando quem segura /dev/dri/*..."
-    LSOF_BEFORE=$(sudo lsof /dev/dri/card0 /dev/dri/card1 2>/dev/null | tail -n +2 || true)
+# Terminar sessoes logind de outros TTYs (Hyprland zombie etc)
+echo "[info] terminando sessoes logind de outros TTYs..."
+MY_TTY=$(tty | sed "s|/dev/||")
+loginctl list-sessions --no-legend | awk '{print $1, $6}' | while read sid stty; do
+    if [[ -n "$stty" && "$stty" != "$MY_TTY" && "$stty" != "-" ]]; then
+        echo "  terminando session $sid (tty=$stty)"
+        sudo loginctl terminate-session "$sid" 2>/dev/null || true
+    fi
+done
+sleep 1
+
+# Auto-detecta cards existentes (Galaxy so tem card1, outros podem ter card0)
+DRM_CARDS=$(ls /dev/dri/card* 2>/dev/null | tr "\n" " ")
+if [[ -n "$DRM_CARDS" ]] && command -v lsof >/dev/null && command -v fuser >/dev/null; then
+    echo "[info] verificando quem segura $DRM_CARDS..."
+    LSOF_BEFORE=$(sudo lsof $DRM_CARDS 2>/dev/null | tail -n +2 || true)
     if [[ -n "$LSOF_BEFORE" ]]; then
         echo "$LSOF_BEFORE"
         echo "[warn] processos seguram DRM. Forcando libera..."
-        sudo fuser -k /dev/dri/card0 /dev/dri/card1 2>/dev/null || true
+        sudo fuser -k $DRM_CARDS 2>/dev/null || true
         sleep 1
     else
-        echo "[info] /dev/dri/* livre"
+        echo "[info] DRM cards livres"
     fi
 fi
 
