@@ -37,7 +37,7 @@ pub fn init(
     loop_handle: LoopHandle<'static, LumoState>,
     state: &mut LumoState,
 ) -> Result<WinitData> {
-    let (backend, winit_loop) = winit::init::<GlesRenderer>()
+    let (mut backend, winit_loop) = winit::init::<GlesRenderer>()
         .map_err(|e| anyhow!("falha init winit backend: {e:?}"))?;
 
     backend.window().set_cursor_visible(false);
@@ -69,8 +69,65 @@ pub fn init(
 
     let damage_tracker = OutputDamageTracker::from_output(&output);
 
+    // A10 frente 1: cria dmabuf-v1 global usando formats reportados pelo
+    // EGLContext do renderer. Render node vem do EGLDevice -> dev_id.
+    // Falha (driver sem render node, fallback EGL software) loga warn
+    // e segue sem o global -- clients GPU caem em SHM.
+    {
+        use smithay::backend::egl::EGLDevice;
+        use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
+
+        let renderer = backend.renderer();
+        let egl_context = renderer.egl_context();
+        let render_formats: Vec<_> = egl_context.dmabuf_render_formats().iter().copied().collect();
+        let egl_display = egl_context.display();
+
+        // Sem feature backend_drm aqui, usamos drm_device_path + stat
+        // pra extrair dev_t (rdev) -- mesma info que DrmNode::dev_id
+        // mas sem puxar dep drm.
+        let dev_id_opt: Option<u64> = EGLDevice::device_for_display(egl_display)
+            .ok()
+            .and_then(|dev| dev.drm_device_path().ok())
+            .and_then(|path| std::fs::metadata(&path).ok())
+            .map(|md| {
+                use std::os::unix::fs::MetadataExt;
+                md.rdev()
+            });
+
+        match dev_id_opt {
+            Some(dev_id) => {
+                let formats_count = render_formats.len();
+                match DmabufFeedbackBuilder::new(dev_id, render_formats).build() {
+                    Ok(feedback) => {
+                        let global = state.dmabuf_state.create_global_with_default_feedback::<LumoState>(
+                            &state.display_handle,
+                            &feedback,
+                        );
+                        state.dmabuf_global = Some(global);
+                        tracing::info!(
+                            dev_id,
+                            formats = formats_count,
+                            "dmabuf-v1 global criado (winit)"
+                        );
+                    }
+                    Err(err) => {
+                        tracing::warn!(?err, "DmabufFeedback build falhou; dmabuf desativado");
+                    }
+                }
+            }
+            None => {
+                tracing::warn!(
+                    "EGLDevice sem render node disponivel; dmabuf desativado (winit fallback)"
+                );
+            }
+        }
+    }
+
     let backend = Rc::new(RefCell::new(backend));
     let damage_tracker = Rc::new(RefCell::new(damage_tracker));
+
+    // Salva handle ao backend pra DmabufHandler conseguir importar.
+    state.winit_backend = Some(backend.clone());
 
     let backend_for_evt = backend.clone();
     let dt_for_evt = damage_tracker.clone();

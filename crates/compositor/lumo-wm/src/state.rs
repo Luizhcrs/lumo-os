@@ -36,6 +36,7 @@ use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xdg_activation::XdgActivationState;
+use smithay::wayland::dmabuf::{DmabufGlobal, DmabufState};
 use smithay::wayland::xdg_toplevel_icon::XdgToplevelIconManager;
 
 use lumo_ipc::{LumoCommand, MAX_WORKSPACES};
@@ -68,6 +69,23 @@ pub struct LumoState {
     pub cursor_shape_state: CursorShapeManagerState,
     #[allow(dead_code)]
     pub xdg_toplevel_icon_manager: XdgToplevelIconManager,
+
+    // A10 frente 1: linux-dmabuf-v1.
+    //
+    // dmabuf_state existe sempre; dmabuf_global so eh criado quando o
+    // backend (winit/drm) sobe um GlesRenderer e descobre o render-node
+    // + format-set do EGL. Clients GPU (Firefox, Chrome, GPUI) precisam
+    // do global; sem ele caem em wl_shm puro ou recusam.
+    pub dmabuf_state: DmabufState,
+    pub dmabuf_global: Option<DmabufGlobal>,
+
+    /// Handle ao backend winit em Rc<RefCell<...>>. Setado pelo
+    /// init de backend::winit; necessario pro DmabufHandler conseguir
+    /// importar via GlesRenderer mantido la dentro. None no path DRM.
+    pub winit_backend: Option<std::rc::Rc<std::cell::RefCell<
+        smithay::backend::winit::WinitGraphicsBackend<
+            smithay::backend::renderer::gles::GlesRenderer
+        >>>>,
 
     // Input
     pub seat: Seat<Self>,
@@ -147,6 +165,10 @@ impl LumoState {
         let xdg_toplevel_icon_manager =
             XdgToplevelIconManager::new::<Self>(&display_handle);
 
+        // DmabufState criado vazio. Global so registrado quando renderer
+        // GPU sobe (winit::init OU drm::run).
+        let dmabuf_state = DmabufState::new();
+
         let cursor = crate::cursor::try_load_first_available(24);
         let cursor_buffer = cursor.as_ref().map(|c| {
             use smithay::backend::allocator::Fourcc;
@@ -187,6 +209,9 @@ impl LumoState {
             fractional_scale_state,
             cursor_shape_state,
             xdg_toplevel_icon_manager,
+            dmabuf_state,
+            dmabuf_global: None,
+            winit_backend: None,
             seat,
             keyboard,
             pointer,

@@ -213,6 +213,35 @@ pub fn run(
         .map_err(|e| anyhow!("GlesRenderer::new: {e:?}"))?;
     tracing::info!("GlesRenderer iniciado");
 
+    // A10 frente 1: dmabuf-v1 global. Galaxy U300 = Intel i915 render
+    // node /dev/dri/renderD128. EGLContext.dmabuf_render_formats() ja
+    // inclui DRM_FORMAT_MOD_LINEAR + I915_FORMAT_MOD_X_TILED + Y_TILED
+    // descobertos pelo Mesa. Sem hardcode (memory feedback_design_lapidado).
+    {
+        use smithay::wayland::dmabuf::DmabufFeedbackBuilder;
+        let dev_id = primary.dev_id();
+        let formats_count = render_formats.len();
+        match DmabufFeedbackBuilder::new(dev_id, render_formats.iter().copied()).build() {
+            Ok(feedback) => {
+                let global = state
+                    .dmabuf_state
+                    .create_global_with_default_feedback::<LumoState>(
+                        &state.display_handle,
+                        &feedback,
+                    );
+                state.dmabuf_global = Some(global);
+                tracing::info!(
+                    dev_id,
+                    formats = formats_count,
+                    "dmabuf-v1 global criado (drm)"
+                );
+            }
+            Err(err) => {
+                tracing::warn!(?err, "DmabufFeedback build (drm) falhou; dmabuf desativado");
+            }
+        }
+    }
+
     // ============================================================
     // 5. Enumeracao connectors -> pick eDP -> achar CRTC.
     // ============================================================
