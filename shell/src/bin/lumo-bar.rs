@@ -1020,7 +1020,7 @@ fn main() {
         seat_state: SeatState::new(&globals, &qh),
         layer,
         pool,
-        width: 1280,
+        width: 1920, // A19.18 default = output Galaxy nativo
         height: BAR_HEIGHT,
         active_workspace: active_workspace.clone(),
         battery_pct: 100,
