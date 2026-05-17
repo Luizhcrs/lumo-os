@@ -997,7 +997,7 @@ fn main() {
     let layer =
         layer_shell.create_layer_surface(&qh, surface, Layer::Top, Some("lumo-bar"), None);
     layer.set_anchor(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT);
-    layer.set_size(0, BAR_HEIGHT);
+    layer.set_size(1920, BAR_HEIGHT); // A19.16 forca 1920 pra layer-shell
     layer.set_exclusive_zone(BAR_HEIGHT as i32);
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
