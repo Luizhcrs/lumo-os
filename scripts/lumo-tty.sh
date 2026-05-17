@@ -106,6 +106,25 @@ echo "[info] terminando sessoes logind de outros TTYs..."
 MY_TTY=$(tty | sed "s|/dev/||")
 echo "  MY_TTY=$MY_TTY"
 # Pega session id via loginctl show-session por SID, evita awk de colunas
+# Ativar a propria sessao no logind (libseat depende disso pra DRM master)
+MY_SID=$(loginctl list-sessions --no-legend | awk '{print $1}' | while read s; do
+    t=$(loginctl show-session "$s" --property=TTY --value 2>/dev/null)
+    if [[ "$t" == "$MY_TTY" ]]; then echo "$s"; break; fi
+done)
+if [[ -n "$MY_SID" ]]; then
+    MY_ACTIVE=$(loginctl show-session "$MY_SID" --property=Active --value 2>/dev/null)
+    echo "  minha session=$MY_SID active=$MY_ACTIVE"
+    if [[ "$MY_ACTIVE" != "yes" ]]; then
+        echo "  [warn] session inativa, ativando..."
+        sudo loginctl activate "$MY_SID" 2>&1 || echo "  (activate falhou)"
+        sleep 1
+        MY_ACTIVE=$(loginctl show-session "$MY_SID" --property=Active --value 2>/dev/null)
+        echo "  apos activate: active=$MY_ACTIVE"
+    fi
+else
+    echo "  [warn] nao encontrou session id pra $MY_TTY"
+fi
+
 for SID in $(loginctl list-sessions --no-legend | awk '{print $1}'); do
     STTY=$(loginctl show-session "$SID" --property=TTY --value 2>/dev/null)
     if [[ -n "$STTY" && "$STTY" != "$MY_TTY" ]]; then
