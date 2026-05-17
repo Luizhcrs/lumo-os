@@ -255,6 +255,8 @@ impl LumoState {
         &self,
         pos: Point<f64, Logical>,
     ) -> Option<(WlSurface, Point<i32, Logical>)> {
+        let trace = std::env::var("LUMO_TRACE_POINTER").is_ok();
+        if trace { eprintln!("[trace] surface_under pos=({:.1},{:.1})", pos.x, pos.y); }
         // A20.2: layer-shell PRIMEIRO (bar/dock/notif).
         // Z-order: Overlay > Top > Window > Bottom > Background.
         let outputs: Vec<_> = self.space.outputs().cloned().collect();
@@ -262,6 +264,7 @@ impl LumoState {
             let map = layer_map_for_output(output);
             for layer in map.layers_on(WlrLayer::Overlay).chain(map.layers_on(WlrLayer::Top)) {
                 let geo = map.layer_geometry(layer).unwrap_or_default();
+                if trace { eprintln!("[trace] layer Top geo={:?} contains={}", geo, geo.to_f64().contains(pos)); }
                 if geo.to_f64().contains(pos) {
                     let rel = pos - geo.loc.to_f64();
                     if let Some((surface, surf_off)) =

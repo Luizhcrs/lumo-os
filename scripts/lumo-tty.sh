@@ -182,6 +182,7 @@ export XDG_SESSION_TYPE=wayland
 export XDG_CURRENT_DESKTOP=lumo
 export WAYLAND_DISPLAY=wayland-lumo
 export RUST_LOG="${RUST_LOG:-lumo_wm=info,smithay=warn,wgpu=warn}"
+export LUMO_TRACE_POINTER=1
 
 # A13: theme default LIGHT (Luiz pediu). Override com:
 #   LUMO_THEME=dark ./scripts/lumo-tty.sh
