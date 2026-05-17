@@ -548,10 +548,11 @@ pub fn run(
         // Recriar Device handle via FD (DrmDeviceFd implementa AsFd).
         // Helper aceita &DrmDevice mas precisamos do trait Device. Como
         // DrmOutputManager owns DrmDevice, usamos accessor:
-        let dev_ref = output_manager.device();
-        if let Err(e) = set_broadcast_rgb_full(dev_ref, picked_info.handle()) {
-            tracing::warn!(?e, "set_broadcast_rgb_full falhou (segue)");
-        }
+        // A16.1: Broadcast RGB Full DESATIVADO. Hyprland funciona com Automatic (default).
+        // Forcando Full pode estar piorando: painel TN recebe range full mas converte
+        // pra Limited internamente -> dither extra. Deixar driver decidir.
+        let _dev_ref = output_manager.device();
+        tracing::info!("Broadcast RGB: usando default (Automatic) - Hyprland-style");
     }
 
     let drm_output = output_manager
