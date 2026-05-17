@@ -174,18 +174,6 @@ fn stroke_rrect(
     canvas.stroke_path(&path, &p, &st, Transform::identity(), None);
 }
 
-fn stroke_circle(canvas: &mut PixmapMut, cx: f32, cy: f32, r: f32, color: Color, sw: f32) {
-    let path = PathBuilder::from_circle(cx, cy, r).unwrap();
-    let mut p = Paint::default();
-    p.set_color(color);
-    p.anti_alias = true;
-    let st = Stroke {
-        width: sw,
-        ..Default::default()
-    };
-    canvas.stroke_path(&path, &p, &st, Transform::identity(), None);
-}
-
 /// Arco SVG-style usando tiny-skia path. cx,cy = centro do circulo
 /// imaginario; arco vai de angulo `start_deg` a `end_deg` (sentido horario,
 /// 0deg = leste, 90deg = sul). Quadratic bezier aproxima arco curto.
