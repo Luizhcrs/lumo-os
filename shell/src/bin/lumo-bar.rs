@@ -49,7 +49,7 @@ use smithay_client_toolkit::{
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
-        pointer::{PointerEvent, PointerEventKind, PointerHandler, ThemedPointer, BTN_LEFT},
+        pointer::{PointerEvent, PointerEventKind, PointerHandler, BTN_LEFT},
         Capability, SeatHandler, SeatState,
     },
     shell::{
@@ -1055,7 +1055,7 @@ struct LumoBar {
     wifi_on: bool,
     running: bool,
     first_configured: bool,
-    pointer: Option<ThemedPointer>,
+    pointer: Option<smithay_client_toolkit::reexports::client::protocol::wl_pointer::WlPointer>,
     pointer_x: f32,
     pointer_pos: Option<(f64, f64)>,
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
@@ -1255,14 +1255,9 @@ impl SeatHandler for LumoBar {
         capability: Capability,
     ) {
         if capability == Capability::Pointer && self.pointer.is_none() {
-            if let Ok(p) = self.seat_state.get_pointer_with_theme(
-                qh,
-                &seat,
-                self.shm.wl_shm(),
-                self.layer.wl_surface().clone(),
-                smithay_client_toolkit::seat::pointer::ThemeSpec::System,
-            ) {
+            if let Ok(p) = self.seat_state.get_pointer(qh, &seat) {
                 self.pointer = Some(p);
+                eprintln!("[lumo-bar] pointer adquirido via get_pointer (sem theme)");
             }
         }
     }
