@@ -1285,6 +1285,7 @@ impl PointerHandler for LumoBar {
         _: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
+        eprintln!("[lumo-bar] pointer_frame {} events", events.len());
         for ev in events {
             match ev.kind {
                 PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
@@ -1294,7 +1295,9 @@ impl PointerHandler for LumoBar {
                 PointerEventKind::Leave { .. } => {
                     self.pointer_pos = None;
                 }
-                PointerEventKind::Press { button, .. } if button == BTN_LEFT => {
+                PointerEventKind::Press { button, serial, time } => {
+                    eprintln!("[lumo-bar] Press button={} serial={} time={} pos={:?} hit_rect={:?}", button, serial, time, ev.position, self.bat_hit_rect);
+                    if button != BTN_LEFT { continue; }
                     let (px, py) = (ev.position.0 as f32, ev.position.1 as f32);
                     let mut handled = false;
                     if let Some((rx, ry, rw, rh)) = self.bat_hit_rect {
