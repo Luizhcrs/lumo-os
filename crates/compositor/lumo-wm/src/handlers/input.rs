@@ -131,10 +131,25 @@ impl LumoState {
                             self.set_workspace(n);
                         }
                         Action::SwitchVt(n) => {
-                            // Winit nao tem TTY. So loggamos.
-                            // O backend DRM intercepta via session.change_vt(n)
-                            // antes de chegar aqui (ou em paralelo).
-                            tracing::info!(vt = n, "switch_vt request (no-op fora de DRM)");
+                            // DRM real: chama session.change_vt(n). Se nao
+                            // tem session (winit) so loga.
+                            #[cfg(feature = "drm-backend")]
+                            {
+                                use smithay::backend::session::Session as _;
+                                if let Some(sess) = self.session.as_mut() {
+                                    if let Err(err) = sess.change_vt(n) {
+                                        tracing::warn!(vt = n, ?err, "change_vt falhou");
+                                    } else {
+                                        tracing::info!(vt = n, "change_vt ok");
+                                    }
+                                } else {
+                                    tracing::info!(vt = n, "switch_vt request sem session");
+                                }
+                            }
+                            #[cfg(not(feature = "drm-backend"))]
+                            {
+                                tracing::info!(vt = n, "switch_vt request (no-op fora de DRM)");
+                            }
                         }
                     }
                 }

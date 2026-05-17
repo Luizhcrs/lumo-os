@@ -92,6 +92,22 @@ pub struct LumoState {
     /// Workspace ativo no instante atual. 1..=MAX_WORKSPACES.
     /// Default = 1 no startup.
     pub active_workspace: u8,
+
+    // Fase 5.6 (A9): DRM session + watchdog.
+    /// Sessao libseat (so existe no backend DRM). winit deixa None.
+    /// Usado por handlers/input.rs pra change_vt (Ctrl+Alt+Fn).
+    #[cfg(feature = "drm-backend")]
+    pub session: Option<smithay::backend::session::libseat::LibSeatSession>,
+
+    /// True quando outro VT esta ativo (SessionEvent::PauseSession).
+    /// Watchdog ignora paused; render path skip enquanto paused.
+    pub paused: bool,
+
+    /// Deadline pra watchdog frame-timeout. None = sem watchdog (winit).
+    pub watchdog_deadline: Option<std::time::Instant>,
+
+    /// Exit code do processo. 0 = normal, 2 = watchdog DRM stall.
+    pub exit_code: i32,
 }
 
 impl LumoState {
@@ -170,7 +186,22 @@ impl LumoState {
             cursor_buffer,
             ipc: IpcServer::default(),
             active_workspace: 1,
+            #[cfg(feature = "drm-backend")]
+            session: None,
+            paused: false,
+            watchdog_deadline: None,
+            exit_code: 0,
         }
+    }
+
+    /// Salva sessao libseat no state. So chamado pelo backend DRM.
+    /// Necessario pra handlers/input.rs intercept Ctrl+Alt+Fn -> change_vt.
+    #[cfg(feature = "drm-backend")]
+    pub fn set_session(
+        &mut self,
+        session: smithay::backend::session::libseat::LibSeatSession,
+    ) {
+        self.session = Some(session);
     }
 
     /// Encontra a surface sob a posicao global do ponteiro.
