@@ -120,6 +120,139 @@ pub struct DrmBackendData {
 /// Etapa 2C: recebe `display` (Rc<RefCell>) pra agendar dispatch_clients
 /// dentro do mesmo event loop -- antes o dispatch ficava no main pos-run,
 /// que nunca era alcancado no path DRM (run bloqueia ate exit).
+/// A16 frente 2: forca property "Broadcast RGB" = Full no connector.
+///
+/// Default i915 = Automatic (0). Em painel eDP-1 isso pode resolver pra
+/// Limited 16:235 dependendo EDID e modeline (kernel heuristica). Limited
+/// range = todos cores comprimidos pra 16..235 = banding/dither visivel
+/// quando sRGB content full-range eh enviado bruto pro scanout.
+///
+/// Hyprland NAO seta isso explicito (aquamarine query Colorspace/max_bpc
+/// mas nao Broadcast RGB) — mas Hyprland tambem sofre menos porque GBM
+/// modifier Y-tiled mascara dither hardware. No lumo-wm, com LINEAR
+/// fallback, padrao Bayer fica visivel.
+///
+/// Retorna Ok(()) se setou Full, Ok(()) com warn se prop nao existe (drivers
+/// nao-Intel), Err se acesso DRM falhou.
+fn set_broadcast_rgb_full(
+    drm_device: &smithay::backend::drm::DrmDevice,
+    conn: smithay::reexports::drm::control::connector::Handle,
+) -> anyhow::Result<()> {
+    use smithay::reexports::drm::control::Device as ControlDevice;
+
+    let props = drm_device
+        .get_properties(conn)
+        .map_err(|e| anyhow::anyhow!("get_properties(connector): {e}"))?;
+
+    let mut target: Option<(smithay::reexports::drm::control::property::Handle, u64)> = None;
+    let mut current_val: Option<u64> = None;
+
+    for (handle, raw_value) in props.iter() {
+        let info = match drm_device.get_property(*handle) {
+            Ok(i) => i,
+            Err(_) => continue,
+        };
+        let name = match info.name().to_str() {
+            Ok(n) => n,
+            Err(_) => continue,
+        };
+        if name != "Broadcast RGB" {
+            continue;
+        }
+
+        current_val = Some(*raw_value as u64);
+
+        // Procura enum value "Full"
+        if let smithay::reexports::drm::control::property::ValueType::Enum(enums) =
+            info.value_type()
+        {
+            let (raws, evals) = enums.values();
+            for (raw, ev) in raws.iter().zip(evals.iter()) {
+                if let Ok(ename) = ev.name().to_str() {
+                    if ename == "Full" {
+                        target = Some((*handle, *raw));
+                        break;
+                    }
+                }
+            }
+        }
+        break;
+    }
+
+    match target {
+        Some((handle, full_val)) => {
+            let cur = current_val.unwrap_or(u64::MAX);
+            if cur == full_val {
+                tracing::info!(
+                    broadcast_rgb_value = full_val,
+                    "Broadcast RGB ja em Full (skip set)"
+                );
+                return Ok(());
+            }
+            drm_device
+                .set_property(conn, handle, full_val)
+                .map_err(|e| anyhow::anyhow!("set_property(Broadcast RGB=Full): {e}"))?;
+            tracing::info!(
+                broadcast_rgb_value = full_val,
+                broadcast_rgb_previous = cur,
+                "Broadcast RGB property set: Full (A16 frente 2)"
+            );
+            Ok(())
+        }
+        None => {
+            tracing::warn!("Broadcast RGB property nao encontrada no connector (driver nao expoe — skip)");
+            Ok(())
+        }
+    }
+}
+
+/// A16 frente 1+4: loga modifier real do swapchain + blend func GL ativo.
+///
+/// Hyprland: `glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA)` = premultiplied.
+/// GL_ONE = 1, GL_ONE_MINUS_SRC_ALPHA = 0x0303 = 771.
+///
+/// Modifier esperado em Intel: I915_y_tiled (Mesa escolhe automatico se
+/// disponivel pra Argb8888 + SCANOUT). Se for LINEAR, dither hardware
+/// alinha visualmente em padrao Bayer.
+fn log_drm_pipeline_state(
+    drm_output: &LumoDrmOutput,
+    renderer: &mut GlesRenderer,
+) {
+    let format = drm_output.format();
+    let modifiers: Vec<_> = drm_output
+        .with_compositor(|c| c.modifiers().to_vec());
+
+    tracing::info!(
+        ?format,
+        modifiers_count = modifiers.len(),
+        modifiers = ?modifiers,
+        "A16: swapchain format + modifiers ativos"
+    );
+
+    // Blend func via GlesRenderer context
+    use smithay::backend::renderer::gles::ffi;
+    let _ = renderer.with_context(|gl| unsafe {
+        let mut src_rgb: i32 = 0;
+        let mut dst_rgb: i32 = 0;
+        let mut src_alpha: i32 = 0;
+        let mut dst_alpha: i32 = 0;
+        let mut blend_enabled: u8 = 0;
+        gl.GetIntegerv(ffi::BLEND_SRC_RGB, &mut src_rgb as *mut _);
+        gl.GetIntegerv(ffi::BLEND_DST_RGB, &mut dst_rgb as *mut _);
+        gl.GetIntegerv(ffi::BLEND_SRC_ALPHA, &mut src_alpha as *mut _);
+        gl.GetIntegerv(ffi::BLEND_DST_ALPHA, &mut dst_alpha as *mut _);
+        gl.GetBooleanv(ffi::BLEND, &mut blend_enabled as *mut _);
+        tracing::info!(
+            blend_enabled = blend_enabled != 0,
+            blend_src_rgb = src_rgb,
+            blend_dst_rgb = dst_rgb,
+            blend_src_alpha = src_alpha,
+            blend_dst_alpha = dst_alpha,
+            "A16: blend func GL atual (premul espera src=1 dst=771)"
+        );
+    });
+}
+
 pub fn run(
     event_loop: &mut EventLoop<'static, LumoState>,
     state: &mut LumoState,
@@ -405,6 +538,22 @@ pub fn run(
     // ============================================================
     // 8. initialize_output -> cria DrmOutput (page-flip-ready surface).
     // ============================================================
+    //
+    // A16 frente 2: tenta forcar Broadcast RGB = Full ANTES do primeiro
+    // page-flip. Se driver eDP nao expoe prop, segue (warn). Pre-condicao:
+    // drm_device ainda owned por output_manager — mas DrmOutputManager
+    // tem .with_device_mut? Nao no smithay 0.7. Workaround: pegamos
+    // o connector handle e setamos via FD do drm_fd ja clonado.
+    {
+        // Recriar Device handle via FD (DrmDeviceFd implementa AsFd).
+        // Helper aceita &DrmDevice mas precisamos do trait Device. Como
+        // DrmOutputManager owns DrmDevice, usamos accessor:
+        let dev_ref = output_manager.device();
+        if let Err(e) = set_broadcast_rgb_full(dev_ref, picked_info.handle()) {
+            tracing::warn!(?e, "set_broadcast_rgb_full falhou (segue)");
+        }
+    }
+
     let drm_output = output_manager
         .initialize_output::<_, LumoCustomElement>(
             crtc_handle,
@@ -417,6 +566,9 @@ pub fn run(
         )
         .map_err(|e| anyhow!("initialize_output: {e:?}"))?;
     tracing::info!("DrmOutput surface ativa");
+
+    // A16 frente 1+4: log do estado real escolhido pelo driver.
+    log_drm_pipeline_state(&drm_output, &mut renderer);
 
     // Guarda no state via UserDataMap (ou campo dedicado).
     state.drm_backend = Some(DrmBackendData {
