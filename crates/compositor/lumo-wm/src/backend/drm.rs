@@ -83,7 +83,7 @@ use super::render_common::{collect_drm_elements, DrmCollectInputs, LumoCustomEle
 const WATCHDOG_MS: u64 = 5_000;
 
 /// Frame interval alvo (60Hz). Galaxy U300 painel 60Hz fixo.
-const FRAME_INTERVAL_MS: u64 = 16;
+const FRAME_INTERVAL_MS: u64 = 8; // 125Hz tick (vsync 60Hz limita render efetivo)
 
 /// Formatos color suportados pelo primary plane. ARGB/XRGB 8bit
 /// = lista mais conservadora compativel com i915. 10-bit skipado
