@@ -1,27 +1,31 @@
 //! lumo-bar - top bar Lumo OS via wlr-layer-shell + SHM + tiny-skia.
 //!
-//! A15 redesign: cosmic-text real (Geist Mono / JetBrains Mono Nerd Font
-//! fallback) substituindo bitmap font 5x7 do A14. Wifi 18px (era 14).
-//! Verde solido validado (sem gradient, sem shader, blend SrcOver default).
+//! A18 redesign: **pill-style flutuante** estilo Samsung Galaxy / iOS
+//! Dynamic Island. Bar fundo TRANSPARENTE (alpha 0); 2 pills arredondadas
+//! escuras semi-translucent com sombra preta neutra (sem accent glow,
+//! memory `feedback_zero_neon_glow`).
 //!
-//! Layout (28px alt, full width):
+//! Layout (40px altura total, pills 28px com 6px margem topo):
 //!
-//!   [dot] Lumo  Editar  Visualizar  Ajuda          wifi 73% 13:45 sex 17 mai
+//!   +------------------------------------------------------+
+//!   |  [== . Lumo . 1 ==]                [== ~ 82% 16:42 ==]|
+//!   +------------------------------------------------------+
 //!
-//! Slots:
-//!   - Esquerda (PAD_X=14, gap=16px entre items): brand dot 8px circulo
-//!     emerald + menus text 13px (Lumo BOLD, restantes regular).
-//!   - Direita (PAD_X=14, gap=12px): wifi 18x18 -> bateria texto
-//!     "73%" + icone 18x10 -> clock HH:MM mono -> data abrev pt-br
-//!     "sex 17 mai" (fg_subtle).
+//! Slots (cada constante justificada — `feedback_design_lapidado`):
+//!   - Pill esquerda: brand dot 8px (accent) + " Lumo " + dot middle
+//!     separator + numero workspace ativo (IPC).
+//!   - Pill direita: wifi 16x16 + " 82% " + clock HH:MM mono Geist 13px.
+//!     SEM data (compacta).
 //!
-//! Tipografia: cosmic-text 0.12 + tiny-skia. FontSystem singleton lazy.
-//! Tenta Geist Mono primeiro, depois JetBrains Mono Nerd Font, depois
-//! monospace generico. Glyphs anti-aliased via SwashCache. Coords
-//! arredondadas pra evitar sub-pixel shimmer.
+//! Render pipeline:
+//!   - wl_shm Argb8888 (alpha real necessario pra pills semi-translucent).
+//!   - tiny-skia Pixmap (premul RGBA). Swap RGBA->BGRA pra wl_shm LE Argb8888.
+//!   - Bar background `Color::TRANSPARENT` (compositor pinta atras).
+//!   - Sombra: 4 rrects sobrepostos offset y=1..4 alpha decrescente
+//!     (simula blur 4px sem shader GPU).
 //!
-//! Border bottom: 1px linha cor `border` (sutil). ZERO box-shadow colorido
-//! (memory feedback_zero_neon_glow).
+//! Tipografia: Geist Mono / JetBrains Mono Nerd Font / monospace fallback.
+//! Cosmic-text 0.12 + tiny-skia. Glyphs grayscale AA (sem rainbow subpixel).
 
 use std::io::{ErrorKind, Read};
 use std::os::unix::net::UnixStream;
@@ -31,7 +35,7 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-use chrono::{Datelike, Local, Timelike};
+use chrono::{Local, Timelike};
 use cosmic_text::{
     Attrs, Buffer as CosmicBuffer, Color as CosmicColor, Family, FontSystem, Metrics, Shaping,
     SwashCache,
@@ -70,35 +74,49 @@ use lumo_ipc::{default_socket_path, LumoEvent, MAX_WORKSPACES};
 // Layout constants (lapidado: cada valor justificado).
 // ============================================================
 
-/// Altura fixa da bar. 28px = Apple macOS densidade.
-const BAR_HEIGHT: u32 = 28;
+/// Altura total da bar (layer-shell exclusive zone).
+/// 40px = 28px pill + 6px margin topo + 6px margem inferior (sombra cabe).
+const BAR_HEIGHT: u32 = 40;
 
-/// Padding horizontal nas duas pontas. 14px (Apple ~14).
-const PAD_X: f32 = 14.0;
+/// Altura de cada pill. 28px = padrao Apple Dynamic Island compact.
+const PILL_H: f32 = 28.0;
 
-/// Gap entre menus do slot esquerdo (apos brand dot).
-const MENU_GAP: f32 = 16.0;
+/// Margem topo: distancia entre topo da bar e topo da pill.
+/// 6px = respiro suficiente sem desperdicar real-estate.
+const PILL_MARGIN_TOP: f32 = 6.0;
 
-/// Gap entre items do slot direito (wifi/bat/clock/data).
-const SEG_GAP: f32 = 12.0;
+/// Margem lateral: distancia entre borda da bar e a pill.
+/// 14px = mesmo PAD_X do design anterior (continuidade visual).
+const PILL_MARGIN_X: f32 = 14.0;
 
-/// Brand dot diametro. 8px = atomo visual estavel.
+/// Border-radius das pills. 16px = bem arredondado, pill-shape (28h / 2 = 14
+/// daria capsule pura; 16 amacia mas mantem identidade pill).
+const PILL_RADIUS: f32 = 14.0;
+
+/// Padding horizontal interno da pill (entre borda da pill e conteudo).
+/// 14px = Apple-grade respiracao.
+const PILL_PAD_X: f32 = 14.0;
+
+/// Gap entre items dentro da pill (icone/texto adjacentes).
+/// 8px = denso mas legivel.
+const PILL_GAP: f32 = 8.0;
+
+/// Brand dot diametro 8px (radius 4). Atomo visual estavel.
 const BRAND_DOT_RADIUS: f32 = 4.0;
 
-/// Espacamento entre brand dot e primeiro menu.
-const BRAND_GAP: f32 = 14.0;
+/// Separator dot middle (entre items dentro da pill esquerda).
+/// 4px diametro = sutil mas perceptivel.
+const SEP_DOT_RADIUS: f32 = 2.0;
 
-/// Font sizes (px). Menus 13, status 12, data 11 (Apple-grade hierarchy).
-const FONT_MENU: f32 = 14.0;
-const FONT_STATUS: f32 = 13.0;
-const FONT_DATE: f32 = 12.0;
+/// Font sizes (px). Conteudo de pill todo em 13px (compact uniform).
+const FONT_PILL: f32 = 13.0;
 
-/// Wifi icone tamanho (A15: 18 era 14).
-const WIFI_SIZE: f32 = 18.0;
+/// Wifi icone 16x16 (compact pra caber dentro de pill 28h).
+const WIFI_SIZE: f32 = 16.0;
 
-/// Bateria icone tamanho (A15: 18x10 aspect Apple).
-const BAT_BODY_W: f32 = 18.0;
-const BAT_BODY_H: f32 = 10.0;
+/// Bateria icone 14x8 (proporcional a 28h pill).
+const BAT_BODY_W: f32 = 14.0;
+const BAT_BODY_H: f32 = 8.0;
 
 // ============================================================
 // Color helpers.
@@ -128,10 +146,6 @@ fn to_cosmic(c: Color) -> CosmicColor {
 // ============================================================
 // FontSystem singleton + SwashCache.
 // ============================================================
-//
-// cosmic-text 0.12: FontSystem nao eh thread-safe internamente quando
-// loadado em paralelo. Lock Mutex protege. Init lazy uma vez no primeiro
-// uso. Tenta Geist Mono -> JetBrains Mono Nerd Font -> monospace.
 
 static FONT_SYSTEM: OnceLock<Mutex<FontSystem>> = OnceLock::new();
 static SWASH_CACHE: OnceLock<Mutex<SwashCache>> = OnceLock::new();
@@ -152,8 +166,6 @@ fn swash_cache() -> &'static Mutex<SwashCache> {
     SWASH_CACHE.get_or_init(|| Mutex::new(SwashCache::new()))
 }
 
-/// Carrega ttf/otf extras de paths locais conhecidos (Geist se Luiz
-/// instalar em ~/.local/share/fonts ou similar). Nao falha se nao achar.
 fn load_extra_fonts(fs: &mut FontSystem) {
     let candidates = [
         std::env::var("HOME").ok().map(|h| format!("{}/.local/share/fonts", h)),
@@ -184,7 +196,6 @@ fn load_extra_fonts(fs: &mut FontSystem) {
     }
 }
 
-/// Decide family pra usar com base em quais estao registradas no db.
 fn pick_font_family(fs: &FontSystem) -> String {
     let preferred = [
         "Geist Mono",
@@ -203,7 +214,6 @@ fn pick_font_family(fs: &FontSystem) -> String {
             return p.to_string();
         }
     }
-    // fallback partial-match
     for p in preferred {
         let pl = p.to_lowercase();
         let token = pl.split_whitespace().next().unwrap_or("monospace");
@@ -215,13 +225,12 @@ fn pick_font_family(fs: &FontSystem) -> String {
     "monospace".to_string()
 }
 
-/// Familia atualmente escolhida (preenchida no init do font_system).
 fn current_family() -> &'static str {
     FONT_FAMILY.get().map(|s| s.as_str()).unwrap_or("monospace")
 }
 
 // ============================================================
-// Vector primitives (tiny-skia paths).
+// Vector primitives.
 // ============================================================
 
 fn fill_circle(canvas: &mut PixmapMut, cx: f32, cy: f32, r: f32, color: Color) {
@@ -298,7 +307,6 @@ fn stroke_rrect(
     canvas.stroke_path(&path, &p, &st, Transform::identity(), None);
 }
 
-/// Arco SVG-style usando tiny-skia path quad bezier.
 fn stroke_arc(
     canvas: &mut PixmapMut,
     cx: f32,
@@ -336,25 +344,10 @@ fn stroke_arc(
     canvas.stroke_path(&path, &p, &st, Transform::identity(), None);
 }
 
-fn fill_rect_color(pixmap: &mut Pixmap, x: f32, y: f32, w: f32, h: f32, color: Color) {
-    let mut p = Paint::default();
-    p.set_color(color);
-    p.anti_alias = false;
-    if let Some(r) = Rect::from_xywh(x.round(), y.round(), w, h) {
-        pixmap.fill_rect(r, &p, Transform::identity(), None);
-    }
-}
-
 // ============================================================
-// Text rendering via cosmic-text + swash + tiny-skia.
+// Text rendering.
 // ============================================================
-//
-// Estrategia: shape texto com cosmic-text -> swash rasteriza glyph em
-// mascara alpha 8-bit -> blita pixel a pixel no canvas usando fill_rect 1x1
-// com cor pre-multiplicada pelo alpha do glyph. tiny-skia nao expose
-// direct pixel API, mas fill_rect 1x1 sem AA eh equivalente.
 
-/// Mede a largura de `text` no tamanho dado (sem desenhar).
 fn measure_text(text: &str, size: f32, bold: bool) -> f32 {
     let mut fs = font_system().lock().expect("font_system poisoned");
     let metrics = Metrics::new(size, size * 1.2);
@@ -380,8 +373,6 @@ fn measure_text(text: &str, size: f32, bold: bool) -> f32 {
     w.ceil()
 }
 
-/// Desenha string em (x, y_top) com cor e tamanho. Retorna largura usada.
-/// y_top eh top-left do bounding box (linha de base alinhada via cosmic).
 fn draw_text(
     canvas: &mut PixmapMut,
     x: f32,
@@ -411,8 +402,6 @@ fn draw_text(
         if gw == 0 || gh == 0 {
             return;
         }
-        // Grayscale AA: ignora RGB subpixel (rainbow artifact em painel sem LCD-RGB stripe).
-        // Usa COR PASSADA + alpha do glyph (mask 8-bit).
         let a_mask = gcolor.a() as f32 / 255.0;
         if a_mask < 0.01 {
             return;
@@ -425,9 +414,6 @@ fn draw_text(
         ).unwrap_or(color);
         let px = (x + gx as f32).round();
         let py = (y_top + gy as f32).round();
-        // Cada pixel do glyph eh 1x1; AA ja vem do alpha gcolor (mascara
-        // 8-bit grey-on-color do swash). fill_rect 1x1 AA off pra evitar
-        // duplo-AA.
         if let Some(rect) = Rect::from_xywh(px, py, gw as f32, gh as f32) {
             let mut p = Paint::default();
             p.set_color(c);
@@ -442,31 +428,64 @@ fn draw_text(
     max_w
 }
 
-/// Helper: altura "metrics" para alinhar vertical (cap top).
-fn text_baseline_top(_size: f32, bar_h: f32, text_h: f32) -> f32 {
-    ((bar_h - text_h) / 2.0).round()
+// ============================================================
+// Pill primitive.
+// ============================================================
+//
+// `draw_pill_bg` pinta:
+//   1) sombra: 4 rrects empilhados (y offset 1..4), alpha decrescente
+//      (40 -> 10) -> simula blur 4px sem shader GPU.
+//   2) pill bg fill rounded com cor + alpha do tema.
+//
+// Sem accent glow (memory feedback_zero_neon_glow). Sombra preta neutra.
+
+fn draw_pill_bg(
+    canvas: &mut PixmapMut,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    bg: Color,
+    shadow_alpha: u8,
+) {
+    // Sombra: 4 rrects empilhados, offset y crescente, alpha decrescente.
+    // Cada camada simula um "anel" do blur gaussiano discretizado.
+    let base = shadow_alpha as f32;
+    let layers: [(f32, f32, f32); 4] = [
+        // (dy, dx_expand, alpha_factor)
+        (1.0, 0.0, 1.0),   // mais perto, mais opaco
+        (2.0, 0.5, 0.65),
+        (3.0, 1.0, 0.35),
+        (4.0, 1.5, 0.15),
+    ];
+    for (dy, expand, factor) in layers {
+        let a = (base * factor).round().clamp(0.0, 255.0) as u8;
+        if a == 0 {
+            continue;
+        }
+        let shadow_color = rgba_hex(0x000000, a);
+        fill_rrect(
+            canvas,
+            x - expand,
+            y + dy,
+            w + expand * 2.0,
+            h,
+            PILL_RADIUS,
+            shadow_color,
+        );
+    }
+    // Pill background.
+    fill_rrect(canvas, x, y, w, h, PILL_RADIUS, bg);
 }
 
 // ============================================================
-// Brand mark.
+// Wifi glyph (compact 16px).
 // ============================================================
-fn draw_brand_dot(canvas: &mut PixmapMut, cx: f32, cy: f32, color: Color) {
-    fill_circle(canvas, cx, cy, BRAND_DOT_RADIUS, color);
-}
-
-// ============================================================
-// Wifi glyph (3 arcos concentricos + ponto). A15: 18x18 (era 14x14).
-// ============================================================
-fn draw_wifi(canvas: &mut PixmapMut, x: f32, y: f32, on: bool, palette: &LumoColors) {
-    let color = if on {
-        opaque(palette.fg)
-    } else {
-        opaque(palette.fg_subtle)
-    };
+fn draw_wifi(canvas: &mut PixmapMut, x: f32, y: f32, on: bool, fg: Color, fg_subtle: Color) {
+    let color = if on { fg } else { fg_subtle };
     let s = WIFI_SIZE;
     let cx = x + s / 2.0;
-    let cy = y + s * 0.78; // ponto fica perto da base do icone
-    // Arcos: raio externo ~0.46s, medio ~0.30s, interno ~0.15s.
+    let cy = y + s * 0.78;
     let arcs = [
         (s * 0.46, s * 0.085),
         (s * 0.30, s * 0.075),
@@ -479,75 +498,31 @@ fn draw_wifi(canvas: &mut PixmapMut, x: f32, y: f32, on: bool, palette: &LumoCol
 }
 
 // ============================================================
-// Battery glyph (18x10 A15, ratio Apple). Fill horizontal proporcional.
+// Battery glyph (compact 14x8).
 // ============================================================
-fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, palette: &LumoColors) {
+fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, fg: Color, accent: Color) {
     let body_w = BAT_BODY_W;
     let body_h = BAT_BODY_H;
-    let stroke = opaque(palette.fg);
-    stroke_rrect(canvas, x + 0.5, y + 0.5, body_w - 1.0, body_h - 1.0, 1.8, stroke, 1.0);
-    fill_rrect(canvas, x + body_w, y + body_h * 0.28, 1.6, body_h * 0.44, 0.6, stroke);
+    stroke_rrect(canvas, x + 0.5, y + 0.5, body_w - 1.0, body_h - 1.0, 1.6, fg, 1.0);
+    fill_rrect(canvas, x + body_w, y + body_h * 0.28, 1.4, body_h * 0.44, 0.5, fg);
     let inner_w = body_w - 4.0;
     let fw = (pct as f32 / 100.0).clamp(0.0, 1.0) * inner_w;
     if fw > 0.2 {
         let fill_color = if pct > 20 {
-            opaque(palette.accent)
+            accent
         } else {
             opaque(0xEF4444)
         };
-        fill_rrect(canvas, x + 2.0, y + 2.0, fw, body_h - 4.0, 0.9, fill_color);
+        fill_rrect(canvas, x + 2.0, y + 2.0, fw, body_h - 4.0, 0.8, fill_color);
     }
 }
 
-/// Largura total do icone bateria incluindo cap (pra layout).
 fn battery_total_width() -> f32 {
-    BAT_BODY_W + 1.8
+    BAT_BODY_W + 1.4
 }
 
 // ============================================================
-// Date abreviada pt-br.
-// ============================================================
-fn weekday_abbr_pt(dt: &chrono::DateTime<Local>) -> &'static str {
-    match dt.weekday() {
-        chrono::Weekday::Mon => "seg",
-        chrono::Weekday::Tue => "ter",
-        chrono::Weekday::Wed => "qua",
-        chrono::Weekday::Thu => "qui",
-        chrono::Weekday::Fri => "sex",
-        chrono::Weekday::Sat => "sab",
-        chrono::Weekday::Sun => "dom",
-    }
-}
-
-fn month_abbr_pt(m: u32) -> &'static str {
-    match m {
-        1 => "jan",
-        2 => "fev",
-        3 => "mar",
-        4 => "abr",
-        5 => "mai",
-        6 => "jun",
-        7 => "jul",
-        8 => "ago",
-        9 => "set",
-        10 => "out",
-        11 => "nov",
-        12 => "dez",
-        _ => "???",
-    }
-}
-
-fn format_date_pt(dt: &chrono::DateTime<Local>) -> String {
-    format!(
-        "{} {:02} {}",
-        weekday_abbr_pt(dt),
-        dt.day(),
-        month_abbr_pt(dt.month())
-    )
-}
-
-// ============================================================
-// Bar snapshot.
+// BarSnapshot.
 // ============================================================
 struct BarSnapshot {
     width: u32,
@@ -558,123 +533,116 @@ struct BarSnapshot {
     theme: LumoTheme,
     clock_hh: u8,
     clock_mm: u8,
-    date_abbr: String,
+    active_ws: u8,
 }
 
+// ============================================================
+// paint_frame: pinta as 2 pills sobre fundo transparente.
+// ============================================================
 fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
     let palette = &snap.palette;
-    pixmap.fill(opaque(palette.bg));
+    // BAR BACKGROUND TRANSPARENTE (A18 — alpha 0). Compositor pinta atras.
+    pixmap.fill(Color::TRANSPARENT);
+
     let h = snap.height as f32;
-    let cy = h / 2.0;
+    let pill_y = PILL_MARGIN_TOP;
+    let pill_cy = pill_y + PILL_H / 2.0;
 
-    // Top y para textos (centralizado vertical). cosmic-text baseline-top
-    // alinha pelo line-height; usamos size*1.2 entao text_h ~ size*1.2.
-    let menu_top = text_baseline_top(FONT_MENU, h, FONT_MENU * 1.2);
-    let status_top = text_baseline_top(FONT_STATUS, h, FONT_STATUS * 1.2);
-    let date_top = text_baseline_top(FONT_DATE, h, FONT_DATE * 1.2);
+    // Cor pill bg: hex + alpha do tema. Mesma cor pra ambas as pills.
+    let pill_bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
+    let pill_fg = opaque(palette.pill_fg);
+    let pill_fg_subtle = rgba_hex(palette.pill_fg, 0xB0); // 70% pra dim sobre pill
+    let pill_sep = rgba_hex(palette.pill_sep, palette.pill_sep_alpha);
+    let shadow_a = palette.pill_shadow_alpha;
+    let accent = opaque(palette.accent);
 
-    // ===== Esquerda: brand dot + menus =====
+    // Topo y do texto dentro da pill (centralizado vertical).
+    let text_h = FONT_PILL * 1.2;
+    let text_top = pill_y + (PILL_H - text_h) / 2.0;
+    let text_top = text_top.round();
+
+    // ============================================================
+    // PILL ESQUERDA: [dot] Lumo . 1
+    // ============================================================
+    let workspace_str = snap.active_ws.to_string();
+    let lumo_w = measure_text("Lumo", FONT_PILL, true);
+    let ws_w = measure_text(&workspace_str, FONT_PILL, false);
+
+    // Largura interna pill esquerda:
+    //   pad + brand_dot(8) + gap + Lumo + gap + sep(4) + gap + ws + pad
+    let pill_l_content_w =
+        BRAND_DOT_RADIUS * 2.0
+        + PILL_GAP
+        + lumo_w
+        + PILL_GAP
+        + SEP_DOT_RADIUS * 2.0
+        + PILL_GAP
+        + ws_w;
+    let pill_l_w = pill_l_content_w + PILL_PAD_X * 2.0;
+    let pill_l_x = PILL_MARGIN_X;
+
     {
         let mut canvas = pixmap.as_mut();
-        let mut lx = PAD_X;
-        draw_brand_dot(&mut canvas, lx + BRAND_DOT_RADIUS, cy, opaque(palette.accent));
-        lx += BRAND_DOT_RADIUS * 2.0 + BRAND_GAP;
+        draw_pill_bg(&mut canvas, pill_l_x, pill_y, pill_l_w, PILL_H, pill_bg, shadow_a);
 
-        let menus: &[(&str, bool)] = &[
-            ("Lumo", true),
-            ("Editar", false),
-            ("Visualizar", false),
-            ("Ajuda", false),
-        ];
-        let menu_color = opaque(palette.fg);
-        for (text, bold) in menus {
-            draw_text(&mut canvas, lx, menu_top, text, FONT_MENU, menu_color, *bold);
-            let w = measure_text(text, FONT_MENU, *bold);
-            lx += w + MENU_GAP;
-        }
+        let mut cx = pill_l_x + PILL_PAD_X;
+        // Brand dot (accent emerald/blue).
+        fill_circle(&mut canvas, cx + BRAND_DOT_RADIUS, pill_cy, BRAND_DOT_RADIUS, accent);
+        cx += BRAND_DOT_RADIUS * 2.0 + PILL_GAP;
+        // "Lumo" bold.
+        draw_text(&mut canvas, cx, text_top, "Lumo", FONT_PILL, pill_fg, true);
+        cx += lumo_w + PILL_GAP;
+        // Separator dot middle.
+        fill_circle(&mut canvas, cx + SEP_DOT_RADIUS, pill_cy, SEP_DOT_RADIUS, pill_sep);
+        cx += SEP_DOT_RADIUS * 2.0 + PILL_GAP;
+        // Workspace numero.
+        draw_text(&mut canvas, cx, text_top, &workspace_str, FONT_PILL, pill_fg, false);
     }
 
-    // ===== Direita =====
-    let mut rx = snap.width as f32 - PAD_X;
-
-    // Data
-    let date_w = measure_text(&snap.date_abbr, FONT_DATE, false);
-    rx -= date_w;
-    {
-        let mut canvas = pixmap.as_mut();
-        draw_text(
-            &mut canvas,
-            rx,
-            date_top,
-            &snap.date_abbr,
-            FONT_DATE,
-            opaque(palette.fg_subtle),
-            false,
-        );
-    }
-    rx -= SEG_GAP;
-
-    // Clock
-    let clock_s = format!("{:02}:{:02}", snap.clock_hh, snap.clock_mm);
-    let clock_w = measure_text(&clock_s, FONT_STATUS, false);
-    rx -= clock_w;
-    {
-        let mut canvas = pixmap.as_mut();
-        draw_text(
-            &mut canvas,
-            rx,
-            status_top,
-            &clock_s,
-            FONT_STATUS,
-            opaque(palette.fg),
-            false,
-        );
-    }
-    rx -= SEG_GAP;
-
-    // Bateria: texto + icone
+    // ============================================================
+    // PILL DIREITA: [wifi] 82% [bat] HH:MM
+    // ============================================================
     let bat_text = format!("{}%", snap.battery_pct);
-    let bat_text_w = measure_text(&bat_text, FONT_STATUS, false);
+    let bat_text_w = measure_text(&bat_text, FONT_PILL, false);
     let bat_icon_w = battery_total_width();
-    let bat_gap = 4.0;
-    rx -= bat_text_w + bat_gap + bat_icon_w;
+    let clock_s = format!("{:02}:{:02}", snap.clock_hh, snap.clock_mm);
+    let clock_w = measure_text(&clock_s, FONT_PILL, false);
+
+    // Conteudo direito:
+    //   wifi(16) + gap + bat_text + gap_small + bat_icon + gap + clock
+    let bat_gap_small = 4.0;
+    let pill_r_content_w =
+        WIFI_SIZE
+        + PILL_GAP
+        + bat_text_w
+        + bat_gap_small
+        + bat_icon_w
+        + PILL_GAP
+        + clock_w;
+    let pill_r_w = pill_r_content_w + PILL_PAD_X * 2.0;
+    let pill_r_x = snap.width as f32 - PILL_MARGIN_X - pill_r_w;
+
     {
         let mut canvas = pixmap.as_mut();
-        let bat_color = if snap.battery_pct > 20 {
-            opaque(palette.accent)
-        } else {
-            opaque(palette.fg)
-        };
-        draw_text(
-            &mut canvas,
-            rx,
-            status_top,
-            &bat_text,
-            FONT_STATUS,
-            bat_color,
-            false,
-        );
-        draw_battery(
-            &mut canvas,
-            rx + bat_text_w + bat_gap,
-            cy - BAT_BODY_H / 2.0,
-            snap.battery_pct,
-            palette,
-        );
-    }
-    rx -= SEG_GAP;
+        draw_pill_bg(&mut canvas, pill_r_x, pill_y, pill_r_w, PILL_H, pill_bg, shadow_a);
 
-    // Wifi 18x18
-    rx -= WIFI_SIZE;
-    {
-        let mut canvas = pixmap.as_mut();
-        draw_wifi(&mut canvas, rx, cy - WIFI_SIZE / 2.0, snap.wifi_on, palette);
+        let mut cx = pill_r_x + PILL_PAD_X;
+        // Wifi.
+        draw_wifi(&mut canvas, cx, pill_cy - WIFI_SIZE / 2.0, snap.wifi_on, pill_fg, pill_fg_subtle);
+        cx += WIFI_SIZE + PILL_GAP;
+        // Bateria texto.
+        let bat_color = if snap.battery_pct > 20 { accent } else { pill_fg };
+        draw_text(&mut canvas, cx, text_top, &bat_text, FONT_PILL, bat_color, false);
+        cx += bat_text_w + bat_gap_small;
+        // Bateria icone.
+        draw_battery(&mut canvas, cx, pill_cy - BAT_BODY_H / 2.0, snap.battery_pct, pill_fg, accent);
+        cx += bat_icon_w + PILL_GAP;
+        // Clock.
+        draw_text(&mut canvas, cx, text_top, &clock_s, FONT_PILL, pill_fg, false);
     }
 
-    let _ = snap.theme;
-
-    // Border-bottom 1px
-    fill_rect_color(pixmap, 0.0, h - 1.0, snap.width as f32, 1.0, opaque(palette.border));
+    // Suppress unused warns nos campos do snapshot (theme so usado pra debug log).
+    let _ = (snap.theme, h);
 }
 
 // ============================================================
@@ -802,15 +770,16 @@ impl LumoBar {
             theme: self.theme,
             clock_hh: now.hour() as u8,
             clock_mm: now.minute() as u8,
-            date_abbr: format_date_pt(&now),
+            active_ws: self.active_workspace.load(Ordering::Relaxed),
         };
 
         let stride = self.width as i32 * 4;
+        // A18: VOLTA pra Argb8888 (alpha real pra pills semi-translucent).
         let (buffer, canvas) = match self.pool.create_buffer(
             self.width as i32,
             self.height as i32,
             stride,
-            wl_shm::Format::Xrgb8888, // A16.2 - sem alpha real (bar fundo opaco)
+            wl_shm::Format::Argb8888,
         ) {
             Ok(v) => v,
             Err(e) => {
@@ -824,15 +793,15 @@ impl LumoBar {
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;
-            // A16.2: Xrgb8888 LE = bytes BGRX na memoria. Bar fundo opaco
-            // -> alpha real desnecessario. Elimina premul edge cases.
+            // tiny-skia Pixmap = RGBA premul. wl_shm Argb8888 LE = BGRA na
+            // memoria. Swap canais; alpha preservado (premul ja correto).
             for i in 0..n {
                 let o = i * 4;
                 if o + 3 < dst.len() && o + 3 < src.len() {
                     dst[o]     = src[o + 2]; // B
                     dst[o + 1] = src[o + 1]; // G
                     dst[o + 2] = src[o];     // R
-                    dst[o + 3] = 0xFF;       // X (ignored)
+                    dst[o + 3] = src[o + 3]; // A
                 }
             }
         }
@@ -993,7 +962,6 @@ delegate_pointer!(LumoBar);
 delegate_registry!(LumoBar);
 
 fn main() {
-    // Warm up font_system (gera log de qual familia foi escolhida).
     let _ = font_system();
     let _ = swash_cache();
 
@@ -1022,8 +990,8 @@ fn main() {
     let theme = lumo_foundation::current_theme();
     let palette = current_colors();
     eprintln!(
-        "[lumo-bar] A15 cosmic-text; tema = {:?}, accent = #{:06X}, bg = #{:06X}",
-        theme, palette.accent, palette.bg
+        "[lumo-bar] A18: pill-style activated; tema = {:?}, pill_bg = #{:06X}, alpha = 0x{:02X}",
+        theme, palette.pill_bg, palette.pill_bg_alpha
     );
 
     let mut state = LumoBar {

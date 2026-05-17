@@ -238,6 +238,23 @@ pub struct LumoColors {
     pub border: u32,
     /// Sombra preta neutra. Alpha aplicado quando usada.
     pub shadow: u32,
+    /// A18: pill background RGB (0xRRGGBB). Light: ink escuro
+    /// invertido pra destaque sobre fundo claro; Dark: pearl
+    /// translucido sutil sobre fundo escuro.
+    pub pill_bg: u32,
+    /// A18: pill background alpha (0..0xFF). Light = 0xEE (semi opaco
+    /// escuro contraste forte); Dark = 0x22 (sutileza sobre AMOLED).
+    pub pill_bg_alpha: u8,
+    /// A18: pill foreground RGB (0xRRGGBB). Pearl em ambos os temas
+    /// — light pill eh escuro entao texto branco; dark pill eh pearl
+    /// translucido com texto pearl.
+    pub pill_fg: u32,
+    /// A18: pill shadow alpha (0..0xFF). 0x40 = 25% black drop.
+    pub pill_shadow_alpha: u8,
+    /// A18: separator dot color RGB (`#FFFFFF66` = pearl alpha 0x66).
+    pub pill_sep: u32,
+    /// A18: separator dot alpha.
+    pub pill_sep_alpha: u8,
 }
 
 impl LumoColors {
@@ -252,6 +269,14 @@ impl LumoColors {
             accent_subtle: 0x00DBEAFE, // blue-100 hover wash
             border:        0x00E5E7EB, // zinc-200
             shadow:        0x00000000, // alpha aplicado on use
+            // A18 pill spec: pill escuro #1F1F22 alpha EE -> contraste
+            // invertido sobre bg pearl, vira destaque tipo Dynamic Island.
+            pill_bg:           0x001F1F22,
+            pill_bg_alpha:     0xEE,
+            pill_fg:           0x00F5F5F7, // pearl sobre pill escuro
+            pill_shadow_alpha: 0x40,       // 25% preto neutro
+            pill_sep:          0x00FFFFFF, // dot middle separator
+            pill_sep_alpha:    0x66,       // 40% pearl
         }
     }
 
@@ -266,6 +291,14 @@ impl LumoColors {
             accent_subtle: 0x001E3A8A, // blue-900
             border:        0x002A2A2E, // hairline
             shadow:        0x00000000,
+            // A18 pill spec dark: pearl alpha 0x22 sutil sobre AMOLED.
+            // Pill bg quase invisivel — relevo dado pela sombra preta neutra.
+            pill_bg:           0x00FFFFFF,
+            pill_bg_alpha:     0x22,
+            pill_fg:           0x00F5F5F7,
+            pill_shadow_alpha: 0x40,
+            pill_sep:          0x00FFFFFF,
+            pill_sep_alpha:    0x66,
         }
     }
 
