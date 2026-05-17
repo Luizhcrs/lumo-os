@@ -75,6 +75,9 @@
 - **PointerMotion vs PointerMotionAbsolute**: mouse/touchpad emitem **PointerMotion (delta)**. PointerMotionAbsolute eh raro (touchscreen). Codigo A11.9.
 - **libinput acceleration**: config via `DeviceAdded` event, NAO no init estatico. AccelProfile::Adaptive default suave.
 - **seatd vs logind**: libseat tenta seatd primeiro, fallback logind. Em logind, `Active=yes` na session pra DRM master.
+- **DRM property "Broadcast RGB"** (A16): eDP-1 default = Automatic (0). Kernel i915 pode resolver pra Limited 16:235 dependendo EDID = banding/dither visivel. Forcar = Full (1) via `drm_device.set_property(connector, prop_handle, 1)` antes de `initialize_output`. Enum: Automatic=0, Full=1, Limited 16:235=2.
+- **DRM modifiers Argb8888 Galaxy** (A16): swapchain recebe lista `[Invalid, I915_y_tiled_gen12_rc_ccs, ?, I915_y_tiled, I915_x_tiled, Linear]`. Mesa escolhe automatico melhor pra scanout — driver prefere Y-tiled CCS quando disponivel. Logar via `drm_output.with_compositor(|c| c.modifiers())`.
+- **GlesRenderer blend func default** (A16): `glBlendFunc(GL_ONE=1, GL_ONE_MINUS_SRC_ALPHA=771)` = premultiplied, IGUAL Hyprland. Logar via `renderer.with_context(|gl| gl.GetIntegerv(BLEND_SRC_RGB))`. Nao precisa override.
 
 ## Referencias externas chave
 
