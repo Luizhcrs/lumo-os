@@ -244,7 +244,8 @@ pub struct LumoColors {
     pub pill_bg: u32,
     /// A18: pill background alpha (0..0xFF). Light = 0xEE (semi opaco
     /// escuro contraste forte); Dark = 0x22 (sutileza sobre AMOLED).
-    pub pill_bg_alpha: u8,
+    pub // A18.1 alpha 0xEE -> 0xFF (opaco, sem blend artifacts)
+            pill_bg_alpha: u8,
     /// A18: pill foreground RGB (0xRRGGBB). Pearl em ambos os temas
     /// — light pill eh escuro entao texto branco; dark pill eh pearl
     /// translucido com texto pearl.

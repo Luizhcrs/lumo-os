@@ -505,7 +505,9 @@ fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, fg: Color, acce
     let body_h = BAT_BODY_H;
     stroke_rrect(canvas, x + 0.5, y + 0.5, body_w - 1.0, body_h - 1.0, 1.6, fg, 1.0);
     fill_rrect(canvas, x + body_w, y + body_h * 0.28, 1.4, body_h * 0.44, 0.5, fg);
-    let inner_w = body_w - 4.0;
+    // A18.1: inset 1.4 (bate com stroke 1.6 width interior real)
+    let inset = 1.4f32;
+    let inner_w = body_w - inset * 2.0;
     let fw = (pct as f32 / 100.0).clamp(0.0, 1.0) * inner_w;
     if fw > 0.2 {
         let fill_color = if pct > 20 {
@@ -513,7 +515,7 @@ fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, fg: Color, acce
         } else {
             opaque(0xEF4444)
         };
-        fill_rrect(canvas, x + 2.0, y + 2.0, fw, body_h - 4.0, 0.8, fill_color);
+        fill_rrect(canvas, x + inset, y + inset, fw, body_h - inset * 2.0, 0.6, fill_color);
     }
 }
 
