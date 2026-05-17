@@ -617,7 +617,7 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
 
     let date_w = measure_text(&snap.date_str, FONT_DATE, false);
     let pill_r_content_w =
-        WIFI_SIZE + PILL_GAP + bat_icon_w + PILL_GAP + clock_w + 8.0 + date_w;
+        bat_icon_w + PILL_GAP + WIFI_SIZE + PILL_GAP + date_w + 8.0 + clock_w;
     let pill_r_w = pill_r_content_w + PILL_PAD_X * 2.0;
     let pill_r_x = snap.width as f32 - PILL_MARGIN_X - pill_r_w;
 
@@ -625,13 +625,14 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
         let mut canvas = pixmap.as_mut();
         draw_pill_bg(&mut canvas, pill_r_x, pill_y, pill_r_w, PILL_H, pill_bg, shadow_a);
         let mut cx = pill_r_x + PILL_PAD_X;
-        draw_wifi(&mut canvas, cx, pill_cy - WIFI_SIZE / 2.0, snap.wifi_on, pill_fg, pill_fg_subtle);
-        cx += WIFI_SIZE + PILL_GAP;
+        // A19.10: ordem bat -> wifi -> data -> hora (Mac-style)
         draw_battery(&mut canvas, cx, pill_cy - BAT_BODY_H / 2.0, snap.battery_pct, pill_fg, accent);
         cx += bat_icon_w + PILL_GAP;
-        draw_text(&mut canvas, cx, text_top, &clock_s, FONT_PILL, pill_fg, false);
-        cx += clock_w + 8.0;
+        draw_wifi(&mut canvas, cx, pill_cy - WIFI_SIZE / 2.0, snap.wifi_on, pill_fg, pill_fg_subtle);
+        cx += WIFI_SIZE + PILL_GAP;
         draw_text(&mut canvas, cx, text_top + 1.0, &snap.date_str, FONT_DATE, pill_fg_subtle, false);
+        cx += date_w + 8.0;
+        draw_text(&mut canvas, cx, text_top, &clock_s, FONT_PILL, pill_fg, false);
     }
 
     // Suppress unused warns nos campos do snapshot (theme so usado pra debug log).
@@ -897,7 +898,7 @@ impl LayerShellHandler for LumoBar {
         _: u32,
     ) {
         let (w, h) = cfg.new_size;
-        self.width = if w == 0 { 1280 } else { w };
+        self.width = if w == 0 { 1920 } else { w }; // A19.10 Galaxy nativo
         self.height = if h == 0 { BAR_HEIGHT } else { h };
         self.first_configured = true;
         self.refresh();
