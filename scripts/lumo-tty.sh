@@ -30,10 +30,6 @@
 
 set -euo pipefail
 
-# Log desde primeira linha (capturar TUDO)
-exec > >(tee /tmp/lumo-wm-tty.log) 2>&1
-echo "=== lumo-tty.sh inicio $(date) tty=$(tty) ==="
-
 
 # ============================================================
 # Safety 1: rejeitar se nao for TTY real (SSH, pts, etc).
@@ -197,6 +193,6 @@ post_exit() {
 }
 trap post_exit EXIT
 
-./target/release/lumo-wm
-LUMO_EC=$?
+./target/release/lumo-wm 2>&1 | tee /tmp/lumo-wm-tty.log
+LUMO_EC=${PIPESTATUS[0]}
 echo "[final] lumo-wm exit code=$LUMO_EC"
