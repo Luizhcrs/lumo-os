@@ -33,6 +33,17 @@
 //!   [todo] HiDPI scale tracking (output_scale != 1.0)
 //!   [todo] damage tracker -> skip queue_frame quando damage vazio
 //!
+//! A11 (atual):
+//!   [done] is_master check hard error -- ao inves de seguir tela preta
+//!          silenciosa, aborta com lsof + fix sugerido
+//!   [done] tty script forca fuser -k em /dev/dri/* antes de subir lumo-wm
+//!   [skip] wlr-screencopy-unstable-v1 -- smithay 0.7 NAO tem suporte
+//!          nativo (sem ScreencopyManagerState, sem helper renderer).
+//!          Implementar do zero = 300+ LoC tocando Resource/Frame/dmabuf
+//!          + copy via GlesRenderer pra SHM. Adiado pra A12 com decisao:
+//!          (a) bump smithay pra git main se ja ganhou suporte, ou
+//!          (b) crate auxiliar tipo wayland-protocols-wlr server-side.
+//!
 //! Memory feedback_input_feedback_imediato: frame loop 60Hz +
 //! libinput dispatch entre frames + dispatch_clients 4ms = lag total
 //! ficar < 16ms.
@@ -177,17 +188,64 @@ pub fn run(
         )
         .map_err(|e| anyhow!("session.open({}) falhou: {e:?}", gpu_path.display()))?;
     let drm_fd = DrmDeviceFd::new(DeviceFd::from(fd));
+
+    // A11: diagnostico DRM master.
+    //
+    // Sintoma A10 (Luiz reportou): TTY3 sobe lumo-wm sem erro, mas tela
+    // fica preta com cursor estatico no canto. Log mostrava:
+    //   "Unable to become drm master, assuming unprivileged mode"
+    //
+    // Causa raiz: smithay 0.7 (device/fd.rs:77) chama acquire_master_lock
+    // e se falha SO emite warn -- segue sem master. Sem master = render
+    // loop roda mas page-flip nao faz scanout (kernel rejeita); buffer
+    // vai pra GPU mas nunca aparece no painel.
+    //
+    // Quem segura master? Mesmo apos `hyprctl exit` o Hyprland host
+    // pode demorar pra liberar /dev/dri/card0, OU seatd/logind segura
+    // cacheado, OU outro processo (display manager) tem fd aberto.
+    //
+    // Fix: detectar unprivileged ANTES de continuar e abortar com
+    // mensagem explicita pro Luiz saber exatamente o que rodar pra
+    // resolver. Sem master = tela preta garantida; preferivel falhar
+    // cedo + claro do que silenciar (memory feedback_design_lapidado).
+    // Tentativa de virar master. Smithay 0.7 ja chamou acquire_master_lock
+    // em DrmDeviceFd::new (fd.rs:77). Se outro processo segura, o lock
+    // ja falhou silenciosamente la. Aqui repetimos pra confirmar com erro
+    // explicito (is_privileged eh pub(crate), nao acessivel).
+    let master_ok = {
+        use smithay::reexports::drm::Device as DrmDeviceTrait;
+        drm_fd.acquire_master_lock().is_ok()
+    };
+    if !master_ok {
+        // Diagnostico: quem segura /dev/dri/*?
+        let lsof = std::process::Command::new("lsof")
+            .arg("/dev/dri/card0")
+            .arg("/dev/dri/card1")
+            .output();
+        let busy = lsof
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_else(|| "(lsof indisponivel)".to_string());
+        return Err(anyhow!(
+            "DRM master NAO adquirido em {}. Outro compositor/display manager segura.
+Diagnostico lsof:
+{}
+
+Fix sugerido:
+  1. sudo pkill -9 Hyprland sway gnome-shell kwin_wayland
+  2. sudo fuser -k /dev/dri/card0 /dev/dri/card1
+  3. relogue no TTY (logout + login fresh)
+  4. tente lumo-tty.sh de novo",
+            gpu_path.display(),
+            busy
+        ));
+    }
+    tracing::info!("DRM master adquirido (privileged)");
+
     let (drm_device, drm_notifier) = DrmDevice::new(drm_fd.clone(), true)
         .map_err(|e| anyhow!("DrmDevice::new falhou: {e}"))?;
 
     tracing::info!(atomic = drm_device.is_atomic(), "DrmDevice aberto");
-
-    // Nota: DrmDevice nao expoe set_master direto. Libseat ja entrega
-    // fd com master quando rodamos em TTY ativo. Se outro compositor
-    // (Hyprland host) segura, initialize_output mais abaixo vai falhar
-    // com erro DRM e propagamos o anyhow. Pra teste em TTY3 com
-    // Hyprland ainda vivo, use scripts/lumo-tty.sh que mata Hyprland
-    // antes de subir Lumo.
 
     // ============================================================
     // 4. GbmDevice + EGL + GlesRenderer.

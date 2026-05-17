@@ -92,6 +92,28 @@ if [[ -n "$HYPRLAND_PID" ]]; then
 fi
 
 # ============================================================
+# A11: forca liberacao DRM master.
+#
+# Mesmo apos Hyprland sair, /dev/dri/card0 pode ficar segurado por
+# processos zombies, seatd cache, ou display manager. Lumo precisa
+# de master pra page-flip funcionar; sem ele = tela preta.
+#
+# Fix: lista quem usa, mata todos os processos com fd aberto, espera.
+# ============================================================
+if command -v lsof >/dev/null && command -v fuser >/dev/null; then
+    echo "[info] verificando quem segura /dev/dri/*..."
+    LSOF_BEFORE=$(sudo lsof /dev/dri/card0 /dev/dri/card1 2>/dev/null | tail -n +2 || true)
+    if [[ -n "$LSOF_BEFORE" ]]; then
+        echo "$LSOF_BEFORE"
+        echo "[warn] processos seguram DRM. Forcando libera..."
+        sudo fuser -k /dev/dri/card0 /dev/dri/card1 2>/dev/null || true
+        sleep 1
+    else
+        echo "[info] /dev/dri/* livre"
+    fi
+fi
+
+# ============================================================
 # Safety 3: warn se ainda tem outras sessoes wayland/x11 ativas.
 # ============================================================
 if [[ -n "${WAYLAND_DISPLAY:-}" ]] && [[ "${WAYLAND_DISPLAY}" != "wayland-lumo" ]]; then
