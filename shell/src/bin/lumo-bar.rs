@@ -35,7 +35,7 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-use chrono::{Local, Timelike};
+use chrono::{Datelike, Local, Timelike};
 use cosmic_text::{
     Attrs, Buffer as CosmicBuffer, Color as CosmicColor, Family, FontSystem, Metrics, Shaping,
     SwashCache,
@@ -110,6 +110,7 @@ const SEP_DOT_RADIUS: f32 = 2.0;
 
 /// Font sizes (px). Conteudo de pill todo em 13px (compact uniform).
 const FONT_PILL: f32 = 13.0;
+const FONT_DATE: f32 = 11.0;
 
 /// Wifi icone 16x16 (compact pra caber dentro de pill 28h).
 const WIFI_SIZE: f32 = 16.0;
@@ -541,6 +542,7 @@ struct BarSnapshot {
     clock_hh: u8,
     clock_mm: u8,
     active_ws: u8,
+    date_str: String,
 }
 
 // ============================================================
@@ -613,8 +615,9 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
     let clock_s = format!("{:02}:{:02}", snap.clock_hh, snap.clock_mm);
     let clock_w = measure_text(&clock_s, FONT_PILL, false);
 
+    let date_w = measure_text(&snap.date_str, FONT_DATE, false);
     let pill_r_content_w =
-        WIFI_SIZE + PILL_GAP + bat_icon_w + PILL_GAP + clock_w;
+        WIFI_SIZE + PILL_GAP + bat_icon_w + PILL_GAP + clock_w + 8.0 + date_w;
     let pill_r_w = pill_r_content_w + PILL_PAD_X * 2.0;
     let pill_r_x = snap.width as f32 - PILL_MARGIN_X - pill_r_w;
 
@@ -627,6 +630,8 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
         draw_battery(&mut canvas, cx, pill_cy - BAT_BODY_H / 2.0, snap.battery_pct, pill_fg, accent);
         cx += bat_icon_w + PILL_GAP;
         draw_text(&mut canvas, cx, text_top, &clock_s, FONT_PILL, pill_fg, false);
+        cx += clock_w + 8.0;
+        draw_text(&mut canvas, cx, text_top + 1.0, &snap.date_str, FONT_DATE, pill_fg_subtle, false);
     }
 
     // Suppress unused warns nos campos do snapshot (theme so usado pra debug log).
@@ -636,6 +641,28 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
 // ============================================================
 // Sensors.
 // ============================================================
+
+fn weekday_abbr_pt(d: chrono::Weekday) -> &'static str {
+    use chrono::Weekday::*;
+    match d {
+        Mon => "seg", Tue => "ter", Wed => "qua", Thu => "qui",
+        Fri => "sex", Sat => "sab", Sun => "dom",
+    }
+}
+
+fn month_abbr_pt(m: u32) -> &'static str {
+    match m {
+        1 => "jan", 2 => "fev", 3 => "mar", 4 => "abr",
+        5 => "mai", 6 => "jun", 7 => "jul", 8 => "ago",
+        9 => "set", 10 => "out", 11 => "nov", 12 => "dez",
+        _ => "?",
+    }
+}
+
+fn format_date_pt(dt: &chrono::DateTime<Local>) -> String {
+    format!("{} {} {}", weekday_abbr_pt(dt.weekday()), dt.day(), month_abbr_pt(dt.month()))
+}
+
 fn read_battery() -> u8 {
     for bat in &["BAT0", "BAT1"] {
         if let Ok(s) = std::fs::read_to_string(format!("/sys/class/power_supply/{}/capacity", bat))
@@ -759,6 +786,7 @@ impl LumoBar {
             clock_hh: now.hour() as u8,
             clock_mm: now.minute() as u8,
             active_ws: self.active_workspace.load(Ordering::Relaxed),
+            date_str: format_date_pt(&now),
         };
 
         let stride = self.width as i32 * 4;
@@ -1008,10 +1036,22 @@ fn main() {
     let mut last_clock_tick = Instant::now();
     let mut last_ipc_tick = Instant::now();
     while state.running {
+        // Ticks PRIMEIRO (antes do dispatch nao bloquear demais)
+        if last_clock_tick.elapsed() >= Duration::from_secs(1) {
+            last_clock_tick = Instant::now();
+            state.redraw(&qh);
+        }
+        if last_tick.elapsed() >= Duration::from_secs(30) {
+            state.refresh();
+            state.redraw(&qh);
+            last_tick = Instant::now();
+        }
+
         conn.flush().ok();
-        queue
-            .blocking_dispatch(&mut state)
-            .expect("dispatch fail");
+        // A19.9: dispatch_pending nao bloqueia (timers funcionam)
+        queue.dispatch_pending(&mut state).expect("dispatch fail");
+        // sleep curto pra nao consumir CPU 100%
+        std::thread::sleep(Duration::from_millis(100));
 
         if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
             last_ipc_tick = Instant::now();
@@ -1025,16 +1065,6 @@ fn main() {
             }
         }
 
-        if last_clock_tick.elapsed() >= Duration::from_secs(1) {
-            last_clock_tick = Instant::now();
-            state.redraw(&qh);
-        }
-
-        if last_tick.elapsed() >= Duration::from_secs(30) {
-            state.refresh();
-            state.redraw(&qh);
-            last_tick = Instant::now();
-        }
     }
     let _ = active_workspace;
 }
