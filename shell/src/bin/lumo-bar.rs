@@ -115,8 +115,8 @@ const FONT_PILL: f32 = 13.0;
 const WIFI_SIZE: f32 = 16.0;
 
 /// Bateria icone 14x8 (proporcional a 28h pill).
-const BAT_BODY_W: f32 = 14.0;
-const BAT_BODY_H: f32 = 8.0;
+const BAT_BODY_W: f32 = 18.0; // A19.5 maior + visivel
+const BAT_BODY_H: f32 = 10.0;
 
 // ============================================================
 // Color helpers.
@@ -504,18 +504,16 @@ fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, fg: Color, acce
     let body_w = BAT_BODY_W;
     let body_h = BAT_BODY_H;
     stroke_rrect(canvas, x + 0.5, y + 0.5, body_w - 1.0, body_h - 1.0, 1.6, fg, 1.0);
-    fill_rrect(canvas, x + body_w, y + body_h * 0.28, 1.4, body_h * 0.44, 0.5, fg);
+    fill_rrect(canvas, x + body_w + 0.6, y + body_h * 0.3, 1.8, body_h * 0.4, 0.6, fg);
     // A18.1: inset 1.4 (bate com stroke 1.6 width interior real)
-    let inset = 1.4f32;
+    // A19.5: stroke width 1.6 = interior ~body-3.2. inset 2.0 conservador, fill cheio.
+    let inset = 2.0f32;
     let inner_w = body_w - inset * 2.0;
+    let inner_h = body_h - inset * 2.0;
     let fw = (pct as f32 / 100.0).clamp(0.0, 1.0) * inner_w;
-    if fw > 0.2 {
-        let fill_color = if pct > 20 {
-            accent
-        } else {
-            opaque(0xEF4444)
-        };
-        fill_rrect(canvas, x + inset, y + inset, fw, body_h - inset * 2.0, 0.6, fill_color);
+    if fw > 0.5 {
+        let fill_color = if pct > 20 { accent } else { opaque(0xEF4444) };
+        fill_rrect(canvas, x + inset, y + inset, fw, inner_h, 1.0, fill_color);
     }
 }
 

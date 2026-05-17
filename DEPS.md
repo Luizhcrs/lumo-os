@@ -99,3 +99,35 @@ ANTES de mexer com dep externa:
 4. Se versao desatualizada, registra aqui antes de bump
 
 NAO chutar API. NAO usar `cargo search` ou `crates.io` latest sem confirmar compat.
+
+
+## Pipeline cor sRGB final (FIXADO 2026-05-17 A19.4) — NAO MEXER
+
+**Causa raiz historica**: smithay 0.7 GlesRenderer NAO faz CM. Textura SHM importada como GL_RGBA8 (LINEAR-treated) + shader output LINEAR direto = painel exibe LINEAR onde espera sRGB = banding, 2 cores em pills, dither visivel.
+
+**Patches obrigatorios em `vendor/smithay/`**:
+
+1. **`gles/format.rs`**: `Fourcc::Abgr8888 => (SRGB8_ALPHA8, RGBA, UNSIGNED_BYTE)`. Texturas sRGB-tagged, sampler converte sRGB->linear automatico.
+
+2. **`gles/mod.rs`** linhas 808, 966, 1572, 1614: branches `SRGB8_ALPHA8` em paralelo a `RGBA8`. import_shm_buffer + import_memory + create_buffer + create_renderbuffer.
+
+3. **`gles/shaders/implicit/mod.rs`** linha 51: `variant_for_format` aceita `SRGB8_ALPHA8` no match.
+
+4. **`gles/shaders/implicit/texture.frag` + `solid.frag`** — output linear->sRGB **DEMULTIPLIED** (premul correct):
+   ```glsl
+   vec3 srgb_rgb;
+   if (color.a > 0.0001) {
+       vec3 lin = color.rgb / color.a;
+       srgb_rgb = pow(lin, vec3(1.0/2.2)) * color.a;
+   } else {
+       srgb_rgb = vec3(0.0);
+   }
+   gl_FragColor = vec4(srgb_rgb, color.a);
+   ```
+   **NUNCA usar `pow(color.rgb, 1/2.2)` direto** — premul + gamma simples = bordas AA com cor diferente do centro (visual "2 azuis").
+
+5. **Cargo.toml workspace**: `[patch.crates-io] smithay = { path = "vendor/smithay" }`.
+
+**Wallpaper loading** (A19.4): chamar `LumoWallpaper::try_load(&mut renderer)` em AMBOS backends (winit.rs + drm.rs) apos GlesRenderer init. Esquecer drm.rs = wallpaper nao aparece em TTY3 real.
+
+**Regra de ouro**: cor verdadeira (Hyprland-equivalent) exige todos 5 patches acima. Se voltar 2 cores ou dither: **NAO chutar**, verificar se algum patch foi revertido inadvertidamente.
