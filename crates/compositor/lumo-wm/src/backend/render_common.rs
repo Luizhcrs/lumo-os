@@ -21,8 +21,9 @@ use smithay::backend::renderer::element::memory::{
 };
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
+use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::element::{render_elements, Id, Kind};
-use smithay::backend::renderer::gles::GlesRenderer;
+use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::backend::renderer::Color32F;
 use smithay::desktop::space::{space_render_elements, SpaceRenderElements};
 use smithay::desktop::{Space, Window};
@@ -48,6 +49,7 @@ render_elements! {
     pub LumoCustomElement<=GlesRenderer>;
     Solid=SolidColorRenderElement,
     Memory=MemoryRenderBufferRenderElement<GlesRenderer>,
+    Texture=TextureRenderElement<GlesTexture>,
     Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
 }
 
@@ -201,6 +203,8 @@ pub struct OverlayInputs<'a> {
     pub space: &'a Space<Window>,
     pub output_w: i32,
     pub output_h: i32,
+    /// A19: wallpaper opcional. None = clear color de fundo (igual A18).
+    pub wallpaper: Option<&'a crate::backend::wallpaper::LumoWallpaper>,
 }
 
 /// Constroi overlay completo (cursor + corner mask + shadows).
@@ -254,6 +258,8 @@ pub struct DrmCollectInputs<'a> {
     pub cursor_buffer: Option<&'a MemoryRenderBuffer>,
     pub output_w: i32,
     pub output_h: i32,
+    /// A19: wallpaper opcional (vide OverlayInputs).
+    pub wallpaper: Option<&'a crate::backend::wallpaper::LumoWallpaper>,
 }
 
 /// Coleta TODOS elementos pra render direto no DrmCompositor: chrome
@@ -322,6 +328,90 @@ pub fn collect_drm_elements(
         Err(err) => {
             tracing::warn!(?err, "space_render_elements falhou no DRM path");
         }
+    }
+
+    // 5. A19: wallpaper por ULTIMO (backmost). Convention smithay: lista
+    //    front-first, ultimo elemento eh o mais ao fundo. Wallpaper cobre
+    //    output_w x output_h -- clear color so pinta se houver gap (nao tem).
+    if let Some(wp) = inputs.wallpaper {
+        out.push(LumoCustomElement::Texture(
+            wp.element(inputs.output_w, inputs.output_h),
+        ));
+    }
+
+    out
+}
+
+
+/// A19: pra o winit path injetar wallpaper ATRAS de Space, precisamos
+/// construir uma lista combinada (chrome + space + wallpaper) e usar
+/// damage_tracker.render_output direto -- nao da pra passar wallpaper
+/// via render_output(space, custom_elements) porque custom vem na frente
+/// do space.
+///
+/// Esta funcao retorna a lista pronta na ordem front->back:
+///   1. chrome (cursor, cantos, sombras) -- mesma ordem do build_overlay
+///   2. Space (toplevels + layer-shell, ja ordenado internamente)
+///   3. wallpaper (se presente)
+///
+/// Caller passa essa lista direto pra damage_tracker.render_output
+/// com space iter vazio.
+pub fn build_winit_elements(
+    renderer: &mut GlesRenderer,
+    inputs: &OverlayInputs<'_>,
+    output: &Output,
+) -> Vec<LumoCustomElement> {
+    let mut out: Vec<LumoCustomElement> = Vec::with_capacity(64);
+
+    // 1. Cursor primeiro (mais alto).
+    if let Some(elem) = cursor_xcursor_element(
+        renderer,
+        inputs.pointer_location,
+        inputs.cursor,
+        inputs.cursor_buffer,
+        1.0,
+    ) {
+        out.push(LumoCustomElement::Memory(elem));
+    } else {
+        out.push(LumoCustomElement::Solid(cursor_solid_fallback(
+            inputs.pointer_location,
+            inputs.frame_counter,
+            1.0,
+        )));
+    }
+
+    // 2. Mascara de cantos.
+    for elem in corner_mask_elements(inputs.output_w, inputs.output_h) {
+        out.push(LumoCustomElement::Solid(elem));
+    }
+
+    // 3. Sombras pretas.
+    for elem in shadow_elements(inputs.space) {
+        out.push(LumoCustomElement::Solid(elem));
+    }
+
+    // 4. Space (toplevels + layer-shell).
+    match space_render_elements::<_, Window, _>(
+        renderer,
+        std::iter::once(inputs.space),
+        output,
+        1.0,
+    ) {
+        Ok(elements) => {
+            for el in elements {
+                out.push(LumoCustomElement::Space(el));
+            }
+        }
+        Err(err) => {
+            tracing::warn!(?err, "space_render_elements falhou no winit path");
+        }
+    }
+
+    // 5. Wallpaper no fundo.
+    if let Some(wp) = inputs.wallpaper {
+        out.push(LumoCustomElement::Texture(
+            wp.element(inputs.output_w, inputs.output_h),
+        ));
     }
 
     out

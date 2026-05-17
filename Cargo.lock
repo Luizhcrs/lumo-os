@@ -3704,6 +3704,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "calloop 0.14.4",
+ "image",
  "input",
  "libseat",
  "lumo-foundation",

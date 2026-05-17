@@ -34,7 +34,14 @@ void main() {
         color = vec4(0.0, 0.2, 0.0, 0.2) + color * 0.8;
 #endif
 
-    // A17.2: linear -> sRGB encode no output (texture sample foi auto sRGB->linear via SRGB8_ALPHA8)
-    vec3 srgb_rgb = pow(color.rgb, vec3(1.0/2.2));
+    // A18.2: pow() em premul gera cor errada nas bordas AA. Demultiplicar,
+    // aplicar gamma, remultiplicar (matematica correta pra premul + sRGB).
+    vec3 srgb_rgb;
+    if (color.a > 0.0001) {
+        vec3 linear_rgb = color.rgb / color.a;
+        srgb_rgb = pow(linear_rgb, vec3(1.0/2.2)) * color.a;
+    } else {
+        srgb_rgb = vec3(0.0);
+    }
     gl_FragColor = vec4(srgb_rgb, color.a);
 }

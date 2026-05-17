@@ -3,8 +3,10 @@
 //! - drm: TTY direto via DRM/KMS (gated drm-backend feature)
 //! - libinput: input direto (so gated drm-backend, usa session libseat)
 //! - render_common: helpers de cursor/corner/shadow compartilhados
+//! - wallpaper: textura de fundo (A19), carregada uma vez por backend
 
 pub mod render_common;
+pub mod wallpaper;
 pub mod winit;
 
 #[cfg(feature = "drm-backend")]
