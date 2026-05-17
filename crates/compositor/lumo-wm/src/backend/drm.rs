@@ -250,6 +250,17 @@ pub fn run(
 
     let mut renderer = unsafe { GlesRenderer::new(egl_context) }
         .map_err(|e| anyhow!("GlesRenderer::new: {e:?}"))?;
+
+    // FIX cor: enable GL_FRAMEBUFFER_SRGB pra gamma correction automatica.
+    // Sem isso, GLES compoe sRGB clients em LINEAR framebuffer -> output ao
+    // DRM scanout escurece (gamma double). Hyprland habilita por padrao.
+    // Ref: https://registry.khronos.org/EGL/extensions/KHR/EGL_KHR_gl_colorspace.txt
+    // GL_FRAMEBUFFER_SRGB = 0x8DB9 (OpenGL spec, nao exposto no smithay ffi)
+    const GL_FRAMEBUFFER_SRGB: u32 = 0x8DB9;
+    let _ = renderer.with_context(|gl| unsafe {
+        gl.Enable(GL_FRAMEBUFFER_SRGB);
+        tracing::info!("GL_FRAMEBUFFER_SRGB enabled (gamma correction)");
+    });
     tracing::info!("GlesRenderer iniciado");
 
     // A10 frente 1: dmabuf-v1 global. Galaxy U300 = Intel i915 render

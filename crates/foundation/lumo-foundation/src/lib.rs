@@ -248,8 +248,8 @@ impl LumoColors {
             bg_subtle:     0x00F0F0F2, // hover stretch
             fg:            0x0018181B, // ink claro (Tailwind zinc-900)
             fg_subtle:     0x006B7280, // zinc-500
-            accent:        0x0010B981, // emerald-500 (mais vibrante pra contraste com bg light)
-            accent_subtle: 0x00A7F3D0, // emerald-200 (hover wash mais visivel)
+            accent:        0x003B82F6, // Samsung adaptive blue (One UI 7 inspired)
+            accent_subtle: 0x00DBEAFE, // blue-100 hover wash
             border:        0x00E5E7EB, // zinc-200
             shadow:        0x00000000, // alpha aplicado on use
         }
@@ -258,12 +258,12 @@ impl LumoColors {
     /// Tema dark -- ink_deep, pearl no fg, emerald-500 mais vivo.
     pub const fn dark() -> Self {
         Self {
-            bg:            0x000A0A0C, // ink_deep
+            bg:            0x000F1419, // dark Samsung AMOLED-style // ink_deep
             bg_subtle:     0x001F2024, // hover panel
             fg:            0x00F5F5F7, // pearl
             fg_subtle:     0x009CA3AF, // zinc-400
-            accent:        0x0010B981, // emerald-500 (mais vibrante no escuro)
-            accent_subtle: 0x00064E3B, // emerald-900
+            accent:        0x0060A5FA, // blue-400 (mais vibrante no dark AMOLED)
+            accent_subtle: 0x001E3A8A, // blue-900
             border:        0x002A2A2E, // hairline
             shadow:        0x00000000,
         }
