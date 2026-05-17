@@ -12,7 +12,7 @@
 
 use smithay::backend::input::{
     AbsolutePositionEvent, ButtonState, Event as _, InputBackend, InputEvent, KeyState,
-    KeyboardKeyEvent, PointerButtonEvent,
+    KeyboardKeyEvent, PointerButtonEvent, PointerMotionEvent,
 };
 use smithay::input::keyboard::{FilterResult, Keysym};
 use smithay::input::pointer::{ButtonEvent, MotionEvent};
@@ -153,6 +153,31 @@ impl LumoState {
                         }
                     }
                 }
+            }
+
+            InputEvent::PointerMotion { event } => {
+                let dx = event.delta_x();
+                let dy = event.delta_y();
+                let new_x = (self.pointer_location.x + dx).clamp(0.0, 1919.0);
+                let new_y = (self.pointer_location.y + dy).clamp(0.0, 1079.0);
+                self.pointer_location = (new_x, new_y).into();
+
+                let serial = SERIAL_COUNTER.next_serial();
+                let under = self.surface_under(self.pointer_location);
+                let pointer = self.pointer.clone();
+                pointer.motion(
+                    self,
+                    under.clone().map(|(s, loc)| (s, loc.to_f64())),
+                    &MotionEvent {
+                        location: self.pointer_location,
+                        serial,
+                        time: event.time_msec(),
+                    },
+                );
+                pointer.frame(self);
+
+                // Forca repaint pro cursor mover visualmente no proximo frame
+                self.drm_force_repaint = true;
             }
 
             InputEvent::PointerMotionAbsolute { event } => {
