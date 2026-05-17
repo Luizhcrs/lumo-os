@@ -505,21 +505,20 @@ fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, fg: Color, acce
     let body_h = BAT_BODY_H;
     stroke_rrect(canvas, x + 0.5, y + 0.5, body_w - 1.0, body_h - 1.0, 1.6, fg, 1.0);
     fill_rrect(canvas, x + body_w + 0.6, y + body_h * 0.3, 1.8, body_h * 0.4, 0.6, fg);
-    // A19.7: ajuste fino + cores Mac-style (verde alto, laranja medio, vermelho baixo)
-    let inset_x = 1.5f32; // mais pra esquerda
-    let inset_y = 2.2f32; // mais pra baixo
+    // A19.8: branco quando cheio, laranja medio, vermelho baixo + inset_y maior (linha de baixo desapareceu)
+    let inset_x = 1.5f32;
+    let inset_y = 2.8f32; // mais pra baixo ainda
     let inner_w = body_w - inset_x * 2.0;
     let inner_h = body_h - inset_y * 2.0;
     let fw = (pct as f32 / 100.0).clamp(0.0, 1.0) * inner_w;
     if fw > 0.5 {
         let fill_color = if pct >= 50 {
-            opaque(0x34D399) // verde-400 emerald Mac
+            opaque(0xF5F5F7) // branco pearl Mac cheio
         } else if pct >= 20 {
-            opaque(0xFB923C) // orange-400
+            opaque(0xFB923C) // orange-400 medio
         } else {
-            opaque(0xEF4444) // red-500
+            opaque(0xEF4444) // red-500 baixo
         };
-        // _accent nao usado mais, mas mantem assinatura
         let _ = accent;
         fill_rrect(canvas, x + inset_x, y + inset_y, fw, inner_h, 0.8, fill_color);
     }
@@ -608,44 +607,25 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
     }
 
     // ============================================================
-    // PILL DIREITA: [wifi] 82% [bat] HH:MM
+    // PILL DIREITA: [wifi] [bat icone] HH:MM (A19.8: removido texto %)
     // ============================================================
-    let bat_text = format!("{}%", snap.battery_pct);
-    let bat_text_w = measure_text(&bat_text, FONT_PILL, false);
     let bat_icon_w = battery_total_width();
     let clock_s = format!("{:02}:{:02}", snap.clock_hh, snap.clock_mm);
     let clock_w = measure_text(&clock_s, FONT_PILL, false);
 
-    // Conteudo direito:
-    //   wifi(16) + gap + bat_text + gap_small + bat_icon + gap + clock
-    let bat_gap_small = 4.0;
     let pill_r_content_w =
-        WIFI_SIZE
-        + PILL_GAP
-        + bat_text_w
-        + bat_gap_small
-        + bat_icon_w
-        + PILL_GAP
-        + clock_w;
+        WIFI_SIZE + PILL_GAP + bat_icon_w + PILL_GAP + clock_w;
     let pill_r_w = pill_r_content_w + PILL_PAD_X * 2.0;
     let pill_r_x = snap.width as f32 - PILL_MARGIN_X - pill_r_w;
 
     {
         let mut canvas = pixmap.as_mut();
         draw_pill_bg(&mut canvas, pill_r_x, pill_y, pill_r_w, PILL_H, pill_bg, shadow_a);
-
         let mut cx = pill_r_x + PILL_PAD_X;
-        // Wifi.
         draw_wifi(&mut canvas, cx, pill_cy - WIFI_SIZE / 2.0, snap.wifi_on, pill_fg, pill_fg_subtle);
         cx += WIFI_SIZE + PILL_GAP;
-        // Bateria texto.
-        let bat_color = if snap.battery_pct > 20 { accent } else { pill_fg };
-        draw_text(&mut canvas, cx, text_top, &bat_text, FONT_PILL, bat_color, false);
-        cx += bat_text_w + bat_gap_small;
-        // Bateria icone.
         draw_battery(&mut canvas, cx, pill_cy - BAT_BODY_H / 2.0, snap.battery_pct, pill_fg, accent);
         cx += bat_icon_w + PILL_GAP;
-        // Clock.
         draw_text(&mut canvas, cx, text_top, &clock_s, FONT_PILL, pill_fg, false);
     }
 
