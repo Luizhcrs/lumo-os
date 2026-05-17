@@ -48,7 +48,7 @@ use smithay_client_toolkit::{
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
-        pointer::{PointerEvent, PointerEventKind, PointerHandler, ThemedPointer},
+        pointer::{PointerEvent, PointerEventKind, PointerHandler, ThemedPointer, BTN_LEFT},
         Capability, SeatHandler, SeatState,
     },
     shell::{
@@ -118,6 +118,22 @@ const WIFI_SIZE: f32 = 16.0;
 /// Bateria icone 14x8 (proporcional a 28h pill).
 const BAT_BODY_W: f32 = 22.0; // A19.14 mais larga Mac-style
 const BAT_BODY_H: f32 = 11.0;
+
+// ============================================================
+// Dropdown (A20).
+// ============================================================
+//
+// Painel descendente abaixo da pill direita quando icone bat eh clicado.
+// Largura 280 (>= pill direita), altura 200 (cabe 5 linhas key:value + header).
+// Gap 6px abaixo da pill (respiro visual sem desconectar).
+// Padding interno 14 igual PILL_PAD_X (continuidade).
+const DROPDOWN_W: f32 = 280.0;
+const DROPDOWN_H: f32 = 200.0;
+const DROPDOWN_GAP: f32 = 6.0;
+const DROPDOWN_PAD: f32 = 14.0;
+const DROPDOWN_ROW_H: f32 = 18.0;
+const FONT_DROPDOWN_TITLE: f32 = 14.0;
+const FONT_DROPDOWN_BODY: f32 = 13.0;
 
 // ============================================================
 // Color helpers.
@@ -530,6 +546,268 @@ fn battery_total_width() -> f32 {
 }
 
 // ============================================================
+// Dropdown state (A20).
+// ============================================================
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum DropdownActive {
+    None,
+    Battery,
+    // Wifi, Date pra A21
+}
+
+// ============================================================
+// BatteryInfo - leitura completa /sys/class/power_supply/BAT0
+// ============================================================
+
+#[derive(Clone, Default, Debug)]
+pub struct BatteryInfo {
+    pub pct: u8,
+    pub status: String,
+    pub cycles: Option<u32>,
+    // Algumas baterias expoem energy_* (mWh), outras charge_* (mAh).
+    // Normalizamos pra "full"/"now"/"full_design" + "power_now" (mW
+    // equivalente) usando voltage_now quando charge_*.
+    pub full: Option<u32>,         // mWh
+    pub now: Option<u32>,          // mWh
+    pub full_design: Option<u32>,  // mWh
+    pub power_now: Option<u32>,    // mW
+    pub voltage_now_mv: Option<u32>,
+    pub model: Option<String>,
+    pub manufacturer: Option<String>,
+}
+
+fn sys_read_string(path: &str) -> Option<String> {
+    std::fs::read_to_string(path)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+fn sys_read_u32(path: &str) -> Option<u32> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+}
+
+fn read_battery_info() -> BatteryInfo {
+    let mut dir = String::new();
+    for bat in &["BAT0", "BAT1", "BAT2"] {
+        let p = format!("/sys/class/power_supply/{}", bat);
+        if std::path::Path::new(&format!("{}/capacity", p)).exists() {
+            dir = p;
+            break;
+        }
+    }
+    if dir.is_empty() {
+        return BatteryInfo {
+            pct: 100,
+            status: "Sem bateria".to_string(),
+            ..Default::default()
+        };
+    }
+    let voltage_uv = sys_read_u32(&format!("{}/voltage_now", dir));
+    let voltage_mv = voltage_uv.map(|v| v / 1000);
+
+    // Tenta energy_* (mWh, microWh dividido). Fallback charge_* (uAh)
+    // convertendo via voltage_mv (mV) -> mWh = mAh * V = mAh * mV / 1000.
+    let energy_now = sys_read_u32(&format!("{}/energy_now", dir));
+    let energy_full = sys_read_u32(&format!("{}/energy_full", dir));
+    let energy_full_design = sys_read_u32(&format!("{}/energy_full_design", dir));
+    let power_now_uw = sys_read_u32(&format!("{}/power_now", dir));
+
+    let charge_now = sys_read_u32(&format!("{}/charge_now", dir));
+    let charge_full = sys_read_u32(&format!("{}/charge_full", dir));
+    let charge_full_design = sys_read_u32(&format!("{}/charge_full_design", dir));
+    let current_now_ua = sys_read_u32(&format!("{}/current_now", dir));
+
+    // Convert uWh -> mWh (divide 1000); uAh + mV -> uWh -> mWh.
+    fn uwh_to_mwh(uwh: Option<u32>) -> Option<u32> { uwh.map(|v| v / 1000) }
+    fn uah_to_mwh(uah: Option<u32>, mv: Option<u32>) -> Option<u32> {
+        let a = uah? as u64;
+        let v = mv? as u64;
+        // uAh * mV = nWh; / 1_000_000 = mWh.
+        Some(((a * v) / 1_000_000) as u32)
+    }
+
+    let full = uwh_to_mwh(energy_full).or_else(|| uah_to_mwh(charge_full, voltage_mv));
+    let now = uwh_to_mwh(energy_now).or_else(|| uah_to_mwh(charge_now, voltage_mv));
+    let full_design = uwh_to_mwh(energy_full_design)
+        .or_else(|| uah_to_mwh(charge_full_design, voltage_mv));
+    let power_now = uwh_to_mwh(power_now_uw)
+        .or_else(|| uah_to_mwh(current_now_ua, voltage_mv));
+
+    BatteryInfo {
+        pct: sys_read_u32(&format!("{}/capacity", dir)).unwrap_or(100) as u8,
+        status: sys_read_string(&format!("{}/status", dir)).unwrap_or_else(|| "?".into()),
+        cycles: sys_read_u32(&format!("{}/cycle_count", dir)),
+        full,
+        now,
+        full_design,
+        power_now,
+        voltage_now_mv: voltage_mv,
+        model: sys_read_string(&format!("{}/model_name", dir)),
+        manufacturer: sys_read_string(&format!("{}/manufacturer", dir)),
+    }
+}
+
+/// Status traduzido PT-BR.
+fn status_pt(s: &str) -> &str {
+    match s {
+        "Charging" => "Carregando",
+        "Discharging" => "Descarregando",
+        "Full" => "Cheia",
+        "Not charging" => "Pausada",
+        "Unknown" => "Desconhecido",
+        other => other,
+    }
+}
+
+/// Saude % = full / full_design * 100 (mWh normalizado).
+fn battery_health(info: &BatteryInfo) -> Option<u8> {
+    let full = info.full? as f32;
+    let design = info.full_design? as f32;
+    if design < 1.0 {
+        return None;
+    }
+    Some(((full / design) * 100.0).round().clamp(0.0, 100.0) as u8)
+}
+
+/// Tempo restante string PT-BR ("2h 15min", "cheia", "-").
+fn battery_time_left(info: &BatteryInfo) -> String {
+    let p = match info.power_now {
+        Some(v) if v > 0 => v as f32,
+        _ => return match info.status.as_str() {
+            "Full" => "cheia".into(),
+            _ => "-".into(),
+        },
+    };
+    let (numer, label) = match info.status.as_str() {
+        "Discharging" => (info.now.map(|v| v as f32), "restante"),
+        "Charging" => {
+            let now = info.now.map(|v| v as f32);
+            let full = info.full.map(|v| v as f32);
+            match (now, full) {
+                (Some(n), Some(f)) => (Some((f - n).max(0.0)), "ate cheia"),
+                _ => (None, ""),
+            }
+        }
+        "Full" => return "cheia".into(),
+        _ => (None, ""),
+    };
+    let energy = match numer {
+        Some(e) => e,
+        None => return "-".into(),
+    };
+    let hours_total = energy / p; // mWh / mW = h
+    if hours_total < 0.01 {
+        return "menos 1min".into();
+    }
+    let h = hours_total.floor() as u32;
+    let m = ((hours_total - h as f32) * 60.0).round() as u32;
+    if h == 0 {
+        format!("{}min {}", m, label)
+    } else {
+        format!("{}h {:02}min {}", h, m, label)
+    }
+}
+
+// ============================================================
+// draw_battery_dropdown (A20).
+// ============================================================
+//
+// Layout:
+//   y0  Bateria (title bold)
+//   y1  100% . Carregando (medium)
+//   sep
+//   y2  Saude:      92%
+//   y3  Ciclos:     142
+//   y4  Tempo:      cheia
+//   y5  Voltagem:   12.4 V
+//   y6  Modelo:     Samsung SLA1NV2DR
+//
+// Mesma cor pill_bg (consistente). Sem accent glow (memory feedback_zero_neon_glow).
+fn draw_battery_dropdown(
+    canvas: &mut PixmapMut,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    palette: &LumoColors,
+    info: &BatteryInfo,
+) {
+    let bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
+    let fg = opaque(palette.pill_fg);
+    let fg_subtle = rgba_hex(palette.pill_fg, 0xA0);
+    let sep_color = rgba_hex(palette.pill_sep, palette.pill_sep_alpha);
+
+    // Background rounded rect (mesma radius pill).
+    fill_rrect(canvas, x, y, w, h, PILL_RADIUS, bg);
+
+    // Title "Bateria" 14px bold.
+    let cx = x + DROPDOWN_PAD;
+    let mut cy = y + DROPDOWN_PAD;
+    draw_text(canvas, cx, cy, "Bateria", FONT_DROPDOWN_TITLE, fg, true);
+    cy += FONT_DROPDOWN_TITLE * 1.4;
+
+    // Linha "{N}% . {status}".
+    let summary = format!("{}%  .  {}", info.pct, status_pt(&info.status));
+    draw_text(canvas, cx, cy, &summary, FONT_DROPDOWN_BODY, fg_subtle, false);
+    cy += FONT_DROPDOWN_BODY * 1.6;
+
+    // Separator linha cinza 1px.
+    if let Some(rect) = Rect::from_xywh(x + DROPDOWN_PAD, cy.round(), w - DROPDOWN_PAD * 2.0, 1.0) {
+        let mut p = Paint::default();
+        p.set_color(sep_color);
+        p.anti_alias = false;
+        canvas.fill_rect(rect, &p, Transform::identity(), None);
+    }
+    cy += 8.0;
+
+    // Linhas key:value.
+    let value_x = x + w - DROPDOWN_PAD;
+    let rows: [(&str, String); 5] = [
+        (
+            "Saude",
+            battery_health(info)
+                .map(|h| format!("{}%", h))
+                .unwrap_or_else(|| "-".into()),
+        ),
+        (
+            "Ciclos",
+            info.cycles.map(|c| c.to_string()).unwrap_or_else(|| "-".into()),
+        ),
+        ("Tempo", battery_time_left(info)),
+        (
+            "Voltagem",
+            info.voltage_now_mv
+                .map(|mv| format!("{:.2} V", mv as f32 / 1000.0))
+                .unwrap_or_else(|| "-".into()),
+        ),
+        (
+            "Modelo",
+            match (info.manufacturer.as_deref(), info.model.as_deref()) {
+                (Some(mfr), Some(m)) => format!("{} {}", mfr, m),
+                (None, Some(m)) => m.to_string(),
+                _ => "-".into(),
+            },
+        ),
+    ];
+    for (key, value) in rows.iter() {
+        draw_text(canvas, cx, cy, key, FONT_DROPDOWN_BODY, fg_subtle, false);
+        // Truncar valor longo (modelo): max ~24 chars no espaco disponivel.
+        let mut v = value.clone();
+        if v.chars().count() > 22 {
+            v.truncate(v.char_indices().nth(20).map(|(i, _)| i).unwrap_or(v.len()));
+            v.push_str("..");
+        }
+        let vw = measure_text(&v, FONT_DROPDOWN_BODY, false);
+        draw_text(canvas, value_x - vw, cy, &v, FONT_DROPDOWN_BODY, fg, false);
+        cy += DROPDOWN_ROW_H;
+    }
+}
+
+// ============================================================
 // BarSnapshot.
 // ============================================================
 struct BarSnapshot {
@@ -543,16 +821,25 @@ struct BarSnapshot {
     clock_mm: u8,
     active_ws: u8,
     date_str: String,
+    dropdown: DropdownActive,
+    battery_info: BatteryInfo,
+}
+
+/// Resultado de paint_frame: posicoes calculadas pra hit-test no proximo frame.
+#[derive(Default, Clone, Copy)]
+struct PaintResult {
+    bat_hit_rect: Option<(f32, f32, f32, f32)>,
 }
 
 // ============================================================
 // paint_frame: pinta as 2 pills sobre fundo transparente.
 // ============================================================
-fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
+fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
     let palette = &snap.palette;
     // BAR BACKGROUND TRANSPARENTE (A18 — alpha 0). Compositor pinta atras.
     pixmap.fill(Color::TRANSPARENT);
 
+    let mut result = PaintResult::default();
     let h = snap.height as f32;
     let pill_y = PILL_MARGIN_TOP;
     let pill_cy = pill_y + PILL_H / 2.0;
@@ -626,7 +913,10 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
         draw_pill_bg(&mut canvas, pill_r_x, pill_y, pill_r_w, PILL_H, pill_bg, 0);
         let mut cx = pill_r_x + PILL_PAD_X;
         // A19.10: ordem bat -> wifi -> data -> hora (Mac-style)
+        // A20: salvar bat_hit_rect (cx atual + bat_icon_w, altura PILL_H pra click facil)
+        let bat_x_start = cx;
         draw_battery(&mut canvas, cx, pill_cy - BAT_BODY_H / 2.0, snap.battery_pct, pill_fg, accent);
+        result.bat_hit_rect = Some((bat_x_start, pill_y, bat_icon_w, PILL_H));
         cx += bat_icon_w + PILL_GAP;
         draw_wifi(&mut canvas, cx, pill_cy - WIFI_SIZE / 2.0, snap.wifi_on, pill_fg, pill_fg_subtle);
         cx += WIFI_SIZE + PILL_GAP;
@@ -635,8 +925,33 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
         draw_text(&mut canvas, cx, text_top, &clock_s, FONT_PILL, pill_fg, false);
     }
 
+    // ============================================================
+    // DROPDOWN (A20) — render abaixo da pill direita se ativo.
+    // ============================================================
+    if snap.dropdown == DropdownActive::Battery {
+        if let Some((rx, ry, rw, rh)) = result.bat_hit_rect {
+            // Centralizado horizontalmente sobre o icone bateria, mas
+            // ancorado pra nao sair da tela direita.
+            let want_x = rx + rw / 2.0 - DROPDOWN_W / 2.0;
+            let max_x = snap.width as f32 - PILL_MARGIN_X - DROPDOWN_W;
+            let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
+            let dropdown_y = ry + rh + DROPDOWN_GAP;
+            let mut canvas = pixmap.as_mut();
+            draw_battery_dropdown(
+                &mut canvas,
+                dropdown_x,
+                dropdown_y,
+                DROPDOWN_W,
+                DROPDOWN_H,
+                palette,
+                &snap.battery_info,
+            );
+        }
+    }
+
     // Suppress unused warns nos campos do snapshot (theme so usado pra debug log).
     let _ = (snap.theme, h);
+    result
 }
 
 // ============================================================
@@ -662,18 +977,6 @@ fn month_abbr_pt(m: u32) -> &'static str {
 
 fn format_date_pt(dt: &chrono::DateTime<Local>) -> String {
     format!("{} {} {}", weekday_abbr_pt(dt.weekday()), dt.day(), month_abbr_pt(dt.month()))
-}
-
-fn read_battery() -> u8 {
-    for bat in &["BAT0", "BAT1"] {
-        if let Ok(s) = std::fs::read_to_string(format!("/sys/class/power_supply/{}/capacity", bat))
-        {
-            if let Ok(n) = s.trim().parse::<u8>() {
-                return n;
-            }
-        }
-    }
-    100
 }
 
 fn read_wifi() -> bool {
@@ -758,11 +1061,15 @@ struct LumoBar {
     height: u32,
     active_workspace: Arc<AtomicU8>,
     battery_pct: u8,
+    battery_info: BatteryInfo,
     wifi_on: bool,
     running: bool,
     first_configured: bool,
     pointer: Option<ThemedPointer>,
     pointer_x: f32,
+    pointer_pos: Option<(f64, f64)>,
+    bat_hit_rect: Option<(f32, f32, f32, f32)>,
+    dropdown: DropdownActive,
     ipc_stream: Option<UnixStream>,
     ipc_rx_buf: Vec<u8>,
     theme: LumoTheme,
@@ -771,8 +1078,36 @@ struct LumoBar {
 
 impl LumoBar {
     fn refresh(&mut self) {
-        self.battery_pct = read_battery();
+        // A20: leitura completa /sys/class/power_supply.
+        self.battery_info = read_battery_info();
+        self.battery_pct = self.battery_info.pct;
         self.wifi_on = read_wifi();
+    }
+
+    /// Altura efetiva da surface (bar + dropdown opcional).
+    /// Reserva exclusive_zone original = BAR_HEIGHT (toplevels nao afetados).
+    fn computed_height(&self) -> u32 {
+        match self.dropdown {
+            DropdownActive::None => BAR_HEIGHT,
+            DropdownActive::Battery => {
+                BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H as u32 + 8
+            }
+        }
+    }
+
+    /// Reconfigura tamanho do layer e redesenha (toggle dropdown).
+    /// IMPORTANTE: exclusive_zone fixo = BAR_HEIGHT (DEPS.md A19.18).
+    fn update_size_and_redraw(&mut self, qh: &QueueHandle<Self>) {
+        let new_h = self.computed_height();
+        if new_h != self.height {
+            self.height = new_h;
+            self.layer.set_size(self.width, self.height);
+            // exclusive_zone NAO muda — toplevels veem so BAR_HEIGHT.
+            self.layer.commit();
+            // Realoca pool se necessario (cresceu de 40 pra ~250 = ainda cabe
+            // no 1920*40*4*2 init = 614400 < 1920*254*4 = 1.95MB precisa mais).
+        }
+        self.redraw(qh);
     }
 
     fn redraw(&mut self, _qh: &QueueHandle<Self>) {
@@ -788,6 +1123,8 @@ impl LumoBar {
             clock_mm: now.minute() as u8,
             active_ws: self.active_workspace.load(Ordering::Relaxed),
             date_str: format_date_pt(&now),
+            dropdown: self.dropdown,
+            battery_info: self.battery_info.clone(),
         };
 
         let stride = self.width as i32 * 4;
@@ -806,7 +1143,8 @@ impl LumoBar {
         };
 
         if let Some(mut px) = Pixmap::new(self.width, self.height) {
-            paint_frame(&mut px, &snap);
+            let paint_result = paint_frame(&mut px, &snap);
+            self.bat_hit_rect = paint_result.bat_hit_rect;
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;
@@ -953,13 +1291,43 @@ impl PointerHandler for LumoBar {
     fn pointer_frame(
         &mut self,
         _: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
         _: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
         for ev in events {
-            if let PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } = ev.kind {
-                self.pointer_x = ev.position.0 as f32;
+            match ev.kind {
+                PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
+                    self.pointer_x = ev.position.0 as f32;
+                    self.pointer_pos = Some(ev.position);
+                }
+                PointerEventKind::Leave { .. } => {
+                    self.pointer_pos = None;
+                }
+                PointerEventKind::Press { button, .. } if button == BTN_LEFT => {
+                    let (px, py) = (ev.position.0 as f32, ev.position.1 as f32);
+                    let mut handled = false;
+                    if let Some((rx, ry, rw, rh)) = self.bat_hit_rect {
+                        if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                            self.dropdown = if self.dropdown == DropdownActive::Battery {
+                                DropdownActive::None
+                            } else {
+                                // Atualiza info bateria no momento do click
+                                // (memory feedback_input_feedback_imediato).
+                                self.refresh();
+                                DropdownActive::Battery
+                            };
+                            self.update_size_and_redraw(qh);
+                            handled = true;
+                        }
+                    }
+                    if !handled && self.dropdown != DropdownActive::None {
+                        // Click fora -> fecha dropdown.
+                        self.dropdown = DropdownActive::None;
+                        self.update_size_and_redraw(qh);
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -1002,7 +1370,13 @@ fn main() {
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
 
-    let pool = SlotPool::new(1920 * BAR_HEIGHT as usize * 4 * 2, &shm)
+    // A20: pool dimensionado pra acomodar bar EXPANDIDA com dropdown.
+    // height max = BAR_HEIGHT + GAP + DROPDOWN_H + 8 ~= 254. Margem 2x.
+    let max_height = BAR_HEIGHT as usize
+        + DROPDOWN_GAP as usize
+        + DROPDOWN_H as usize
+        + 8;
+    let pool = SlotPool::new(1920 * max_height * 4 * 2, &shm)
         .expect("SlotPool init");
 
     let active_workspace = Arc::new(AtomicU8::new(1));
@@ -1024,11 +1398,15 @@ fn main() {
         height: BAR_HEIGHT,
         active_workspace: active_workspace.clone(),
         battery_pct: 100,
+        battery_info: BatteryInfo::default(),
         wifi_on: true,
         running: true,
         first_configured: false,
         pointer: None,
         pointer_x: 0.0,
+        pointer_pos: None,
+        bat_hit_rect: None,
+        dropdown: DropdownActive::None,
         ipc_stream: connect_ipc(),
         ipc_rx_buf: Vec::with_capacity(256),
         theme,
