@@ -131,3 +131,12 @@ NAO chutar API. NAO usar `cargo search` ou `crates.io` latest sem confirmar comp
 **Wallpaper loading** (A19.4): chamar `LumoWallpaper::try_load(&mut renderer)` em AMBOS backends (winit.rs + drm.rs) apos GlesRenderer init. Esquecer drm.rs = wallpaper nao aparece em TTY3 real.
 
 **Regra de ouro**: cor verdadeira (Hyprland-equivalent) exige todos 5 patches acima. Se voltar 2 cores ou dither: **NAO chutar**, verificar se algum patch foi revertido inadvertidamente.
+
+
+## Bar layer-shell width (FIXADO 2026-05-17 A19.18) — NAO MEXER
+
+**Causa raiz**: `LumoBar::new` inicializava `width: 1280`. Configure callback do smithay-client-toolkit 0.20 (`LayerSurfaceConfigure`) que deveria trocar pra 1920 **nem sempre dispara** no primeiro commit (smithay/compositor timing). Resultado: bar pintava em 1280 = pill direita aparecia "no meio" do output 1920.
+
+**Fix**: init default `width: 1920` (output Galaxy nativo). Configure handler ainda atualiza se for chamado, mas nao depende dele pra primeiro render.
+
+**Regra**: se output do compositor for diferente de 1920x1080, atualizar default OU implementar deteccao via OutputState antes do primeiro redraw. Hardcode + fallback robusto.
