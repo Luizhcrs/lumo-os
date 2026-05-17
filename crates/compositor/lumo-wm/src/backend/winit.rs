@@ -22,7 +22,10 @@ use smithay::utils::Transform;
 
 use crate::state::LumoState;
 
-use super::render_common::{build_overlay, clear_color_linear, LumoCustomElement, OverlayInputs};
+use super::render_common::{
+    build_winit_elements, clear_color_linear, LumoCustomElement, OverlayInputs,
+};
+use super::wallpaper::LumoWallpaper;
 
 const OUTPUT_NAME: &str = "lumo-winit-0";
 const REFRESH_MHZ: i32 = 60_000;
@@ -123,6 +126,11 @@ pub fn init(
         }
     }
 
+    // A19: carrega wallpaper antes de mover backend pra Rc. Path via env
+    //      LUMO_WALLPAPER ou $HOME/.config/lumo-wallpaper.jpg. Falha = warn + None.
+    let wallpaper = LumoWallpaper::try_load(backend.renderer());
+    state.wallpaper = wallpaper;
+
     let backend = Rc::new(RefCell::new(backend));
     let damage_tracker = Rc::new(RefCell::new(damage_tracker));
 
@@ -206,8 +214,6 @@ fn redraw(
         .bind()
         .map_err(|e| anyhow!("bind framebuffer: {e:?}"))?;
 
-    let space_iter = std::iter::once(&state.space);
-
     let mode = output.current_mode().unwrap_or(Mode {
         size: (1280, 720).into(),
         refresh: REFRESH_MHZ,
@@ -215,6 +221,7 @@ fn redraw(
     let (ow, oh) = (mode.size.w, mode.size.h);
 
     let inputs = OverlayInputs {
+        wallpaper: state.wallpaper.as_ref(),
         pointer_location: state.pointer_location,
         frame_counter: state.frame_counter,
         cursor: state.cursor.as_ref(),
@@ -223,7 +230,12 @@ fn redraw(
         output_w: ow,
         output_h: oh,
     };
-    let overlay = build_overlay(renderer, &inputs);
+    // A19: lista combinada (chrome + space + wallpaper). Passamos space iter
+    // vazio pra render_output, todos elementos vao via custom_elements --
+    // unica forma de wallpaper ficar ATRAS de Space.
+    let all_elements = build_winit_elements(renderer, &inputs, output);
+    let empty_spaces: std::iter::Empty<&smithay::desktop::Space<smithay::desktop::Window>> =
+        std::iter::empty();
 
     let render_result = render_output::<_, LumoCustomElement, _, _>(
         output,
@@ -231,8 +243,8 @@ fn redraw(
         &mut framebuffer,
         1.0,
         0,
-        space_iter,
-        &overlay,
+        empty_spaces,
+        &all_elements,
         damage_tracker,
         {
             let c = clear_color_linear();

@@ -780,6 +780,7 @@ fn render_drm(state: &mut LumoState) {
         ref cursor_buffer,
         ref space,
         ref start_time,
+        ref wallpaper,
         frame_counter,
         ..
     } = *state;
@@ -811,6 +812,7 @@ fn render_drm(state: &mut LumoState) {
     // ordem de stack -- cursor primeiro (front), cantos, sombras, depois
     // SpaceRenderElements vindos do smithay com z-order interno correto.
     let collect_inputs = DrmCollectInputs {
+        wallpaper: state.wallpaper.as_ref(),
         space,
         output: &surface.output,
         pointer_location,

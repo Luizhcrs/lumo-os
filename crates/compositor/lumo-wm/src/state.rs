@@ -138,6 +138,10 @@ pub struct LumoState {
 
     /// Exit code do processo. 0 = normal, 2 = watchdog DRM stall.
     pub exit_code: i32,
+
+    /// A19: wallpaper opcional carregado pelo backend (winit OU drm)
+    /// apos o GlesRenderer estar pronto. None = clear color de fundo.
+    pub wallpaper: Option<crate::backend::wallpaper::LumoWallpaper>,
 }
 
 impl LumoState {
@@ -232,6 +236,7 @@ impl LumoState {
             paused: false,
             watchdog_deadline: None,
             exit_code: 0,
+            wallpaper: None,
         }
     }
 
