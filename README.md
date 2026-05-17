@@ -264,3 +264,42 @@ sudo systemctl restart getty@tty3.service
 - linux-dmabuf-v1 pra clients GPU
 - Hot-plug real (atualmente so loga)
 - Cursor HW plane (overlay scan-out direct, low priority)
+
+## A19 - Wallpaper + Dev nested workflow
+
+### Wallpaper (textura de fundo)
+
+Backend (winit ou drm) carrega imagem do disco no startup, sobe como
+textura GL via `renderer.import_memory` e desenha como element no
+fundo do stack a cada frame.
+
+Path resolvido em ordem:
+
+1. Env `LUMO_WALLPAPER` se setada
+2. `$HOME/.config/lumo-wallpaper.jpg` (default)
+
+Falha de load (arquivo ausente, decode bug, GL upload erro) = warn no
+log + cai pra clear color (comportamento A18). Compositor nunca trava
+por wallpaper.
+
+Decode via crate `image` 0.25 (jpeg + png minimo, sem default features).
+Upload em `Fourcc::Abgr8888` (mesmo formato do cursor xcursor desde A7).
+
+Strategy de scale: stretch pro tamanho do output. Wallpaper padrao
+1999x1124 vs display 1920x1080 sao ambos ~16:9 — distorcao invisivel.
+
+### Dev nested workflow
+
+Duas formas de subir lumo-wm pra iterar:
+
+- `./scripts/lumo-dev.sh` — **debug live nested**. Roda lumo-wm em winit
+  dentro do Hyprland host (qualquer terminal). Janela ~1280x720 aparece;
+  spawn de apps via `WAYLAND_DISPLAY=$SOCKET foot &`. Cor pipeline pode
+  diferir do DRM real (HDR/dither do painel ficam fora), mas layout
+  e render basico iteram em segundos. Ctrl+C mata tudo.
+
+- `./scripts/lumo-tty.sh` — **polish final TTY3**. Roda lumo-wm em DRM
+  direto no TTY3 (mata Hyprland host primeiro). Color management e dither
+  reais. Usar quando precisar validar pipeline visual completo.
+
+Workflow recomendado: iterar visual no nested, validar final no TTY.
