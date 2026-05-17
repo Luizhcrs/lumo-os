@@ -34,6 +34,7 @@ use std::sync::{
     Arc, Mutex, OnceLock,
 };
 use std::time::{Duration, Instant};
+extern crate libc;
 
 use chrono::{Datelike, Local, Timelike};
 use cosmic_text::{
@@ -128,7 +129,7 @@ const BAT_BODY_H: f32 = 11.0;
 // Gap 6px abaixo da pill (respiro visual sem desconectar).
 // Padding interno 14 igual PILL_PAD_X (continuidade).
 const DROPDOWN_W: f32 = 280.0;
-const DROPDOWN_H: f32 = 200.0;
+const DROPDOWN_H: f32 = 150.0; // A20.1 menor (3 rows)
 const DROPDOWN_GAP: f32 = 6.0;
 const DROPDOWN_PAD: f32 = 14.0;
 const DROPDOWN_ROW_H: f32 = 18.0;
@@ -766,7 +767,7 @@ fn draw_battery_dropdown(
 
     // Linhas key:value.
     let value_x = x + w - DROPDOWN_PAD;
-    let rows: [(&str, String); 5] = [
+    let rows: [(&str, String); 3] = [
         (
             "Saude",
             battery_health(info)
@@ -777,21 +778,8 @@ fn draw_battery_dropdown(
             "Ciclos",
             info.cycles.map(|c| c.to_string()).unwrap_or_else(|| "-".into()),
         ),
+        // A20.1: removido Voltagem/Modelo (irrelevantes ao usuario)
         ("Tempo", battery_time_left(info)),
-        (
-            "Voltagem",
-            info.voltage_now_mv
-                .map(|mv| format!("{:.2} V", mv as f32 / 1000.0))
-                .unwrap_or_else(|| "-".into()),
-        ),
-        (
-            "Modelo",
-            match (info.manufacturer.as_deref(), info.model.as_deref()) {
-                (Some(mfr), Some(m)) => format!("{} {}", mfr, m),
-                (None, Some(m)) => m.to_string(),
-                _ => "-".into(),
-            },
-        ),
     ];
     for (key, value) in rows.iter() {
         draw_text(canvas, cx, cy, key, FONT_DROPDOWN_BODY, fg_subtle, false);
@@ -1430,7 +1418,9 @@ fn main() {
 
         conn.flush().ok();
         // A19.9: dispatch_pending nao bloqueia (timers funcionam)
-        queue.dispatch_pending(&mut state).expect("dispatch fail");
+        if let Err(e) = queue.dispatch_pending(&mut state) {
+            eprintln!("[lumo-bar] dispatch_pending warn: {e:?}");
+        }
         // sleep curto pra nao consumir CPU 100%
         std::thread::sleep(Duration::from_millis(100));
 
