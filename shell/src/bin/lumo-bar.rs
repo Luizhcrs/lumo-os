@@ -1090,15 +1090,9 @@ impl LumoBar {
     /// Reconfigura tamanho do layer e redesenha (toggle dropdown).
     /// IMPORTANTE: exclusive_zone fixo = BAR_HEIGHT (DEPS.md A19.18).
     fn update_size_and_redraw(&mut self, qh: &QueueHandle<Self>) {
-        let new_h = self.computed_height();
-        if new_h != self.height {
-            self.height = new_h;
-            self.layer.set_size(self.width, self.height);
-            // exclusive_zone NAO muda — toplevels veem so BAR_HEIGHT.
-            self.layer.commit();
-            // Realoca pool se necessario (cresceu de 40 pra ~250 = ainda cabe
-            // no 1920*40*4*2 init = 614400 < 1920*254*4 = 1.95MB precisa mais).
-        }
+        // A20.11: surface SEMPRE altura max (BAR_HEIGHT + DROPDOWN). NAO faz
+        // set_size dinamico (causava flicker open/close cycle). Renderiza
+        // dropdown so se ativo; resto da surface fica transparente alpha 0.
         self.redraw(qh);
     }
 
@@ -1230,7 +1224,7 @@ impl LayerShellHandler for LumoBar {
         let (w, h) = cfg.new_size;
         // A19.13: forca 1920 sempre (compositor passa width parcial as vezes)
         self.width = 1920;
-        self.height = BAR_HEIGHT;
+        self.height = BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H as u32 + 8; // A20.11 altura max sempre
         self.first_configured = true;
         eprintln!("[lumo-bar] configured cfg_size=({},{}) FORCED width=1920 height={}", w, h, self.height);
         self.refresh();
@@ -1370,7 +1364,7 @@ fn main() {
     let layer =
         layer_shell.create_layer_surface(&qh, surface, Layer::Top, Some("lumo-bar"), None);
     layer.set_anchor(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT);
-    layer.set_size(1920, BAR_HEIGHT); // A19.16 forca 1920 pra layer-shell
+    layer.set_size(1920, BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H as u32 + 8); // A20.11 altura max
     layer.set_exclusive_zone(BAR_HEIGHT as i32);
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
