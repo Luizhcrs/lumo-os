@@ -817,6 +817,7 @@ struct BarSnapshot {
 #[derive(Default, Clone, Copy)]
 struct PaintResult {
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
+    last_click_at: Option<Instant>,
 }
 
 // ============================================================
@@ -1299,6 +1300,15 @@ impl PointerHandler for LumoBar {
                 PointerEventKind::Press { button, serial, time } => {
                     eprintln!("[lumo-bar] Press button={} serial={} time={} pos={:?} hit_rect={:?}", button, serial, time, ev.position, self.bat_hit_rect);
                     if button != BTN_LEFT { continue; }
+                    // A20.10: debounce 200ms (re-size surface multipla = bug visual)
+                    let now = Instant::now();
+                    if let Some(last) = self.last_click_at {
+                        if now.duration_since(last) < Duration::from_millis(200) {
+                            eprintln!("[lumo-bar] click debounced");
+                            continue;
+                        }
+                    }
+                    self.last_click_at = Some(now);
                     let (px, py) = (ev.position.0 as f32, ev.position.1 as f32);
                     let mut handled = false;
                     if let Some((rx, ry, rw, rh)) = self.bat_hit_rect {
@@ -1400,6 +1410,7 @@ fn main() {
         pointer_x: 0.0,
         pointer_pos: None,
         bat_hit_rect: None,
+        last_click_at: None,
         dropdown: DropdownActive::None,
         ipc_stream: connect_ipc(),
         ipc_rx_buf: Vec::with_capacity(256),
