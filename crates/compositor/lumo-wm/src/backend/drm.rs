@@ -386,6 +386,14 @@ pub fn run(
     let _global = output.create_global::<LumoState>(&state.display_handle);
     output.set_preferred(wl_mode);
     output.change_current_state(Some(wl_mode), None, None, Some((0, 0).into()));
+
+    // Centraliza cursor no output real detectado
+    state.pointer_location = (
+        wl_mode.size.w as f64 / 2.0,
+        wl_mode.size.h as f64 / 2.0,
+    )
+        .into();
+    tracing::info!(x = state.pointer_location.x, y = state.pointer_location.y, "cursor centralizado");
     state.space.map_output(&output, (0, 0));
 
     // ============================================================

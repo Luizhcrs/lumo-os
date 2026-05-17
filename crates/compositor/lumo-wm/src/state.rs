@@ -215,7 +215,7 @@ impl LumoState {
             seat,
             keyboard,
             pointer,
-            pointer_location: (0.0, 0.0).into(),
+            pointer_location: (960.0, 540.0).into(), // centro 1920x1080, ajustado dinamico ao detectar output real
             space: Space::default(),
             popups: PopupManager::default(),
             frame_counter: 0,
