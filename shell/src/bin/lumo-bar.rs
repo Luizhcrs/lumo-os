@@ -592,7 +592,7 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
 
     {
         let mut canvas = pixmap.as_mut();
-        draw_pill_bg(&mut canvas, pill_l_x, pill_y, pill_l_w, PILL_H, pill_bg, shadow_a);
+        draw_pill_bg(&mut canvas, pill_l_x, pill_y, pill_l_w, PILL_H, pill_bg, 0);
 
         let mut cx = pill_l_x + PILL_PAD_X;
         // Brand dot (accent emerald/blue).
@@ -623,7 +623,7 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
 
     {
         let mut canvas = pixmap.as_mut();
-        draw_pill_bg(&mut canvas, pill_r_x, pill_y, pill_r_w, PILL_H, pill_bg, shadow_a);
+        draw_pill_bg(&mut canvas, pill_r_x, pill_y, pill_r_w, PILL_H, pill_bg, 0);
         let mut cx = pill_r_x + PILL_PAD_X;
         // A19.10: ordem bat -> wifi -> data -> hora (Mac-style)
         draw_battery(&mut canvas, cx, pill_cy - BAT_BODY_H / 2.0, snap.battery_pct, pill_fg, accent);
@@ -901,6 +901,7 @@ impl LayerShellHandler for LumoBar {
         self.width = if w == 0 { 1920 } else { w }; // A19.10 Galaxy nativo
         self.height = if h == 0 { BAR_HEIGHT } else { h };
         self.first_configured = true;
+        eprintln!("[lumo-bar] configured cfg_size=({},{}) effective_size=({},{})", w, h, self.width, self.height);
         self.refresh();
         self.redraw(qh);
     }
