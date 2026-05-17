@@ -49,7 +49,7 @@ use smithay_client_toolkit::{
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
-        pointer::{PointerEvent, PointerEventKind, PointerHandler, BTN_LEFT},
+        pointer::{PointerEvent, PointerEventKind, PointerHandler, ThemedPointer, BTN_LEFT},
         Capability, SeatHandler, SeatState,
     },
     shell::{
@@ -1055,7 +1055,7 @@ struct LumoBar {
     wifi_on: bool,
     running: bool,
     first_configured: bool,
-    pointer: Option<smithay_client_toolkit::reexports::client::protocol::wl_pointer::WlPointer>,
+    pointer: Option<ThemedPointer>,
     pointer_x: f32,
     pointer_pos: Option<(f64, f64)>,
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
@@ -1255,9 +1255,15 @@ impl SeatHandler for LumoBar {
         capability: Capability,
     ) {
         if capability == Capability::Pointer && self.pointer.is_none() {
-            if let Ok(p) = self.seat_state.get_pointer(qh, &seat) {
+            if let Ok(p) = self.seat_state.get_pointer_with_theme(
+                qh,
+                &seat,
+                self.shm.wl_shm(),
+                self.layer.wl_surface().clone(),
+                smithay_client_toolkit::seat::pointer::ThemeSpec::System,
+            ) {
                 self.pointer = Some(p);
-                eprintln!("[lumo-bar] pointer adquirido via get_pointer (sem theme)");
+                eprintln!("[lumo-bar] pointer adquirido ThemedPointer");
             }
         }
     }
@@ -1417,12 +1423,17 @@ fn main() {
         }
 
         conn.flush().ok();
-        // A19.9: dispatch_pending nao bloqueia (timers funcionam)
+        // A20.9: poll com timeout 50ms = events processados sem bloqueio infinito
+        if let Some(guard) = queue.prepare_read() {
+            use std::os::fd::AsFd;
+            let fd = conn.as_fd();
+            let mut pfd = [nix::poll::PollFd::new(fd, nix::poll::PollFlags::POLLIN)];
+            let _ = nix::poll::poll(&mut pfd, nix::poll::PollTimeout::try_from(50i32).unwrap());
+            let _ = guard.read();
+        }
         if let Err(e) = queue.dispatch_pending(&mut state) {
             eprintln!("[lumo-bar] dispatch_pending warn: {e:?}");
         }
-        // sleep curto pra nao consumir CPU 100%
-        std::thread::sleep(Duration::from_millis(100));
 
         if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
             last_ipc_tick = Instant::now();
