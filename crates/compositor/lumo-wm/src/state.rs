@@ -17,7 +17,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use smithay::desktop::{PopupManager, Space, Window};
+use smithay::desktop::{layer_map_for_output, LayerSurface, PopupManager, Space, Window, WindowSurfaceType};
 use smithay::input::keyboard::KeyboardHandle;
 use smithay::input::pointer::PointerHandle;
 use smithay::input::{Seat, SeatState};
@@ -31,7 +31,7 @@ use smithay::wayland::fractional_scale::FractionalScaleManagerState;
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::selection::primary_selection::PrimarySelectionState;
-use smithay::wayland::shell::wlr_layer::WlrLayerShellState;
+use smithay::wayland::shell::wlr_layer::{Layer as WlrLayer, WlrLayerShellState};
 use smithay::wayland::shell::xdg::XdgShellState;
 use smithay::wayland::shm::ShmState;
 use smithay::wayland::socket::ListeningSocketSource;
@@ -255,12 +255,45 @@ impl LumoState {
         &self,
         pos: Point<f64, Logical>,
     ) -> Option<(WlSurface, Point<i32, Logical>)> {
+        // A20.2: layer-shell PRIMEIRO (bar/dock/notif).
+        // Z-order: Overlay > Top > Window > Bottom > Background.
+        let outputs: Vec<_> = self.space.outputs().cloned().collect();
+        for output in outputs.iter() {
+            let map = layer_map_for_output(output);
+            for layer in map.layers_on(WlrLayer::Overlay).chain(map.layers_on(WlrLayer::Top)) {
+                let geo = map.layer_geometry(layer).unwrap_or_default();
+                if geo.to_f64().contains(pos) {
+                    let rel = pos - geo.loc.to_f64();
+                    if let Some((surface, surf_off)) =
+                        layer.surface_under(rel, WindowSurfaceType::ALL)
+                    {
+                        return Some((surface, geo.loc + surf_off));
+                    }
+                }
+            }
+        }
+        // Toplevels
         if let Some((window, win_loc)) = self.space.element_under(pos) {
             let rel = pos - win_loc.to_f64();
             if let Some((surface, surf_off)) =
-                window.surface_under(rel, smithay::desktop::WindowSurfaceType::ALL)
+                window.surface_under(rel, WindowSurfaceType::ALL)
             {
                 return Some((surface, win_loc + surf_off));
+            }
+        }
+        // Layer-shell Bottom/Background (atras dos toplevels)
+        for output in outputs.iter() {
+            let map = layer_map_for_output(output);
+            for layer in map.layers_on(WlrLayer::Bottom).chain(map.layers_on(WlrLayer::Background)) {
+                let geo = map.layer_geometry(layer).unwrap_or_default();
+                if geo.to_f64().contains(pos) {
+                    let rel = pos - geo.loc.to_f64();
+                    if let Some((surface, surf_off)) =
+                        layer.surface_under(rel, WindowSurfaceType::ALL)
+                    {
+                        return Some((surface, geo.loc + surf_off));
+                    }
+                }
             }
         }
         None
