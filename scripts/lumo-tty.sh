@@ -180,8 +180,6 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 mkdir -p "$XDG_RUNTIME_DIR"
 export XDG_SESSION_TYPE=wayland
 export XDG_CURRENT_DESKTOP=lumo
-# Forca libseat usar logind backend (seatd nao sincroniza Active com logind)
-export LIBSEAT_BACKEND=logind
 export WAYLAND_DISPLAY=wayland-lumo
 export RUST_LOG="${RUST_LOG:-lumo_wm=info,smithay=warn,wgpu=warn}"
 
