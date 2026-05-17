@@ -821,13 +821,25 @@ impl LumoBar {
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;
+            // Premultiplicar alpha + swap RGBA->BGRA (wl_shm Argb8888 LE)
             for i in 0..n {
                 let o = i * 4;
                 if o + 3 < dst.len() && o + 3 < src.len() {
-                    dst[o] = src[o + 2];
-                    dst[o + 1] = src[o + 1];
-                    dst[o + 2] = src[o];
-                    dst[o + 3] = src[o + 3];
+                    let r = src[o] as u16;
+                    let g = src[o + 1] as u16;
+                    let b = src[o + 2] as u16;
+                    let a = src[o + 3] as u16;
+                    if a == 255 {
+                        dst[o] = b as u8;
+                        dst[o + 1] = g as u8;
+                        dst[o + 2] = r as u8;
+                        dst[o + 3] = 255;
+                    } else {
+                        dst[o] = ((b * a) / 255) as u8;
+                        dst[o + 1] = ((g * a) / 255) as u8;
+                        dst[o + 2] = ((r * a) / 255) as u8;
+                        dst[o + 3] = a as u8;
+                    }
                 }
             }
         }
