@@ -10,6 +10,13 @@
 //! dentro do event loop que ele controla (run() bloqueia ate exit).
 //! Antes, o timer dispatch_clients ficava no main pos-backend init, mas
 //! em DRM esse main nunca chega no path -- run() segura o thread.
+//!
+//! A12 Frente 1: auto-spawn lumo-bar no path DRM (TTY standalone).
+//! Sem isso, Luiz precisa abrir SSH externo so pra subir a bar manualmente.
+//! Winit nested NAO faz auto-spawn (host ja tem barra; evita 2 bars na demo).
+//! Memory feedback_design_lapidado: justificar -- spawn so quando backend
+//! eh DRM E binario lumo-bar existe ao lado de lumo-wm; log explicito em
+//! qualquer falha pra Luiz diagnosticar via journalctl.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -22,7 +29,7 @@ use smithay::reexports::wayland_server::Display;
 
 use lumo_wm::{init_socket, LumoState};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BackendChoice {
     Winit,
     Drm,
@@ -35,6 +42,65 @@ fn pick_backend() -> BackendChoice {
         Ok(other) => {
             tracing::warn!(value = other, "LUMO_WM_BACKEND desconhecido, usando winit");
             BackendChoice::Winit
+        }
+    }
+}
+
+/// A12 Frente 1: spawna lumo-bar (e opcionalmente foot) na inicializacao
+/// do compositor full-session.
+///
+/// So roda em backend DRM. Em winit nested o host (Hyprland) ja tem a sua
+/// propria bar; subir uma segunda dentro da janela nested polui a demo.
+///
+/// `socket_name` tem que estar binded antes desta funcao -- filhos herdam
+/// WAYLAND_DISPLAY do env e conectam imediato. O dispatch_clients timer do
+/// backend DRM (drm.rs step 13b, 4ms) responde os primeiros bind requests
+/// em < 1 frame, entao o filho nao trava no connect.
+///
+/// Falha de spawn = warn no log + segue. lumo-wm nao para de funcionar
+/// porque a bar nao subiu (Luiz ainda consegue SUPER+Q -> foot manual).
+fn spawn_autostart(socket_name: &str) {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_owned()))
+        .unwrap_or_else(|| std::path::PathBuf::from("./target/release"));
+
+    let bar_path = exe_dir.join("lumo-bar");
+    let home = std::env::var("HOME").unwrap_or_default();
+    let xdg = std::env::var("XDG_CONFIG_HOME")
+        .unwrap_or_else(|_| format!("{home}/.config"));
+    let xdg_runtime = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
+
+    // lumo-bar
+    if bar_path.exists() {
+        let mut cmd = std::process::Command::new(&bar_path);
+        cmd.env("WAYLAND_DISPLAY", socket_name);
+        cmd.env("HOME", &home);
+        cmd.env("XDG_CONFIG_HOME", &xdg);
+        cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
+        match cmd.spawn() {
+            Ok(child) => tracing::info!(
+                pid = child.id(),
+                bar = ?bar_path,
+                "autostart lumo-bar"
+            ),
+            Err(err) => tracing::warn!(?err, "autostart lumo-bar falhou"),
+        }
+    } else {
+        tracing::warn!(bar = ?bar_path, "lumo-bar binary nao encontrado, skip autostart");
+    }
+
+    // Opcional: terminal foot se LUMO_AUTOSTART_FOOT=1.
+    // Padrao OFF porque Luiz pode preferir desktop limpo no boot.
+    if std::env::var("LUMO_AUTOSTART_FOOT").is_ok() {
+        let mut cmd = std::process::Command::new("foot");
+        cmd.env("WAYLAND_DISPLAY", socket_name);
+        cmd.env("HOME", &home);
+        cmd.env("XDG_CONFIG_HOME", &xdg);
+        cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
+        match cmd.spawn() {
+            Ok(child) => tracing::info!(pid = child.id(), "autostart foot"),
+            Err(err) => tracing::warn!(?err, "autostart foot falhou"),
         }
     }
 }
@@ -84,6 +150,16 @@ fn main() -> Result<()> {
     // herdam env. Setado antes do dispatch porque DRM bloqueia.
     if let Some(s) = socket_name.as_ref() {
         std::env::set_var("WAYLAND_DISPLAY", s);
+    }
+
+    // A12 Frente 1: autostart so no path DRM (full TTY session).
+    // Em winit nested, host ja tem a bar -- evitar duplicar.
+    if backend == BackendChoice::Drm {
+        if let Some(s) = socket_name.as_deref() {
+            spawn_autostart(s);
+        } else {
+            tracing::warn!("autostart skip: socket Wayland nao foi criado");
+        }
     }
 
     // Display em Rc<RefCell> -- compartilhado entre path winit (timer

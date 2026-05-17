@@ -176,8 +176,13 @@ impl LumoState {
                 );
                 pointer.frame(self);
 
-                // Forca repaint pro cursor mover visualmente no proximo frame
-                self.drm_force_repaint = true;
+                // Forca repaint pro cursor mover visualmente no proximo frame.
+                // Campo so existe sob feature drm-backend; winit nao precisa
+                // (winit redraw eh imediato via window.request_redraw).
+                #[cfg(feature = "drm-backend")]
+                {
+                    self.drm_force_repaint = true;
+                }
             }
 
             InputEvent::PointerMotionAbsolute { event } => {
