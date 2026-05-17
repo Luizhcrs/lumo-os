@@ -505,14 +505,22 @@ fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, fg: Color, acce
     let body_h = BAT_BODY_H;
     stroke_rrect(canvas, x + 0.5, y + 0.5, body_w - 1.0, body_h - 1.0, 1.6, fg, 1.0);
     fill_rrect(canvas, x + body_w + 0.6, y + body_h * 0.3, 1.8, body_h * 0.4, 0.6, fg);
-    // A19.6: inset_y=1 (vertical mais agressivo pra fill bater interior real do stroke)
-    let inset_x = 2.0f32;
-    let inset_y = 1.4f32;
+    // A19.7: ajuste fino + cores Mac-style (verde alto, laranja medio, vermelho baixo)
+    let inset_x = 1.5f32; // mais pra esquerda
+    let inset_y = 2.2f32; // mais pra baixo
     let inner_w = body_w - inset_x * 2.0;
     let inner_h = body_h - inset_y * 2.0;
     let fw = (pct as f32 / 100.0).clamp(0.0, 1.0) * inner_w;
     if fw > 0.5 {
-        let fill_color = if pct > 20 { accent } else { opaque(0xEF4444) };
+        let fill_color = if pct >= 50 {
+            opaque(0x34D399) // verde-400 emerald Mac
+        } else if pct >= 20 {
+            opaque(0xFB923C) // orange-400
+        } else {
+            opaque(0xEF4444) // red-500
+        };
+        // _accent nao usado mais, mas mantem assinatura
+        let _ = accent;
         fill_rrect(canvas, x + inset_x, y + inset_y, fw, inner_h, 0.8, fill_color);
     }
 }
