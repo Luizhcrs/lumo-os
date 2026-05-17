@@ -803,6 +803,9 @@ fn render_drm(state: &mut LumoState) {
 
     let pointer_location = *pointer_location;
     let start_time_elapsed = start_time.elapsed();
+    if std::env::var("LUMO_TRACE_POINTER").is_ok() {
+        eprintln!("[trace] render cursor pos=({:.1},{:.1})", pointer_location.x, pointer_location.y);
+    }
 
     // Output size pra mascara de cantos.
     let mode = surface.output.current_mode().unwrap_or(WlMode {
