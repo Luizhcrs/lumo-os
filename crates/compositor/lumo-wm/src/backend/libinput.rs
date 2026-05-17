@@ -44,6 +44,19 @@ pub fn init(
 
     loop_handle
         .insert_source(backend, |event, _, state| {
+            // Config acceleration/tap em devices novos (cursor fluido)
+            if let InputEvent::DeviceAdded { ref device } = event {
+                let mut d: smithay::reexports::input::Device = device.clone();
+                use smithay::reexports::input as li;
+                let _ = d.config_accel_set_profile(li::AccelProfile::Adaptive);
+                let _ = d.config_accel_set_speed(0.3);
+                if d.config_tap_finger_count() > 0 {
+                    let _ = d.config_tap_set_enabled(true);
+                    let _ = d.config_tap_set_button_map(li::TapButtonMap::LeftRightMiddle);
+                }
+                let _ = d.config_dwt_set_enabled(true);
+                tracing::info!(name = ?d.name(), "device libinput configurado");
+            }
             // Memory feedback_input_feedback_imediato: warn em lag > 100ms.
             if let InputEvent::Keyboard { ref event } = event {
                 let now_ms = state.clock.now().as_millis() as u64;
