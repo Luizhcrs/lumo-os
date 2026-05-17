@@ -48,7 +48,7 @@ impl GlesTexProgram {
         has_alpha: bool,
     ) -> &GlesTexProgramVariant {
         match format {
-            Some(ffi::BGRA_EXT) | Some(ffi::RGBA) | Some(ffi::RGBA8) | Some(ffi::RGB10_A2)
+            Some(ffi::BGRA_EXT) | Some(ffi::RGBA) | Some(ffi::RGBA8) | Some(ffi::SRGB8_ALPHA8) | Some(ffi::RGB10_A2)
             | Some(ffi::RGBA16F) => {
                 if has_alpha {
                     &self.0.variants[0]
