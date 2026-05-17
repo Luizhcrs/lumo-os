@@ -810,7 +810,7 @@ impl LumoBar {
             self.width as i32,
             self.height as i32,
             stride,
-            wl_shm::Format::Argb8888,
+            wl_shm::Format::Xrgb8888, // A16.2 - sem alpha real (bar fundo opaco)
         ) {
             Ok(v) => v,
             Err(e) => {
@@ -824,16 +824,15 @@ impl LumoBar {
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;
-            // tiny-skia Pixmap.data() JA premultiplied (docs.rs/tiny-skia
-            // Pixmap: "premultiplied RGBA pixels"). So precisa swap RGBA->BGRA
-            // pra wl_shm Argb8888 little-endian. Premultiply manual = duplo = bug.
+            // A16.2: Xrgb8888 LE = bytes BGRX na memoria. Bar fundo opaco
+            // -> alpha real desnecessario. Elimina premul edge cases.
             for i in 0..n {
                 let o = i * 4;
                 if o + 3 < dst.len() && o + 3 < src.len() {
                     dst[o]     = src[o + 2]; // B
                     dst[o + 1] = src[o + 1]; // G
                     dst[o + 2] = src[o];     // R
-                    dst[o + 3] = src[o + 3]; // A
+                    dst[o + 3] = 0xFF;       // X (ignored)
                 }
             }
         }
