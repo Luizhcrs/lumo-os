@@ -15,10 +15,11 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use smithay::backend::renderer::damage::OutputDamageTracker;
+use smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement;
 use smithay::backend::renderer::element::solid::SolidColorRenderElement;
-use smithay::backend::renderer::element::{Id, Kind};
+use smithay::backend::renderer::element::{render_elements, Id, Kind};
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::Color32F;
+use smithay::backend::renderer::{Color32F, ImportMem};
 use smithay::backend::winit::{self, WinitEvent, WinitGraphicsBackend};
 use smithay::desktop::space::render_output;
 use smithay::output::{Mode, Output, PhysicalProperties, Subpixel};
@@ -27,6 +28,15 @@ use smithay::reexports::calloop::LoopHandle;
 use smithay::utils::{Point, Rectangle, Transform};
 
 use crate::state::LumoState;
+
+// Fix 5 (5.4): wrapper pra combinar SolidColor (brand dot + fallback) e
+// MemoryRenderBuffer (cursor xcursor real). render_output exige um unico
+// tipo C: RenderElement<R>; o macro do Smithay gera o enum + impls.
+render_elements! {
+    pub LumoCustomElement<R> where R: ImportMem;
+    Solid=SolidColorRenderElement,
+    Memory=MemoryRenderBufferRenderElement<R>,
+}
 
 const OUTPUT_NAME: &str = "lumo-winit-0";
 const REFRESH_MHZ: i32 = 60_000;
@@ -180,10 +190,9 @@ fn brand_dot_element() -> SolidColorRenderElement {
     )
 }
 
-/// Cursor server-side stub: bloco solido 10x14 no pointer_location.
-/// Sem xcursor theme - MVP suficiente pra "ter cursor visivel" ate a
-/// fase 5.4 que tras o cursor surface completo + tema.
-fn cursor_element(state: &LumoState, output_scale: f64) -> SolidColorRenderElement {
+/// Cursor server-side fallback: bloco solido 10x14 no pointer_location.
+/// Usado quando nao ha tema xcursor disponivel.
+fn cursor_solid_fallback(state: &LumoState, output_scale: f64) -> SolidColorRenderElement {
     let px = (state.pointer_location.x * output_scale).round() as i32;
     let py = (state.pointer_location.y * output_scale).round() as i32;
     let geo: Rectangle<i32, smithay::utils::Physical> =
@@ -202,6 +211,32 @@ fn cursor_element(state: &LumoState, output_scale: f64) -> SolidColorRenderEleme
     )
 }
 
+/// Cursor xcursor real via MemoryRenderBuffer. Hotspot ajusta a
+/// posicao pra que a ponta da seta caia exatamente no
+/// pointer_location.
+fn cursor_xcursor_element(
+    renderer: &mut GlesRenderer,
+    state: &LumoState,
+    output_scale: f64,
+) -> Option<MemoryRenderBufferRenderElement<GlesRenderer>> {
+    let buffer = state.cursor_buffer.as_ref()?;
+    let loaded = state.cursor.as_ref()?;
+
+    let px = state.pointer_location.x * output_scale - loaded.hotspot_x as f64;
+    let py = state.pointer_location.y * output_scale - loaded.hotspot_y as f64;
+
+    MemoryRenderBufferRenderElement::from_buffer(
+        renderer,
+        smithay::utils::Point::<f64, smithay::utils::Physical>::from((px, py)),
+        buffer,
+        None,
+        None,
+        None,
+        Kind::Cursor,
+    )
+    .ok()
+}
+
 fn redraw(
     backend: &mut WinitGraphicsBackend<GlesRenderer>,
     damage_tracker: &mut OutputDamageTracker,
@@ -218,10 +253,16 @@ fn redraw(
     let space_iter = std::iter::once(&state.space);
 
     // Overlay Lumo (custom elements ficam em cima dos space elements).
-    let overlay: Vec<SolidColorRenderElement> =
-        vec![cursor_element(state, 1.0), brand_dot_element()];
+    // Cursor xcursor real se carregado; senao fallback SolidColor.
+    let mut overlay: Vec<LumoCustomElement<GlesRenderer>> = Vec::with_capacity(2);
+    if let Some(elem) = cursor_xcursor_element(renderer, state, 1.0) {
+        overlay.push(LumoCustomElement::Memory(elem));
+    } else {
+        overlay.push(LumoCustomElement::Solid(cursor_solid_fallback(state, 1.0)));
+    }
+    overlay.push(LumoCustomElement::Solid(brand_dot_element()));
 
-    let render_result = render_output::<_, SolidColorRenderElement, _, _>(
+    let render_result = render_output::<_, LumoCustomElement<GlesRenderer>, _, _>(
         output,
         renderer,
         &mut framebuffer,

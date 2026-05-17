@@ -17,6 +17,7 @@
 //! arquitetural da escolha do Smithay.
 
 pub mod backend;
+pub mod cursor;
 pub mod handlers;
 pub mod state;
 

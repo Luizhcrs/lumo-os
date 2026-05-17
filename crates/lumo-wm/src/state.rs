@@ -73,6 +73,16 @@ pub struct LumoState {
 
     // Frame counter pra invalidar SolidColorRenderElements (ex: cursor que se move).
     pub frame_counter: u64,
+
+    // Fix 5 (5.4): cursor xcursor real (Adwaita/default). Some(...) se um
+    // tema foi achado e parseado; None mantem fallback SolidColor stub.
+    pub cursor: Option<crate::cursor::LoadedCursor>,
+
+    // MemoryRenderBuffer pre-criado com pixels do xcursor. None se nao
+    // carregou. Compartilhado entre frames pra reutilizar upload de
+    // textura no GPU (Smithay faz upload lazy + damage tracking).
+    pub cursor_buffer:
+        Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
 }
 
 impl LumoState {
@@ -100,6 +110,22 @@ impl LumoState {
         let cursor_shape_state = CursorShapeManagerState::new::<Self>(&display_handle);
         let xdg_toplevel_icon_manager =
             XdgToplevelIconManager::new::<Self>(&display_handle);
+
+        // Fix 5: tenta carregar cursor xcursor real. Falha = stub.
+        let cursor = crate::cursor::try_load_first_available(24);
+        let cursor_buffer = cursor.as_ref().map(|c| {
+            use smithay::backend::allocator::Fourcc;
+            use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
+            use smithay::utils::Transform;
+            MemoryRenderBuffer::from_slice(
+                &c.pixels,
+                Fourcc::Argb8888,
+                (c.width as i32, c.height as i32),
+                1,
+                Transform::Normal,
+                None,
+            )
+        });
 
         let mut seat = seat_state.new_wl_seat(&display_handle, "lumo-seat-0");
         let keyboard = seat
@@ -133,6 +159,8 @@ impl LumoState {
             space: Space::default(),
             popups: PopupManager::default(),
             frame_counter: 0,
+            cursor,
+            cursor_buffer,
         }
     }
 
