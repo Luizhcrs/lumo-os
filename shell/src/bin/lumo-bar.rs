@@ -411,15 +411,18 @@ fn draw_text(
         if gw == 0 || gh == 0 {
             return;
         }
-        // gcolor inclui alpha pre-multiplicada pela mascara do glyph.
-        let r = gcolor.r() as f32 / 255.0;
-        let g = gcolor.g() as f32 / 255.0;
-        let b = gcolor.b() as f32 / 255.0;
-        let a = gcolor.a() as f32 / 255.0;
-        if a < 0.01 {
+        // Grayscale AA: ignora RGB subpixel (rainbow artifact em painel sem LCD-RGB stripe).
+        // Usa COR PASSADA + alpha do glyph (mask 8-bit).
+        let a_mask = gcolor.a() as f32 / 255.0;
+        if a_mask < 0.01 {
             return;
         }
-        let c = Color::from_rgba(r, g, b, a).unwrap_or(color);
+        let c = Color::from_rgba(
+            color.red(),
+            color.green(),
+            color.blue(),
+            color.alpha() * a_mask,
+        ).unwrap_or(color);
         let px = (x + gx as f32).round();
         let py = (y_top + gy as f32).round();
         // Cada pixel do glyph eh 1x1; AA ja vem do alpha gcolor (mascara
