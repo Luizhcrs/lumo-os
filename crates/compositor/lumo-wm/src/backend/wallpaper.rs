@@ -28,7 +28,7 @@ use smithay::backend::renderer::element::texture::{TextureBuffer, TextureRenderE
 use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::backend::renderer::ImportMem;
-use smithay::utils::{Logical, Physical, Point, Size, Transform};
+use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
 
 /// Wallpaper carregado: TextureBuffer GL + dimensoes originais da imagem.
 ///
@@ -128,13 +128,19 @@ impl LumoWallpaper {
     /// distorcao desprezivel. Pra suporte multi-output ou aspect ratios
     /// diferentes, futuro: implementar cover/contain com crop.
     pub fn element(&self, output_w: i32, output_h: i32) -> TextureRenderElement<GlesTexture> {
-        let size: Size<i32, Logical> = (output_w, output_h).into();
+        // A19.11: src_rect explicito (full buffer) + size logical (output) =
+        // forca scale 7680x4320 -> 1920x1080. Sem src explicito, smithay
+        // pode renderizar 1:1 sem scale.
+        let logical_size: Size<i32, Logical> = (output_w, output_h).into();
+        let src: Rectangle<f64, Logical> = Rectangle::from_size(
+            (self.size.0 as f64, self.size.1 as f64).into(),
+        );
         TextureRenderElement::from_texture_buffer(
             Point::<f64, Physical>::from((0.0, 0.0)),
             &self.buffer,
             None,
-            None,
-            Some(size),
+            Some(src),
+            Some(logical_size),
             Kind::Unspecified,
         )
     }
