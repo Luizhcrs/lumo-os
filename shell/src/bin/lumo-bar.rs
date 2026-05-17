@@ -1060,6 +1060,7 @@ struct LumoBar {
     pointer_x: f32,
     pointer_pos: Option<(f64, f64)>,
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
+    last_click_at: Option<Instant>,
     dropdown: DropdownActive,
     ipc_stream: Option<UnixStream>,
     ipc_rx_buf: Vec<u8>,
