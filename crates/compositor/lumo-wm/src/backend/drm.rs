@@ -391,6 +391,10 @@ pub fn run(
     tracing::info!("FRAMEBUFFER_SRGB skipped (testing)");
     tracing::info!("GlesRenderer iniciado");
 
+    // A19.4: carrega wallpaper (igual winit.rs:131)
+    let wallpaper = crate::backend::wallpaper::LumoWallpaper::try_load(&mut renderer);
+    state.wallpaper = wallpaper;
+
     // A10 frente 1: dmabuf-v1 global. Galaxy U300 = Intel i915 render
     // node /dev/dri/renderD128. EGLContext.dmabuf_render_formats() ja
     // inclui DRM_FORMAT_MOD_LINEAR + I915_FORMAT_MOD_X_TILED + Y_TILED
