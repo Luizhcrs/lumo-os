@@ -235,9 +235,7 @@ pub fn build_overlay(
     }
 
     // 2. Mascara de cantos do output.
-    for elem in corner_mask_elements(inputs.output_w, inputs.output_h) {
-        overlay.push(LumoCustomElement::Solid(elem));
-    }
+    // A19.6: corner_mask removido (quadrados brancos no canto sobrepondo wallpaper)
 
     // 3. Sombras das toplevels.
     for elem in shadow_elements(inputs.space) {
@@ -302,9 +300,7 @@ pub fn collect_drm_elements(
 
     // 2. Mascara de cantos (cobre pixels dos cantos por cima de tudo
     //    que vier do space, antes do clear preto preencher fora).
-    for elem in corner_mask_elements(inputs.output_w, inputs.output_h) {
-        out.push(LumoCustomElement::Solid(elem));
-    }
+    // A19.6: corner_mask removido (quadrados brancos no canto sobrepondo wallpaper)
 
     // 3. Sombras pretas atras das toplevels.
     for elem in shadow_elements(inputs.space) {
@@ -381,9 +377,7 @@ pub fn build_winit_elements(
     }
 
     // 2. Mascara de cantos.
-    for elem in corner_mask_elements(inputs.output_w, inputs.output_h) {
-        out.push(LumoCustomElement::Solid(elem));
-    }
+    // A19.6: corner_mask removido (quadrados brancos no canto sobrepondo wallpaper)
 
     // 3. Sombras pretas.
     for elem in shadow_elements(inputs.space) {
