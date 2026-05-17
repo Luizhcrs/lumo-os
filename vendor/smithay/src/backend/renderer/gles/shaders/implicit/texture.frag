@@ -34,5 +34,7 @@ void main() {
         color = vec4(0.0, 0.2, 0.0, 0.2) + color * 0.8;
 #endif
 
-    gl_FragColor = color;
+    // A17.2: linear -> sRGB encode no output (texture sample foi auto sRGB->linear via SRGB8_ALPHA8)
+    vec3 srgb_rgb = pow(color.rgb, vec3(1.0/2.2));
+    gl_FragColor = vec4(srgb_rgb, color.a);
 }
