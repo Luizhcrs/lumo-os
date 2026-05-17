@@ -4,6 +4,7 @@ members = [
     "shell",
     "crates/lumo-gfx-core",
     "crates/lumo-wm",
+    "crates/lumo-ipc",
 ]
 
 [profile.release]

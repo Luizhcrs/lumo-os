@@ -1,24 +1,19 @@
 //! lumo-wm - Wayland compositor proprio do Lumo OS (Layer 5).
 //!
-//! Fase 5.2: client rendering + layer-shell + input dispatch + protocols
-//! opcionais (primary_selection, xdg_activation, fractional_scale,
-//! cursor_shape, xdg_toplevel_icon).
+//! Fase 5.4 (A7): cursor xcursor real + spawn keybind + bar SHM.
 //!
-//! Roda como cliente Wayland em cima do Hyprland (backend winit), expoe
-//! seu proprio socket `wayland-N`, renderiza clientes via GlesRenderer
-//! dentro da janela winit. Foot/weston-terminal aparecem nested.
+//! Fase 5.5 (A8):
+//! - backend DRM/KMS (`backend::drm`) gated por feature `drm-backend`,
+//!   selecionado via env `LUMO_WM_BACKEND=drm` (default winit).
+//! - IPC unix socket (`crate::ipc`) pra workspaces -> lumo-bar.
+//! - Moldura desktop: corner radius + sombra preta neutra (sem neon).
 //!
-//! Fases proximas:
-//! - 5.3 lumo-gfx-core integration (wgpu pipeline + custom cursor)
-//! - 5.4 gestures completos + animation engine
-//! - 5.5 feature parity Hyprland + TTY (udev/DRM)
-//!
-//! Veja [[06 - Layer 3 Compositor Research]] no vault pra justificativa
-//! arquitetural da escolha do Smithay.
+//! Roda nested em Hyprland (winit) ou full-session em TTY (drm).
 
 pub mod backend;
 pub mod cursor;
 pub mod handlers;
+pub mod ipc;
 pub mod state;
 
 pub use state::{init_socket, ClientState, LumoState};

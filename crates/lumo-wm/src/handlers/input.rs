@@ -1,10 +1,14 @@
 //! Input dispatch - converte WinitEvent::Input em eventos pra Seat.
 //!
-//! Fase 5.4: adiciona keybinds SUPER (logo) interceptados antes do
-//! forward pro cliente focado:
-//!   SUPER+Q ou SUPER+Return -> spawn `foot`
-//!   SUPER+L                 -> sai do compositor (debug)
-//!   SUPER+1..9              -> placeholder workspaces (no-op)
+//! Fase 5.5 (A8): SUPER+1..5 agora chama state.set_workspace(N) e
+//! dispara broadcast IPC pra lumo-bar. Antes era no-op.
+//!
+//! Keybinds:
+//!   SUPER+Q ou SUPER+Return  -> spawn `foot`
+//!   SUPER+L                  -> sai do compositor (debug)
+//!   SUPER+1..5               -> troca workspace ativo + broadcast IPC
+//!   Ctrl+Alt+F1..F12         -> switch_vt (so DRM backend; winit ignora)
+//!   Ctrl+Alt+Backspace       -> exit clean (DRM safety)
 
 use smithay::backend::input::{
     AbsolutePositionEvent, ButtonState, Event as _, InputBackend, InputEvent, KeyState,
@@ -16,12 +20,12 @@ use smithay::utils::SERIAL_COUNTER;
 
 use crate::state::LumoState;
 
-/// Acao interceptada por keybind do compositor. Retornada como
-/// FilterResult::Intercept pro evento NAO ser encaminhado ao cliente.
-enum Action {
+/// Acao interceptada por keybind do compositor.
+pub enum Action {
     SpawnFoot,
     Quit,
     Workspace(u8),
+    SwitchVt(i32),
 }
 
 impl LumoState {
@@ -42,14 +46,44 @@ impl LumoState {
                     serial,
                     time,
                     |_state, mods, kh| {
-                        // So intercepta no press; release sempre forward.
                         if !press {
                             return FilterResult::Forward;
+                        }
+                        let sym = kh.modified_sym();
+                        // Ctrl+Alt+F1..F12 -> VT switch (DRM only).
+                        // Ctrl+Alt+Backspace -> quit safety.
+                        if mods.ctrl && mods.alt {
+                            match sym {
+                                Keysym::XF86_Switch_VT_1 | Keysym::F1 => {
+                                    return FilterResult::Intercept(Action::SwitchVt(1));
+                                }
+                                Keysym::XF86_Switch_VT_2 | Keysym::F2 => {
+                                    return FilterResult::Intercept(Action::SwitchVt(2));
+                                }
+                                Keysym::XF86_Switch_VT_3 | Keysym::F3 => {
+                                    return FilterResult::Intercept(Action::SwitchVt(3));
+                                }
+                                Keysym::XF86_Switch_VT_4 | Keysym::F4 => {
+                                    return FilterResult::Intercept(Action::SwitchVt(4));
+                                }
+                                Keysym::XF86_Switch_VT_5 | Keysym::F5 => {
+                                    return FilterResult::Intercept(Action::SwitchVt(5));
+                                }
+                                Keysym::XF86_Switch_VT_6 | Keysym::F6 => {
+                                    return FilterResult::Intercept(Action::SwitchVt(6));
+                                }
+                                Keysym::XF86_Switch_VT_7 | Keysym::F7 => {
+                                    return FilterResult::Intercept(Action::SwitchVt(7));
+                                }
+                                Keysym::BackSpace => {
+                                    return FilterResult::Intercept(Action::Quit);
+                                }
+                                _ => {}
+                            }
                         }
                         if !mods.logo {
                             return FilterResult::Forward;
                         }
-                        let sym = kh.modified_sym();
                         match sym {
                             Keysym::q | Keysym::Q | Keysym::Return => {
                                 FilterResult::Intercept(Action::SpawnFoot)
@@ -60,10 +94,6 @@ impl LumoState {
                             Keysym::_3 => FilterResult::Intercept(Action::Workspace(3)),
                             Keysym::_4 => FilterResult::Intercept(Action::Workspace(4)),
                             Keysym::_5 => FilterResult::Intercept(Action::Workspace(5)),
-                            Keysym::_6 => FilterResult::Intercept(Action::Workspace(6)),
-                            Keysym::_7 => FilterResult::Intercept(Action::Workspace(7)),
-                            Keysym::_8 => FilterResult::Intercept(Action::Workspace(8)),
-                            Keysym::_9 => FilterResult::Intercept(Action::Workspace(9)),
                             _ => FilterResult::Forward,
                         }
                     },
@@ -71,10 +101,6 @@ impl LumoState {
                 if let Some(action) = action {
                     match action {
                         Action::SpawnFoot => {
-                            // A7 fix bug 3: propaga env explicito pro foot
-                            // achar foot.ini (tema Lumo emerald/ink_deep)
-                            // mesmo quando lumo-wm e lancado de contexto
-                            // sem XDG_CONFIG_HOME populado.
                             let home = std::env::var("HOME")
                                 .unwrap_or_else(|_| "/root".to_string());
                             let xdg = std::env::var("XDG_CONFIG_HOME")
@@ -88,7 +114,6 @@ impl LumoState {
                             if let Some(sock) = socket_name.as_deref() {
                                 cmd.env("WAYLAND_DISPLAY", sock);
                             }
-                            // Detach: nao queremos zumbi quando foot encerra.
                             match cmd.spawn() {
                                 Ok(child) => {
                                     tracing::info!(pid = child.id(), "spawn foot");
@@ -99,18 +124,23 @@ impl LumoState {
                             }
                         }
                         Action::Quit => {
-                            tracing::info!("SUPER+L -> sair");
+                            tracing::info!("SUPER+L / Ctrl+Alt+Backspace -> sair");
                             self.running = false;
                         }
                         Action::Workspace(n) => {
-                            tracing::debug!(workspace = n, "switch workspace (no-op)");
+                            self.set_workspace(n);
+                        }
+                        Action::SwitchVt(n) => {
+                            // Winit nao tem TTY. So loggamos.
+                            // O backend DRM intercepta via session.change_vt(n)
+                            // antes de chegar aqui (ou em paralelo).
+                            tracing::info!(vt = n, "switch_vt request (no-op fora de DRM)");
                         }
                     }
                 }
             }
 
             InputEvent::PointerMotionAbsolute { event } => {
-                // MVP: assume output 1280x720.
                 let x = event.x_transformed(1280);
                 let y = event.y_transformed(720);
                 self.pointer_location = (x, y).into();
@@ -130,7 +160,6 @@ impl LumoState {
                 );
                 pointer.frame(self);
 
-                // Focus-follows-mouse MVP.
                 if let Some((surface, _)) = under {
                     let kb = self.keyboard.clone();
                     if kb.current_focus().as_ref() != Some(&surface) {

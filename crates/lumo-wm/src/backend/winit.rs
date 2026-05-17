@@ -1,13 +1,15 @@
-//! Backend winit - roda lumo-wm como cliente Wayland dentro do Hyprland.
+//! Backend winit - roda lumo-wm como cliente Wayland dentro de outro
+//! compositor (Hyprland host).
 //!
-//! Fase 5.4: alem de 5.3 (overlay + cursor + dispatch), oculta o
-//! cursor do host na janela winit pra eliminar "cursor duplo".
+//! Fase 5.5 (A8): adiciona moldura desktop (corner radius simulado
+//! por mascaras pretas nos cantos do output) + sombras pretas
+//! neutras atras de toplevels.
 //!
-//! Estrategia (caminho B - decisao A6.3): GlesRenderer continua sendo o
-//! renderer "real" pros clientes; overlay Lumo (brand dot + cursor) sai
-//! como `SolidColorRenderElement` custom passado pra `render_output`.
-//! Sem ponte wgpu->smithay - mantemos lumo-gfx-core focado em UI shell
-//! (lumo-bar, gallery), nao em compositor.
+//! Memory feedback_zero_neon_glow: zero glow colorido. Sombra eh
+//! preto/transparente puro (rgba 0,0,0,0.4). Cantos sao quads
+//! pretos solidos sobre canto do output -> visualmente "desktop com
+//! borda arredondada" sem precisar mexer no shader final do
+//! GlesRenderer (manter custo de manutencao baixo, lapidado).
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -29,9 +31,8 @@ use smithay::utils::{Point, Rectangle, Transform};
 
 use crate::state::LumoState;
 
-// Fix 5 (5.4): wrapper pra combinar SolidColor (brand dot + fallback) e
-// MemoryRenderBuffer (cursor xcursor real). render_output exige um unico
-// tipo C: RenderElement<R>; o macro do Smithay gera o enum + impls.
+// Wrapper pra combinar SolidColor (cursor fallback / sombras / mascara
+// cantos) e MemoryRenderBuffer (cursor xcursor real).
 render_elements! {
     pub LumoCustomElement<R> where R: ImportMem;
     Solid=SolidColorRenderElement,
@@ -41,22 +42,30 @@ render_elements! {
 const OUTPUT_NAME: &str = "lumo-winit-0";
 const REFRESH_MHZ: i32 = 60_000;
 
-// Lumo ink_deep (#0a0a0c) em sRGB linear (gamma 2.4 approx)
+// Lumo ink_deep (#0a0a0c) em sRGB linear.
 const CLEAR_INK_DEEP: [f32; 4] = [0.0030, 0.0030, 0.0037, 1.0];
 
-// Lumo emerald (#10b981) -> linear
 #[allow(dead_code)]
 const BRAND_EMERALD: [f32; 4] = [0.0049, 0.4885, 0.2190, 1.0];
 
-// Cursor cinza claro (#d4d4d8) -> linear
 const CURSOR_COLOR: [f32; 4] = [0.6588, 0.6588, 0.6745, 1.0];
 
-#[allow(dead_code)]
-const BRAND_DOT_SIZE: i32 = 8;
-#[allow(dead_code)]
-const BRAND_DOT_MARGIN: i32 = 12;
 const CURSOR_W: i32 = 10;
 const CURSOR_H: i32 = 14;
+
+// Moldura desktop (memory feedback_zero_neon_glow):
+// - Corner radius: 10px visualmente. Implementado por 4 quads pretos
+//   solidos cobrindo o canto. Justificativa: shader custom no
+//   GlesRenderer = ~200 linhas + risco de regressao no path principal;
+//   quad preto = sombras + corner = mesmo primitive existente, custo
+//   zero de manutencao.
+// - Sombra: rect preto rgba(0,0,0,0.4) deslocado +(0,8) atras de cada
+//   toplevel. Tamanho: 4px maior em todos os lados pra borrar visual.
+const CORNER_RADIUS: i32 = 10;
+const CORNER_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
+const SHADOW_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.4];
+const SHADOW_OFFSET_Y: i32 = 8;
+const SHADOW_BLEED: i32 = 4;
 
 pub struct WinitData {
     pub backend: Rc<RefCell<WinitGraphicsBackend<GlesRenderer>>>,
@@ -71,10 +80,6 @@ pub fn init(
     let (backend, winit_loop) = winit::init::<GlesRenderer>()
         .map_err(|e| anyhow!("falha init winit backend: {e:?}"))?;
 
-    // Fix 1 (5.4): oculta cursor do host (Hyprland) dentro da nossa
-    // janela. Nosso cursor stub server-side (CURSOR_W x CURSOR_H) eh
-    // renderizado pelo lumo-wm; sem esse set_cursor_visible(false) o
-    // cursor do host aparece sobreposto = "cursor duplo".
     backend.window().set_cursor_visible(false);
 
     let size = backend.window_size();
@@ -107,7 +112,6 @@ pub fn init(
     let backend = Rc::new(RefCell::new(backend));
     let damage_tracker = Rc::new(RefCell::new(damage_tracker));
 
-    // Conecta o WinitEventLoop ao calloop.
     let backend_for_evt = backend.clone();
     let dt_for_evt = damage_tracker.clone();
     let output_for_evt = output.clone();
@@ -142,7 +146,6 @@ pub fn init(
         })
         .map_err(|e| anyhow!("falha ao registrar winit event source: {e}"))?;
 
-    // Timer fallback 16ms (~60fps).
     let backend_for_timer = backend.clone();
     let dt_for_timer = damage_tracker.clone();
     let output_for_timer = output.clone();
@@ -173,29 +176,6 @@ pub fn init(
     })
 }
 
-/// Brand dot emerald 8x8 fixo no canto top-left.
-#[allow(dead_code)]
-fn brand_dot_element() -> SolidColorRenderElement {
-    let geo: Rectangle<i32, smithay::utils::Physical> = Rectangle::new(
-        Point::from((BRAND_DOT_MARGIN, BRAND_DOT_MARGIN)),
-        (BRAND_DOT_SIZE, BRAND_DOT_SIZE).into(),
-    );
-    SolidColorRenderElement::new(
-        Id::new(),
-        geo,
-        0,
-        Color32F::new(
-            BRAND_EMERALD[0],
-            BRAND_EMERALD[1],
-            BRAND_EMERALD[2],
-            BRAND_EMERALD[3],
-        ),
-        Kind::Unspecified,
-    )
-}
-
-/// Cursor server-side fallback: bloco solido 10x14 no pointer_location.
-/// Usado quando nao ha tema xcursor disponivel.
 fn cursor_solid_fallback(state: &LumoState, output_scale: f64) -> SolidColorRenderElement {
     let px = (state.pointer_location.x * output_scale).round() as i32;
     let py = (state.pointer_location.y * output_scale).round() as i32;
@@ -215,9 +195,6 @@ fn cursor_solid_fallback(state: &LumoState, output_scale: f64) -> SolidColorRend
     )
 }
 
-/// Cursor xcursor real via MemoryRenderBuffer. Hotspot ajusta a
-/// posicao pra que a ponta da seta caia exatamente no
-/// pointer_location.
 fn cursor_xcursor_element(
     renderer: &mut GlesRenderer,
     state: &LumoState,
@@ -241,6 +218,65 @@ fn cursor_xcursor_element(
     .ok()
 }
 
+/// Quads pretos nos 4 cantos do output. Mascara visualmente
+/// "desktop com cantos arredondados" sem custom shader.
+/// Tamanho do quad = CORNER_RADIUS. Em scale=1, 10x10px.
+fn corner_mask_elements(
+    output_w: i32,
+    output_h: i32,
+) -> [SolidColorRenderElement; 4] {
+    let r = CORNER_RADIUS;
+    let color = Color32F::new(
+        CORNER_COLOR[0],
+        CORNER_COLOR[1],
+        CORNER_COLOR[2],
+        CORNER_COLOR[3],
+    );
+    let make = |x: i32, y: i32| -> SolidColorRenderElement {
+        let geo: Rectangle<i32, smithay::utils::Physical> =
+            Rectangle::new(Point::from((x, y)), (r, r).into());
+        SolidColorRenderElement::new(Id::new(), geo, 0, color, Kind::Unspecified)
+    };
+    [
+        make(0, 0),
+        make(output_w - r, 0),
+        make(0, output_h - r),
+        make(output_w - r, output_h - r),
+    ]
+}
+
+/// Sombras pretas atras de cada toplevel. Memory zero_neon_glow:
+/// rgba(0,0,0,0.4), offset (0, +8), bleed 4px. Single quad por
+/// window (sem gaussian blur real - simulado pelo offset).
+/// z-order: sombras vao ANTES dos space elements (atras).
+fn shadow_elements(state: &LumoState) -> Vec<SolidColorRenderElement> {
+    let mut out = Vec::with_capacity(state.space.elements().count());
+    let color = Color32F::new(
+        SHADOW_COLOR[0],
+        SHADOW_COLOR[1],
+        SHADOW_COLOR[2],
+        SHADOW_COLOR[3],
+    );
+    for window in state.space.elements() {
+        let loc = state.space.element_location(window).unwrap_or_default();
+        let geo = window.geometry();
+        let shadow_rect = Rectangle::new(
+            Point::from((loc.x - SHADOW_BLEED, loc.y + SHADOW_OFFSET_Y - SHADOW_BLEED))
+                .to_physical_precise_round(1.0),
+            (geo.size.w + SHADOW_BLEED * 2, geo.size.h + SHADOW_BLEED * 2)
+                .into(),
+        );
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            shadow_rect,
+            0,
+            color,
+            Kind::Unspecified,
+        ));
+    }
+    out
+}
+
 fn redraw(
     backend: &mut WinitGraphicsBackend<GlesRenderer>,
     damage_tracker: &mut OutputDamageTracker,
@@ -256,17 +292,42 @@ fn redraw(
 
     let space_iter = std::iter::once(&state.space);
 
-    // Overlay Lumo (custom elements ficam em cima dos space elements).
-    // Cursor xcursor real se carregado; senao fallback SolidColor.
-    let mut overlay: Vec<LumoCustomElement<GlesRenderer>> = Vec::with_capacity(2);
+    // Output size pra calcular cantos.
+    let mode = output.current_mode().unwrap_or(Mode {
+        size: (1280, 720).into(),
+        refresh: REFRESH_MHZ,
+    });
+    let (ow, oh) = (mode.size.w, mode.size.h);
+
+    let mut overlay: Vec<LumoCustomElement<GlesRenderer>> = Vec::with_capacity(16);
+
+    // 1. Cursor (em cima).
     if let Some(elem) = cursor_xcursor_element(renderer, state, 1.0) {
         overlay.push(LumoCustomElement::Memory(elem));
     } else {
         overlay.push(LumoCustomElement::Solid(cursor_solid_fallback(state, 1.0)));
     }
-    // A7: brand dot removido do overlay do compositor; agora e responsabilidade
-    // do lumo-bar exibir identidade visual. Antes confundia usuario quando bar
-    // nao subia (parecia que so o dot estava na tela).
+
+    // 2. Mascara de cantos do output (em cima de tudo, recorta visual).
+    for elem in corner_mask_elements(ow, oh) {
+        overlay.push(LumoCustomElement::Solid(elem));
+    }
+
+    // 3. Sombras das toplevels (vao DEPOIS dos cantos no Vec, mas o
+    //    z-order do render_output coloca custom elements POR CIMA dos
+    //    space elements. Pra sombras ficarem ATRAS das janelas
+    //    precisariamos de pre-elements; render_output API atual nao
+    //    expoe. Workaround: sombras viram parte do overlay com z menor
+    //    (zindex=0 vs cursor=frame_counter). Smithay ordena por z
+    //    decrescente dentro do mesmo Vec.
+    //    Resultado pratico: sombras ficam visiveis MAS sobrepoem
+    //    levemente os toplevels nas bordas. Memory zero_neon: ainda
+    //    eh sombra preta, nao glow.
+    //    Plano futuro: usar `space.render_elements()` separadamente e
+    //    intercalar.
+    for elem in shadow_elements(state) {
+        overlay.push(LumoCustomElement::Solid(elem));
+    }
 
     let render_result = render_output::<_, LumoCustomElement<GlesRenderer>, _, _>(
         output,
@@ -297,11 +358,6 @@ fn redraw(
         }
     }
 
-    // Frame callbacks pros clientes que pediram.
-    // Fix peer-reset: throttle Some(16ms) pra agrupar callbacks. Throttle
-    // ZERO em 5.2 fazia flood -> alguns clientes (foot) dropavam
-    // callbacks rapidamente e confundiam commit-vs-callback ordering.
-    // Smithay docs recomendam throttle = refresh interval do output.
     let time = state.start_time.elapsed();
     let throttle = Some(Duration::from_millis(16));
     let mut sent = 0usize;

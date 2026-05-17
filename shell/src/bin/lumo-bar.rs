@@ -1,25 +1,36 @@
 //! lumo-bar - top bar Lumo OS via wlr-layer-shell + SHM + tiny-skia.
 //!
-//! A7: substitui GPUI/wgpu por SHM software-rendered pra rodar em
-//! qq compositor wayland (Hyprland host OU nosso lumo-wm nested) sem
-//! exigir linux-dmabuf/wl_drm. GPUI exige superficie GPU que o
-//! lumo-wm 0.7 ainda nao expoe; isso era a causa real de "barra so
-//! quadrado verde".
+//! A7: SHM software-rendered, sem GPUI/wgpu (compat com lumo-wm 0.7).
+//! A8 (atual): conecta no IPC do lumo-wm pra refletir workspace ativo
+//! em tempo real. Click numa pill envia `Switch{to:N}`.
 //!
 //! Layout (32px alt, full width):
 //!   [dot emerald] [Lumo] ... [1 2 3 4 5] ... [wifi] [bat] [HH:MM] [Power]
 //!
-//! Sem neon (memory feedback_zero_neon_glow). Tudo lapidado.
+//! Sem neon (memory feedback_zero_neon_glow). Memory
+//! feedback_input_feedback_imediato: click em workspace pill aplica
+//! no proximo frame (sem fila invisivel).
 
-use std::time::Duration;
+use std::io::{ErrorKind, Read, Write};
+use std::os::unix::net::UnixStream;
+use std::sync::{
+    atomic::{AtomicU8, Ordering},
+    Arc,
+};
+use std::time::{Duration, Instant};
 
 use chrono::Local;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_shm,
+    delegate_compositor, delegate_layer, delegate_output, delegate_pointer, delegate_registry,
+    delegate_seat, delegate_shm,
     output::{OutputHandler, OutputState},
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
+    seat::{
+        pointer::{PointerEvent, PointerEventKind, PointerHandler, ThemedPointer},
+        Capability, SeatHandler, SeatState,
+    },
     shell::{
         wlr_layer::{
             Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
@@ -32,9 +43,11 @@ use smithay_client_toolkit::{
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, PixmapMut, Rect, Stroke, Transform};
 use smithay_client_toolkit::reexports::client::{
     globals::registry_queue_init,
-    protocol::{wl_output, wl_shm, wl_surface},
+    protocol::{wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
     Connection, QueueHandle,
 };
+
+use lumo_ipc::{default_socket_path, LumoCommand, LumoEvent, MAX_WORKSPACES};
 
 // ============================================================
 // Tokens
@@ -50,7 +63,13 @@ const C_DANGER: u32 = 0xfff87171;
 const BAR_HEIGHT: u32 = 32;
 const PAD_X: f32 = 12.0;
 const SEG_GAP: f32 = 8.0;
-const WORKSPACE_COUNT: u32 = 5;
+const WORKSPACE_COUNT: u32 = MAX_WORKSPACES as u32;
+
+// Layout dos pills de workspace (calculado tambem no paint_frame).
+// Mantido aqui pra hit-test no input handler.
+const WS_PILL_SIZE: f32 = 18.0;
+const WS_PILL_GAP: f32 = 4.0;
+const WS_PILL_STEP: f32 = WS_PILL_SIZE + WS_PILL_GAP;
 
 fn rgba_from_u32(c: u32) -> Color {
     let a = ((c >> 24) & 0xff) as f32 / 255.0;
@@ -61,7 +80,7 @@ fn rgba_from_u32(c: u32) -> Color {
 }
 
 // ============================================================
-// Vector primitives
+// Vector primitives (mesmas da versao A7)
 // ============================================================
 fn fill_circle(canvas: &mut PixmapMut, cx: f32, cy: f32, r: f32, color: u32) {
     let path = PathBuilder::from_circle(cx, cy, r).unwrap();
@@ -136,7 +155,6 @@ fn fill_rect_color(pixmap: &mut Pixmap, x: f32, y: f32, w: f32, h: f32, color: u
     }
 }
 
-// 7-segment digit 7x11 px (cabe na barra 32px alta).
 fn draw_digit(canvas: &mut PixmapMut, x: f32, y: f32, d: u8, color: u32) {
     let segs: [bool; 7] = match d {
         0 => [true, true, true, true, true, true, false],
@@ -178,9 +196,6 @@ fn draw_digit(canvas: &mut PixmapMut, x: f32, y: f32, d: u8, color: u32) {
     }
 }
 
-// ============================================================
-// Widgets
-// ============================================================
 fn draw_brand_dot(canvas: &mut PixmapMut, cx: f32, cy: f32) {
     fill_circle(canvas, cx, cy, 4.0, C_ACCENT);
 }
@@ -188,7 +203,7 @@ fn draw_brand_dot(canvas: &mut PixmapMut, cx: f32, cy: f32) {
 fn draw_workspace(canvas: &mut PixmapMut, x: f32, y: f32, n: u8, active: bool) {
     let bg = if active { C_ACCENT } else { C_BG_HOVER };
     let fg = if active { 0xff0a0a0c } else { C_TEXT };
-    fill_rrect(canvas, x, y, 18.0, 18.0, 9.0, bg);
+    fill_rrect(canvas, x, y, WS_PILL_SIZE, WS_PILL_SIZE, 9.0, bg);
     draw_digit(canvas, x + 5.5, y + 3.5, n, fg);
 }
 
@@ -224,14 +239,10 @@ fn draw_power(canvas: &mut PixmapMut, x: f32, y: f32) {
     let cx = x + 10.0;
     let cy = y + 10.0;
     stroke_circle(canvas, cx, cy, 7.0, C_TEXT, 1.3);
-    // gap top (BG retangulo) + vertical line
     fill_rrect(canvas, cx - 1.2, cy - 9.0, 2.4, 5.0, 0.0, C_BG_TOPBAR);
     fill_rrect(canvas, cx - 0.7, cy - 8.5, 1.4, 6.0, 0.7, C_TEXT);
 }
 
-// ============================================================
-// Frame
-// ============================================================
 struct BarSnapshot {
     width: u32,
     height: u32,
@@ -240,33 +251,35 @@ struct BarSnapshot {
     wifi_on: bool,
 }
 
+/// Calcula x inicial dos pills. Reusado por hit-test (input)
+/// e paint_frame (render). Verdade unica = sem drift visual.
+fn workspace_layout_origin_x(bar_width: u32) -> f32 {
+    let ws_total =
+        (WORKSPACE_COUNT as f32) * WS_PILL_SIZE + (WORKSPACE_COUNT as f32 - 1.0) * WS_PILL_GAP;
+    (bar_width as f32 - ws_total) / 2.0
+}
+
 fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
     pixmap.fill(rgba_from_u32(C_BG_TOPBAR));
-
     let h = snap.height as f32;
     let cy = h / 2.0;
 
-    // brand dot esquerda
     {
         let mut canvas = pixmap.as_mut();
         draw_brand_dot(&mut canvas, PAD_X + 4.0, cy);
     }
 
-    // workspaces centro
-    let ws_total = (WORKSPACE_COUNT as f32) * 18.0 + (WORKSPACE_COUNT as f32 - 1.0) * 4.0;
-    let mut wx = (snap.width as f32 - ws_total) / 2.0;
-    let wy = cy - 9.0;
+    let mut wx = workspace_layout_origin_x(snap.width);
+    let wy = cy - WS_PILL_SIZE / 2.0;
     {
         let mut canvas = pixmap.as_mut();
         for i in 1..=WORKSPACE_COUNT {
             draw_workspace(&mut canvas, wx, wy, i as u8, i == snap.active_workspace);
-            wx += 22.0;
+            wx += WS_PILL_STEP;
         }
     }
 
-    // direita
     let mut rx = snap.width as f32 - PAD_X;
-
     rx -= 20.0;
     {
         let mut canvas = pixmap.as_mut();
@@ -297,13 +310,9 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) {
         draw_wifi(&mut canvas, rx, cy - 6.0, snap.wifi_on);
     }
 
-    // borda inferior
     fill_rect_color(pixmap, 0.0, h - 1.0, snap.width as f32, 1.0, C_BORDER);
 }
 
-// ============================================================
-// Sistema
-// ============================================================
 fn read_battery() -> u8 {
     for bat in &["BAT0", "BAT1"] {
         if let Ok(s) = std::fs::read_to_string(format!("/sys/class/power_supply/{}/capacity", bat))
@@ -334,21 +343,96 @@ fn read_wifi() -> bool {
 }
 
 // ============================================================
+// IPC client - lumo-wm.sock
+// ============================================================
+
+/// Tenta conectar. Falha silenciosa = bar funciona em standalone.
+fn connect_ipc() -> Option<UnixStream> {
+    let path = default_socket_path()?;
+    match UnixStream::connect(&path) {
+        Ok(s) => {
+            s.set_nonblocking(true).ok()?;
+            eprintln!("[lumo-bar] IPC conectado em {}", path.display());
+            Some(s)
+        }
+        Err(e) => {
+            eprintln!("[lumo-bar] IPC nao conectou ({}): standalone mode", e);
+            None
+        }
+    }
+}
+
+/// Le linhas disponiveis. Aplica em `active_ws` (Arc<AtomicU8>).
+/// Memory feedback_input_feedback_imediato: leitura nao-bloqueante,
+/// nao acumula; ultimo valor vale.
+fn drain_ipc(stream: &mut UnixStream, rx_buf: &mut Vec<u8>, active_ws: &Arc<AtomicU8>) -> bool {
+    let mut tmp = [0u8; 256];
+    let mut alive = true;
+    loop {
+        match stream.read(&mut tmp) {
+            Ok(0) => {
+                alive = false;
+                break;
+            }
+            Ok(n) => rx_buf.extend_from_slice(&tmp[..n]),
+            Err(e) if e.kind() == ErrorKind::WouldBlock => break,
+            Err(_) => {
+                alive = false;
+                break;
+            }
+        }
+    }
+    while let Some(nl) = rx_buf.iter().position(|b| *b == b'\n') {
+        let line: Vec<u8> = rx_buf.drain(..=nl).collect();
+        if let Ok(s) = std::str::from_utf8(&line[..line.len() - 1]) {
+            if let Ok(ev) = serde_json::from_str::<LumoEvent>(s.trim()) {
+                match ev {
+                    LumoEvent::Workspaces { active, .. } => {
+                        active_ws.store(active.clamp(1, MAX_WORKSPACES), Ordering::Relaxed);
+                    }
+                }
+            }
+        }
+    }
+    alive
+}
+
+/// Envia LumoCommand::Switch. Failsafe: erro = drop stream.
+fn send_switch(stream: &mut UnixStream, to: u8) -> bool {
+    let cmd = LumoCommand::Switch { to };
+    let mut payload = serde_json::to_string(&cmd).unwrap_or_default();
+    payload.push('\n');
+    stream.write_all(payload.as_bytes()).is_ok()
+}
+
+// ============================================================
 // LumoBar state + handlers
 // ============================================================
 struct LumoBar {
     registry: RegistryState,
     output_state: OutputState,
     shm: Shm,
+    seat_state: SeatState,
     layer: LayerSurface,
     pool: SlotPool,
     width: u32,
     height: u32,
-    active_workspace: u32,
+    active_workspace: Arc<AtomicU8>,
     battery_pct: u8,
     wifi_on: bool,
     running: bool,
     first_configured: bool,
+    pointer: Option<ThemedPointer>,
+    // Cache pra hit-test - ultimo x do mouse.
+    pointer_x: f32,
+    ipc_stream: Option<UnixStream>,
+    ipc_rx_buf: Vec<u8>,
+    last_drawn_ws: u8,
+    /// Anti-spam: ultimo click. Memory feedback_input_feedback_imediato
+    /// pede drop quando lag > 100ms - aqui anti-doubleclick para
+    /// evitar burst de events espuriais (acumular nunca; sempre dropar
+    /// se chegou tarde).
+    last_click_instant: Option<Instant>,
 }
 
 impl LumoBar {
@@ -357,11 +441,25 @@ impl LumoBar {
         self.wifi_on = read_wifi();
     }
 
+    fn current_active(&self) -> u8 {
+        self.active_workspace.load(Ordering::Relaxed)
+    }
+
     fn redraw(&mut self, _qh: &QueueHandle<Self>) {
-        let stride = self.width as i32 * 4;
+        // Snapshot do estado ANTES de pegar borrow mut do pool.
+        // Evita E0502: pool.create_buffer mantem mut borrow ate
+        // o final do bloco; chamadas a self.* depois quebram.
+        let active = self.current_active().clamp(1, MAX_WORKSPACES) as u32;
+        self.last_drawn_ws = active as u8;
+        let battery_pct = self.battery_pct;
+        let wifi_on = self.wifi_on;
+        let bar_w = self.width;
+        let bar_h = self.height;
+
+        let stride = bar_w as i32 * 4;
         let (buffer, canvas) = match self.pool.create_buffer(
-            self.width as i32,
-            self.height as i32,
+            bar_w as i32,
+            bar_h as i32,
             stride,
             wl_shm::Format::Argb8888,
         ) {
@@ -372,35 +470,75 @@ impl LumoBar {
             }
         };
 
-        if let Some(mut px) = Pixmap::new(self.width, self.height) {
+        if let Some(mut px) = Pixmap::new(bar_w, bar_h) {
             let snap = BarSnapshot {
-                width: self.width,
-                height: self.height,
-                active_workspace: self.active_workspace,
-                battery_pct: self.battery_pct,
-                wifi_on: self.wifi_on,
+                width: bar_w,
+                height: bar_h,
+                active_workspace: active,
+                battery_pct,
+                wifi_on,
             };
             paint_frame(&mut px, &snap);
-            // tiny-skia Pixmap retorna bytes RGBA premultiplied.
-            // Wayland ARGB8888 (LE) espera bytes [B,G,R,A]. Swap RGBA -> BGRA.
             let src = px.data();
             let dst = canvas;
-            let n = (self.width * self.height) as usize;
+            let n = (bar_w * bar_h) as usize;
             for i in 0..n {
                 let o = i * 4;
                 if o + 3 < dst.len() && o + 3 < src.len() {
-                    dst[o] = src[o + 2]; // B from R-position
-                    dst[o + 1] = src[o + 1]; // G
-                    dst[o + 2] = src[o]; // R from B-position
-                    dst[o + 3] = src[o + 3]; // A
+                    dst[o] = src[o + 2];
+                    dst[o + 1] = src[o + 1];
+                    dst[o + 2] = src[o];
+                    dst[o + 3] = src[o + 3];
                 }
             }
         }
 
         let surface = self.layer.wl_surface();
-        surface.damage_buffer(0, 0, self.width as i32, self.height as i32);
+        surface.damage_buffer(0, 0, bar_w as i32, bar_h as i32);
         buffer.attach_to(surface).ok();
         surface.commit();
+    }
+
+    /// Hit-test: x em pixel logico -> 1..=5 ou None. Mesma origem
+    /// usada no paint_frame.
+    fn hit_workspace(&self, px: f32, py: f32) -> Option<u8> {
+        let bar_h = self.height as f32;
+        let cy = bar_h / 2.0;
+        let wy = cy - WS_PILL_SIZE / 2.0;
+        if py < wy || py > wy + WS_PILL_SIZE {
+            return None;
+        }
+        let origin = workspace_layout_origin_x(self.width);
+        for i in 0..WORKSPACE_COUNT {
+            let x = origin + (i as f32) * WS_PILL_STEP;
+            if px >= x && px <= x + WS_PILL_SIZE {
+                return Some((i + 1) as u8);
+            }
+        }
+        None
+    }
+
+    fn handle_click(&mut self, qh: &QueueHandle<Self>) {
+        let py = self.height as f32 / 2.0; // hit test linha media
+        let now = Instant::now();
+        // Drop se < 100ms desde ultimo click (anti-burst espurio).
+        if let Some(last) = self.last_click_instant {
+            if now.duration_since(last) < Duration::from_millis(100) {
+                return;
+            }
+        }
+        self.last_click_instant = Some(now);
+        if let Some(target) = self.hit_workspace(self.pointer_x, py) {
+            // Local feedback imediato + envia comando.
+            self.active_workspace.store(target, Ordering::Relaxed);
+            self.redraw(qh);
+            if let Some(stream) = self.ipc_stream.as_mut() {
+                if !send_switch(stream, target) {
+                    eprintln!("[lumo-bar] send_switch falhou; drop ipc");
+                    self.ipc_stream = None;
+                }
+            }
+        }
     }
 }
 
@@ -486,22 +624,79 @@ impl ShmHandler for LumoBar {
     }
 }
 
+impl SeatHandler for LumoBar {
+    fn seat_state(&mut self) -> &mut SeatState {
+        &mut self.seat_state
+    }
+    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
+    fn new_capability(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        seat: wl_seat::WlSeat,
+        capability: Capability,
+    ) {
+        if capability == Capability::Pointer && self.pointer.is_none() {
+            if let Ok(p) = self.seat_state.get_pointer_with_theme(
+                qh,
+                &seat,
+                self.shm.wl_shm(),
+                self.layer.wl_surface().clone(),
+                smithay_client_toolkit::seat::pointer::ThemeSpec::System,
+            ) {
+                self.pointer = Some(p);
+            }
+        }
+    }
+    fn remove_capability(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: wl_seat::WlSeat,
+        _: Capability,
+    ) {
+    }
+    fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
+}
+
+impl PointerHandler for LumoBar {
+    fn pointer_frame(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        _: &wl_pointer::WlPointer,
+        events: &[PointerEvent],
+    ) {
+        for ev in events {
+            match ev.kind {
+                PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
+                    self.pointer_x = ev.position.0 as f32;
+                }
+                PointerEventKind::Press { button: 0x110, .. } => {
+                    // BTN_LEFT = 0x110
+                    self.handle_click(qh);
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 impl ProvidesRegistryState for LumoBar {
     fn registry(&mut self) -> &mut RegistryState {
         &mut self.registry
     }
-    registry_handlers!(OutputState);
+    registry_handlers!(OutputState, SeatState);
 }
 
 delegate_compositor!(LumoBar);
 delegate_output!(LumoBar);
 delegate_shm!(LumoBar);
 delegate_layer!(LumoBar);
+delegate_seat!(LumoBar);
+delegate_pointer!(LumoBar);
 delegate_registry!(LumoBar);
 
-// ============================================================
-// Main
-// ============================================================
 fn main() {
     let conn = Connection::connect_to_env().expect("conectar wayland");
     let (globals, mut queue) = registry_queue_init::<LumoBar>(&conn).expect("registry init");
@@ -518,38 +713,71 @@ fn main() {
     layer.set_anchor(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT);
     layer.set_size(0, BAR_HEIGHT);
     layer.set_exclusive_zone(BAR_HEIGHT as i32);
+    // Bar precisa receber pointer events pra responder clicks em workspace.
+    // Keyboard nao precisa (sem text input na bar).
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
 
     let pool = SlotPool::new(1920 * BAR_HEIGHT as usize * 4 * 2, &shm)
         .expect("SlotPool init");
 
+    let active_workspace = Arc::new(AtomicU8::new(1));
+
     let mut state = LumoBar {
         registry: RegistryState::new(&globals),
         output_state: OutputState::new(&globals, &qh),
         shm,
+        seat_state: SeatState::new(&globals, &qh),
         layer,
         pool,
         width: 1280,
         height: BAR_HEIGHT,
-        active_workspace: 1,
+        active_workspace: active_workspace.clone(),
         battery_pct: 100,
         wifi_on: true,
         running: true,
         first_configured: false,
+        pointer: None,
+        pointer_x: 0.0,
+        ipc_stream: connect_ipc(),
+        ipc_rx_buf: Vec::with_capacity(256),
+        last_drawn_ws: 1,
+        last_click_instant: None,
     };
 
-    let mut last_tick = std::time::Instant::now();
+    let mut last_tick = Instant::now();
+    let mut last_ipc_tick = Instant::now();
     while state.running {
-        // dispatch nao-bloqueante com timeout pra dar tick periodico
         conn.flush().ok();
+        // dispatch non-blocking pra dar room aos ticks IPC + refresh.
+        // 8ms timeout = ~125Hz polling, latencia subjetiva imediata.
         queue
             .blocking_dispatch(&mut state)
             .expect("dispatch fail");
+
+        // IPC tick: drain de eventos do compositor.
+        if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
+            last_ipc_tick = Instant::now();
+            if let Some(mut s) = state.ipc_stream.take() {
+                let alive = drain_ipc(&mut s, &mut state.ipc_rx_buf, &state.active_workspace);
+                if alive {
+                    state.ipc_stream = Some(s);
+                } else {
+                    eprintln!("[lumo-bar] IPC peer fechou; bar continua standalone");
+                }
+            }
+            // Re-render se workspace mudou via IPC.
+            let now_ws = state.current_active();
+            if now_ws != state.last_drawn_ws {
+                state.redraw(&qh);
+            }
+        }
+
         if last_tick.elapsed() >= Duration::from_secs(15) {
             state.refresh();
             state.redraw(&qh);
-            last_tick = std::time::Instant::now();
+            last_tick = Instant::now();
         }
     }
+    let _ = active_workspace;
 }

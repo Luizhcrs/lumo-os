@@ -11,6 +11,22 @@ path = "src/lib.rs"
 name = "lumo-wm"
 path = "src/bin/lumo-wm.rs"
 
+[features]
+default = []
+# Backend DRM/KMS (TTY direto, fullscreen). Opt-in pra nao
+# pesar build padrao (winit-only); precisa de libseat,
+# libinput, libudev no sistema.
+drm-backend = [
+    "smithay/backend_drm",
+    "smithay/backend_gbm",
+    "smithay/backend_libinput",
+    "smithay/backend_session_libseat",
+    "smithay/backend_udev",
+    "dep:input",
+    "dep:libseat",
+    "dep:udev",
+]
+
 [dependencies]
 smithay = { version = "0.7", default-features = false, features = [
     "backend_winit",
@@ -23,3 +39,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
 xcursor = "0.3"
+lumo-ipc = { path = "../lumo-ipc" }
+
+# DRM backend optional deps (so puxados com --features drm-backend).
+input = { version = "0.9", default-features = false, features = ["libinput_1_19"], optional = true }
+libseat = { version = "0.2", default-features = false, optional = true }
+udev = { version = "0.9", optional = true }

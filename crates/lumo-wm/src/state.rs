@@ -1,14 +1,18 @@
 //! LumoState - top-level compositor state for lumo-wm.
 //!
-//! Fase 5.2: alem do esqueleto da 5.1 agora carregamos:
-//! - layer_shell_state (pra futuros lumo-bar + status surfaces)
-//! - primary_selection_state (Ctrl+Shift+C / middle-click paste)
-//! - xdg_activation_state (request_activation entre apps)
-//! - fractional_scale_manager_state (stub scale=1)
-//! - cursor_shape_manager_state (stub - cursor server-side vira depois)
-//! - xdg_toplevel_icon_manager (stub)
+//! Fase 5.4+: alem do esqueleto da 5.1/5.2/5.3:
+//! - layer_shell_state, primary_selection_state, xdg_activation_state,
+//!   fractional_scale_manager_state, cursor_shape_manager_state,
+//!   xdg_toplevel_icon_manager
 //! - PopupManager pra ciclo de vida dos popups xdg
-//! - estado de input (pointer pos, foco, layout horizontal de janelas)
+//! - estado de input (pointer pos, foco, layout horizontal)
+//! - cursor xcursor real (Adwaita/default) com MemoryRenderBuffer
+//!
+//! Fase 5.5 (A8):
+//! - servidor IPC (`crate::ipc`) acoplado em `ipc: IpcServer`
+//! - estado de workspace ativo (`active_workspace`)
+//! - `handle_ipc_command` aplicando comandos do canal IPC
+//! - `set_workspace` faz broadcast a cada troca
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -34,6 +38,10 @@ use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xdg_activation::XdgActivationState;
 use smithay::wayland::xdg_toplevel_icon::XdgToplevelIconManager;
 
+use lumo_ipc::{LumoCommand, MAX_WORKSPACES};
+
+use crate::ipc::IpcServer;
+
 /// Estado raiz do Lumo WM.
 pub struct LumoState {
     pub start_time: Instant,
@@ -52,7 +60,7 @@ pub struct LumoState {
     pub seat_state: SeatState<Self>,
     pub data_device_state: DataDeviceState,
 
-    // Fase 5.2: novos protocols
+    // Fase 5.2: protocols extras
     pub layer_shell_state: WlrLayerShellState,
     pub primary_selection_state: PrimarySelectionState,
     pub xdg_activation_state: XdgActivationState,
@@ -71,18 +79,19 @@ pub struct LumoState {
     pub space: Space<Window>,
     pub popups: PopupManager,
 
-    // Frame counter pra invalidar SolidColorRenderElements (ex: cursor que se move).
+    // Frame counter pra invalidar SolidColorRenderElements.
     pub frame_counter: u64,
 
-    // Fix 5 (5.4): cursor xcursor real (Adwaita/default). Some(...) se um
-    // tema foi achado e parseado; None mantem fallback SolidColor stub.
+    // Cursor xcursor real (fase 5.4).
     pub cursor: Option<crate::cursor::LoadedCursor>,
-
-    // MemoryRenderBuffer pre-criado com pixels do xcursor. None se nao
-    // carregou. Compartilhado entre frames pra reutilizar upload de
-    // textura no GPU (Smithay faz upload lazy + damage tracking).
     pub cursor_buffer:
         Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
+
+    // Fase 5.5 (A8): IPC + workspaces.
+    pub ipc: IpcServer,
+    /// Workspace ativo no instante atual. 1..=MAX_WORKSPACES.
+    /// Default = 1 no startup.
+    pub active_workspace: u8,
 }
 
 impl LumoState {
@@ -101,7 +110,6 @@ impl LumoState {
         let mut seat_state = SeatState::new();
         let data_device_state = DataDeviceState::new::<Self>(&display_handle);
 
-        // Fase 5.2 protocols
         let layer_shell_state = WlrLayerShellState::new::<Self>(&display_handle);
         let primary_selection_state = PrimarySelectionState::new::<Self>(&display_handle);
         let xdg_activation_state = XdgActivationState::new::<Self>(&display_handle);
@@ -111,7 +119,6 @@ impl LumoState {
         let xdg_toplevel_icon_manager =
             XdgToplevelIconManager::new::<Self>(&display_handle);
 
-        // Fix 5: tenta carregar cursor xcursor real. Falha = stub.
         let cursor = crate::cursor::try_load_first_available(24);
         let cursor_buffer = cursor.as_ref().map(|c| {
             use smithay::backend::allocator::Fourcc;
@@ -161,6 +168,8 @@ impl LumoState {
             frame_counter: 0,
             cursor,
             cursor_buffer,
+            ipc: IpcServer::default(),
+            active_workspace: 1,
         }
     }
 
@@ -180,11 +189,40 @@ impl LumoState {
         None
     }
 
-    /// Calcula proxima posicao de tile horizontal. MVP: 620px de passo,
-    /// y fixo 40.
+    /// Calcula proxima posicao de tile horizontal. MVP.
     pub fn next_tile_position(&self) -> Point<i32, Logical> {
         let count = self.space.elements().count() as i32;
         ((count * 620).min(1280 - 600), 40).into()
+    }
+
+    /// Aplica comando recebido via IPC. Centraliza
+    /// dispatch pra facilitar adicionar acoes novas
+    /// (LumoCommand variantes).
+    pub fn handle_ipc_command(&mut self, cmd: LumoCommand) {
+        match cmd {
+            LumoCommand::Switch { to } => {
+                self.set_workspace(to);
+            }
+        }
+    }
+
+    /// Troca workspace ativo. Validacao + broadcast IPC.
+    /// Memory feedback_input_feedback_imediato: aplicar no
+    /// proximo frame (state muda; redraw da bar acontece no
+    /// proprio compositor + lumo-bar reage ao broadcast).
+    pub fn set_workspace(&mut self, to: u8) {
+        if !(1..=MAX_WORKSPACES).contains(&to) {
+            tracing::warn!(to, "workspace fora do range, ignorado");
+            return;
+        }
+        if to == self.active_workspace {
+            return;
+        }
+        let prev = self.active_workspace;
+        self.active_workspace = to;
+        tracing::info!(prev, current = to, "switch workspace");
+        let ev = IpcServer::workspaces_event(self.active_workspace, MAX_WORKSPACES);
+        self.ipc.broadcast(&ev);
     }
 }
 

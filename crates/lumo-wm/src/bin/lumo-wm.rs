@@ -1,12 +1,9 @@
 //! lumo-wm entry point - inicia Wayland display, socket nested,
-//! backend winit, registra handlers e roda event loop.
+//! IPC unix socket, backend (winit OU drm via env LUMO_WM_BACKEND),
+//! registra handlers e roda event loop.
 //!
-//! Fase 5.3: dispatch_clients periodico via timer pra evitar
-//! peer-reset em clientes idle. Antes o dispatch so rodava apos um
-//! event source disparar - clientes que enviavam request enquanto o
-//! loop estava em sleep ficavam pendentes ate o proximo evento.
-//! Agora um Timer 4ms forca `dispatch_clients + flush_clients`,
-//! cortando latencia de protocolo.
+//! Fase 5.5 (A8): seleciona backend por env. DRM precisa feature
+//! `drm-backend` no build; winit eh sempre o default seguro.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -19,6 +16,23 @@ use smithay::reexports::wayland_server::Display;
 
 use lumo_wm::{init_socket, LumoState};
 
+#[derive(Debug, Clone, Copy)]
+enum BackendChoice {
+    Winit,
+    Drm,
+}
+
+fn pick_backend() -> BackendChoice {
+    match std::env::var("LUMO_WM_BACKEND").as_deref() {
+        Ok("drm") => BackendChoice::Drm,
+        Ok("winit") | Err(_) => BackendChoice::Winit,
+        Ok(other) => {
+            tracing::warn!(value = other, "LUMO_WM_BACKEND desconhecido, usando winit");
+            BackendChoice::Winit
+        }
+    }
+}
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -27,8 +41,10 @@ fn main() -> Result<()> {
         )
         .init();
 
+    let backend = pick_backend();
     tracing::info!(
-        "Lumo WM 0.1.0 - Fase 5.4 (cursor unico + SUPER keybinds + lumo-bar configure)"
+        "Lumo WM 0.1.0 - Fase 5.5 (A8: DRM backend + IPC + moldura) backend={:?}",
+        backend
     );
 
     let mut event_loop: EventLoop<'static, LumoState> = EventLoop::try_new()?;
@@ -38,32 +54,58 @@ fn main() -> Result<()> {
     let socket_name = match init_socket(&event_loop.handle(), &display_handle) {
         Ok(name) => Some(name),
         Err(err) => {
-            tracing::warn!(?err, "Falha ao abrir socket; rodando sem socket publico");
+            tracing::warn!(?err, "Falha ao abrir socket Wayland; rodando sem");
             None
         }
     };
-
     if let Some(s) = socket_name.as_ref() {
-        tracing::info!(socket = %s, "Lumo WM aceitando clientes Wayland em WAYLAND_DISPLAY={}", s);
+        tracing::info!(socket = %s, "Wayland socket: WAYLAND_DISPLAY={}", s);
     }
 
     let mut state = LumoState::new(display_handle, event_loop.handle(), socket_name.clone());
 
-    let _winit_data = lumo_wm::backend::winit::init(event_loop.handle(), &mut state)?;
+    // IPC socket: best-effort. Falha = avisa e continua sem.
+    match lumo_wm::ipc::init(event_loop.handle()) {
+        Ok(ipc) => {
+            state.ipc = ipc;
+        }
+        Err(err) => {
+            tracing::warn!(?err, "IPC desativado");
+        }
+    }
+
+    // Backend dispatch.
+    match backend {
+        BackendChoice::Winit => {
+            let _winit_data = lumo_wm::backend::winit::init(event_loop.handle(), &mut state)?;
+        }
+        BackendChoice::Drm => {
+            #[cfg(feature = "drm-backend")]
+            {
+                lumo_wm::backend::drm::run(&mut event_loop, &mut state)?;
+                // run() bloqueia tudo; em DRM o proprio backend
+                // orquestra o event loop. Saimos aqui depois.
+                tracing::info!("Lumo WM saiu do backend DRM");
+                return Ok(());
+            }
+            #[cfg(not(feature = "drm-backend"))]
+            {
+                anyhow::bail!(
+                    "LUMO_WM_BACKEND=drm pediu DRM backend mas binario nao foi compilado \
+                     com --features drm-backend. Rebuild: cargo build --release \
+                     --features drm-backend --bin lumo-wm"
+                );
+            }
+        }
+    }
 
     if let Some(s) = socket_name.as_ref() {
         std::env::set_var("WAYLAND_DISPLAY", s);
     }
 
-    // Display em Rc<RefCell<...>> pra compartilhar entre o timer de
-    // dispatch + o callback do event_loop.
     let display = Rc::new(RefCell::new(display));
 
-    // Timer pra dispatch_clients periodico (4ms = 250Hz). Garante
-    // que requests/responses Wayland fluem mesmo quando nao tem
-    // events na fila (calloop em sleep aguardando timer maior).
-    // Sem isso clientes idle podem disparar timeout interno e
-    // bater "Connection reset by peer" no compositor.
+    // Timer 4ms: dispatch Wayland + tick IPC.
     let display_for_timer = display.clone();
     event_loop
         .handle()
@@ -78,6 +120,9 @@ fn main() -> Result<()> {
                     tracing::warn!(?err, "dispatch_clients periodico falhou");
                 }
                 let _ = d.flush_clients();
+                drop(d);
+                // Tick IPC (drain read+write de clients).
+                lumo_wm::ipc::tick(state);
                 TimeoutAction::ToDuration(Duration::from_millis(4))
             },
         )
@@ -92,6 +137,11 @@ fn main() -> Result<()> {
         let _ = d.dispatch_clients(state);
         let _ = d.flush_clients();
     })?;
+
+    // Cleanup socket IPC.
+    if let Some(path) = state.ipc.socket_path.take() {
+        let _ = std::fs::remove_file(path);
+    }
 
     tracing::info!("Lumo WM saindo");
     Ok(())
