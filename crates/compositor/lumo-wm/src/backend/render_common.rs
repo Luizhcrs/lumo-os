@@ -64,6 +64,11 @@ pub const CURSOR_H: i32 = 14;
 // `lumo_foundation::corner_mask_color_linear()` runtime.
 pub const CORNER_RADIUS: i32 = 10;
 
+/// Radius dos cantos de cada toplevel (A37). Quads pintados com cor
+/// do background cobrem os cantos da janela, simulando borda arredondada.
+/// Valor 12px.
+pub const CORNER_RADIUS_WINDOW: i32 = 12;
+
 /// Cor da mascara de cantos. Runtime (le tema corrente) — necessario
 /// porque const eval nao consegue chamar `current_colors()`. Custo
 /// desprezivel (4 mults + env lookup por frame, igual `clear_color_linear`).
@@ -200,6 +205,44 @@ pub fn shadow_elements(space: &Space<Window>) -> Vec<SolidColorRenderElement> {
     out
 }
 
+/// Quads pintados na cor do background sobre os 4 cantos de cada toplevel.
+/// Simula corner radius sem shader customizado (A37 Opcao A).
+/// Lista front->back: inserir ANTES do Space (z-order acima do toplevel).
+pub fn window_corner_elements(space: &Space<Window>) -> Vec<SolidColorRenderElement> {
+    let r = CORNER_RADIUS_WINDOW;
+    let cc = corner_color();
+    let color = Color32F::new(cc[0], cc[1], cc[2], cc[3]);
+    let mut out = Vec::with_capacity(space.elements().count() * 4);
+    for window in space.elements() {
+        let loc = space.element_location(window).unwrap_or_default();
+        let geo = window.geometry();
+        let x = loc.x;
+        let y = loc.y;
+        let w = geo.size.w;
+        let h = geo.size.h;
+        let corners = [
+            (x, y),
+            (x + w - r, y),
+            (x, y + h - r),
+            (x + w - r, y + h - r),
+        ];
+        for (cx, cy) in corners {
+            let rect = Rectangle::new(
+                Point::from((cx, cy)).to_physical_precise_round(1.0),
+                (r, r).into(),
+            );
+            out.push(SolidColorRenderElement::new(
+                Id::new(),
+                rect,
+                0,
+                color,
+                Kind::Unspecified,
+            ));
+        }
+    }
+    out
+}
+
 /// Args agrupados pra build_overlay -- evita conflito de borrow
 /// quando o caller ja tem &mut em outro campo de LumoState.
 pub struct OverlayInputs<'a> {
@@ -246,6 +289,11 @@ pub fn build_overlay(
 
     // 3. Sombras das toplevels.
     for elem in shadow_elements(inputs.space) {
+        overlay.push(LumoCustomElement::Solid(elem));
+    }
+
+    // 4. Corner radius: quads sobre cantos de cada toplevel.
+    for elem in window_corner_elements(inputs.space) {
         overlay.push(LumoCustomElement::Solid(elem));
     }
 
@@ -311,6 +359,11 @@ pub fn collect_drm_elements(
 
     // 3. Sombras pretas atras das toplevels.
     for elem in shadow_elements(inputs.space) {
+        out.push(LumoCustomElement::Solid(elem));
+    }
+
+    // 3b. Corner radius sobre cantos dos toplevels.
+    for elem in window_corner_elements(inputs.space) {
         out.push(LumoCustomElement::Solid(elem));
     }
 
@@ -388,6 +441,11 @@ pub fn build_winit_elements(
 
     // 3. Sombras pretas.
     for elem in shadow_elements(inputs.space) {
+        out.push(LumoCustomElement::Solid(elem));
+    }
+
+    // 3b. Corner radius sobre cantos dos toplevels.
+    for elem in window_corner_elements(inputs.space) {
         out.push(LumoCustomElement::Solid(elem));
     }
 

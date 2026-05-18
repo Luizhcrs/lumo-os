@@ -1,6 +1,7 @@
 //! xdg_shell delegate - top-level windows + popups.
 
 use smithay::desktop::{PopupKind, Window};
+use smithay::input::pointer::{Focus, GrabStartData};
 use smithay::reexports::wayland_server::protocol::wl_seat::WlSeat;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::Serial;
@@ -9,6 +10,7 @@ use smithay::wayland::shell::xdg::{
     PopupSurface, PositionerState, ToplevelSurface, XdgShellHandler, XdgShellState,
 };
 
+use crate::input::move_grab::MoveSurfaceGrab;
 use crate::state::LumoState;
 
 impl XdgShellHandler for LumoState {
@@ -72,6 +74,48 @@ impl XdgShellHandler for LumoState {
             state.positioner = positioner;
         });
         surface.send_repositioned(token);
+    }
+
+    fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, serial: Serial) {
+        // Localiza Window correspondente ao toplevel no espaco.
+        let window = self
+            .space
+            .elements()
+            .find(|w| w.toplevel().map(|t| t == &surface).unwrap_or(false))
+            .cloned();
+
+        let window = match window {
+            Some(w) => w,
+            None => return,
+        };
+
+        let initial_window_location = self
+            .space
+            .element_location(&window)
+            .unwrap_or_default();
+
+        // Constroi GrabStartData com estado atual do pointer.
+        let pointer = self.pointer.clone();
+        let start_data = GrabStartData {
+            focus: pointer.current_focus().map(|s| {
+                let loc = self
+                    .surface_under(self.pointer_location)
+                    .map(|(_, l)| l.to_f64())
+                    .unwrap_or_default();
+                (s, loc)
+            }),
+            button: 0x110, // BTN_LEFT
+            location: self.pointer_location,
+        };
+
+        let grab = MoveSurfaceGrab {
+            start_data,
+            window,
+            initial_window_location,
+        };
+
+        pointer.set_grab(self, grab, serial, Focus::Clear);
+        tracing::debug!("move_request: grab iniciado serial={:?}", serial);
     }
 }
 

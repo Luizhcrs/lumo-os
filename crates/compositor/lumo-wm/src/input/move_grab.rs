@@ -5,14 +5,14 @@
 //! o inicio do grab e reposiciona o Window no Space.
 //! Libera o grab quando o botao que iniciou eh solto.
 
-use smithay::desktop::{Space, Window};
+use smithay::desktop::Window;
 use smithay::input::pointer::{
     AxisFrame, ButtonEvent, GestureHoldBeginEvent, GestureHoldEndEvent,
     GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent,
     GestureSwipeBeginEvent, GestureSwipeEndEvent, GestureSwipeUpdateEvent,
     GrabStartData, MotionEvent, PointerGrab, PointerInnerHandle, RelativeMotionEvent,
 };
-use smithay::input::{pointer::Focus, SeatHandler};
+use smithay::input::pointer::Focus;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point};
 
@@ -167,5 +167,10 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
 
     fn start_data(&self) -> &GrabStartData<LumoState> {
         &self.start_data
+    }
+
+    fn unset(&mut self, _data: &mut LumoState) {
+        // No-op: nada precisa reverter quando grab termina (Space mantem
+        // ultima posicao mapeada pelo motion).
     }
 }
