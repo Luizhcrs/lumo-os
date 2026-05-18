@@ -2,24 +2,21 @@
 //! na area de trabalho (estilo macOS Finder / Windows desktop).
 //!
 //! A21: novo binario.
+//! A25: menu visual alinhado com pill bar (transparencia, sem sombra,
+//! altura exata, hover wash accent_subtle, font 13px Geist/JetBrains).
 //!
 //! Comportamento:
-//!   - Layer::Background full-screen (1920x1080 Galaxy), atras de
-//!     toplevels e da bar.
-//!   - Surface 100% transparente: nao desenha NADA quando menu fechado;
-//!     wallpaper do compositor aparece atraves.
+//!   - Layer::Background full-screen (1920x1080 Galaxy).
+//!   - Surface 100% transparente quando menu fechado.
 //!   - Click esquerdo em area vazia: envia LumoCommand::CloseDropdowns
-//!     pelo socket IPC. Compositor traduz em LumoEvent::CloseDropdowns
-//!     pra bar.
-//!   - Click direito: abre menu contextual rrect 200x180 com 3 items
-//!     (Configuracoes / Trocar wallpaper / Sobre Lumo). Outro click
-//!     esquerdo fecha o menu.
-//!   - Toplevels (foot/firefox) e bar (Layer::Top) vem POR CIMA: clicks
-//!     neles sao roteados normal pelo compositor antes de chegar aqui.
+//!     pelo socket IPC -> compositor traduz em LumoEvent::CloseDropdowns
+//!     pra bar (A25 frente 2).
+//!   - Click direito: abre menu contextual estilo pill bar com 3 items
+//!     (Configuracoes / Trocar wallpaper / Sobre Lumo).
 //!
-//! Memory feedback_zero_neon_glow: menu com sombra preta neutra, sem
-//! glow accent. Memory feedback_design_lapidado: cada constante com
-//! justificativa abaixo.
+//! Memory feedback_zero_neon_glow: zero sombra colorida, zero glow.
+//! Bar pills A19.12 nao tem sombra; menu segue mesma decisao A25.
+//! Memory feedback_design_lapidado: cada constante com justificativa.
 
 use std::io::{ErrorKind, Write};
 use std::os::unix::net::UnixStream;
@@ -59,62 +56,140 @@ use smithay_client_toolkit::reexports::client::{
 };
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, PixmapMut, Transform};
 
+use lumo_foundation::{current_colors, LumoColors};
 use lumo_ipc::{default_socket_path, LumoCommand};
 
 // ============================================================
-// Layout constants (lapidado).
+// Layout constants A25 (lapidado, alinhado com pill bar).
 // ============================================================
 
-/// Output Galaxy nativo. Default + fallback caso configure callback
-/// nao traga size cedo (DEPS.md A19.18: bar tem mesmo padrao).
+/// Output Galaxy nativo (DEPS.md A19.18 mesmo padrao bar).
 const OUTPUT_W: u32 = 1920;
 const OUTPUT_H: u32 = 1080;
 
-/// Menu contextual.
-/// Largura 200 = cabe os 3 textos curtos com folga (FONT 13 + pad 16).
-const MENU_W: f32 = 200.0;
-/// Altura 180 = 3 rows 40px + header 14 + bottom 16 + margem visual.
-const MENU_H: f32 = 180.0;
-/// Border-radius. 12 = consistencia com pill (14) mas mais discreto.
-const MENU_RADIUS: f32 = 12.0;
-/// Padding interno horizontal. 16 = respiracao Apple-grade.
-const MENU_PAD_X: f32 = 16.0;
-/// Padding interno vertical (topo/base). 12 = visualmente equilibrado.
-const MENU_PAD_Y: f32 = 12.0;
-/// Altura por row clicavel. 40 = touch-friendly + mouse-friendly.
-const MENU_ROW_H: f32 = 40.0;
-/// Font size dos items.
+/// Menu width 220 = cabe textos curtos com 14px pad lateral + folga 13px font.
+const MENU_W: f32 = 220.0;
+/// Padding vertical (topo/base). 6 = compacto Apple-grade. 6+6 = 12.
+const MENU_PAD_Y: f32 = 6.0;
+/// Padding horizontal (interno row). 14 = igual PILL_PAD_X bar (continuidade).
+const MENU_PAD_X: f32 = 14.0;
+/// Altura por row clicavel. 30 = balanco touch/mouse + 13px font + respiro.
+const MENU_ROW_H: f32 = 30.0;
+/// Border-radius. 14 = igual PILL_RADIUS bar (continuidade total).
+const MENU_RADIUS: f32 = 14.0;
+/// Font size dos items. 13 = igual FONT_PILL bar.
 const FONT_MENU: f32 = 13.0;
-/// Margem entre cursor e canto do menu (offset visual).
+/// Margem entre cursor e canto do menu.
 const MENU_OFFSET: f32 = 2.0;
+/// Row hover radius interno (sub-rrect). 9 = arredondado dentro do menu 14.
+const MENU_ROW_HOVER_RADIUS: f32 = 9.0;
+/// Inset lateral do hover wash.
+const MENU_ROW_HOVER_INSET: f32 = 4.0;
 
-// Cores (sem glow / neon - memory feedback_zero_neon_glow).
-fn menu_bg() -> Color {
-    Color::from_rgba(0.10, 0.10, 0.12, 0.96).unwrap()
-}
-fn menu_border() -> Color {
-    Color::from_rgba(0.25, 0.25, 0.28, 1.0).unwrap()
-}
-fn menu_text() -> Color {
-    Color::from_rgba(0.93, 0.93, 0.95, 1.0).unwrap()
-}
-fn menu_hover_bg() -> Color {
-    Color::from_rgba(1.0, 1.0, 1.0, 0.06).unwrap()
+/// Altura computada exata = pad_top + 3 rows + pad_bottom.
+const fn menu_h(items: usize) -> f32 {
+    MENU_PAD_Y + (items as f32) * MENU_ROW_H + MENU_PAD_Y
 }
 
 // ============================================================
-// FontSystem singleton.
+// FontSystem singleton (alinhado com lumo-bar: Geist/JetBrains).
 // ============================================================
 
 static FONT_SYSTEM: OnceLock<Mutex<FontSystem>> = OnceLock::new();
 static SWASH_CACHE: OnceLock<Mutex<SwashCache>> = OnceLock::new();
+static FONT_FAMILY: OnceLock<String> = OnceLock::new();
 
 fn font_system() -> &'static Mutex<FontSystem> {
-    FONT_SYSTEM.get_or_init(|| Mutex::new(FontSystem::new()))
+    FONT_SYSTEM.get_or_init(|| {
+        let mut fs = FontSystem::new();
+        load_extra_fonts(&mut fs);
+        let family = pick_font_family(&fs);
+        eprintln!("[lumo-desktop] font_family escolhida = {}", family);
+        let _ = FONT_FAMILY.set(family);
+        Mutex::new(fs)
+    })
 }
 
 fn swash_cache() -> &'static Mutex<SwashCache> {
     SWASH_CACHE.get_or_init(|| Mutex::new(SwashCache::new()))
+}
+
+fn load_extra_fonts(fs: &mut FontSystem) {
+    let candidates = [
+        std::env::var("HOME").ok().map(|h| format!("{}/.local/share/fonts", h)),
+        std::env::var("HOME").ok().map(|h| format!("{}/.fonts", h)),
+        Some("/usr/share/fonts/geist-mono".to_string()),
+        Some("/usr/local/share/fonts".to_string()),
+    ];
+    for opt in candidates.iter().flatten() {
+        if let Ok(entries) = std::fs::read_dir(opt) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                let ext_ok = p
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| {
+                        let l = e.to_ascii_lowercase();
+                        l == "ttf" || l == "otf"
+                    })
+                    .unwrap_or(false);
+                if ext_ok {
+                    let name = p.to_string_lossy().to_lowercase();
+                    if name.contains("geist") || name.contains("jetbrains") {
+                        fs.db_mut().load_font_file(&p).ok();
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn pick_font_family(fs: &FontSystem) -> String {
+    let preferred = [
+        "Geist Mono",
+        "GeistMono Nerd Font",
+        "JetBrainsMono Nerd Font",
+        "JetBrains Mono",
+        "JetBrainsMono Nerd Font Mono",
+    ];
+    let faces: Vec<String> = fs
+        .db()
+        .faces()
+        .flat_map(|f| f.families.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>())
+        .collect();
+    for p in preferred {
+        if faces.iter().any(|f| f.eq_ignore_ascii_case(p)) {
+            return p.to_string();
+        }
+    }
+    for p in preferred {
+        let pl = p.to_lowercase();
+        let token = pl.split_whitespace().next().unwrap_or("monospace");
+        if let Some(found) = faces.iter().find(|f| f.to_lowercase().contains(token)) {
+            return found.clone();
+        }
+    }
+    "monospace".to_string()
+}
+
+fn current_family() -> &'static str {
+    FONT_FAMILY.get().map(|s| s.as_str()).unwrap_or("monospace")
+}
+
+// ============================================================
+// Color helpers (alinhados com bar).
+// ============================================================
+
+fn rgba_hex(hex: u32, alpha: u8) -> Color {
+    let r = ((hex >> 16) & 0xff) as f32 / 255.0;
+    let g = ((hex >> 8) & 0xff) as f32 / 255.0;
+    let b = (hex & 0xff) as f32 / 255.0;
+    let a = alpha as f32 / 255.0;
+    Color::from_rgba(r, g, b, a).unwrap()
+}
+
+fn opaque(hex: u32) -> Color {
+    rgba_hex(hex, 0xff)
 }
 
 fn to_cosmic(c: Color) -> CosmicColor {
@@ -168,7 +243,8 @@ fn draw_text(
     let mut sc = sc_mutex.lock().unwrap();
     let metrics = Metrics::new(size, size * 1.4);
     let mut buffer = CosmicBuffer::new(&mut fs, metrics);
-    let attrs = Attrs::new().family(Family::Monospace);
+    let family_name = current_family().to_string();
+    let attrs = Attrs::new().family(Family::Name(&family_name));
     buffer.set_size(&mut fs, Some(f32::INFINITY), Some(size * 1.4));
     buffer.set_text(&mut fs, text, attrs, Shaping::Advanced);
     buffer.shape_until_scroll(&mut fs, false);
@@ -244,7 +320,7 @@ fn send_close_dropdowns(stream: &mut Option<UnixStream>) {
 }
 
 // ============================================================
-// LumoDesktop state + handlers.
+// LumoDesktop state.
 // ============================================================
 
 #[derive(Debug, Clone, Copy)]
@@ -252,7 +328,7 @@ struct MenuActive {
     visible: bool,
     x: f32,
     y: f32,
-    hover_row: i32, // -1 = nenhuma
+    hover_row: i32,
 }
 
 const MENU_ITEMS: [&str; 3] = ["Configuracoes", "Trocar wallpaper", "Sobre Lumo"];
@@ -273,66 +349,56 @@ struct LumoDesktop {
     menu: MenuActive,
     ipc_stream: Option<UnixStream>,
     last_click_at: Option<Instant>,
+    palette: LumoColors,
 }
 
 fn clamp_menu_origin(x: f32, y: f32, surf_w: u32, surf_h: u32) -> (f32, f32) {
+    let menu_h_val = menu_h(MENU_ITEMS.len());
     let mut mx = x + MENU_OFFSET;
     let mut my = y + MENU_OFFSET;
     if mx + MENU_W > surf_w as f32 {
         mx = (x - MENU_W - MENU_OFFSET).max(0.0);
     }
-    if my + MENU_H > surf_h as f32 {
-        my = (y - MENU_H - MENU_OFFSET).max(0.0);
+    if my + menu_h_val > surf_h as f32 {
+        my = (y - menu_h_val - MENU_OFFSET).max(0.0);
     }
     (mx, my)
 }
 
-fn paint_menu_at(canvas: &mut PixmapMut, menu: MenuActive, surf_w: u32, surf_h: u32) {
+fn paint_menu_at(
+    canvas: &mut PixmapMut,
+    menu: MenuActive,
+    surf_w: u32,
+    surf_h: u32,
+    palette: &LumoColors,
+) {
     let (mx, my) = clamp_menu_origin(menu.x, menu.y, surf_w, surf_h);
-    // Sombra: 4 rrects offset 1..4 alpha decrescente (blur fake 4px).
-    // Memory feedback_zero_neon_glow: preto neutro, sem accent.
-    for k in 1..=4 {
-        let base = 0.55_f32;
-        let alpha = (base * (1.0 - (k as f32 - 1.0) * 0.18)).max(0.0);
-        let c = Color::from_rgba(0.0, 0.0, 0.0, alpha).unwrap();
-        fill_rrect(
-            canvas,
-            mx - 1.0,
-            my + k as f32,
-            MENU_W + 2.0,
-            MENU_H,
-            MENU_RADIUS,
-            c,
-        );
-    }
-    fill_rrect(canvas, mx, my, MENU_W, MENU_H, MENU_RADIUS, menu_bg());
-    if let Some(path) =
-        rrect_path(mx + 0.5, my + 0.5, MENU_W - 1.0, MENU_H - 1.0, MENU_RADIUS - 0.5)
-    {
-        let mut p = Paint::default();
-        p.set_color(menu_border());
-        p.anti_alias = true;
-        let stroke = tiny_skia::Stroke {
-            width: 1.0,
-            ..Default::default()
-        };
-        canvas.stroke_path(&path, &p, &stroke, Transform::identity(), None);
-    }
+    let menu_h_val = menu_h(MENU_ITEMS.len());
+
+    // Background pill: cor + alpha do tema (igual pill bar A19.15).
+    let bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
+    fill_rrect(canvas, mx, my, MENU_W, menu_h_val, MENU_RADIUS, bg);
+
+    // SEM sombra (A25): bar pills shadow_alpha=0, menu segue mesma decisao.
+
+    let fg = opaque(palette.pill_fg);
+    let hover_bg = rgba_hex(palette.accent_subtle, 0x60);
+
     for (i, label) in MENU_ITEMS.iter().enumerate() {
         let row_y = my + MENU_PAD_Y + (i as f32) * MENU_ROW_H;
         if menu.hover_row == i as i32 {
             fill_rrect(
                 canvas,
-                mx + 4.0,
-                row_y,
-                MENU_W - 8.0,
+                mx + MENU_ROW_HOVER_INSET,
+                row_y + 2.0,
+                MENU_W - MENU_ROW_HOVER_INSET * 2.0,
                 MENU_ROW_H - 4.0,
-                8.0,
-                menu_hover_bg(),
+                MENU_ROW_HOVER_RADIUS,
+                hover_bg,
             );
         }
         let text_y = row_y + (MENU_ROW_H - FONT_MENU * 1.4) / 2.0;
-        draw_text(canvas, mx + MENU_PAD_X, text_y, label, FONT_MENU, menu_text());
+        draw_text(canvas, mx + MENU_PAD_X, text_y.round(), label, FONT_MENU, fg);
     }
 }
 
@@ -352,30 +418,25 @@ impl LumoDesktop {
             }
         };
 
-        // Copia state de menu pro stack — evita reborrow imutavel de self
-        // enquanto self.pool ainda esta mut-borrowed pelo create_buffer.
         let menu_snap = self.menu;
         let surf_w = self.width;
         let surf_h = self.height;
+        let palette = self.palette;
         if let Some(mut px) = Pixmap::new(self.width, self.height) {
-            // Surface 100% transparente por padrao. tiny-skia Pixmap::new
-            // ja zera = ja transparente. So desenha quando menu visivel.
             if menu_snap.visible {
                 let mut canvas_mut = px.as_mut();
-                paint_menu_at(&mut canvas_mut, menu_snap, surf_w, surf_h);
+                paint_menu_at(&mut canvas_mut, menu_snap, surf_w, surf_h, &palette);
             }
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;
-            // tiny-skia RGBA premul -> wl_shm Argb8888 LE = BGRA na memoria.
-            // Swap canais; alpha preservado (DEPS.md A15.1).
             for i in 0..n {
                 let o = i * 4;
                 if o + 3 < dst.len() && o + 3 < src.len() {
-                    dst[o] = src[o + 2]; // B
-                    dst[o + 1] = src[o + 1]; // G
-                    dst[o + 2] = src[o]; // R
-                    dst[o + 3] = src[o + 3]; // A
+                    dst[o] = src[o + 2];
+                    dst[o + 1] = src[o + 1];
+                    dst[o + 2] = src[o];
+                    dst[o + 3] = src[o + 3];
                 }
             }
         }
@@ -386,7 +447,6 @@ impl LumoDesktop {
         surface.commit();
     }
 
-
     fn clamp_menu_origin(&self, x: f32, y: f32) -> (f32, f32) {
         clamp_menu_origin(x, y, self.width, self.height)
     }
@@ -396,7 +456,8 @@ impl LumoDesktop {
             return None;
         }
         let (mx, my) = self.clamp_menu_origin(self.menu.x, self.menu.y);
-        if px < mx || px > mx + MENU_W || py < my || py > my + MENU_H {
+        let menu_h_val = menu_h(MENU_ITEMS.len());
+        if px < mx || px > mx + MENU_W || py < my || py > my + menu_h_val {
             return None;
         }
         for i in 0..MENU_ITEMS.len() {
@@ -439,8 +500,6 @@ impl LayerShellHandler for LumoDesktop {
         _: u32,
     ) {
         let (w, h) = cfg.new_size;
-        // A21: forca OUTPUT default se compositor mandar 0 (size=(0,0) +
-        // Anchor full = compositor pode mandar zero antes do output state estabilizar).
         self.width = if w > 0 { w } else { OUTPUT_W };
         self.height = if h > 0 { h } else { OUTPUT_H };
         self.first_configured = true;
@@ -512,7 +571,6 @@ impl PointerHandler for LumoDesktop {
                 }
                 PointerEventKind::Press { button, .. } => {
                     let (px, py) = (ev.position.0 as f32, ev.position.1 as f32);
-                    // Debounce 150ms (espelha pattern bar A20.10).
                     let now = Instant::now();
                     if let Some(last) = self.last_click_at {
                         if now.duration_since(last) < Duration::from_millis(150) {
@@ -584,8 +642,6 @@ fn main() {
     let shm = Shm::bind(&globals, &qh).expect("wl_shm nao disponivel");
 
     let surface = compositor.create_surface(&qh);
-    // Background layer = atras de tudo. Namespace 'lumo-desktop' pra log
-    // no compositor (state.rs trace 'namespace layer encontrado').
     let layer = layer_shell.create_layer_surface(
         &qh,
         surface,
@@ -593,16 +649,12 @@ fn main() {
         Some("lumo-desktop"),
         None,
     );
-    // Full-screen via Anchor 4 lados + size (0,0) auto (compositor preenche).
     layer.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
     layer.set_size(0, 0);
-    // exclusive_zone -1: NAO reserva area E NAO eh afetado por outros
-    // layers (bar exclusive_zone fica intocada).
     layer.set_exclusive_zone(-1);
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
 
-    // Pool dimensionado pra full-screen 1920x1080 Argb8888 + double buffer.
     let pool = SlotPool::new(OUTPUT_W as usize * OUTPUT_H as usize * 4 * 2, &shm)
         .expect("SlotPool init");
 
@@ -622,11 +674,11 @@ fn main() {
         menu: MenuActive { visible: false, x: 0.0, y: 0.0, hover_row: -1 },
         ipc_stream: connect_ipc(),
         last_click_at: None,
+        palette: current_colors(),
     };
 
-    eprintln!("[lumo-desktop] A21: layer-shell Background + menu contextual + CloseDropdowns IPC");
+    eprintln!("[lumo-desktop] A25: menu pill-style + CloseDropdowns IPC");
 
-    // Loop principal: padrao DEPS.md A20.9 (prepare_read + poll + dispatch).
     while state.running {
         conn.flush().ok();
         if let Some(guard) = queue.prepare_read() {

@@ -1524,9 +1524,12 @@ fn connect_ipc() -> Option<UnixStream> {
     }
 }
 
-fn drain_ipc(stream: &mut UnixStream, rx_buf: &mut Vec<u8>, active_ws: &Arc<AtomicU8>) -> bool {
+/// A25: retorna (alive, close_dropdowns_requested). Caller usa flag pra
+/// fechar dropdown ativo + redraw imediato (memory feedback_input_feedback_imediato).
+fn drain_ipc(stream: &mut UnixStream, rx_buf: &mut Vec<u8>, active_ws: &Arc<AtomicU8>) -> (bool, bool) {
     let mut tmp = [0u8; 256];
     let mut alive = true;
+    let mut close_dropdowns = false;
     loop {
         match stream.read(&mut tmp) {
             Ok(0) => {
@@ -1545,15 +1548,20 @@ fn drain_ipc(stream: &mut UnixStream, rx_buf: &mut Vec<u8>, active_ws: &Arc<Atom
         let line: Vec<u8> = rx_buf.drain(..=nl).collect();
         if let Ok(s) = std::str::from_utf8(&line[..line.len() - 1]) {
             if let Ok(ev) = serde_json::from_str::<LumoEvent>(s.trim()) {
-                // A23: pattern-match nao-exaustivo via if-let pra evitar
-                // acoplamento com variants futuros (ex: CloseDropdowns A21).
-                if let LumoEvent::Workspaces { active, .. } = ev {
-                    active_ws.store(active.clamp(1, MAX_WORKSPACES), Ordering::Relaxed);
+                match ev {
+                    LumoEvent::Workspaces { active, .. } => {
+                        active_ws.store(active.clamp(1, MAX_WORKSPACES), Ordering::Relaxed);
+                    }
+                    LumoEvent::CloseDropdowns => {
+                        // A25: lumo-desktop pediu fechar dropdowns via IPC.
+                        // Sinaliza pra loop main fechar + redraw imediato.
+                        close_dropdowns = true;
+                    }
                 }
             }
         }
     }
-    alive
+    (alive, close_dropdowns)
 }
 
 // ============================================================
@@ -2024,11 +2032,17 @@ fn main() {
         if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
             last_ipc_tick = Instant::now();
             if let Some(mut s) = state.ipc_stream.take() {
-                let alive = drain_ipc(&mut s, &mut state.ipc_rx_buf, &state.active_workspace);
+                let (alive, close_dropdowns) = drain_ipc(&mut s, &mut state.ipc_rx_buf, &state.active_workspace);
                 if alive {
                     state.ipc_stream = Some(s);
                 } else {
                     eprintln!("[lumo-bar] IPC peer fechou; bar continua standalone");
+                }
+                // A25: CloseDropdowns IPC (lumo-desktop click esquerdo desktop).
+                if close_dropdowns && state.dropdown != DropdownActive::None {
+                    state.dropdown = DropdownActive::None;
+                    state.update_size_and_redraw(&qh);
+                    eprintln!("[lumo-bar] CloseDropdowns recebido -> dropdown fechado");
                 }
             }
         }
