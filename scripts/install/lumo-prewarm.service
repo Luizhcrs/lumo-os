@@ -1,0 +1,19 @@
+[Unit]
+Description=Lumo OS pre-warm: wallpaper decode + cache em /dev/shm
+# Roda antes do compositor. Nao bloqueia boot se falhar.
+DefaultDependencies=no
+After=basic.target
+
+[Service]
+Type=oneshot
+# RemainAfterExit=yes pra systemd reconhecer como "active" pos-execucao.
+RemainAfterExit=yes
+# Caminho absoluto ao binary do script. Requer install na home do user.
+ExecStart=%h/Projects/lumo-shell/scripts/install/lumo-prewarm.sh
+# Nao falhar a sessao se wallpaper nao existe.
+SuccessExitStatus=0 1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

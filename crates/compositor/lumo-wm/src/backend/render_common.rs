@@ -16,6 +16,7 @@
 //! mesmo valor em DRM e winit (consistencia visual entre Lumo
 //! nested e Lumo fullscreen).
 
+use super::corner_shader::{CornerShader, RoundedSurfaceElement};
 use smithay::backend::renderer::element::memory::{
     MemoryRenderBuffer, MemoryRenderBufferRenderElement,
 };
@@ -51,6 +52,7 @@ render_elements! {
     Memory=MemoryRenderBufferRenderElement<GlesRenderer>,
     Texture=TextureRenderElement<GlesTexture>,
     Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
+    Rounded=RoundedSurfaceElement,
 }
 
 // Cursor solid fallback (10x14 cinza claro). Usado quando xcursor falha.
@@ -215,6 +217,29 @@ pub fn window_corner_elements(_space: &Space<Window>) -> Vec<SolidColorRenderEle
     Vec::new()
 }
 
+
+/// Converte SpaceRenderElements de toplevel (Element variant) em
+/// RoundedSurfaceElement com SDF corner radius (A38).
+/// Layer-shell (Surface variant) passa sem wrapper.
+fn wrap_space_elements_rounded(
+    elements: Vec<SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>>,
+    corner_shader: &CornerShader,
+) -> Vec<LumoCustomElement> {
+    elements
+        .into_iter()
+        .map(|el| match el {
+            SpaceRenderElements::Element(_) => {
+                LumoCustomElement::Rounded(RoundedSurfaceElement::new(
+                    el,
+                    corner_shader.program.clone(),
+                    CORNER_RADIUS_WINDOW as f32,
+                ))
+            }
+            _ => LumoCustomElement::Space(el),
+        })
+        .collect()
+}
+
 /// Args agrupados pra build_overlay -- evita conflito de borrow
 /// quando o caller ja tem &mut em outro campo de LumoState.
 pub struct OverlayInputs<'a> {
@@ -225,6 +250,8 @@ pub struct OverlayInputs<'a> {
     pub space: &'a Space<Window>,
     pub output_w: i32,
     pub output_h: i32,
+    /// A38: corner shader opcional. None = sem corner radius.
+    pub corner_shader: Option<&'a CornerShader>,
     /// A19: wallpaper opcional. None = clear color de fundo (igual A18).
     pub wallpaper: Option<&'a crate::backend::wallpaper::LumoWallpaper>,
 }
@@ -283,6 +310,8 @@ pub struct DrmCollectInputs<'a> {
     pub cursor_buffer: Option<&'a MemoryRenderBuffer>,
     pub output_w: i32,
     pub output_h: i32,
+    /// A38: corner shader opcional.
+    pub corner_shader: Option<&'a CornerShader>,
     /// A19: wallpaper opcional (vide OverlayInputs).
     pub wallpaper: Option<&'a crate::backend::wallpaper::LumoWallpaper>,
 }
@@ -340,8 +369,8 @@ pub fn collect_drm_elements(
     }
 
     // 4. Toplevels + layer-shell via space_render_elements.
-    //    Smithay ja ordena: layer top/overlay -> space windows ->
-    //    layer bottom/background (front->back).
+    //    A38: toplevels (Element variant) recebem SDF corner radius.
+    //    Layer-shell (Surface variant) passa direto.
     match space_render_elements::<_, Window, _>(
         renderer,
         std::iter::once(inputs.space),
@@ -349,8 +378,14 @@ pub fn collect_drm_elements(
         1.0,
     ) {
         Ok(elements) => {
-            for el in elements {
-                out.push(LumoCustomElement::Space(el));
+            if let Some(cs) = inputs.corner_shader {
+                for el in wrap_space_elements_rounded(elements, cs) {
+                    out.push(el);
+                }
+            } else {
+                for el in elements {
+                    out.push(LumoCustomElement::Space(el));
+                }
             }
         }
         Err(err) => {
@@ -422,6 +457,7 @@ pub fn build_winit_elements(
     }
 
     // 4. Space (toplevels + layer-shell).
+    //    A38: toplevels (Element variant) recebem SDF corner radius.
     match space_render_elements::<_, Window, _>(
         renderer,
         std::iter::once(inputs.space),
@@ -429,8 +465,14 @@ pub fn build_winit_elements(
         1.0,
     ) {
         Ok(elements) => {
-            for el in elements {
-                out.push(LumoCustomElement::Space(el));
+            if let Some(cs) = inputs.corner_shader {
+                for el in wrap_space_elements_rounded(elements, cs) {
+                    out.push(el);
+                }
+            } else {
+                for el in elements {
+                    out.push(LumoCustomElement::Space(el));
+                }
             }
         }
         Err(err) => {

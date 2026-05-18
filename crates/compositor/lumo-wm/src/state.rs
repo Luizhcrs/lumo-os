@@ -151,6 +151,8 @@ pub struct LumoState {
     /// A19: wallpaper opcional carregado pelo backend (winit OU drm)
     /// apos o GlesRenderer estar pronto. None = clear color de fundo.
     pub wallpaper: Option<crate::backend::wallpaper::LumoWallpaper>,
+    /// A38: programa SDF corner radius. None ate renderer iniciado.
+    pub corner_shader: Option<crate::backend::corner_shader::CornerShader>,
 
     /// B1: gesture state acumulado (swipe + pinch).
     pub gesture: crate::input::TouchpadGestureState,
@@ -252,6 +254,7 @@ impl LumoState {
             watchdog_deadline: None,
             exit_code: 0,
             wallpaper: None,
+            corner_shader: None,
             gesture: Default::default(),
         }
     }

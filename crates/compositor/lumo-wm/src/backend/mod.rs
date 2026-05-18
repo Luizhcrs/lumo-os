@@ -5,6 +5,7 @@
 //! - render_common: helpers de cursor/corner/shadow compartilhados
 //! - wallpaper: textura de fundo (A19), carregada uma vez por backend
 
+pub mod corner_shader;
 pub mod render_common;
 pub mod wallpaper;
 pub mod winit;
