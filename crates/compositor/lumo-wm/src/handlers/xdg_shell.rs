@@ -52,6 +52,8 @@ impl XdgShellHandler for LumoState {
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
+        // M1: limpa SSD entry ao fechar toplevel.
+        self.ssd_windows.remove(surface.wl_surface());
         let to_remove = self
             .space
             .elements()

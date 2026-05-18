@@ -816,6 +816,7 @@ fn render_drm(state: &mut LumoState) {
         ref start_time,
         ref wallpaper,
         ref corner_shader,
+        ref ssd_windows,
         frame_counter,
         ..
     } = *state;
@@ -853,6 +854,7 @@ fn render_drm(state: &mut LumoState) {
         boot_curtain_alpha,
         wallpaper: wallpaper.as_ref(),
         corner_shader: corner_shader.as_ref(),
+        ssd_windows,
         space,
         output: &surface.output,
         pointer_location,
