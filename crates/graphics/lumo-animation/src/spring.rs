@@ -161,3 +161,54 @@ mod tests {
         assert!(iters < 120, "interactive demorou: {iters} frames");
     }
 }
+
+#[cfg(test)]
+mod extended_tests {
+    use super::*;
+
+    #[test]
+    fn set_target_does_not_snap() {
+        let mut s = Spring::smooth();
+        s.set_target(1.0);
+        // value should still be at 0.0 before tick
+        assert!((s.value).abs() < 1e-6);
+    }
+
+    #[test]
+    fn set_value_updates_value() {
+        let mut s = Spring::smooth();
+        s.set_value(0.5);
+        assert!((s.value - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn large_dt_is_clamped_value_stays_finite() {
+        let mut s = Spring::smooth();
+        s.set_target(1.0);
+        s.tick(10.0);
+        assert!(s.value.is_finite());
+        assert!(s.velocity.is_finite());
+    }
+
+    #[test]
+    fn bouncy_preset_has_nonzero_params() {
+        let s = Spring::bouncy();
+        assert!(s.stiffness > 0.0);
+        assert!(s.damping > 0.0);
+        assert!(s.mass > 0.0);
+    }
+
+    #[test]
+    fn settled_at_target_zero_velocity() {
+        let mut s = Spring::smooth();
+        s.snap_to(1.0);
+        assert!(s.settled());
+    }
+
+    #[test]
+    fn smooth_preset_is_default_constructible() {
+        let a = Spring::smooth();
+        let b = Spring::smooth();
+        assert!((a.stiffness - b.stiffness).abs() < 1e-6);
+    }
+}

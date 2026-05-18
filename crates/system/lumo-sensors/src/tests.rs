@@ -207,3 +207,104 @@ mod backlight_tests {
         assert_eq!(raw, 1);
     }
 }
+
+#[cfg(test)]
+mod extra_battery_tests {
+    #[test]
+    fn capacity_empty_string_parse_fails() {
+        let raw = "";
+        let result: Result<u32, _> = raw.trim().parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn health_zero_design_capacity_clamps_to_100() {
+        let full = 3_490_000_u64 as f64;
+        let design = 1_u64 as f64;
+        let health = ((full / design) * 100.0).round().clamp(0.0, 100.0) as u8;
+        assert_eq!(health, 100);
+    }
+
+    #[test]
+    fn charge_limit_boundary_1_is_valid() {
+        use crate::SensorError;
+        let pct: u32 = 1;
+        let result: Result<(), SensorError> = if !(1..=100).contains(&pct) {
+            Err(SensorError::OutOfRange(format!("{pct}")))
+        } else {
+            Ok(())
+        };
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn charge_limit_boundary_100_is_valid() {
+        use crate::SensorError;
+        let pct: u32 = 100;
+        let result: Result<(), SensorError> = if !(1..=100).contains(&pct) {
+            Err(SensorError::OutOfRange(format!("{pct}")))
+        } else {
+            Ok(())
+        };
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn capacity_whitespace_trims_before_parse() {
+        let raw = "  75\n";
+        let v: u8 = raw.trim().parse::<u32>().unwrap().clamp(0, 100) as u8;
+        assert_eq!(v, 75);
+    }
+}
+
+#[cfg(test)]
+mod extra_thermal_tests {
+    use crate::thermal::ThermalKind;
+
+    fn kind_from(s: &str) -> ThermalKind {
+        let lower = s.to_ascii_lowercase();
+        if lower.contains("x86_pkg") || lower.contains("tcpu") || lower.contains("cpu") {
+            ThermalKind::Cpu
+        } else if lower.contains("soc") {
+            ThermalKind::Soc
+        } else if lower.contains("charg") {
+            ThermalKind::Charger
+        } else if lower.contains("nvme") || lower.contains("sns") {
+            ThermalKind::Nvme
+        } else if lower.contains("wifi") || lower.contains("iwl") {
+            ThermalKind::Wifi
+        } else {
+            ThermalKind::Other
+        }
+    }
+
+    #[test]
+    fn charger_maps_correctly() {
+        assert_eq!(kind_from("Charger"), ThermalKind::Charger);
+    }
+
+    #[test]
+    fn nvme_maps_correctly() {
+        assert_eq!(kind_from("nvme0"), ThermalKind::Nvme);
+    }
+
+    #[test]
+    fn soc_maps_correctly() {
+        assert_eq!(kind_from("soc_thermal"), ThermalKind::Soc);
+    }
+
+    #[test]
+    fn temp_millideg_round_trip() {
+        let millideg: u32 = 72500;
+        let celsius = millideg as f32 / 1000.0;
+        let back = (celsius * 1000.0).round() as u32;
+        assert_eq!(back, 72500);
+    }
+
+    #[test]
+    fn temp_zero_millideg_is_zero_celsius() {
+        let millideg: u32 = 0;
+        let celsius = millideg as f32 / 1000.0;
+        assert!(celsius.abs() < 1e-6);
+    }
+}

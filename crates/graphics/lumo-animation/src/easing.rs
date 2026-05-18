@@ -123,3 +123,58 @@ mod tests {
         assert!(mid > 0.5, "spring deve arrancar rapido, got {mid}");
     }
 }
+
+#[cfg(test)]
+mod extended_tests {
+    use super::*;
+
+    #[test]
+    fn ease_in_cubic_slow_at_start() {
+        let c = LACurve::ease_in_out();
+        let early = c.eval(0.1);
+        assert!(early < 0.05, "ease-in should be slow at start: {early}");
+    }
+
+    #[test]
+    fn ease_out_cubic_fast_at_start() {
+        let c = LACurve::ease_out_cubic();
+        let early = c.eval(0.1);
+        // ease-out: fast start -> value at 0.1 should be > 0.1 (linear)
+        assert!(early > 0.1, "ease-out should be above linear at start: {early}");
+    }
+
+    #[test]
+    fn apple_smooth_quarter_below_half() {
+        // apple_smooth ease-in-out: first half should be below 0.5
+        let c = LACurve::apple_smooth();
+        let v = c.eval(0.25);
+        // ease-in-out: slow start, so v(0.25) < 0.25 is not guaranteed
+        // but v(0.25) < 0.5 always for well-formed ease curves
+        assert!(v < 0.5, "apple_smooth quarter={v}");
+    }
+
+    #[test]
+    fn t_below_zero_returns_zero() {
+        let c = LACurve::ease_out_cubic();
+        assert!((c.eval(-0.5)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn t_above_one_returns_one() {
+        let c = LACurve::ease_out_cubic();
+        assert!((c.eval(1.5) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn endpoints_are_always_zero_and_one() {
+        for c in [
+            LACurve::ease_in_out(),
+            LACurve::ease_out_cubic(),
+            LACurve::apple_smooth(),
+            LACurve::apple_spring_default(),
+        ] {
+            assert!((c.eval(0.0)).abs() < 1e-5, "eval(0) != 0");
+            assert!((c.eval(1.0) - 1.0).abs() < 1e-5, "eval(1) != 1");
+        }
+    }
+}

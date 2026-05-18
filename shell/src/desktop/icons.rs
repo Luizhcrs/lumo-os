@@ -520,3 +520,201 @@ fn rects_intersect(
 ) -> bool {
     ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by
 }
+
+// ============================================================
+// Unit tests -- logica pura sem I/O de disco.
+// ============================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn make_icon(name: &str, x: f32, y: f32) -> DesktopIcon {
+        DesktopIcon {
+            name: name.to_string(),
+            path: PathBuf::from(format!("/tmp/{name}")),
+            is_dir: false,
+            custom_pos: None,
+            screen_x: x,
+            screen_y: y,
+            selected: false,
+        }
+    }
+
+    fn make_state(icons: Vec<DesktopIcon>) -> IconsState {
+        IconsState {
+            icons,
+            layout: DesktopLayout::default(),
+            last_scan: std::time::Instant::now(),
+            drag: None,
+            last_click: None,
+            ctx_menu: None,
+            ctx_hover: usize::MAX,
+        }
+    }
+
+    // T01: contains returns true when point is inside cell.
+    #[test]
+    fn contains_inside_cell() {
+        let icon = make_icon("test.txt", 100.0, 200.0);
+        assert!(icon.contains(150.0, 250.0));
+    }
+
+    // T02: contains returns false when point is outside cell (left).
+    #[test]
+    fn contains_outside_cell_left() {
+        let icon = make_icon("test.txt", 100.0, 200.0);
+        assert!(!icon.contains(50.0, 250.0));
+    }
+
+    // T03: contains returns false at right edge (exclusive).
+    #[test]
+    fn contains_at_right_edge_exclusive() {
+        let icon = make_icon("test.txt", 100.0, 200.0);
+        assert!(!icon.contains(100.0 + CELL_W, 200.0 + CELL_H / 2.0));
+    }
+
+    // T04: hit returns None when no icons.
+    #[test]
+    fn hit_empty_returns_none() {
+        let state = make_state(vec![]);
+        assert!(state.hit(0.0, 0.0).is_none());
+    }
+
+    // T05: hit returns index of icon containing point.
+    #[test]
+    fn hit_returns_correct_index() {
+        let state = make_state(vec![
+            make_icon("a.txt", 0.0, 0.0),
+            make_icon("b.txt", 200.0, 0.0),
+        ]);
+        assert_eq!(state.hit(210.0, 10.0), Some(1));
+    }
+
+    // T06: press_icon sets drag offset relative to icon position.
+    #[test]
+    fn press_icon_sets_drag_offset() {
+        let mut state = make_state(vec![make_icon("test.txt", 50.0, 60.0)]);
+        state.press_icon(0, 70.0, 80.0);
+        let drag = state.drag.unwrap();
+        assert_eq!(drag.0, 0);
+        assert!((drag.1 - 20.0).abs() < 1e-5); // off_x = 70 - 50
+        assert!((drag.2 - 20.0).abs() < 1e-5); // off_y = 80 - 60
+        assert!(!drag.3); // not started
+    }
+
+    // T07: motion_drag returns false before DRAG_THRESHOLD.
+    #[test]
+    fn motion_drag_false_below_threshold() {
+        let mut state = make_state(vec![make_icon("test.txt", 50.0, 60.0)]);
+        state.press_icon(0, 70.0, 80.0);
+        let moved = state.motion_drag(71.0, 80.5); // dx=1 < DRAG_THRESHOLD=4
+        assert!(!moved);
+    }
+
+    // T08: motion_drag returns true after DRAG_THRESHOLD crossed.
+    #[test]
+    fn motion_drag_true_after_threshold() {
+        let mut state = make_state(vec![make_icon("test.txt", 50.0, 60.0)]);
+        state.press_icon(0, 70.0, 80.0);
+        let moved = state.motion_drag(80.0, 80.0); // dx=10 > DRAG_THRESHOLD
+        assert!(moved);
+    }
+
+    // T09: release_drag returns false when drag was not started.
+    #[test]
+    fn release_drag_not_started_returns_false() {
+        let mut state = make_state(vec![make_icon("test.txt", 50.0, 60.0)]);
+        state.press_icon(0, 70.0, 80.0);
+        state.motion_drag(70.5, 80.0); // below threshold
+        let was_drag = state.release_drag();
+        assert!(!was_drag);
+    }
+
+    // T10: release_drag returns true when drag was active.
+    #[test]
+    fn release_drag_active_returns_true() {
+        let mut state = make_state(vec![make_icon("test.txt", 50.0, 60.0)]);
+        state.press_icon(0, 70.0, 80.0);
+        state.motion_drag(80.0, 80.0);
+        let was_drag = state.release_drag();
+        assert!(was_drag);
+    }
+
+    // T11: release_drag clears drag state.
+    #[test]
+    fn release_drag_clears_state() {
+        let mut state = make_state(vec![make_icon("test.txt", 50.0, 60.0)]);
+        state.press_icon(0, 70.0, 80.0);
+        state.motion_drag(80.0, 80.0);
+        state.release_drag();
+        assert!(state.drag.is_none());
+    }
+
+    // T12: ctx_menu_hit returns None when point is outside menu.
+    #[test]
+    fn ctx_menu_hit_outside_returns_none() {
+        let result = ctx_menu_hit(0.0, 0.0, 500.0, 500.0);
+        assert!(result.is_none());
+    }
+
+    // T13: ctx_menu_hit returns first item index.
+    #[test]
+    fn ctx_menu_hit_first_item() {
+        let menu_x = 100.0;
+        let menu_y = 100.0;
+        let click_y = menu_y + CTX_PADDING + CTX_ITEM_H * 0.5;
+        let result = ctx_menu_hit(menu_x + 10.0, click_y, menu_x, menu_y);
+        assert_eq!(result, Some(0));
+    }
+
+    // T14: truncate_label does not truncate short names.
+    #[test]
+    fn truncate_label_short_name() {
+        let result = super::truncate_label("hello.txt", 14);
+        assert_eq!(result, "hello.txt");
+    }
+
+    // T15: truncate_label truncates and adds ellipsis for long names.
+    #[test]
+    fn truncate_label_long_name_has_ellipsis() {
+        let result = super::truncate_label("very_long_filename_here.txt", 14);
+        assert!(result.ends_with("..."));
+        assert!(result.chars().count() <= 14);
+    }
+
+    // T16: recalc_positions sets screen_x/y in valid grid area.
+    #[test]
+    fn recalc_positions_sets_coords() {
+        let mut state = make_state(vec![make_icon("test.txt", 0.0, 0.0)]);
+        state.recalc_positions(1920, 1080);
+        assert!(state.icons[0].screen_x > 0.0);
+        assert!(state.icons[0].screen_y >= GRID_MARGIN_TOP);
+    }
+
+    // T17: clear_selection deselects all icons.
+    #[test]
+    fn clear_selection_deselects_all() {
+        let mut state = make_state(vec![
+            make_icon("a.txt", 0.0, 0.0),
+            make_icon("b.txt", 200.0, 0.0),
+        ]);
+        state.icons[0].selected = true;
+        state.icons[1].selected = true;
+        state.clear_selection();
+        assert!(!state.icons[0].selected);
+        assert!(!state.icons[1].selected);
+    }
+
+    // T18: cell_rect returns correct position and dimensions.
+    #[test]
+    fn cell_rect_correct() {
+        let icon = make_icon("test.txt", 100.0, 200.0);
+        let (x, y, w, h) = icon.cell_rect();
+        assert!((x - 100.0).abs() < 1e-5);
+        assert!((y - 200.0).abs() < 1e-5);
+        assert!((w - CELL_W).abs() < 1e-5);
+        assert!((h - CELL_H).abs() < 1e-5);
+    }
+}

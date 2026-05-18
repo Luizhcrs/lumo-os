@@ -692,3 +692,186 @@ mod theme_tests {
         assert_eq!(colors.accent, 0xABCDEF);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests LFColor + LFGeometry + LumoColors + LFTokens (L4)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod lf_color_tests {
+    use super::*;
+
+    #[test]
+    fn srgb_to_linear_channel_zero_is_zero() {
+        assert!((LFColor::srgb_to_linear_channel(0.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn srgb_to_linear_channel_one_is_one() {
+        let v = LFColor::srgb_to_linear_channel(1.0);
+        assert!((v - 1.0).abs() < 1e-4, "v={v}");
+    }
+
+    #[test]
+    fn srgb_to_linear_channel_is_monotonic() {
+        let a = LFColor::srgb_to_linear_channel(0.4);
+        let b = LFColor::srgb_to_linear_channel(0.5);
+        assert!(a < b, "should be monotonic: a={a} b={b}");
+    }
+
+    #[test]
+    fn srgb_to_linear_preserves_alpha() {
+        let s = [0.5, 0.5, 0.5, 0.75];
+        let l = LFColor::srgb_to_linear(s);
+        assert!((l[3] - 0.75).abs() < 1e-6);
+    }
+
+    #[test]
+    fn srgb_to_linear_darkens_midgray() {
+        // sRGB 0.5 -> linear < 0.5 (gamma correction darkens mid tones)
+        let v = LFColor::srgb_to_linear_channel(0.5);
+        assert!(v < 0.5, "linear should be darker: v={v}");
+    }
+
+    #[test]
+    fn srgb_to_linear_low_value_linear_segment() {
+        // Below 0.04045 uses linear segment c/12.92
+        let v = LFColor::srgb_to_linear_channel(0.01);
+        let expected = 0.01 / 12.92;
+        assert!((v - expected).abs() < 1e-6);
+    }
+}
+
+#[cfg(test)]
+mod lf_geometry_tests {
+    use super::*;
+
+    #[test]
+    fn px_size_to_ndc_fullscreen() {
+        // 1920x1080 fills entire viewport -> NDC size [2.0, 2.0]
+        let result = LFGeometry::px_size_to_ndc(1920.0, 1080.0, [1920.0, 1080.0]);
+        assert!((result[0] - 2.0).abs() < 1e-5);
+        assert!((result[1] - 2.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn px_center_to_ndc_center_is_origin() {
+        let result = LFGeometry::px_center_to_ndc(960.0, 540.0, [1920.0, 1080.0]);
+        assert!((result[0]).abs() < 1e-4, "x={}", result[0]);
+        assert!((result[1]).abs() < 1e-4, "y={}", result[1]);
+    }
+
+    #[test]
+    fn px_center_to_ndc_top_left_corner() {
+        let result = LFGeometry::px_center_to_ndc(0.0, 0.0, [1920.0, 1080.0]);
+        assert!((result[0] - (-1.0)).abs() < 1e-4);
+        assert!((result[1] - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn px_offset_to_ndc_zero_is_zero() {
+        let result = LFGeometry::px_offset_to_ndc(0.0, 0.0, [1920.0, 1080.0]);
+        assert!((result[0]).abs() < 1e-6);
+        assert!((result[1]).abs() < 1e-6);
+    }
+
+    #[test]
+    fn px_to_ndc_radius_half_height() {
+        // radius = 540px on 1080 viewport = 1.0 NDC
+        let r = LFGeometry::px_to_ndc_radius(540.0, 1080.0);
+        assert!((r - 1.0).abs() < 1e-5);
+    }
+}
+
+#[cfg(test)]
+mod lumo_colors_tests {
+    use super::*;
+
+    #[test]
+    fn light_has_bright_background() {
+        let c = LumoColors::light();
+        let r = (c.bg >> 16) & 0xFF;
+        // #FAFAFA -> r=0xFA=250
+        assert!(r > 200, "light bg should be bright, r={r}");
+    }
+
+    #[test]
+    fn dark_has_dark_background() {
+        let c = LumoColors::dark();
+        let r = (c.bg >> 16) & 0xFF;
+        // Dark bg should have low r component
+        assert!(r < 50, "dark bg should be dark, r={r}");
+    }
+
+    #[test]
+    fn hex_to_srgb_emerald_red_component() {
+        // 0x059669 -> r=5/255
+        let s = LumoColors::hex_to_srgb(0x059669);
+        assert!((s[0] - 5.0 / 255.0).abs() < 1e-4);
+        assert!((s[3] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn hex_to_srgb_black_is_zeros() {
+        let s = LumoColors::hex_to_srgb(0x000000);
+        assert!(s[0].abs() < 1e-6);
+        assert!(s[1].abs() < 1e-6);
+        assert!(s[2].abs() < 1e-6);
+    }
+
+    #[test]
+    fn hex_to_linear_white_is_one() {
+        let l = LumoColors::hex_to_linear(0xFFFFFF);
+        assert!((l[0] - 1.0).abs() < 1e-4);
+        assert!((l[1] - 1.0).abs() < 1e-4);
+        assert!((l[2] - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn bg_as_linear_rgba_matches_hex_to_linear() {
+        let c = LumoColors::light();
+        let a = c.bg_as_linear_rgba();
+        let b = LumoColors::hex_to_linear(c.bg);
+        assert!((a[0] - b[0]).abs() < 1e-6);
+    }
+}
+
+#[cfg(test)]
+mod lf_tokens_tests {
+    use super::*;
+
+    #[test]
+    fn transparent_alpha_is_zero() {
+        assert!((LFTokens::TRANSPARENT[3]).abs() < 1e-6);
+    }
+
+    #[test]
+    fn shadow_black_rgb_are_zero() {
+        assert!((LFTokens::SHADOW_BLACK[0]).abs() < 1e-6);
+        assert!((LFTokens::SHADOW_BLACK[1]).abs() < 1e-6);
+        assert!((LFTokens::SHADOW_BLACK[2]).abs() < 1e-6);
+    }
+
+    #[test]
+    fn pearl_srgb_r_near_nominal() {
+        // #f5f5f7 -> 0.9607...
+        let r = LFTokens::PEARL_SRGB[0];
+        assert!((r - 0.960_784_3).abs() < 1e-5, "r={r}");
+    }
+
+    #[test]
+    fn linear_values_not_exceed_srgb() {
+        // Linear representation <= sRGB for non-zero values
+        for i in 0..3 {
+            assert!(
+                LFTokens::PEARL[i] <= LFTokens::PEARL_SRGB[i],
+                "linear[{i}] should be <= srgb[{i}]"
+            );
+        }
+    }
+
+    #[test]
+    fn color_module_emerald_matches_lf_tokens() {
+        assert_eq!(color::EMERALD_600, LFTokens::EMERALD_600);
+    }
+}
