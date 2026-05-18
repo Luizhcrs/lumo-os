@@ -175,6 +175,22 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
             lumo_hit_x_end - lumo_hit_x_start,
             pill_h,
         ));
+
+        // S2: pill fallback AppName ▾ apos pill Lumo se nao ha dbusmenu items.
+        if snap.appmenu_items.is_empty() && !snap.appmenu_app_id.is_empty() {
+            let label: String = if !snap.appmenu_title.is_empty() {
+                snap.appmenu_title.chars().take(24).collect()
+            } else {
+                snap.appmenu_app_id.chars().take(24).collect()
+            };
+            let label_w = measure_text(&label, FONT_PILL, false);
+            let fb_w = label_w + pill_pad_x * 2.0 + 18.0;
+            let fb_x = pill_l_x + pill_l_w + pill_gap;
+            draw_pill_bg(&mut canvas, fb_x, pill_y, fb_w, pill_h, pill_bg, 0);
+            draw_text(&mut canvas, fb_x + pill_pad_x, text_top, &label, FONT_PILL, pill_fg, false);
+            draw_text(&mut canvas, fb_x + pill_pad_x + label_w + 4.0, text_top, "v", FONT_PILL, pill_fg, false);
+            result.appmenu_fallback_rect = Some((fb_x, pill_y, fb_w, pill_h));
+        }
     }
 
     // ============================================================

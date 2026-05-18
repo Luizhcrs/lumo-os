@@ -182,6 +182,14 @@ impl LumoState {
                                 break;
                             }
                             let title_rect = ssd_titlebar_rect_logical(loc, geo.size.w);
+                            // S1 BTN_RIGHT: titlebar right-click = close window (menu completo futuro).
+                            if button == 0x111 && title_rect.contains(ptr_pos) {
+                                if let Some(tl) = window.toplevel() {
+                                    tl.send_close();
+                                }
+                                ssd_handled = true;
+                                break;
+                            }
                             if title_rect.contains(ptr_pos) {
                                 // Q1: raise + focus antes do move grab.
                                 self.space.raise_element(window, true);
