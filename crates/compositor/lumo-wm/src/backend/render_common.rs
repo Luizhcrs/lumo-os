@@ -254,6 +254,8 @@ pub struct OverlayInputs<'a> {
     pub corner_shader: Option<&'a CornerShader>,
     /// A19: wallpaper opcional. None = clear color de fundo (igual A18).
     pub wallpaper: Option<&'a crate::backend::wallpaper::LumoWallpaper>,
+    /// A39: boot curtain alpha. 0.0 = sem cortina; 1.0 = tela preta total.
+    pub boot_curtain_alpha: f32,
 }
 
 /// Constroi overlay completo (cursor + corner mask + shadows).
@@ -265,6 +267,21 @@ pub fn build_overlay(
     inputs: &OverlayInputs<'_>,
 ) -> Vec<LumoCustomElement> {
     let mut overlay: Vec<LumoCustomElement> = Vec::with_capacity(16);
+
+    // A39: boot curtain full-screen.
+    if inputs.boot_curtain_alpha > 0.001 {
+        let alpha = inputs.boot_curtain_alpha.clamp(0.0, 1.0);
+        let geo: Rectangle<i32, Physical> =
+            Rectangle::new(Point::from((0, 0)), (inputs.output_w, inputs.output_h).into());
+        overlay.push(LumoCustomElement::Solid(SolidColorRenderElement::new(
+            Id::new(),
+            geo,
+            0,
+            Color32F::new(0.0, 0.0, 0.0, alpha),
+            Kind::Unspecified,
+        )));
+        return overlay;
+    }
 
     // 1. Cursor (em cima).
     if let Some(elem) = cursor_xcursor_element(
@@ -314,6 +331,8 @@ pub struct DrmCollectInputs<'a> {
     pub corner_shader: Option<&'a CornerShader>,
     /// A19: wallpaper opcional (vide OverlayInputs).
     pub wallpaper: Option<&'a crate::backend::wallpaper::LumoWallpaper>,
+    /// A39: boot curtain alpha.
+    pub boot_curtain_alpha: f32,
 }
 
 /// Coleta TODOS elementos pra render direto no DrmCompositor: chrome
@@ -336,6 +355,23 @@ pub fn collect_drm_elements(
     inputs: &DrmCollectInputs<'_>,
 ) -> Vec<LumoCustomElement> {
     let mut out: Vec<LumoCustomElement> = Vec::with_capacity(64);
+
+    // A39: boot curtain. Se alpha > 0.001, injeta quad preto full-screen
+    // na FRENTE de tudo (lista front-first = primeiro elemento).
+    // Early return depois: nao precisa renderizar o resto durante fade.
+    if inputs.boot_curtain_alpha > 0.001 {
+        let alpha = inputs.boot_curtain_alpha.clamp(0.0, 1.0);
+        let geo: Rectangle<i32, Physical> =
+            Rectangle::new(Point::from((0, 0)), (inputs.output_w, inputs.output_h).into());
+        out.push(LumoCustomElement::Solid(SolidColorRenderElement::new(
+            Id::new(),
+            geo,
+            0,
+            Color32F::new(0.0, 0.0, 0.0, alpha),
+            Kind::Unspecified,
+        )));
+        return out;
+    }
 
     // 1. Cursor primeiro (mais alto na pilha visual).
     if let Some(elem) = cursor_xcursor_element(
@@ -425,6 +461,21 @@ pub fn build_winit_elements(
     output: &Output,
 ) -> Vec<LumoCustomElement> {
     let mut out: Vec<LumoCustomElement> = Vec::with_capacity(64);
+
+    // A39: boot curtain full-screen.
+    if inputs.boot_curtain_alpha > 0.001 {
+        let alpha = inputs.boot_curtain_alpha.clamp(0.0, 1.0);
+        let geo: Rectangle<i32, Physical> =
+            Rectangle::new(Point::from((0, 0)), (inputs.output_w, inputs.output_h).into());
+        out.push(LumoCustomElement::Solid(SolidColorRenderElement::new(
+            Id::new(),
+            geo,
+            0,
+            Color32F::new(0.0, 0.0, 0.0, alpha),
+            Kind::Unspecified,
+        )));
+        return out;
+    }
 
     // 1. Cursor primeiro (mais alto).
     if let Some(elem) = cursor_xcursor_element(

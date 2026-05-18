@@ -225,7 +225,16 @@ fn redraw(
     });
     let (ow, oh) = (mode.size.w, mode.size.h);
 
+    // A39: tick boot curtain state.
+    if !state.boot_ready && state.boot_clients_ready() {
+        state.boot_ready = true;
+    }
+    if state.boot_ready && state.boot_curtain_alpha > 0.001 {
+        state.boot_curtain_alpha = (state.boot_curtain_alpha - 0.067).max(0.0);
+    }
+
     let inputs = OverlayInputs {
+        boot_curtain_alpha: state.boot_curtain_alpha,
         wallpaper: state.wallpaper.as_ref(),
         pointer_location: state.pointer_location,
         frame_counter: state.frame_counter,

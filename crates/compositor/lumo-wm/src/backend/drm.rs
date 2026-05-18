@@ -797,6 +797,15 @@ fn render_drm(state: &mut LumoState) {
     let force_repaint = state.drm_force_repaint;
     state.drm_force_repaint = false;
 
+    // A39: tick boot curtain state (antes de destructure pra evitar split borrow).
+    if !state.boot_ready && state.boot_clients_ready() {
+        state.boot_ready = true;
+    }
+    if state.boot_ready && state.boot_curtain_alpha > 0.001 {
+        state.boot_curtain_alpha = (state.boot_curtain_alpha - 0.067).max(0.0);
+    }
+    let boot_curtain_alpha = state.boot_curtain_alpha;
+
     // Destructure pra split borrow: backend mut + state.* imut em paralelo.
     let LumoState {
         ref mut drm_backend,
@@ -841,6 +850,7 @@ fn render_drm(state: &mut LumoState) {
     // ordem de stack -- cursor primeiro (front), cantos, sombras, depois
     // SpaceRenderElements vindos do smithay com z-order interno correto.
     let collect_inputs = DrmCollectInputs {
+        boot_curtain_alpha,
         wallpaper: wallpaper.as_ref(),
         corner_shader: corner_shader.as_ref(),
         space,

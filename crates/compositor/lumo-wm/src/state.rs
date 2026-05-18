@@ -17,7 +17,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use smithay::desktop::{layer_map_for_output, LayerSurface, PopupManager, Space, Window, WindowSurfaceType};
+use smithay::desktop::{layer_map_for_output, PopupManager, Space, Window, WindowSurfaceType};
 use smithay::input::keyboard::KeyboardHandle;
 use smithay::input::pointer::PointerHandle;
 use smithay::input::{Seat, SeatState};
@@ -160,6 +160,12 @@ pub struct LumoState {
     pub gesture: crate::input::TouchpadGestureState,
     /// L5: lid switch handler state.
     pub lid_handler: std::sync::Arc<std::sync::Mutex<crate::handlers::lid::LidHandlerState>>,
+
+    // A39: boot curtain. Tela preta inicial ate lumo-bar estar mapeada.
+    // boot_ready: lumo-bar detectada pelo menos 1x via layer_map.
+    // boot_curtain_alpha: 1.0 inicial; decrementa 0.067/frame apos ready.
+    pub boot_ready: bool,
+    pub boot_curtain_alpha: f32,
 }
 
 impl LumoState {
@@ -262,6 +268,8 @@ impl LumoState {
             focus_manager: Default::default(),
             gesture: Default::default(),
             lid_handler: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
+            boot_ready: false,
+            boot_curtain_alpha: 1.0,
         }
     }
 
@@ -385,7 +393,21 @@ impl LumoState {
         }
     }
 
-    /// A40: broadcast DesktopOpenSelected pra lumo-desktop abrir
+    /// A39: retorna true quando lumo-bar esta mapeada no layer_map.
+    /// Detecta pelo namespace lumo-bar em qualquer output e qualquer layer.
+    pub fn boot_clients_ready(&self) -> bool {
+        for output in self.space.outputs() {
+            let map = layer_map_for_output(output);
+            for layer in map.layers() {
+                if layer.namespace() == "lumo-bar" {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// A39: broadcast DesktopOpenSelected pra lumo-desktop abrir
     /// o icone selecionado via xdg-open.
     pub fn broadcast_desktop_open_selected(&mut self) {
         self.ipc.broadcast(&LumoEvent::DesktopOpenSelected);
