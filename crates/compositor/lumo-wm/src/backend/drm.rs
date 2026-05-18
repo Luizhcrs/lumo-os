@@ -394,6 +394,11 @@ pub fn run(
     // A19.4: carrega wallpaper (igual winit.rs:131)
     let wallpaper = crate::backend::wallpaper::LumoWallpaper::try_load(&mut renderer);
     state.wallpaper = wallpaper;
+    // A38: compila shader SDF corner radius (igual winit.rs).
+    state.corner_shader = match crate::backend::corner_shader::CornerShader::compile(&mut renderer) {
+        Ok(cs) => Some(cs),
+        Err(e) => { tracing::warn!("corner_shader compile falhou: {:?}", e); None }
+    };
 
     // A10 frente 1: dmabuf-v1 global. Galaxy U300 = Intel i915 render
     // node /dev/dri/renderD128. EGLContext.dmabuf_render_formats() ja
@@ -785,6 +790,7 @@ fn render_drm(state: &mut LumoState) {
         ref space,
         ref start_time,
         ref wallpaper,
+        ref corner_shader,
         frame_counter,
         ..
     } = *state;
@@ -820,6 +826,7 @@ fn render_drm(state: &mut LumoState) {
     // SpaceRenderElements vindos do smithay com z-order interno correto.
     let collect_inputs = DrmCollectInputs {
         wallpaper: wallpaper.as_ref(),
+        corner_shader: corner_shader.as_ref(),
         space,
         output: &surface.output,
         pointer_location,

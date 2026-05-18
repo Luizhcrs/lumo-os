@@ -71,7 +71,7 @@ impl Default for TouchpadConfig {
             accel_profile: AccelProfileCfg::Adaptive,
             accel_speed: 0.0,
             disable_while_typing: true,
-            click_method: ClickMethodCfg::Clickfinger,
+            click_method: ClickMethodCfg::ButtonAreas,
         }
     }
 }

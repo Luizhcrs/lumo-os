@@ -72,6 +72,9 @@ pub fn drain_ipc(
                     LumoEvent::DesktopOpenSelected => {
                         // A40: evento destinado ao lumo-desktop, bar ignora.
                     }
+                    LumoEvent::ActiveApp { .. } => {
+                        // C5 WIP: bar futuramente exibe menubar Mac-style aqui.
+                    }
                 }
             }
         }

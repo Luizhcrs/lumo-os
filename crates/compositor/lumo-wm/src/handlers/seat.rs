@@ -49,8 +49,36 @@ impl SeatHandler for LumoState {
         // Cursor rendering entra na Fase 5.3 (lumo-gfx integration).
     }
 
-    fn focus_changed(&mut self, _seat: &Seat<Self>, _focused: Option<&WlSurface>) {
-        // Foco persistido em LumoState futuramente.
+    fn focus_changed(&mut self, _seat: &Seat<Self>, focused: Option<&WlSurface>) {
+        // C5: broadcast ActiveApp a cada troca de foco de teclado.
+        // Quando focused=None, envia campos vazios + pid=0 pra bar limpar menubar.
+        use smithay::reexports::wayland_server::Resource;
+        use smithay::wayland::compositor as wl_compositor;
+        use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
+        use lumo_ipc::LumoEvent;
+        let (app_id, title, pid) = if let Some(surf) = focused {
+            let (app_id, title) = wl_compositor::with_states(surf, |states| {
+                if let Some(data) = states.data_map.get::<XdgToplevelSurfaceData>() {
+                    let lock = data.lock().unwrap();
+                    (
+                        lock.app_id.clone().unwrap_or_default(),
+                        lock.title.clone().unwrap_or_default(),
+                    )
+                } else {
+                    (String::new(), String::new())
+                }
+            });
+            let pid = surf
+                .client()
+                .and_then(|c| c.get_credentials(&self.display_handle).ok())
+                .map(|creds| creds.pid as u32)
+                .unwrap_or(0);
+            (app_id, title, pid)
+        } else {
+            (String::new(), String::new(), 0u32)
+        };
+        tracing::debug!(%app_id, %title, pid, "C5: focus_changed -> ActiveApp broadcast");
+        self.ipc.broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
     }
 
     fn led_state_changed(&mut self, _seat: &Seat<Self>, led_state: LedState) {

@@ -153,7 +153,7 @@ impl Element for RoundedSurfaceElement {
     fn damage_since(&self, scale: Scale<f64>, commit: Option<CommitCounter>) -> DamageSet<i32, Physical> {
         self.inner.damage_since(scale, commit)
     }
-    fn opaque_regions(&self, scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
+    fn opaque_regions(&self, _scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
         // corner radius remove pixels de cantos; sem opaque regions pra forcar blend
         OpaqueRegions::default()
     }

@@ -40,6 +40,14 @@ pub enum LumoEvent {
     /// a duplo-click). Emitido pelo compositor quando Return e pressionado
     /// sem toplevel ativo. lumo-desktop chama xdg-open no icone selecionado.
     DesktopOpenSelected,
+    /// C5: app em foco mudou. Emitido pelo compositor a cada troca de foco
+    /// de teclado em toplevel xdg. lumo-bar usa pra buscar appmenu via DBus.
+    /// app_id = xdg-toplevel app_id (ex: "thunar", "firefox").
+    /// title = titulo da janela no momento do foco.
+    /// pid = PID do processo dono da surface (via wl_client::pid()).
+    /// Quando nenhuma janela tem foco (focus = None), emite ActiveApp com
+    /// campos vazios e pid = 0 pra bar limpar menubar.
+    ActiveApp { app_id: String, title: String, pid: u32 },
 }
 
 /// Comandos enviados pelos clientes (lumo-bar, lumoctl, etc) ao

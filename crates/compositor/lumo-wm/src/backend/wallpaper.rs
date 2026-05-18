@@ -7,6 +7,14 @@
 //! pelo wallpaper. Como a textura cobre o output inteiro (stretch),
 //! clear color so vira fallback se load do wallpaper falhar.
 //!
+//! C4 (boot integration): try_load tenta primeiro o cache pre-aquecido
+//! em /dev/shm/lumo-wallpaper.cache (gerado por lumo-prewarm.service).
+//! Cache contem RGBA8 pre-decodificado e escalado para 1920x1080,
+//! eliminando decode JPEG 8K + scale (~250ms) no hot path de startup.
+//! Formato: header 16 bytes LE [LMWP][w u32][h u32][version u32]
+//!          seguido de w*h*4 bytes RGBA8.
+//! Fallback automatico para decode normal se cache ausente/corrompido.
+//!
 //! Memory feedback_design_lapidado: justificar -- por que imagem em vez
 //! de gradient procedural? Resposta: clear_color ja simulava cor solida;
 //! textura permite personalizacao real via env LUMO_WALLPAPER. Stretch
@@ -29,6 +37,13 @@ use smithay::backend::renderer::element::Kind;
 use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::backend::renderer::ImportMem;
 use smithay::utils::{Logical, Physical, Point, Rectangle, Size, Transform};
+
+/// Magic bytes no header do cache de wallpaper (lumo-prewarm.sh).
+const CACHE_MAGIC: &[u8; 4] = b"LMWP";
+/// Versao de formato suportada.
+const CACHE_VERSION: u32 = 1;
+/// Path do cache em tmpfs (gerado por lumo-prewarm.service).
+const CACHE_PATH: &str = "/dev/shm/lumo-wallpaper.cache";
 
 /// Wallpaper carregado: TextureBuffer GL + dimensoes originais da imagem.
 ///
@@ -58,7 +73,51 @@ impl LumoWallpaper {
             .into_rgba8();
         let (w, h) = img.dimensions();
         let pixels = img.into_raw();
-        let size: Size<i32, smithay::utils::Buffer> = (w as i32, h as i32).into();
+        Self::upload(renderer, pixels, w as i32, h as i32)
+    }
+
+    /// Tenta ler o cache pre-aquecido de /dev/shm/lumo-wallpaper.cache.
+    /// Retorna erro se: arquivo ausente, header invalido, tamanho incorreto.
+    /// Caller faz fallback para load() normal em qualquer erro.
+    fn load_cache(renderer: &mut GlesRenderer) -> Result<Self> {
+        let data = std::fs::read(CACHE_PATH)
+            .with_context(|| "abrir cache /dev/shm/lumo-wallpaper.cache")?;
+
+        // Header: 4 magic + 4 width + 4 height + 4 version = 16 bytes.
+        if data.len() < 16 {
+            return Err(anyhow!("cache muito pequeno ({} bytes)", data.len()));
+        }
+        let magic = &data[0..4];
+        if magic != CACHE_MAGIC {
+            return Err(anyhow!("magic invalido: {:?}", magic));
+        }
+        let w = u32::from_le_bytes(data[4..8].try_into().unwrap()) as i32;
+        let h = u32::from_le_bytes(data[8..12].try_into().unwrap()) as i32;
+        let version = u32::from_le_bytes(data[12..16].try_into().unwrap());
+
+        if version != CACHE_VERSION {
+            return Err(anyhow!("versao de cache incompativel: {version}"));
+        }
+        if w <= 0 || h <= 0 || w > 7680 || h > 4320 {
+            return Err(anyhow!("dimensoes invalidas no cache: {w}x{h}"));
+        }
+        let expected_pixels = (w as usize) * (h as usize) * 4;
+        let actual_pixels = data.len() - 16;
+        if actual_pixels != expected_pixels {
+            return Err(anyhow!(
+                "tamanho de pixels incorreto: esperado {expected_pixels}, encontrado {actual_pixels}"
+            ));
+        }
+
+        let pixels = data[16..].to_vec();
+        tracing::info!(w, h, "wallpaper cache hit: /dev/shm/lumo-wallpaper.cache");
+        Self::upload(renderer, pixels, w, h)
+    }
+
+    /// Upload de pixels RGBA8 para textura GL. Fatorado para ser chamado
+    /// tanto por load() (decode normal) quanto por load_cache() (shm).
+    fn upload(renderer: &mut GlesRenderer, pixels: Vec<u8>, w: i32, h: i32) -> Result<Self> {
+        let size: Size<i32, smithay::utils::Buffer> = (w, h).into();
 
         // Abgr8888 = ordem byte [R,G,B,A] em memoria little-endian. Bate
         // exato com layout do image::Rgba8 (R primeiro). Mesmo formato
@@ -70,18 +129,9 @@ impl LumoWallpaper {
         // TextureBuffer scale=1, transform=Normal -- queremos coordenadas
         // 1:1 com output. opaque_regions=None: image::Rgba8 pode ter alpha
         // (PNG transparente). Default seguro.
-        let buffer = TextureBuffer::from_texture(
-            renderer,
-            texture,
-            1,
-            Transform::Normal,
-            None,
-        );
+        let buffer = TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
 
-        Ok(Self {
-            buffer,
-            size: (w as i32, h as i32),
-        })
+        Ok(Self { buffer, size: (w, h) })
     }
 
     /// Resolve path do wallpaper: env LUMO_WALLPAPER se setado,
@@ -95,9 +145,24 @@ impl LumoWallpaper {
         Some(PathBuf::from(home).join(".config/lumo-wallpaper.jpg"))
     }
 
-    /// Wrapper: tenta resolver+carregar. Loga warn em qualquer falha
-    /// e retorna None (caller usa clear color como fallback).
+    /// Wrapper: tenta resolver+carregar. Ordem de tentativa:
+    /// 1. Cache pre-aquecido /dev/shm/lumo-wallpaper.cache (lumo-prewarm.service).
+    /// 2. Decode normal do arquivo original via image crate.
+    /// Loga warn em qualquer falha final e retorna None.
     pub fn try_load(renderer: &mut GlesRenderer) -> Option<Self> {
+        // C4: tenta cache primeiro (zero decode cost se prewarm rodou).
+        match Self::load_cache(renderer) {
+            Ok(w) => return Some(w),
+            Err(e) => {
+                // Cache ausente e normal antes do prewarm; outro erro = warn.
+                if std::path::Path::new(CACHE_PATH).exists() {
+                    tracing::warn!(error = %e, "cache corrompido, fallback decode normal");
+                } else {
+                    tracing::debug!("cache nao disponivel, decode direto do arquivo");
+                }
+            }
+        }
+
         let path = Self::resolve_path()?;
         if !path.exists() {
             tracing::warn!(path = %path.display(), "wallpaper nao encontrado, usando clear color");
@@ -109,7 +174,7 @@ impl LumoWallpaper {
                     path = %path.display(),
                     w = w.size.0,
                     h = w.size.1,
-                    "wallpaper carregado"
+                    "wallpaper carregado (decode direto)"
                 );
                 Some(w)
             }
