@@ -66,10 +66,33 @@ fn spawn_autostart(socket_name: &str) {
         .unwrap_or_else(|| std::path::PathBuf::from("./target/release"));
 
     let bar_path = exe_dir.join("lumo-bar");
+    let desktop_path = exe_dir.join("lumo-desktop");
     let home = std::env::var("HOME").unwrap_or_default();
     let xdg = std::env::var("XDG_CONFIG_HOME")
         .unwrap_or_else(|_| format!("{home}/.config"));
     let xdg_runtime = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
+
+    // A21: lumo-desktop ANTES de lumo-bar.
+    // Background layer eh atras de tudo = primeiro a desenhar; subir
+    // antes garante que o compositor ja tem a surface registrada quando
+    // bar/toplevels chegarem por cima. Falha de spawn = warn + continua.
+    if desktop_path.exists() {
+        let mut cmd = std::process::Command::new(&desktop_path);
+        cmd.env("WAYLAND_DISPLAY", socket_name);
+        cmd.env("HOME", &home);
+        cmd.env("XDG_CONFIG_HOME", &xdg);
+        cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
+        match cmd.spawn() {
+            Ok(child) => tracing::info!(
+                pid = child.id(),
+                desktop = ?desktop_path,
+                "autostart lumo-desktop"
+            ),
+            Err(err) => tracing::warn!(?err, "autostart lumo-desktop falhou"),
+        }
+    } else {
+        tracing::warn!(desktop = ?desktop_path, "lumo-desktop binary nao encontrado, skip autostart");
+    }
 
     // lumo-bar
     if bar_path.exists() {

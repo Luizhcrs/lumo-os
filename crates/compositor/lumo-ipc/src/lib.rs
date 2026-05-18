@@ -27,6 +27,11 @@ pub enum LumoEvent {
     /// Estado completo de workspaces. Emitido no connect + a cada
     /// mudanca. Idempotente (vale o ultimo).
     Workspaces { active: u8, total: u8 },
+    /// Pedido pra fechar dropdowns ativos em clients (ex: lumo-bar
+    /// fecha dropdown de bateria). Emitido pelo compositor quando
+    /// click esquerdo no desktop (lumo-desktop) em area vazia.
+    /// A21: clientes que nao tem dropdown ignoram silenciosamente.
+    CloseDropdowns,
 }
 
 /// Comandos enviados pelos clientes (lumo-bar, lumoctl, etc) ao
@@ -37,6 +42,11 @@ pub enum LumoCommand {
     /// Troca workspace ativo. `to` em 1..=MAX_WORKSPACES.
     /// Compositor valida e ignora fora do range.
     Switch { to: u8 },
+    /// Pede pro compositor avisar todos clients pra fecharem seus
+    /// dropdowns ativos. A21: enviado por lumo-desktop quando ha
+    /// click esquerdo em area vazia da area de trabalho.
+    /// Compositor traduz em broadcast LumoEvent::CloseDropdowns.
+    CloseDropdowns,
 }
 
 /// Path padrao do socket. Falha se `XDG_RUNTIME_DIR` ausente.

@@ -39,7 +39,7 @@ use smithay::wayland::xdg_activation::XdgActivationState;
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufState};
 use smithay::wayland::xdg_toplevel_icon::XdgToplevelIconManager;
 
-use lumo_ipc::{LumoCommand, MAX_WORKSPACES};
+use lumo_ipc::{LumoCommand, LumoEvent, MAX_WORKSPACES};
 
 use crate::ipc::IpcServer;
 
@@ -318,6 +318,12 @@ impl LumoState {
         match cmd {
             LumoCommand::Switch { to } => {
                 self.set_workspace(to);
+            }
+            LumoCommand::CloseDropdowns => {
+                // A21: compositor nao tem dropdown proprio; so propaga pra
+                // clients (lumo-bar) decidirem o que fechar. Idempotente —
+                // clients sem dropdown ativo ignoram.
+                self.ipc.broadcast(&LumoEvent::CloseDropdowns);
             }
         }
     }
