@@ -40,6 +40,8 @@ pub enum TileDir {
 /// Acoes disparadas por keybind.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KeyAction {
+    /// F5: refresh compositor (re-render + re-init clients).
+    Refresh,
     Spawn(String),
     CloseWindow,
     Lock,
@@ -168,6 +170,7 @@ pub fn default_bindings() -> Vec<KeyBinding> {
         KeyBinding::new(s(), Keysym::space,      KeyAction::Launcher),
         KeyBinding::new(s(), Keysym::Return,     KeyAction::Spawn("foot".to_string())),
         KeyBinding::new(s(), Keysym::Tab,        KeyAction::CycleWindow(1)),
+        KeyBinding::new(ModifiersMask::default(), Keysym::F5, KeyAction::Refresh),
         KeyBinding::new(s(), Keysym::f,          KeyAction::FullscreenToggle),
         KeyBinding::new(s(), Keysym::F,          KeyAction::FullscreenToggle),
         KeyBinding::new(s(), Keysym::m,          KeyAction::Minimize),

@@ -330,10 +330,25 @@ impl LumoState {
         None
     }
 
-    /// Calcula proxima posicao de tile horizontal. MVP.
+    /// Calcula posicao pra nova janela. Estrategia: cursor center se nao
+    /// colide com bar/desktop, fallback centro tela. Mac/Windows-like.
     pub fn next_tile_position(&self) -> Point<i32, Logical> {
-        let count = self.space.elements().count() as i32;
-        ((count * 620).min(1280 - 600), 40).into()
+        // Assume 1920x1080 output (Galaxy Book 4 nativo).
+        // Bar topo = 32px. Janela default ~800x600. Centro logico (560, 240).
+        const OUT_W: i32 = 1920;
+        const OUT_H: i32 = 1080;
+        const DEFAULT_W: i32 = 800;
+        const DEFAULT_H: i32 = 600;
+        const BAR_H: i32 = 40;
+        let cx = self.pointer_location.x as i32;
+        let cy = self.pointer_location.y as i32;
+        // Posiciona window CENTRADA no cursor.
+        let mut x = cx - DEFAULT_W / 2;
+        let mut y = cy - DEFAULT_H / 2;
+        // Clamp dentro output, respeita bar topo.
+        x = x.clamp(8, OUT_W - DEFAULT_W - 8);
+        y = y.clamp(BAR_H + 8, OUT_H - DEFAULT_H - 8);
+        (x, y).into()
     }
 
     /// Aplica comando recebido via IPC. Centraliza

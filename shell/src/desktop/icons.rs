@@ -29,7 +29,7 @@ pub const ICON_PAD_X: f32 = (CELL_W - ICON_SIZE) / 2.0;
 pub const ICON_PAD_Y: f32 = 4.0;
 /// Grid ancora: top-right com margem da borda.
 pub const GRID_MARGIN_RIGHT: f32 = 16.0;
-pub const GRID_MARGIN_TOP: f32 = 32.0;
+pub const GRID_MARGIN_TOP: f32 = 56.0;
 /// Scan interval.
 pub const SCAN_INTERVAL: Duration = Duration::from_secs(2);
 /// Threshold de movimento pra iniciar drag (px).

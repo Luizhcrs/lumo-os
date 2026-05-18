@@ -257,6 +257,16 @@ impl LumoState {
             KeyAction::CloseWindow => {
                 self.close_focused_window();
             }
+            KeyAction::Refresh => {
+                tracing::info!("F5 refresh compositor (force redraw)");
+                #[cfg(feature = "drm-backend")]
+                {
+                    self.drm_force_repaint = true;
+                }
+                // Broadcast pra clients fazerem reload do theme.toml.
+                use lumo_ipc::{LumoEvent, ThemeMode};
+                self.ipc.broadcast(&LumoEvent::ThemeReloaded { mode: ThemeMode::Light });
+            }
             KeyAction::Lock => {
                 tracing::info!("lock pendente A40");
             }

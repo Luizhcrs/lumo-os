@@ -187,8 +187,6 @@ export LUMO_TRACE_POINTER=1
 # A13: theme default LIGHT (Luiz pediu). Override com:
 #   LUMO_THEME=dark ./scripts/lumo-tty.sh
 export LUMO_THEME="${LUMO_THEME:-light}"
-# Foot terminal auto-spawn (ate dock M1 entrar)
-export LUMO_AUTOSTART_FOOT=1
 
 # C5: GTK3 apps exportam appmenu via DBus quando appmenu-gtk-module carregado.
 export GTK_MODULES="${GTK_MODULES:+$GTK_MODULES:}appmenu-gtk-module"
