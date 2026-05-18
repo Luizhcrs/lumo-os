@@ -1,11 +1,15 @@
-//! lumo-sensors - sysfs sensor registry for Galaxy Book 4 (Arch Linux, kernel 7.x).
+//! # lumo-sensors
 //!
-//! Paths are cached at discover() time. All reads are fresh (no internal cache).
-//! Write operations require polkit rule 49-lumo-sensors.rules or group membership.
+//! Proposito: Registry de sensores sysfs para Galaxy Book 4 (Arch Linux, kernel 7.x).
 //!
-//! Validated empirically on Galaxy Book 4 NP750XGJ-* (2026-05-18):
-//!   BAT1, charge_control_end_threshold, platform_profile (4 modes),
-//!   8 thermal zones, intel_backlight, ACPI lid switch.
+//! ## Invariantes
+//! - Paths cacheados em discover(); leituras sao sempre fresh (sem cache interno).
+//! - Write ops exigem polkit rule 49-lumo-sensors.rules ou membership no grupo correto.
+//! - Validado empiricamente em Galaxy Book 4 NP750XGJ-* (2026-05-18).
+//!
+//! ## Memory refs
+//! - [[feedback-design-lapidado]]
+//! - [[project-lumo-os]]
 
 pub mod battery;
 pub mod backlight;

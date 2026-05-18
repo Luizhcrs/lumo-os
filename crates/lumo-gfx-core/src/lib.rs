@@ -1,14 +1,14 @@
-//! lumo-gfx-core (umbrella)
+//! # lumo-gfx-core
 //!
-//! Re-exporta todos os crates Lumo framework-style. Existe pra:
-//! 1) manter 1 ponto unico para os bins demo (`triangle`, `quad-gallery`,
-//!    `quad-shadow`, `text-demo`, `button-demo`, `button-interactive`).
-//! 2) dar uma API de "monorepo gfx" pra callers que nao querem listar 7
-//!    deps no Cargo.toml deles.
+//! Proposito: Umbrella crate: re-exporta todos os crates grafico Lumo para uso pelos bins demo.
 //!
-//! Novos call sites devem importar dos crates especificos
-//! (`lumo_beam`, `lumo_kit`, etc.) para Cargo entender melhor o grafo
-//! de dependencias.
+//! ## Invariantes
+//! - Novos call sites devem importar dos crates especificos pra Cargo entender melhor o grafo.
+//! - Re-exports com glob (*): conflitos de nome sao erro de compilacao, nao silenciosos.
+//!
+//! ## Memory refs
+//! - [[feedback-design-lapidado]]
+//! - [[project-lumo-os]]
 
 // Flat top-level re-exports (preserva caminhos curtos `lumo_gfx_core::QuadInstance`).
 pub use lumo_animation::*;

@@ -1,18 +1,15 @@
-//! Widgets (Layer 4.1.8 + 4.1.9).
+//! # lumo-kit
 //!
-//! Primeiro widget Lumo de verdade: `Button`. Composto por:
-//!   - 1 quad (background + corner radius + opcional border + drop shadow)
-//!   - 1 run de texto centralizada no padding
+//! Proposito: Widgets Lumo: Button stateless + ButtonHandle com spring animation.
 //!
-//! Layer 4.1.8: stateless (queue / measure / render direto).
-//! Layer 4.1.9: state machine externa via `ButtonHandle` + spring animation
-//! no `press_progress`. Caller mantem o handle entre frames; o `Button`
-//! continua stateless e e renderizado via `queue` (sem state) ou
-//! `queue_stateful(handle)` (com modulacao de cor/scale por estado).
+//! ## Invariantes
+//! - Todas as cores recebidas devem ser linear space antes de entrar nos widgets — ver I-10.
+//! - Button e stateless; estado externo exclusivamente via ButtonHandle.
+//! - queue_stateful() modula cor/scale via press_progress; valores fora [0.0, 1.0] sao clampados.
 //!
-//! Convencao de cor: todas as cores aqui sao **linear** (consistente com
-//! `color::*`). Se vier sRGB de um theme runtime, converter via
-//! `color::srgb_to_linear` antes.
+//! ## Memory refs
+//! - [[feedback-design-lapidado]]
+//! - [[project-lumo-os]]
 
 use std::time::Instant;
 

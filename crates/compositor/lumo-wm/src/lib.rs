@@ -1,14 +1,16 @@
-//! lumo-wm - Wayland compositor proprio do Lumo OS (Layer 5).
+//! # lumo-wm
 //!
-//! Fase 5.4 (A7): cursor xcursor real + spawn keybind + bar SHM.
+//! Proposito: Wayland compositor DRM/winit do Lumo OS. Backend selecionado via LUMO_WM_BACKEND.
 //!
-//! Fase 5.5 (A8):
-//! - backend DRM/KMS (`backend::drm`) gated por feature `drm-backend`,
-//!   selecionado via env `LUMO_WM_BACKEND=drm` (default winit).
-//! - IPC unix socket (`crate::ipc`) pra workspaces -> lumo-bar.
-//! - Moldura desktop: corner radius + sombra preta neutra (sem neon).
+//! ## Invariantes
+//! - Apenas 1 processo pode ser DRM master simultaneamente — ver I-01.
+//! - LumoState nao implementa Send; event loop calloop e single-threaded — ver I-09.
+//! - WAYLAND_DISPLAY e socket_name sao imutaveis apos EventLoop::run() — ver I-05.
+//! - LumoWallpaper.buffer nao pode sobreviver ao GlesRenderer que o criou — ver I-04.
 //!
-//! Roda nested em Hyprland (winit) ou full-session em TTY (drm).
+//! ## Memory refs
+//! - [[feedback-design-lapidado]]
+//! - [[project-lumo-os]]
 
 pub mod backend;
 pub mod focus;

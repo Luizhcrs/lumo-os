@@ -1,17 +1,14 @@
-//! Text rendering (Layer 4.1.7).
+//! # lumo-text
 //!
-//! Estrategia:
-//! - `cosmic-text` faz font discovery (via fontdb), shaping, e rasterizacao
-//!   monocromatica via `SwashCache`.
-//! - Os bitmaps de glyph (R8, alpha) vao para um atlas 1024x1024 packed por
-//!   `etagere::BucketedAtlasAllocator`.
-//! - Cache: `GlyphKey { font_id, glyph_id, subpx, size_q }` -> `AtlasEntry`.
-//! - Uma instancia por glyph e enviada ao GPU; o fragment shader le o alpha
-//!   no atlas e multiplica pela cor da run.
+//! Proposito: Text rendering via cosmic-text + atlas GPU 1024x1024.
 //!
-//! Atlas growth ainda nao implementado: se estourar 1024x1024 o renderer
-//! avisa via `log::warn!` e descarta o glyph (espacos brancos). Para os
-//! textos da demo cabe folgado.
+//! ## Invariantes
+//! - FontSystem locked ANTES de SwashCache em qualquer callsite — ver I-03.
+//! - Atlas overflow descarta glyph com log::warn (sem panic); crescimento de atlas nao implementado.
+//!
+//! ## Memory refs
+//! - [[feedback-design-lapidado]]
+//! - [[project-lumo-os]]
 
 use std::collections::HashMap;
 

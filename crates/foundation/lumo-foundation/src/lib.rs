@@ -1,23 +1,15 @@
-//! lumo-foundation
+//! # lumo-foundation
 //!
-//! Apple-style "Foundation": camada base com design tokens, helpers de cor
-//! e helpers de geometria (pixel <-> NDC). Zero dependencias de wgpu/winit
-//! para poder ser usada por qualquer camada acima.
+//! Proposito: Design tokens, color helpers e geometria NDC. Zero deps wgpu/winit.
 //!
-//! Layout:
-//! - [`LFTokens`]   : design tokens (cores ink/panel/emerald/pearl/danger).
-//! - [`LFColor`]    : conversao sRGB <-> linear.
-//! - [`LFGeometry`] : pixel-to-NDC helpers para widgets / renderers.
+//! ## Invariantes
+//! - Cores em campos sem sufixo sao linear space (nao sRGB) — ver I-10.
+//! - Zero dependencias de wgpu/winit/smithay: pode ser usada por qualquer crate acima.
+//! - LFColor::srgb_to_linear obrigatoria pra qualquer cor vinda de input externo (theme override).
 //!
-//! # Color space gotcha
-//!
-//! Surfaces wgpu usam `Bgra8UnormSrgb` (sRGB). O hardware aplica
-//! `linear -> sRGB` automaticamente ao escrever no framebuffer. Portanto
-//! **as cores enviadas ao shader devem estar em linear space**, nao em
-//! sRGB. Os campos `*` (sem sufixo) em `LFTokens` ja sao linear.
-//! Os `*_SRGB` preservam o valor nominal do design system pra debug.
-//! Use [`LFColor::srgb_to_linear`] em runtime quando carregar cor de
-//! usuario (hex picker, theme override, etc.).
+//! ## Memory refs
+//! - [[feedback-design-lapidado]]
+//! - [[project-lumo-os]]
 
 // ---------------------------------------------------------------------------
 // LFTokens — design tokens
@@ -873,5 +865,286 @@ mod lf_tokens_tests {
     #[test]
     fn color_module_emerald_matches_lf_tokens() {
         assert_eq!(color::EMERALD_600, LFTokens::EMERALD_600);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// BarLayout -- data-driven layout carregado de layout.toml (F1)
+// ---------------------------------------------------------------------------
+
+/// Spec de uma pill individual na bar.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PillSpec {
+    pub id: String,
+    pub width: Option<f32>,
+}
+
+impl PillSpec {
+    pub fn new(id: &str) -> Self {
+        Self { id: id.to_string(), width: None }
+    }
+    pub fn with_width(id: &str, w: f32) -> Self {
+        Self { id: id.to_string(), width: Some(w) }
+    }
+}
+
+/// Layout completo da bar. Lido de layout.toml; fallback para default se ausente.
+#[derive(Debug, Clone)]
+pub struct BarLayout {
+    pub height: u32,
+    pub padding_x: f32,
+    pub pill_gap: f32,
+    pub pill_radius: f32,
+    pub margin_top: f32,
+    pub margin_x: f32,
+    pub left_pills: Vec<PillSpec>,
+    pub right_pills: Vec<PillSpec>,
+}
+
+impl BarLayout {
+    /// Valores identicos aos hardcoded em tokens.rs -- zero regressao visual.
+    pub fn default_layout() -> Self {
+        Self {
+            height: 40,
+            padding_x: 14.0,
+            pill_gap: 8.0,
+            pill_radius: 14.0,
+            margin_top: 6.0,
+            margin_x: 14.0,
+            left_pills: vec![
+                PillSpec::with_width("brand", 88.0),
+                PillSpec::new("appmenu"),
+            ],
+            right_pills: vec![
+                PillSpec::with_width("battery", 32.0),
+                PillSpec::with_width("brightness", 24.0),
+                PillSpec::with_width("wifi", 24.0),
+                PillSpec::with_width("datetime", 220.0),
+            ],
+        }
+    }
+
+    pub fn find_pill(&self, id: &str) -> Option<&PillSpec> {
+        self.left_pills.iter()
+            .chain(self.right_pills.iter())
+            .find(|p| p.id == id)
+    }
+
+    pub fn config_path() -> Option<std::path::PathBuf> {
+        let home = std::env::var_os("HOME")?;
+        let mut p = std::path::PathBuf::from(home);
+        p.push(".config/lumo/layout.toml");
+        Some(p)
+    }
+
+    pub fn load_from_disk() -> Self {
+        let path = match Self::config_path() {
+            Some(p) => p,
+            None => return Self::default_layout(),
+        };
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(_) => return Self::default_layout(),
+        };
+        Self::parse_toml(&text).unwrap_or_else(|_| Self::default_layout())
+    }
+
+    pub fn parse_toml(text: &str) -> Result<Self, String> {
+        let mut layout = Self::default_layout();
+        let mut section = String::new();
+        for raw_line in text.lines() {
+            let line = raw_line.trim();
+            if line.is_empty() || line.starts_with('#') { continue; }
+            if line.starts_with('[') && line.ends_with(']') {
+                section = line[1..line.len() - 1].trim().to_string();
+                continue;
+            }
+            if line.starts_with("pills") {
+                if let Some(arr_start) = line.find('[') {
+                    let pills = parse_pill_array(&line[arr_start..]);
+                    match section.as_str() {
+                        "bar.left"  => layout.left_pills  = pills,
+                        "bar.right" => layout.right_pills = pills,
+                        _ => {}
+                    }
+                }
+                continue;
+            }
+            let Some(eq) = line.find('=') else { continue };
+            let key = line[..eq].trim();
+            let val = line[eq + 1..].trim().trim_matches('"').trim_matches('\'');
+            match (section.as_str(), key) {
+                ("bar", "height")      => { if let Ok(v) = val.parse::<u32>() { layout.height      = v; } }
+                ("bar", "padding_x")   => { if let Ok(v) = val.parse::<f32>() { layout.padding_x   = v; } }
+                ("bar", "pill_gap")    => { if let Ok(v) = val.parse::<f32>() { layout.pill_gap    = v; } }
+                ("bar", "pill_radius") => { if let Ok(v) = val.parse::<f32>() { layout.pill_radius = v; } }
+                ("bar", "margin_top")  => { if let Ok(v) = val.parse::<f32>() { layout.margin_top  = v; } }
+                ("bar", "margin_x")    => { if let Ok(v) = val.parse::<f32>() { layout.margin_x    = v; } }
+                _ => {}
+            }
+        }
+        Ok(layout)
+    }
+}
+
+fn parse_pill_array(arr_str: &str) -> Vec<PillSpec> {
+    let mut pills = Vec::new();
+    let mut depth = 0i32;
+    let mut start = 0usize;
+    let chars: Vec<char> = arr_str.chars().collect();
+    for (i, &c) in chars.iter().enumerate() {
+        if c == '{' {
+            if depth == 0 { start = i; }
+            depth += 1;
+        } else if c == '}' {
+            depth -= 1;
+            if depth == 0 {
+                let item: String = chars[start..=i].iter().collect();
+                if let Some(spec) = parse_pill_item(&item) { pills.push(spec); }
+            }
+        }
+    }
+    pills
+}
+
+fn parse_pill_item(item: &str) -> Option<PillSpec> {
+    let inner = item.trim_start_matches('{').trim_end_matches('}').trim();
+    let mut id: Option<String> = None;
+    let mut width: Option<f32> = None;
+    for part in inner.split(',') {
+        let kv = part.trim();
+        if let Some(eq) = kv.find('=') {
+            let k = kv[..eq].trim();
+            let v = kv[eq + 1..].trim().trim_matches('"').trim_matches('\'');
+            match k {
+                "id"    => id = Some(v.to_string()),
+                "width" => { if let Ok(w) = v.parse::<f32>() { width = Some(w); } }
+                _ => {}
+            }
+        }
+    }
+    let id = id?;
+    Some(match width {
+        Some(w) => PillSpec::with_width(&id, w),
+        None    => PillSpec::new(&id),
+    })
+}
+
+static BAR_LAYOUT_GLOBAL: std::sync::OnceLock<std::sync::Arc<std::sync::RwLock<BarLayout>>> =
+    std::sync::OnceLock::new();
+
+pub fn bar_layout_global() -> &'static std::sync::Arc<std::sync::RwLock<BarLayout>> {
+    BAR_LAYOUT_GLOBAL.get_or_init(|| {
+        std::sync::Arc::new(std::sync::RwLock::new(BarLayout::load_from_disk()))
+    })
+}
+
+/// Snapshot imutavel do layout atual. Chame por frame (clone e barato).
+pub fn current_bar_layout() -> BarLayout {
+    bar_layout_global().read().unwrap().clone()
+}
+
+/// Inicia thread de filewatcher para layout.toml. Atualiza global e chama callback.
+pub fn watch_layout<F: Fn(BarLayout) + Send + 'static>(callback: F) {
+    let Some(path) = BarLayout::config_path() else { return };
+    std::thread::Builder::new()
+        .name("lumo-layout-watcher".into())
+        .spawn(move || {
+            use notify::{EventKind, RecursiveMode, Watcher};
+            use notify::event::{ModifyKind, CreateKind};
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let (tx, rx) = std::sync::mpsc::channel();
+            let mut watcher = match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+                if let Ok(ev) = res { let _ = tx.send(ev); }
+            }) {
+                Ok(w) => w,
+                Err(e) => {
+                    eprintln!("[lumo-foundation] watch_layout: watcher init falhou: {e}");
+                    return;
+                }
+            };
+            let watch_dir = path.parent().unwrap_or(path.as_path());
+            if let Err(e) = watcher.watch(watch_dir, RecursiveMode::NonRecursive) {
+                eprintln!("[lumo-foundation] watch_layout: watch({}) falhou: {e}", watch_dir.display());
+                return;
+            }
+            for event in rx {
+                let is_layout_file = event.paths.iter().any(|p| p == &path);
+                if !is_layout_file { continue; }
+                let relevant = matches!(
+                    event.kind,
+                    EventKind::Modify(ModifyKind::Data(_))
+                    | EventKind::Modify(ModifyKind::Any)
+                    | EventKind::Create(CreateKind::File)
+                    | EventKind::Create(CreateKind::Any)
+                );
+                if relevant {
+                    let new_layout = BarLayout::load_from_disk();
+                    if let Ok(mut guard) = bar_layout_global().write() {
+                        *guard = new_layout.clone();
+                    }
+                    callback(new_layout);
+                }
+            }
+        })
+        .ok();
+}
+
+#[cfg(test)]
+mod bar_layout_tests {
+    use super::*;
+
+    #[test]
+    fn default_layout_has_expected_pills() {
+        let l = BarLayout::default_layout();
+        assert!(l.find_pill("brand").is_some());
+        assert!(l.find_pill("battery").is_some());
+        assert!(l.find_pill("datetime").is_some());
+        assert!(l.find_pill("nonexistent").is_none());
+    }
+
+    #[test]
+    fn default_layout_dimensions() {
+        let l = BarLayout::default_layout();
+        assert_eq!(l.height, 40);
+        assert!((l.padding_x - 14.0).abs() < 0.01);
+        assert!((l.pill_gap - 8.0).abs() < 0.01);
+        assert!((l.pill_radius - 14.0).abs() < 0.01);
+        assert!((l.margin_top - 6.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn load_fallback_when_no_file() {
+        let layout = BarLayout::load_from_disk();
+        assert!(layout.find_pill("brand").is_some());
+    }
+
+    #[test]
+    fn parse_toml_dimensions() {
+        let toml = "[bar]\nheight = 32\npadding_x = 16\n";
+        let layout = BarLayout::parse_toml(toml).unwrap();
+        assert_eq!(layout.height, 32);
+        assert!((layout.padding_x - 16.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_pill_array_inline() {
+        let arr = concat!(
+            r#"[{ id = "wifi", width = 24 }, { id = "brand" }]"#
+        );
+        let pills = super::parse_pill_array(arr);
+        assert_eq!(pills.len(), 2);
+        assert_eq!(pills[0].id, "wifi");
+        assert_eq!(pills[0].width, Some(24.0));
+        assert_eq!(pills[1].id, "brand");
+        assert!(pills[1].width.is_none());
+    }
+
+    #[test]
+    fn find_pill_returns_none_for_unknown() {
+        let l = BarLayout::default_layout();
+        assert!(l.find_pill("unknown_pill_xyz").is_none());
     }
 }

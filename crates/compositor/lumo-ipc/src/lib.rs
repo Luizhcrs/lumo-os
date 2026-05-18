@@ -1,15 +1,15 @@
-//! lumo-ipc - tipos e helpers do canal de IPC do Lumo OS.
+//! # lumo-ipc
 //!
-//! Canal: socket unix em `$XDG_RUNTIME_DIR/lumo-wm.sock`.
-//! Protocolo: linhas JSON ('\n' terminator). Justificativa do
-//! line-delimited JSON em vez de length-prefixed/CBOR:
-//! - debug trivial (tail / nc -U / socat)
-//! - sem framing custom = menos bug nos primeiros dias
-//! - throughput esperado < 100 msg/s (UI), zero pressao por bytes
+//! Proposito: Tipos e helpers do canal IPC unix socket do Lumo OS. Protocolo line-delimited JSON.
 //!
-//! Memory feedback_design_lapidado: cada decisao com motivo.
-//! Memory feedback_input_feedback_imediato: clients devem aplicar
-//! eventos no proximo frame, drop quando lag > 100ms.
+//! ## Invariantes
+//! - Socket criado antes de clientes conectarem; clientes toleram ausencia com retry/standalone — ver I-02.
+//! - Todos UnixStream IPC devem ter set_nonblocking(true) imediatamente apos connect/accept — ver I-06.
+//! - active_workspace sempre em 1..=MAX_WORKSPACES; set_workspace() e cliente bar clampam — ver I-07.
+//!
+//! ## Memory refs
+//! - [[feedback-design-lapidado]]
+//! - [[project-lumo-os]]
 
 use serde::{Deserialize, Serialize};
 

@@ -1,14 +1,14 @@
-//! lumo-graphics
+//! # lumo-graphics
 //!
-//! Apple-style "CoreGraphics" equivalente: quad com SDF rounded corners,
-//! border instanced, drop shadow expandido. Roda em cima do `LBDevice` /
-//! `LBGlobalUniforms` do `lumo-beam`.
+//! Proposito: QuadRenderer instanced com SDF rounded corners, border e drop shadow.
 //!
-//! Layout:
-//! - [`LGQuadVertex`]    : vertex local `[-0.5..+0.5]` (constante).
-//! - [`LGQuadInstance`]  : 1 instancia descrevendo um quad com bg/border/
-//!                         corner-radius/shadow.
-//! - [`LGQuadRenderer`]  : pipeline instanced + buffers + draw helpers.
+//! ## Invariantes
+//! - Instancias enviadas por frame sao acumuladas e flushed em draw(); nao chamar draw() multiplas vezes sem flush.
+//! - Sombras usam preto neutro (sem neon) — ver feedback_zero_neon_glow.
+//!
+//! ## Memory refs
+//! - [[feedback-design-lapidado]]
+//! - [[project-lumo-os]]
 
 use bytemuck::{Pod, Zeroable};
 use lumo_beam::LBGlobalUniforms;

@@ -1,14 +1,15 @@
-//! Input event handling (Layer 4.1.9).
+//! # lumo-input
 //!
-//! Esta camada existe pra desacoplar a `lumo-gfx-core` do `winit` na hora de
-//! propagar eventos pro `widget::ButtonHandle` (e widgets futuros). O bridge
-//! `winit_event_to_lumo` faz o adapter; o resto da stack so conhece
-//! `LumoEvent` / `PointerState`.
+//! Proposito: Adapter winit -> LumoEvent. Desacopla lumo-gfx-core do winit.
 //!
-//! Convencoes:
-//! - posicao em pixels fisicos (mesmo espaco do viewport)
-//! - origem top-left (compativel com `widget::Rect` e `Button::queue`)
-//! - botoes do mouse como bitmask (compat com `PointerState.buttons`)
+//! ## Invariantes
+//! - Posicoes em pixels fisicos, origem top-left.
+//! - Cada keystroke deve resultar em render no proximo frame — ver feedback_input_feedback_imediato.
+//! - Inputs antigos (lag > 100ms) devem ser descartados pelo caller.
+//!
+//! ## Memory refs
+//! - [[feedback-design-lapidado]]
+//! - [[project-lumo-os]]
 
 use winit::event::{ElementState, MouseButton as WinitMouseButton, WindowEvent};
 use winit::keyboard::ModifiersState;

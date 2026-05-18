@@ -173,27 +173,17 @@ echo "[1/3] Build lumo-wm (feature drm-backend) + lumo-bar..."
 cargo build --release --features lumo-wm/drm-backend --bin lumo-wm --bin lumo-bar 2>&1 | tail -6
 
 # ============================================================
-# Env.
+# Env (source de lumo-env.conf).
+# Override individual: export VAR=value antes deste script.
 # ============================================================
-export LUMO_WM_BACKEND=drm
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 mkdir -p "$XDG_RUNTIME_DIR"
-export XDG_SESSION_TYPE=wayland
-export XDG_CURRENT_DESKTOP=lumo
-export WAYLAND_DISPLAY=wayland-lumo
-export RUST_LOG="${RUST_LOG:-lumo_wm=info,smithay=warn,wgpu=warn}"
-export LUMO_TRACE_POINTER=1
-
-# A13: theme default LIGHT (Luiz pediu). Override com:
-#   LUMO_THEME=dark ./scripts/lumo-tty.sh
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+ENV_FILE="$HOME/.config/lumo/env.conf"
+[ -f "$ENV_FILE" ] || ENV_FILE="$REPO/scripts/install/lumo-env.conf"
+set -a; source "$ENV_FILE"; set +a
+# A13: LUMO_THEME default light; override: LUMO_THEME=dark ./scripts/lumo-tty.sh
 export LUMO_THEME="${LUMO_THEME:-light}"
-
-# C5: GTK3 apps exportam appmenu via DBus quando appmenu-gtk-module carregado.
-export GTK_MODULES="${GTK_MODULES:+$GTK_MODULES:}appmenu-gtk-module"
-# Qt5/Qt6 apps via appmenu-qt5 platformtheme (se instalado).
-export QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-appmenu-qt5}"
-# Ubuntu legacy var: alguns apps ainda usam pra detectar global menu host.
-export UBUNTU_MENUPROXY=1
 
 echo "[2/3] TTY = $current_tty, user = $(id -un)"
 echo "[3/3] Iniciando lumo-wm DRM..."

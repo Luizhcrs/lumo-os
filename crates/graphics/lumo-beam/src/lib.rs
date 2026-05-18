@@ -1,17 +1,14 @@
-//! lumo-beam
+//! # lumo-beam
 //!
-//! Apple-style "Metal" equivalente: wgpu device + surface + triangle
-//! primitive. O nome "Beam" vem da metafora "feixe de luz que rasteriza
-//! pixels" -- evita conflito com a marca Metal.
+//! Proposito: wgpu device/surface/queue wrapper. Primitivo triangle e uniforms globais.
 //!
-//! Layout:
-//! - [`LBDevice`]         : wraps wgpu instance/adapter/device/queue/surface.
-//! - [`LBVertex`]         : vertex generico (position + color) usado em
-//!                          triangle primitive e exemplares de pipeline.
-//! - [`LBGlobalUniforms`] : uniform bloco global por frame (viewport + time).
+//! ## Invariantes
+//! - LBDevice e o unico dono do wgpu Device/Queue — nunca clonar Arc pra escopo mais longo que o renderer.
+//! - LBGlobalUniforms e updated a cada frame antes de qualquer draw call.
 //!
-//! O QuadRenderer e SDF ficam em `lumo-graphics`. Text em `lumo-text`.
-//! Widgets em `lumo-kit`. Animation em `lumo-animation`.
+//! ## Memory refs
+//! - [[feedback-design-lapidado]]
+//! - [[project-lumo-os]]
 
 use bytemuck::{Pod, Zeroable};
 use std::sync::Arc;

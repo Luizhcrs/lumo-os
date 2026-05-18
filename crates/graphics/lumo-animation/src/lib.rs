@@ -1,12 +1,14 @@
-//! lumo-animation: framework animacoes Apple-grade pra Lumo OS.
+//! # lumo-animation
 //!
-//! Modulos:
-//!   spring      - Spring (LASpring): mola amortecida 1D, presets Apple
-//!   easing      - LACurve: cubic-bezier deterministica + presets iOS
-//!   interpolate - LAInterpolable: trait lerp + impls (f32, Color, Rect)
-//!   animator    - LAAnimator<T>: driver duration-based ou spring generico
+//! Proposito: Framework de animacoes: spring amortecido, cubic-bezier, LAAnimator generico.
 //!
-//! Namespace LA* espelha Apple CoreAnimation (CA*) pra familiaridade.
+//! ## Invariantes
+//! - LASpring e deterministica dado mesmo delta-t; nao depende de clock externo.
+//! - LAAnimator::tick() deve ser chamado a cada frame com delta real (nao fixo) pra convergencia correta.
+//!
+//! ## Memory refs
+//! - [[feedback-design-lapidado]]
+//! - [[project-lumo-os]]
 
 pub mod animator;
 pub mod easing;
