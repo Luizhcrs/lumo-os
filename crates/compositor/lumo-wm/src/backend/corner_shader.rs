@@ -174,8 +174,19 @@ impl RenderElement<GlesRenderer> for RoundedSurfaceElement {
         damage: &[Rectangle<i32, Physical>],
         opaque_regions: &[Rectangle<i32, Physical>],
     ) -> Result<(), GlesError> {
+        // R3: usar dimensoes do dst renderizado (nao geometry precalculado).
+        // elem.geometry() pode incluir shadow/CSD padding (e.g. GTK4 sombra top)
+        // fazendo o SDF clipar so os cantos superiores. dst.size = pixels
+        // reais que o compositor vai escrever = tamanho certo pro SDF.
+        let w = dst.size.w as f32;
+        let h = dst.size.h as f32;
+        tracing::debug!(
+            dst_w = w, dst_g_w = self.surf_w,
+            dst_h = h, dst_g_h = self.surf_h,
+            "R3 RoundedSurfaceElement draw"
+        );
         let uniforms = vec![
-            Uniform::new("u_surf_size", (self.surf_w, self.surf_h)).into_owned(),
+            Uniform::new("u_surf_size", (w, h)).into_owned(),
             Uniform::new("u_corner_radius", self.corner_radius).into_owned(),
         ];
         frame.override_default_tex_program(self.corner_program.clone(), uniforms);
