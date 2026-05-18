@@ -67,12 +67,22 @@ pub const BAT_BODY_H: f32 = 11.0;
 // Gap 6px abaixo da pill (respiro visual sem desconectar).
 // Padding interno 14 igual PILL_PAD_X (continuidade).
 pub const DROPDOWN_W: f32 = 280.0;
-pub const DROPDOWN_H: f32 = 150.0; // A20.1 menor (3 rows)
+pub const DROPDOWN_H: f32 = 150.0; // A20.1 menor (3 rows) - bateria
 pub const DROPDOWN_GAP: f32 = 6.0;
 pub const DROPDOWN_PAD: f32 = 14.0;
 pub const DROPDOWN_ROW_H: f32 = 18.0;
 pub const FONT_DROPDOWN_TITLE: f32 = 14.0;
 pub const FONT_DROPDOWN_BODY: f32 = 13.0;
+
+// A31: Wifi tem layout proprio (gerenciador redes), altura variavel.
+// Calc: pad(14) + header(20) + connected_row(22) + spacer(6) +
+//   label(20) + 6 * row(22) + sep_pad(12) + footer_row(22) + pad(14)
+//   = 14 + 20 + 22 + 6 + 20 + 132 + 12 + 22 + 14 = ~262. Pad +4 = 266.
+pub const DROPDOWN_WIFI_W: f32 = 300.0;
+pub const DROPDOWN_WIFI_H: f32 = 266.0;
+/// Altura linha de rede individual (icon + ssid + pct). 22 = font 13 + 9
+/// padding vertical = area de click confortavel sem inflar dropdown.
+pub const DROPDOWN_WIFI_ROW_H: f32 = 22.0;
 
 // ============================================================
 // Dropdown DateTime (A24).
