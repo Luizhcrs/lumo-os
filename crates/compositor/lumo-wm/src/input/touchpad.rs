@@ -22,8 +22,13 @@ const SWIPE_V_THRESHOLD: f64 = 60.0;
 pub struct TouchpadConfig {
     /// Tap to click (1 dedo = botao esquerdo).
     pub tap_enabled: bool,
-    /// Tap and drag com drag-lock.
+    /// Tap and drag (segurar drag entre toques).
     pub tap_drag: bool,
+    /// Drag lock: mantem drag apos lift do dedo ate proximo tap.
+    /// Lumo default = false (Apple real default). Quando true, atrapalha
+    /// rubber-band selection no desktop (rect demora a sumir).
+    #[serde(default)]
+    pub tap_drag_lock: bool,
     /// Natural scroll (direcao conteudo, Mac default).
     pub natural_scroll: bool,
     /// Two-finger scroll habilitado.
@@ -59,6 +64,7 @@ impl Default for TouchpadConfig {
         Self {
             tap_enabled: true,
             tap_drag: true,
+            tap_drag_lock: false,
             natural_scroll: true,
             two_finger_scroll: true,
             gestures_enabled: true,
@@ -125,7 +131,7 @@ impl TouchpadConfig {
         if self.tap_enabled {
             let _ = device.config_tap_set_button_map(li::TapButtonMap::LeftRightMiddle);
             let _ = device.config_tap_set_drag_enabled(self.tap_drag);
-            let _ = device.config_tap_set_drag_lock_enabled(self.tap_drag);
+            let _ = device.config_tap_set_drag_lock_enabled(self.tap_drag_lock);
         }
 
         // Natural scroll.
