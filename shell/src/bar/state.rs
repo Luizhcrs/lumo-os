@@ -426,6 +426,8 @@ pub(crate) struct LumoBar {
     pub appmenu_submenu: Vec<crate::bar::appmenu::AppMenuItem>,
     pub appmenu_pill_rects: Vec<(usize, (f32, f32, f32, f32))>,
     pub appmenu_submenu_rects: Vec<(usize, (f32, f32, f32, f32))>,
+    // C5.1: handle compartilhado com thread Registrar DBus.
+    pub registrar_handle: crate::bar::registrar::RegistrarHandle,
     pub ipc_stream: Option<UnixStream>,
     pub ipc_rx_buf: Vec<u8>,
     pub theme: LumoTheme,

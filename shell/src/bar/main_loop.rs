@@ -127,6 +127,12 @@ pub fn run() {
         viewed_year: Local::now().year(),
         viewed_month: Local::now().month(),
         selected_day: None,
+        // C5.1: registrar DBus server handle.
+        registrar_handle: {
+            let h = crate::bar::registrar::new_handle();
+            crate::bar::registrar::spawn_registrar(h.clone());
+            h
+        },
         // C5: appmenu.
         appmenu: crate::bar::appmenu::AppMenuState::default(),
         appmenu_open_idx: None,
@@ -243,6 +249,14 @@ pub fn run() {
                     state.lumo_menu_hover_idx = usize::MAX; // A27
                     state.update_size_and_redraw(&qh);
                     eprintln!("[lumo-bar] CloseDropdowns recebido -> dropdown fechado");
+                }
+                // C5.1: ActiveApp -> fetch appmenu via Registrar.
+                if let Some((app_id, _title, pid)) = res.active_app {
+                    let new_menu = crate::bar::appmenu::AppMenuState::fetch(pid, &app_id);
+                    state.appmenu = new_menu;
+                    state.appmenu_open_idx = None;
+                    state.appmenu_submenu.clear();
+                    state.redraw(&qh);
                 }
             }
         }
