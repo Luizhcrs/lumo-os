@@ -142,6 +142,9 @@ impl LumoState {
                 let state: ButtonState = event.state();
                 let pointer = self.pointer.clone();
 
+                // C3 debug: log raw button code pra diagnostico BTN_RIGHT.
+                tracing::debug!(button, state = ?state, pos = ?(self.pointer_location.x as i32, self.pointer_location.y as i32), "C3 PointerButton");
+
                 if state == ButtonState::Pressed {
                     if let Some((surface, _)) = self.surface_under(self.pointer_location) {
                         let kb = self.keyboard.clone();

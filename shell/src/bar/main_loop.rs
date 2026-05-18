@@ -29,7 +29,7 @@ use crate::bar::dropdowns::battery::BatteryInfo;
 use crate::bar::dropdowns::wifi::WifiInfo;
 use crate::bar::dropdowns::DropdownActive;
 use crate::bar::fonts::{font_system, swash_cache};
-use crate::bar::ipc::{connect_ipc, drain_ipc};
+use crate::bar::ipc::{connect_ipc, drain_ipc, DrainResult};
 use lumo_animation::{AnimCurve, LAAnimator, LACurve, Spring};
 use crate::bar::state::LumoBar;
 use crate::bar::tokens::*;
