@@ -158,6 +158,44 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     }
 
     // ============================================================
+    // APPMENU PILLS (C5): renderiza items top-level do app em foco
+    // como pills individuais ao lado do pill Lumo.
+    // 24px altura, Geist 13pt, hover highlight via appmenu_open_idx.
+    // ============================================================
+    {
+        let appmenu_pill_h = PILL_H; // mesma altura das pills principais
+        let mut ax = pill_l_x + pill_l_w + PILL_GAP;
+        let mut appmenu_rects: Vec<(usize, (f32, f32, f32, f32))> = Vec::new();
+        for (idx, item) in snap.appmenu_items.iter().enumerate() {
+            if item.label == "---" {
+                ax += 4.0; // separador visual
+                continue;
+            }
+            let label_w = measure_text(&item.label, FONT_PILL, false);
+            let pill_w = label_w + PILL_PAD_X * 2.0;
+            let is_open = snap.appmenu_open_idx == Some(idx);
+            let bg_color = if is_open {
+                rgba_hex(palette.accent, 0xCC)
+            } else {
+                pill_bg
+            };
+            let fg_color = if is_open {
+                opaque(0xFFFFFF)
+            } else {
+                pill_fg
+            };
+            {
+                let mut canvas = pixmap.as_mut();
+                draw_pill_bg(&mut canvas, ax, pill_y, pill_w, appmenu_pill_h, bg_color, 0);
+                draw_text(&mut canvas, ax + PILL_PAD_X, text_top, &item.label, FONT_PILL, fg_color, false);
+            }
+            appmenu_rects.push((idx, (ax, pill_y, pill_w, appmenu_pill_h)));
+            ax += pill_w + 4.0; // gap entre pills appmenu
+        }
+        result.appmenu_pill_rects = appmenu_rects;
+    }
+
+    // ============================================================
     // PILL DIREITA: [wifi] [bat icone] HH:MM (A19.8: removido texto %)
     // ============================================================
     let bat_icon_w = battery_total_width();
@@ -341,6 +379,63 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
             }
         }
         DropdownActive::None => {}
+    }
+
+    // ============================================================
+    // APPMENU SUBMENU (C5): dropdown do item top-level aberto.
+    // Renderizado diretamente (sem DropdownActive -- submenu appmenu
+    // e independente dos dropdowns de sistema).
+    // ============================================================
+    if let Some(open_idx) = snap.appmenu_open_idx {
+        if let Some(&(_, (rx, ry, rw, rh))) = result.appmenu_pill_rects.iter().find(|(i, _)| *i == open_idx) {
+            if !snap.appmenu_submenu.is_empty() {
+                // Calcula dimensoes do submenu.
+                let sub_item_h: f32 = 22.0;
+                let sub_pad: f32 = 8.0;
+                let max_label_w = snap.appmenu_submenu.iter()
+                    .map(|it| if it.label == "---" { 0.0 } else { measure_text(&it.label, FONT_PILL, false) })
+                    .fold(0.0f32, f32::max);
+                let sub_w = (max_label_w + PILL_PAD_X * 2.0).max(120.0);
+                let sub_h = snap.appmenu_submenu.iter()
+                    .map(|it| if it.label == "---" { 8.0 } else { sub_item_h })
+                    .sum::<f32>() + sub_pad * 2.0;
+                let sub_x = rx.max(PILL_MARGIN_X);
+                let sub_y = ry + rh + DROPDOWN_GAP;
+
+                if let Some(mut sub) = tiny_skia::Pixmap::new(sub_w as u32, sub_h as u32) {
+                    use crate::bar::icons::fill_rrect;
+                    let bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
+                    {
+                        let mut canvas = sub.as_mut();
+                        // Fundo do dropdown.
+                        fill_rrect(&mut canvas, 0.0, 0.0, sub_w, sub_h, 10.0, bg);
+                    }
+                    let mut submenu_rects: Vec<(usize, (f32, f32, f32, f32))> = Vec::new();
+                    let mut item_y = sub_pad;
+                    for (sidx, item) in snap.appmenu_submenu.iter().enumerate() {
+                        if item.label == "---" {
+                            // Separador: linha horizontal fina.
+                            let sep_color = rgba_hex(palette.pill_sep, palette.pill_sep_alpha);
+                            {
+                                let mut canvas = sub.as_mut();
+                                fill_rrect(&mut canvas, PILL_PAD_X, item_y + 3.0, sub_w - PILL_PAD_X * 2.0, 1.0, 0.0, sep_color);
+                            }
+                            item_y += 8.0;
+                            continue;
+                        }
+                        {
+                            let mut canvas = sub.as_mut();
+                            draw_text(&mut canvas, PILL_PAD_X, item_y + (sub_item_h - FONT_PILL * 1.2) / 2.0,
+                                      &item.label, FONT_PILL, opaque(palette.pill_fg), false);
+                        }
+                        submenu_rects.push((sidx, (sub_x + PILL_PAD_X, sub_y + item_y, sub_w - PILL_PAD_X * 2.0, sub_item_h)));
+                        item_y += sub_item_h;
+                    }
+                    result.appmenu_submenu_rects = submenu_rects;
+                    composite_dropdown(pixmap, &sub, sub_x, sub_y, snap.dropdown_scale, snap.dropdown_alpha);
+                }
+            }
+        }
     }
 
     // Suppress unused warns nos campos do snapshot (theme so usado pra debug log).

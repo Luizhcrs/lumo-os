@@ -224,10 +224,20 @@ fn activate_inner(
     Ok(())
 }
 
-/// Fallback: busca qualquer janela registrada no DBus com items de menu.
-/// Stub — implementacao real necessitaria enumerar servicos registrados.
-fn fetch_any_registered(_app_id: &str) -> Result<AppMenuState, Box<dyn std::error::Error>> {
-    Err("fetch_any_registered: not implemented".into())
+/// Fallback: varre wid 1..=100 chamando fetch_inner.
+/// Retorna primeiro com items nao-vazios.
+/// Apps GTK3 registram via gtk_window_id (nao PID) -- pode ser qualquer u32.
+fn fetch_any_registered(app_id: &str) -> Result<AppMenuState, Box<dyn std::error::Error>> {
+    for wid in 1u32..=100 {
+        match fetch_inner(wid, app_id) {
+            Ok(state) if !state.items.is_empty() => {
+                eprintln!("[appmenu] C5: fallback wid={} -> {} items", wid, state.items.len());
+                return Ok(state);
+            }
+            _ => {}
+        }
+    }
+    Err("fetch_any_registered: nenhum wid 1..100 com items".into())
 }
 
 fn fetch_submenu_inner(

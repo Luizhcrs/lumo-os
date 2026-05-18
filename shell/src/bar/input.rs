@@ -355,6 +355,52 @@ impl PointerHandler for LumoBar {
                             handled = true;
                         }
                     }
+                    // C5: click em pill appmenu top-level -> abre submenu.
+                    if !handled {
+                        let hit = self.appmenu_pill_rects.iter().find_map(|(idx, (rx, ry, rw, rh))| {
+                            if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
+                                Some(*idx)
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(idx) = hit {
+                            if self.appmenu_open_idx == Some(idx) {
+                                // Clicou no mesmo -> fecha.
+                                self.appmenu_open_idx = None;
+                                self.appmenu_submenu.clear();
+                            } else {
+                                // Busca submenu do item.
+                                let submenu = self.appmenu.fetch_submenu(
+                                    self.appmenu.items.get(idx).map(|it| it.id).unwrap_or(0)
+                                );
+                                self.appmenu_open_idx = Some(idx);
+                                self.appmenu_submenu = submenu;
+                            }
+                            self.update_size_and_redraw(qh);
+                            handled = true;
+                        }
+                    }
+                    // C5: click em subitem do submenu appmenu aberto -> activate + fecha.
+                    if !handled && self.appmenu_open_idx.is_some() {
+                        let hit = self.appmenu_submenu_rects.iter().find_map(|(sidx, (rx, ry, rw, rh))| {
+                            if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
+                                Some(*sidx)
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(sidx) = hit {
+                            if let Some(item) = self.appmenu_submenu.get(sidx) {
+                                self.appmenu.activate(item.id);
+                            }
+                            self.appmenu_open_idx = None;
+                            self.appmenu_submenu.clear();
+                            self.update_size_and_redraw(qh);
+                            handled = true;
+                        }
+                    }
+
                     if !handled && self.dropdown != DropdownActive::None {
                         self.dropdown = DropdownActive::None;
                         self.lumo_menu_hover_idx = usize::MAX; // A27

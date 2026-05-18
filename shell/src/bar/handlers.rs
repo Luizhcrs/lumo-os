@@ -189,6 +189,9 @@ impl LumoBar {
             self.wifi_toggle_rect = paint_result.wifi_toggle_rect;
             self.wifi_disconnect_rect = paint_result.wifi_disconnect_rect;
             self.wifi_connect_rects = paint_result.wifi_connect_rects;
+            // C5: appmenu pill hit-rects.
+            self.appmenu_pill_rects = paint_result.appmenu_pill_rects;
+            self.appmenu_submenu_rects = paint_result.appmenu_submenu_rects;
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;
