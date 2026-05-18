@@ -32,12 +32,13 @@ impl XdgShellHandler for LumoState {
         });
         surface.send_configure();
 
-        // Foco de teclado pra nova janela.
+        // L1: FocusManager gerencia foco na nova janela.
         if let Some(wl) = window.wl_surface() {
             let serial = smithay::utils::SERIAL_COUNTER.next_serial();
             let surf: WlSurface = wl.into_owned();
             let kb = self.keyboard.clone();
-            kb.set_focus(self, Some(surf), serial);
+            let new_focus = self.focus_manager.new_toplevel(surf);
+            kb.set_focus(self, new_focus, serial);
         }
     }
 

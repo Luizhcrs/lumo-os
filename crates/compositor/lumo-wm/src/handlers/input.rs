@@ -147,26 +147,24 @@ impl LumoState {
 
                 if state == ButtonState::Pressed {
                     let kb = self.keyboard.clone();
-                    if let Some((surface, _)) = self.surface_under(self.pointer_location) {
-                        // L1 UX foco: so seta foco em toplevel real (xdg_surface).
-                        // Layer-shell surfaces (bar/desktop) NAO recebem keyboard
-                        // focus -- preserva toplevel anterior se houver, OU None.
+                    let new_focus = if let Some((surface, _)) = self.surface_under(self.pointer_location) {
+                        // L1: FocusManager centraliza policy de foco.
                         use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
                         let is_toplevel = smithay::wayland::compositor::with_states(
                             &surface,
                             |states| states.data_map.get::<XdgToplevelSurfaceData>().is_some(),
                         );
                         if is_toplevel {
-                            kb.set_focus(self, Some(surface), serial);
+                            self.focus_manager.click_toplevel(surface)
                         } else {
-                            // Click em layer-shell (desktop area, bar) -> remove foco
-                            // de qualquer toplevel ativo. Enable Enter no desktop (A40).
-                            kb.set_focus(self, None, serial);
+                            // Layer-shell (bar, desktop) -> sem foco de teclado.
+                            self.focus_manager.click_layer_shell()
                         }
                     } else {
-                        // Click em area sem surface (raro) -> remove foco.
-                        kb.set_focus(self, None, serial);
-                    }
+                        // Area sem surface -> sem foco.
+                        self.focus_manager.click_layer_shell()
+                    };
+                    kb.set_focus(self, new_focus, serial);
                 }
 
                 pointer.button(
@@ -272,7 +270,11 @@ impl LumoState {
                 tracing::info!(workspace = n, "MoveToWorkspace pendente (sem multi-workspace map)");
             }
             KeyAction::CycleWindow(delta) => {
-                self.cycle_window_focus(delta);
+                // L1: SUPER+Tab -> FocusManager.cycle.
+                let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+                let kb = self.keyboard.clone();
+                let new_focus = self.focus_manager.cycle(&kb, &self.space, delta);
+                kb.set_focus(self, new_focus, serial);
             }
             KeyAction::TileMove(dir) => {
                 let dir_str = match dir {

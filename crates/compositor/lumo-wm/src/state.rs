@@ -154,6 +154,8 @@ pub struct LumoState {
     /// A38: programa SDF corner radius. None ate renderer iniciado.
     pub corner_shader: Option<crate::backend::corner_shader::CornerShader>,
 
+    /// L1: focus state machine centralizada.
+    pub focus_manager: crate::focus::FocusManager,
     /// B1: gesture state acumulado (swipe + pinch).
     pub gesture: crate::input::TouchpadGestureState,
     /// L5: lid switch handler state.
@@ -257,6 +259,7 @@ impl LumoState {
             exit_code: 0,
             wallpaper: None,
             corner_shader: None,
+            focus_manager: Default::default(),
             gesture: Default::default(),
             lid_handler: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
         }
