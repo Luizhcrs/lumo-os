@@ -50,8 +50,12 @@ pub fn font_system() -> &'static Mutex<FontSystem> {
     FONT_SYSTEM.get_or_init(|| {
         let mut fs = FontSystem::new();
         load_extra_fonts(&mut fs);
-        let ui = pick_font_family(&fs, false);
-        let mono = pick_font_family(&fs, true);
+        // R4: ler tokens do theme.toml pra respeitar font_sans/font_mono configurados.
+        let tokens = lumo_foundation::LumoTokens::load_from_disk();
+        let sans_override = tokens.font_sans.clone();
+        let mono_override = tokens.font_mono.clone();
+        let ui = pick_font_family(&fs, false, sans_override.as_deref());
+        let mono = pick_font_family(&fs, true, mono_override.as_deref());
         eprintln!("[lumo-bar] font_family UI = {} | MONO = {}", ui, mono);
         let _ = FONT_FAMILY_UI.set(ui);
         let _ = FONT_FAMILY_MONO.set(mono);
@@ -68,6 +72,10 @@ fn load_extra_fonts(fs: &mut FontSystem) {
         std::env::var("HOME").ok().map(|h| format!("{}/.local/share/fonts", h)),
         std::env::var("HOME").ok().map(|h| format!("{}/.fonts", h)),
         Some("/usr/share/fonts/geist-mono".to_string()),
+        // R4: Inter (ttf-inter pacman) e outros paths comuns.
+        Some("/usr/share/fonts/inter".to_string()),
+        Some("/usr/share/fonts/TTF".to_string()),
+        Some("/usr/share/fonts/OTF".to_string()),
         Some("/usr/local/share/fonts".to_string()),
     ];
     for opt in candidates.iter().flatten() {
@@ -95,14 +103,44 @@ fn walk_load(fs: &mut FontSystem, dir: &std::path::Path) {
             continue;
         }
         let name = p.to_string_lossy().to_lowercase();
-        if name.contains("geist") || name.contains("jetbrains") || name.contains("inter") {
+        // R4: incluir "inter" e "noto" na lista de fontes carregadas.
+        if name.contains("geist")
+            || name.contains("jetbrains")
+            || name.contains("inter")
+            || name.contains("noto")
+        {
             fs.db_mut().load_font_file(&p).ok();
         }
     }
 }
 
-/// A29: escolhe familia com base no perfil. `prefer_mono=true` -> Geist Mono.
-fn pick_font_family(fs: &FontSystem, prefer_mono: bool) -> String {
+/// R4: escolhe familia com base no perfil.
+/// `override_name` = familia explicitamente configurada no theme.toml.
+/// Se presente, tenta essa primeiro (exact + fuzzy). Fallback: lista padrao.
+fn pick_font_family(fs: &FontSystem, prefer_mono: bool, override_name: Option<&str>) -> String {
+    let faces: Vec<String> = fs
+        .db()
+        .faces()
+        .flat_map(|f| f.families.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>())
+        .collect();
+
+    // Tenta override configurado primeiro.
+    if let Some(ov) = override_name {
+        if faces.iter().any(|f| f.eq_ignore_ascii_case(ov)) {
+            eprintln!("[lumo-bar] R4 font override aceito: {}", ov);
+            return ov.to_string();
+        }
+        // Fuzzy: primeiro token do nome.
+        let tok = ov.to_lowercase();
+        let tok = tok.split_whitespace().next().unwrap_or(ov);
+        if let Some(found) = faces.iter().find(|f| f.to_lowercase().contains(tok)) {
+            eprintln!("[lumo-bar] R4 font override fuzzy: {} -> {}", ov, found);
+            return found.clone();
+        }
+        eprintln!("[lumo-bar] R4 font override {:?} nao encontrada; usando lista padrao", ov);
+    }
+
+    // R4: lista padrao com Inter em primeiro pra sans.
     let preferred: &[&str] = if prefer_mono {
         &[
             "Geist Mono",
@@ -113,17 +151,12 @@ fn pick_font_family(fs: &FontSystem, prefer_mono: bool) -> String {
         ]
     } else {
         &[
-            "Geist",
             "Inter",
-            "JetBrainsMono Nerd Font",
+            "Geist",
+            "Noto Sans",
             "sans-serif",
         ]
     };
-    let faces: Vec<String> = fs
-        .db()
-        .faces()
-        .flat_map(|f| f.families.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>())
-        .collect();
     for p in preferred {
         if faces.iter().any(|f| f.eq_ignore_ascii_case(p)) {
             return (*p).to_string();
@@ -137,10 +170,10 @@ fn pick_font_family(fs: &FontSystem, prefer_mono: bool) -> String {
         }
     }
     if prefer_mono {
-        eprintln!("[lumo-bar] warning: Geist Mono nao encontrada; fallback monospace");
+        eprintln!("[lumo-bar] warning: fonte mono nao encontrada; fallback monospace");
         "monospace".to_string()
     } else {
-        eprintln!("[lumo-bar] warning: Geist Sans nao encontrada; fallback sans-serif");
+        eprintln!("[lumo-bar] warning: Inter/Geist nao encontrada; fallback sans-serif");
         "sans-serif".to_string()
     }
 }

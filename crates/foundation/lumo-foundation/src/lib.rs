@@ -406,6 +406,12 @@ pub struct LumoTokens {
     pub ink_deep: Option<u32>,
     /// pill_bg override (hex 0xRRGGBB).
     pub pill_bg: Option<u32>,
+    /// R4: familia de fonte sans-serif. None = usa pick_font_family padrao.
+    /// Configuravel via [fonts] font_sans = "Inter" em theme.toml.
+    pub font_sans: Option<String>,
+    /// R4: familia de fonte mono. None = usa pick_font_family padrao.
+    /// Configuravel via [fonts] font_mono = "JetBrainsMono Nerd Font" em theme.toml.
+    pub font_mono: Option<String>,
 }
 
 /// Erros de I/O ao ler/escrever theme.toml.
@@ -486,7 +492,7 @@ impl LumoTokens {
             Ok("dark") | Ok("Dark") | Ok("DARK") => LumoTheme::Dark,
             _ => LumoTheme::Light,
         };
-        Self { mode, accent: None, ink_deep: None, pill_bg: None }
+        Self { mode, accent: None, ink_deep: None, pill_bg: None, font_sans: None, font_mono: None }
     }
 
     fn parse_toml(text: &str) -> Result<Self, TokenError> {
@@ -494,6 +500,8 @@ impl LumoTokens {
         let mut accent: Option<u32> = None;
         let mut ink_deep: Option<u32> = None;
         let mut pill_bg: Option<u32> = None;
+        let mut font_sans: Option<String> = None;
+        let mut font_mono: Option<String> = None;
 
         // Parser minimalista: nao depende de serde para manter zero deps extras.
         // Percorre linhas, extrai pares key = "value".
@@ -520,10 +528,13 @@ impl LumoTokens {
                 ("colors", "accent") => accent = parse_hex_color(val),
                 ("colors", "ink_deep") => ink_deep = parse_hex_color(val),
                 ("colors", "pill_bg") => pill_bg = parse_hex_color(val),
+                // R4: tokens de fonte configuravel.
+                ("fonts", "font_sans") if !val.is_empty() => font_sans = Some(val.to_string()),
+                ("fonts", "font_mono") if !val.is_empty() => font_mono = Some(val.to_string()),
                 _ => {}
             }
         }
-        Ok(Self { mode, accent, ink_deep, pill_bg })
+        Ok(Self { mode, accent, ink_deep, pill_bg, font_sans, font_mono })
     }
 
     fn to_toml(&self) -> String {
@@ -544,7 +555,27 @@ impl LumoTokens {
         if let Some(p) = self.pill_bg {
             out.push_str(&format!("pill_bg = \"#{:06X}\"\n", p));
         }
+        // R4: fontes (somente escreve se nao default).
+        if self.font_sans.is_some() || self.font_mono.is_some() {
+            out.push_str("\n[fonts]\n");
+            if let Some(ref fs) = self.font_sans {
+                out.push_str(&format!("font_sans = \"{fs}\"\n"));
+            }
+            if let Some(ref fm) = self.font_mono {
+                out.push_str(&format!("font_mono = \"{fm}\"\n"));
+            }
+        }
         out
+    }
+
+    /// R4: retorna familia sans-serif configurada ou default "Inter".
+    pub fn effective_font_sans(&self) -> &str {
+        self.font_sans.as_deref().unwrap_or("Inter")
+    }
+
+    /// R4: retorna familia mono configurada ou default "JetBrainsMono Nerd Font".
+    pub fn effective_font_mono(&self) -> &str {
+        self.font_mono.as_deref().unwrap_or("JetBrainsMono Nerd Font")
     }
 }
 
