@@ -137,6 +137,21 @@ fn spawn_autostart(socket_name: &str) {
         tracing::warn!(osd = ?osd_path, "lumo-osd binary nao encontrado, skip autostart");
     }
 
+    // P5: lumo-power (charge limit + weekly cell balance daemon).
+    let power_path = exe_dir.join("lumo-power");
+    if power_path.exists() {
+        let mut cmd = std::process::Command::new(&power_path);
+        cmd.env("HOME", &home);
+        cmd.env("XDG_CONFIG_HOME", &xdg);
+        cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
+        match cmd.spawn() {
+            Ok(child) => tracing::info!(pid = child.id(), power = ?power_path, "autostart lumo-power"),
+            Err(err) => tracing::warn!(?err, "autostart lumo-power falhou"),
+        }
+    } else {
+        tracing::warn!(power = ?power_path, "lumo-power binary nao encontrado, skip autostart");
+    }
+
     // Opcional: terminal foot se LUMO_AUTOSTART_FOOT=1.
     // Padrao OFF porque Luiz pode preferir desktop limpo no boot.
     if std::env::var("LUMO_AUTOSTART_FOOT").is_ok() {

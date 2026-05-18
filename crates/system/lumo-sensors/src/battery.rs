@@ -155,3 +155,55 @@ impl Battery {
         }
     }
 }
+
+// ============================================================
+// ChargePolicy - P5: charge limit 80% + weekly cell balance
+// ============================================================
+
+/// Policy governing charge limit and weekly cell balance cycle.
+///
+/// Default: limit 80%, balance every Friday 22:00 (cron "0 22 * * 5"),
+/// charging to 100% for 12 hours then returning to 80%.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChargePolicy {
+    /// Normal charge ceiling in percent (1-100). Default 80.
+    pub limit_percent: u8,
+    /// Cron expression for weekly balance. Default "0 22 * * 5" (Fri 22h).
+    pub balance_schedule_cron: String,
+    /// Temporary target during balance cycle. Default 100.
+    pub balance_target: u8,
+    /// Hours to hold balance_target before reverting to limit_percent. Default 12.
+    pub balance_duration_hours: u8,
+}
+
+impl Default for ChargePolicy {
+    fn default() -> Self {
+        Self {
+            limit_percent: 80,
+            balance_schedule_cron: "0 22 * * 5".to_string(),
+            balance_target: 100,
+            balance_duration_hours: 12,
+        }
+    }
+}
+
+impl Battery {
+    /// Apply charge policy: writes charge_control_end_threshold to
+    /// policy.limit_percent.
+    pub fn apply_policy(&self, policy: &ChargePolicy) -> Result<(), SensorError> {
+        self.set_charge_limit(policy.limit_percent)
+    }
+
+    /// Begin a balance cycle: temporarily raises the charge limit to
+    /// policy.balance_target. Returns the duration the caller should wait
+    /// before calling end_balance_cycle.
+    pub fn begin_balance_cycle(&self, policy: &ChargePolicy) -> Result<std::time::Duration, SensorError> {
+        self.set_charge_limit(policy.balance_target)?;
+        Ok(std::time::Duration::from_secs(policy.balance_duration_hours as u64 * 3600))
+    }
+
+    /// End a balance cycle: restores the charge limit to policy.limit_percent.
+    pub fn end_balance_cycle(&self, policy: &ChargePolicy) -> Result<(), SensorError> {
+        self.set_charge_limit(policy.limit_percent)
+    }
+}

@@ -90,6 +90,10 @@ pub fn read_battery_info() -> BatteryInfo {
         manufacturer: sys_read_string(&format!("{}/manufacturer", dir)),
         current_now: current_now_ua,
         charge_limit: sys_read_u32(&format!("{}/charge_control_end_threshold", dir)).map(|v| v.clamp(0, 100) as u8),
+        balance_days: {
+            let limit = sys_read_u32(&format!("{}/charge_control_end_threshold", dir)).map(|v| v.clamp(0, 100) as u8).unwrap_or(100);
+            if limit <= 80 { Some(days_until_next_friday()) } else { None }
+        },
         platform_profile: sys_read_string("/sys/firmware/acpi/platform_profile"),
         cpu_temp_c: read_cpu_temp_celsius(),
     }
@@ -406,6 +410,9 @@ pub fn nm_set_radio(on: bool) {
 /// Async. Log saida.
 pub fn nm_connect(ssid: String) {
     std::thread::spawn(move || {
+        // R2: log SSID exato (debug truncamento / encoding).
+        eprintln!("[lumo-bar] R2 nm_connect ssid={:?} (len={})", ssid, ssid.len());
+
         // Tenta primeiro `nmcli con up <ssid>` (rede saved com keyring secret).
         // Mais robusto: nao derruba conexao atual se falhar.
         let up = std::process::Command::new("nmcli")
@@ -413,33 +420,48 @@ pub fn nm_connect(ssid: String) {
             .output();
         match up {
             Ok(o) if o.status.success() => {
-                eprintln!("[lumo-bar] nmcli con up {} OK", ssid);
+                eprintln!("[lumo-bar] nmcli con up {:?} OK", ssid);
                 return;
             }
             Ok(o) => {
-                let e = String::from_utf8_lossy(&o.stderr);
-                if e.contains("Secrets were required") {
-                    eprintln!("[lumo-bar] nmcli con up {}: senha necessaria (A31.3 modal pendente)", ssid);
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                // R2: checar "Secrets were required" em stderr e stdout.
+                if stderr.contains("Secrets were required") || stdout.contains("Secrets were required") {
+                    eprintln!("[lumo-bar] nm_connect {:?}: senha necessaria (A31.3 modal pendente)", ssid);
                     return;
                 }
-                eprintln!("[lumo-bar] nmcli con up {} falhou ({}); tenta dev wifi connect", ssid, e.trim());
+                eprintln!("[lumo-bar] nm_connect {:?} con up falhou stderr={:?}; tenta dev wifi connect", ssid, stderr.trim());
             }
             Err(e) => {
                 eprintln!("[lumo-bar] nmcli spawn falha: {}", e);
                 return;
             }
         }
-        // Fallback: rede nao saved -> dev wifi connect (sem senha falha, mas tenta)
-        let res = std::process::Command::new("nmcli")
-            .args(["dev", "wifi", "connect", &ssid])
-            .output();
+        // Fallback: rede nao saved -> dev wifi connect.
+        // R2: passar ifname explicita pra evitar nmcli escolher iface errada.
+        let iface_opt = find_wifi_iface();
+        let res = if let Some(ref iface) = iface_opt {
+            std::process::Command::new("nmcli")
+                .args(["dev", "wifi", "connect", &ssid, "ifname", iface])
+                .output()
+        } else {
+            std::process::Command::new("nmcli")
+                .args(["dev", "wifi", "connect", &ssid])
+                .output()
+        };
         match res {
             Ok(o) if o.status.success() => {
-                eprintln!("[lumo-bar] nmcli dev wifi connect {} OK", ssid);
+                eprintln!("[lumo-bar] nmcli dev wifi connect {:?} OK", ssid);
             }
             Ok(o) => {
                 let e = String::from_utf8_lossy(&o.stderr);
-                eprintln!("[lumo-bar] nmcli dev wifi connect {} falha: {}", ssid, e.trim());
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                if e.contains("Secrets were required") || stdout.contains("Secrets were required") {
+                    eprintln!("[lumo-bar] nm_connect {:?}: senha necessaria no fallback (A31.3 pendente)", ssid);
+                } else {
+                    eprintln!("[lumo-bar] nmcli dev wifi connect {:?} falha stderr={:?} stdout={:?}", ssid, e.trim(), stdout.trim());
+                }
             }
             Err(e) => eprintln!("[lumo-bar] nmcli spawn falha: {}", e),
         }
@@ -468,6 +490,20 @@ pub fn nm_disconnect_iface(iface: String) {
 // ============================================================
 // L5: CPU thermal + platform profile helpers.
 // ============================================================
+
+
+/// Returns days until the next Friday (0 = today is Friday, 1 = tomorrow, ...).
+pub fn days_until_next_friday() -> u32 {
+    use chrono::Weekday;
+    let wd = Local::now().weekday();
+    let today_num = wd.num_days_from_monday(); // Mon=0 .. Sun=6
+    let fri_num = Weekday::Fri.num_days_from_monday(); // 4
+    if today_num <= fri_num {
+        fri_num - today_num
+    } else {
+        7 - today_num + fri_num
+    }
+}
 
 /// Returns x86_pkg_temp (or first TCPU zone) temperature in Celsius.
 /// Returns None if no suitable zone found.

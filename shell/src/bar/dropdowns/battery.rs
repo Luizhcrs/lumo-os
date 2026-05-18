@@ -35,6 +35,8 @@ pub struct BatteryInfo {
     pub manufacturer: Option<String>,
     // L5: Samsung Galaxy Book 4 specific fields.
     pub charge_limit: Option<u8>,
+    /// Days until next scheduled cell balance (Fri 22h). None if not applicable.
+    pub balance_days: Option<u32>,
     pub platform_profile: Option<String>,
     pub cpu_temp_c: Option<f32>,
 }
@@ -184,6 +186,18 @@ pub fn draw_battery_dropdown(
         draw_text(canvas, cx, cy, label, FONT_DROPDOWN_BODY, row_color, false);
         hits.charge_limit_toggle_rect = Some((x, cy - 2.0, w, DROPDOWN_ROW_H + 4.0));
         cy += DROPDOWN_ROW_H;
+        if active {
+            let bal_str = match info.balance_days {
+                Some(0) => "Cell balance: hoje".to_string(),
+                Some(1) => "Cell balance: amanha".to_string(),
+                Some(n) => format!("Cell balance em {} dias", n),
+                None => String::new(),
+            };
+            if !bal_str.is_empty() {
+                draw_text(canvas, cx + 12.0, cy, &bal_str, FONT_DROPDOWN_BODY, fg_subtle, false);
+                cy += DROPDOWN_ROW_H;
+            }
+        }
     }
 
     {
