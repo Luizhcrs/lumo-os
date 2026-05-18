@@ -1438,7 +1438,18 @@ fn main() {
             let _ = guard.read();
         }
         if let Err(e) = queue.dispatch_pending(&mut state) {
+            let msg = format!("{e:?}");
+            // A20.14: connection reset / broken pipe = compositor saiu, sair limpo (nao loop infinito)
+            if msg.contains("ConnectionReset") || msg.contains("BrokenPipe") || msg.contains("InvalidObject") {
+                eprintln!("[lumo-bar] compositor desconectou ({e:?}), saindo");
+                break;
+            }
             eprintln!("[lumo-bar] dispatch_pending warn: {e:?}");
+        }
+        // Detectar disconnect via flush tambem
+        if conn.flush().is_err() {
+            eprintln!("[lumo-bar] flush falhou, compositor encerrou - saindo");
+            break;
         }
 
         if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
