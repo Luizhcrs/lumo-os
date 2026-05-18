@@ -1,0 +1,4 @@
+# Lumo OS: grupo input pode escrever LEDs do teclado pra sync via compositor.
+SUBSYSTEM=="leds", KERNEL=="input*::capslock", MODE="0660", GROUP="input"
+SUBSYSTEM=="leds", KERNEL=="input*::numlock", MODE="0660", GROUP="input"
+SUBSYSTEM=="leds", KERNEL=="input*::scrolllock", MODE="0660", GROUP="input"
