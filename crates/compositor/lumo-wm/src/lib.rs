@@ -11,6 +11,7 @@
 //! Roda nested em Hyprland (winit) ou full-session em TTY (drm).
 
 pub mod backend;
+pub mod hardware;
 pub mod cursor;
 pub mod handlers;
 pub mod ipc;

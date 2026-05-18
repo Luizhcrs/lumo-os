@@ -200,7 +200,12 @@ fn main() -> Result<()> {
                 lumo_wm::backend::drm::run(&mut event_loop, &mut state, display.clone())?;
                 // run() bloqueia tudo; em DRM o proprio backend
                 // orquestra o event loop. Saimos aqui depois.
-                tracing::info!("Lumo WM saiu do backend DRM");
+                let hw = lumo_wm::hardware::HardwareTarget::detect();
+    tracing::info!(hardware = ?hw, "Hardware detectado: {}", hw.label());
+    if hw == lumo_wm::hardware::HardwareTarget::GenericLinux {
+        tracing::warn!("Lumo otimizado pra Samsung Galaxy Book 4. Outro hardware: defaults genericos, alguns visuais podem diferir.");
+    }
+    tracing::info!("Lumo WM saiu do backend DRM");
                 if let Some(path) = state.ipc.socket_path.take() {
                     let _ = std::fs::remove_file(path);
                 }
@@ -256,6 +261,11 @@ fn main() -> Result<()> {
         let _ = std::fs::remove_file(path);
     }
 
+    let hw = lumo_wm::hardware::HardwareTarget::detect();
+    tracing::info!(hardware = ?hw, "Hardware detectado: {}", hw.label());
+    if hw == lumo_wm::hardware::HardwareTarget::GenericLinux {
+        tracing::warn!("Lumo otimizado pra Samsung Galaxy Book 4. Outro hardware: defaults genericos, alguns visuais podem diferir.");
+    }
     tracing::info!("Lumo WM saindo");
     Ok(())
 }
