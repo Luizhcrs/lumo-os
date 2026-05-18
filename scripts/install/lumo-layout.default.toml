@@ -1,0 +1,34 @@
+# Lumo OS -- bar layout default
+# Copie para ~/.config/lumo/layout.toml e edite.
+# Mudancas sao aplicadas em <250ms via hot reload (sem recompilar).
+
+[bar]
+height     = 40
+padding_x  = 14
+pill_gap   = 8
+pill_radius = 14
+margin_top = 6
+margin_x   = 14
+
+[bar.left]
+# Pills lado esquerdo, da esquerda para a direita.
+# width = omitir para auto (pill calcula proprio tamanho).
+pills = [
+    { id = "brand", width = 88 },
+    { id = "appmenu" },
+]
+
+[bar.right]
+# Pills lado direito, da esquerda para a direita.
+pills = [
+    { id = "battery",    width = 32  },
+    { id = "brightness", width = 24  },
+    { id = "wifi",       width = 24  },
+    { id = "datetime",   width = 220 },
+]
+
+[colors]
+accent        = "#3B82F6"
+pill_bg_light = "#1F1F22"
+pill_bg_dark  = "#FFFFFF"
+ink_deep      = "#0a0a0c"

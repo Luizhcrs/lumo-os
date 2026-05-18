@@ -25,7 +25,8 @@ fn main() {
     }
 
     match args[0].as_str() {
-        "theme" => cmd_theme(&args[1..]),
+        "theme"  => cmd_theme(&args[1..]),
+        "layout" => cmd_layout(&args[1..]),
         other => {
             eprintln!("subcomando desconhecido: {other}");
             std::process::exit(1);
@@ -138,6 +139,36 @@ fn cmd_theme(args: &[String]) {
 
 /// Envia LumoCommand::ReloadTheme via socket unix. Falha silenciosa
 /// se compositor nao estiver rodando (standalone = so toml atualizado).
+fn cmd_layout(args: &[String]) {
+    if args.is_empty() || args[0] != "reload" {
+        eprintln!("uso: lumoctl layout reload");
+        std::process::exit(1);
+    }
+    // Garante que layout.toml existe (copia default se ausente).
+    use lumo_foundation::BarLayout;
+    let path = match BarLayout::config_path() {
+        Some(p) => p,
+        None => {
+            eprintln!("[lumoctl] HOME nao definido");
+            std::process::exit(1);
+        }
+    };
+    if !path.exists() {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let default_toml = include_str!("../../../../scripts/install/lumo-layout.default.toml");
+        if let Err(e) = std::fs::write(&path, default_toml) {
+            eprintln!("[lumoctl] erro ao criar layout.toml: {e}");
+        } else {
+            eprintln!("[lumoctl] layout.toml criado com valores padrao");
+        }
+    } else {
+        eprintln!("[lumoctl] layout.toml existe, enviando reload");
+    }
+    send_reload_theme(); // reutiliza o mesmo canal IPC
+}
+
 fn send_reload_theme() {
     let Some(path) = default_socket_path() else {
         eprintln!("[lumoctl] XDG_RUNTIME_DIR ausente, nao enviou ReloadTheme");

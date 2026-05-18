@@ -5,7 +5,7 @@
 //! DEPS.md A20.9: precisa `prepare_read + poll + read` antes de
 //! `dispatch_pending`; sem isso seat capabilities events nunca chegam.
 
-use std::sync::{atomic::AtomicU8, Arc};
+use std::sync::{atomic::{AtomicBool, AtomicU8, Ordering as AtomOrd}, Arc};
 use std::time::{Duration, Instant};
 
 use chrono::{Datelike, Local};
@@ -48,6 +48,15 @@ delegate_registry!(LumoBar);
 pub fn run() {
     let _ = font_system();
     let _ = swash_cache();
+
+    // F1: flag compartilhado com thread watch_layout.
+    let layout_reload_flag = Arc::new(AtomicBool::new(false));
+    {
+        let flag = Arc::clone(&layout_reload_flag);
+        lumo_foundation::watch_layout(move |_layout| {
+            flag.store(true, AtomOrd::Release);
+        });
+    }
 
     let conn = Connection::connect_to_env().expect("conectar wayland");
     let (globals, mut queue) = registry_queue_init::<LumoBar>(&conn).expect("registry init");
@@ -296,5 +305,11 @@ pub fn run() {
         }
 
     }
+        // F1: layout.toml mudou -> redraw.
+        if layout_reload_flag.swap(false, AtomOrd::AcqRel) {
+            eprintln!("[lumo-bar] F1: layout.toml recarregado -> redraw");
+            state.redraw(&qh);
+        }
+
     let _ = active_workspace;
 }
