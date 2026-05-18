@@ -54,6 +54,8 @@ impl PointerHandler for LumoDesktop {
                     self.last_click_at = Some(now);
 
                     if button == BTN_RIGHT {
+                        // A30.2 mutex: desktop abre menu -> bar fecha dropdowns abertos
+                        send_close_dropdowns(&mut self.ipc_stream);
                         self.menu = MenuActive {
                             visible: true,
                             x: px,
@@ -61,7 +63,7 @@ impl PointerHandler for LumoDesktop {
                             hover_idx: usize::MAX,
                         };
                         need_redraw = true;
-                        eprintln!("[lumo-desktop] right-click ({}, {}) -> menu open", px, py);
+                        eprintln!("[lumo-desktop] right-click ({}, {}) -> menu open + CloseDropdowns IPC", px, py);
                     } else if button == BTN_LEFT {
                         if self.menu.visible {
                             if let Some(idx) = self.hit_test_menu(px, py) {

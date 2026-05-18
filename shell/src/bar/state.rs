@@ -103,37 +103,24 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     let text_top = text_top.round();
 
     // ============================================================
-    // PILL ESQUERDA: [dot] Lumo . 1
+    // PILL ESQUERDA: [dot] Lumo (A30.1 sem workspace numero)
     // ============================================================
-    let workspace_str = snap.active_ws.to_string();
     let lumo_w = measure_text("Lumo", FONT_PILL, true);
-    // A29: workspace numero = Geist Mono (tabular, fixa largura entre 1..9).
-    let ws_w = measure_text_mono(&workspace_str, FONT_PILL, false);
-
-    // Largura interna pill esquerda:
-    //   pad + brand_dot(8) + gap + Lumo + gap + sep(4) + gap + ws + pad
-    let pill_l_content_w =
-        BRAND_DOT_RADIUS * 2.0
-        + PILL_GAP
-        + lumo_w
-        + PILL_GAP
-        + SEP_DOT_RADIUS * 2.0
-        + PILL_GAP
-        + ws_w;
+    let pill_l_content_w = BRAND_DOT_RADIUS * 2.0 + PILL_GAP + lumo_w;
     let pill_l_w = pill_l_content_w + PILL_PAD_X * 2.0;
     let pill_l_x = PILL_MARGIN_X;
+    let _ = snap.active_ws; // suppress dead-code warn ate A35 workspaces reais
 
     {
         let mut canvas = pixmap.as_mut();
         draw_pill_bg(&mut canvas, pill_l_x, pill_y, pill_l_w, PILL_H, pill_bg, 0);
 
         let mut cx = pill_l_x + PILL_PAD_X;
-        // A27: hit-rect cobre brand dot + texto "Lumo" (4px folga em cada lado).
         let lumo_hit_x_start = cx - 4.0;
-        // Brand dot (accent emerald/blue).
+        // Brand dot accent
         draw_brand_dot(&mut canvas, cx + BRAND_DOT_RADIUS, pill_cy, accent);
         cx += BRAND_DOT_RADIUS * 2.0 + PILL_GAP;
-        // "Lumo" bold.
+        // "Lumo" bold
         draw_text(&mut canvas, cx, text_top, "Lumo", FONT_PILL, pill_fg, true);
         let lumo_hit_x_end = cx + lumo_w + 4.0;
         result.lumo_hit_rect = Some((
@@ -142,12 +129,6 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
             lumo_hit_x_end - lumo_hit_x_start,
             PILL_H,
         ));
-        cx += lumo_w + PILL_GAP;
-        // Separator dot middle.
-        fill_circle(&mut canvas, cx + SEP_DOT_RADIUS, pill_cy, SEP_DOT_RADIUS, pill_sep);
-        cx += SEP_DOT_RADIUS * 2.0 + PILL_GAP;
-        // Workspace numero. A29: Geist Mono.
-        draw_text_mono(&mut canvas, cx, text_top, &workspace_str, FONT_PILL, pill_fg, false);
     }
 
     // ============================================================
