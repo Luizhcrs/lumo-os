@@ -17,6 +17,13 @@ serde_json = "1"
 cosmic-text = "0.12"
 fontdb = "0.18"
 
+# Refactor A-REFACTOR: expoe lib crate `lumo_shell` consumida pelos bins.
+# bar/desktop foram quebrados em modulos por feature (memory
+# feedback_lumo_arquitetura_clean).
+[lib]
+name = "lumo_shell"
+path = "src/lib.rs"
+
 [[bin]]
 name = "lumo-shell"
 path = "src/main.rs"
