@@ -137,6 +137,25 @@ const FONT_DROPDOWN_TITLE: f32 = 14.0;
 const FONT_DROPDOWN_BODY: f32 = 13.0;
 
 // ============================================================
+// Dropdown DateTime (A24).
+// ============================================================
+//
+// Largura 280 igual bat/wifi (continuidade visual). Altura 252 acomoda:
+//   - Linha 1: weekday + dia + mes (FONT_DROPDOWN_TITLE 14px)
+//   - Linha 2: HH:MM:SS clock (FONT_DROPDOWN_CLOCK 22px)
+//   - Separator linha
+//   - Header weekdays D S T Q Q S S
+//   - 6 linhas grid mes x 7 colunas
+// Grid cell 32x22 (uniform 7 col * 32 = 224; centralizado em 280).
+// Dia atual destacado pill emerald 22x18 radius 9 (sem glow neon).
+const DROPDOWN_DATETIME_W: f32 = 280.0;
+const DROPDOWN_DATETIME_H: f32 = 252.0;
+const DATETIME_CELL_W: f32 = 32.0;
+const DATETIME_CELL_H: f32 = 22.0;
+const FONT_DROPDOWN_CLOCK: f32 = 22.0;
+const FONT_DROPDOWN_CALENDAR: f32 = 12.0;
+
+// ============================================================
 // Color helpers.
 // ============================================================
 
@@ -554,8 +573,8 @@ fn battery_total_width() -> f32 {
 pub enum DropdownActive {
     None,
     Battery,
-    Wifi, // A23
-    // Date pra A24
+    Wifi,     // A23
+    DateTime, // A24 - calendario + hora detalhada
 }
 
 // ============================================================
@@ -650,6 +669,99 @@ fn read_battery_info() -> BatteryInfo {
         voltage_now_mv: voltage_mv,
         model: sys_read_string(&format!("{}/model_name", dir)),
         manufacturer: sys_read_string(&format!("{}/manufacturer", dir)),
+    }
+}
+
+// ============================================================
+// DateTimeInfo (A24) - calendario + hora detalhada.
+// ============================================================
+
+#[derive(Clone)]
+pub struct DateTimeInfo {
+    pub weekday_full: String, // "domingo"
+    pub day: u32,             // 17
+    pub month_full: String,   // "maio"
+    pub year: i32,            // 2026
+    pub hour: u8,             // 17
+    pub minute: u8,           // 50
+    pub second: u8,           // 32
+    pub month_grid: Vec<Vec<Option<u32>>>, // 6 weeks x 7 days, None = padding
+    pub today_day: u32,
+}
+
+impl Default for DateTimeInfo {
+    fn default() -> Self {
+        DateTimeInfo {
+            weekday_full: String::new(),
+            day: 1,
+            month_full: String::new(),
+            year: 2026,
+            hour: 0,
+            minute: 0,
+            second: 0,
+            month_grid: vec![vec![None; 7]; 6],
+            today_day: 1,
+        }
+    }
+}
+
+fn weekday_full_pt(w: chrono::Weekday) -> &'static str {
+    use chrono::Weekday::*;
+    match w {
+        Mon => "segunda-feira", Tue => "terca-feira", Wed => "quarta-feira",
+        Thu => "quinta-feira", Fri => "sexta-feira", Sat => "sabado", Sun => "domingo",
+    }
+}
+
+fn month_full_pt(m: u32) -> &'static str {
+    match m {
+        1 => "janeiro", 2 => "fevereiro", 3 => "marco", 4 => "abril",
+        5 => "maio", 6 => "junho", 7 => "julho", 8 => "agosto",
+        9 => "setembro", 10 => "outubro", 11 => "novembro", 12 => "dezembro",
+        _ => "?",
+    }
+}
+
+/// Constroi grid 6x7 do mes. Coluna 0 = Domingo (padrao PT-BR D S T Q Q S S).
+fn month_grid_for(year: i32, month: u32) -> Vec<Vec<Option<u32>>> {
+    use chrono::{Datelike, NaiveDate};
+    let first = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+    // num_days_from_sunday: Sun=0 .. Sat=6 (alinha com nosso layout D S T Q Q S S).
+    let first_weekday = first.weekday().num_days_from_sunday() as usize;
+    let next_month_first = if month == 12 {
+        NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap()
+    } else {
+        NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap()
+    };
+    let days_in_month = next_month_first.pred_opt().unwrap().day();
+
+    let mut grid = vec![vec![None; 7]; 6];
+    let mut day = 1u32;
+    for week in 0..6 {
+        for col in 0..7 {
+            if (week == 0 && col < first_weekday) || day > days_in_month {
+                grid[week][col] = None;
+            } else {
+                grid[week][col] = Some(day);
+                day += 1;
+            }
+        }
+    }
+    grid
+}
+
+fn read_datetime_info() -> DateTimeInfo {
+    let now = Local::now();
+    DateTimeInfo {
+        weekday_full: weekday_full_pt(now.weekday()).to_string(),
+        day: now.day(),
+        month_full: month_full_pt(now.month()).to_string(),
+        year: now.year(),
+        hour: now.hour() as u8,
+        minute: now.minute() as u8,
+        second: now.second() as u8,
+        month_grid: month_grid_for(now.year(), now.month()),
+        today_day: now.day(),
     }
 }
 
@@ -1044,6 +1156,110 @@ fn draw_wifi_dropdown(
 }
 
 // ============================================================
+// draw_datetime_dropdown (A24).
+// ============================================================
+//
+// Layout (DROPDOWN_DATETIME_W=280, _H=252):
+//   pad 14 top
+//   linha 1: "{weekday_full}, {day} de {month_full}" 14px bold
+//   linha 2: "HH:MM:SS" 22px (FONT_DROPDOWN_CLOCK) realtime
+//   separator linha 1px
+//   header weekdays "D S T Q Q S S" 12px subtle, 7 colunas uniform
+//   grid 6 linhas x 7 colunas, dia atual pill emerald solido
+//
+// Constantes justificadas (memory feedback_design_lapidado):
+//   DATETIME_CELL_W=32 -> 7*32=224, centralizado em 280 sem PAD_X.
+//   DATETIME_CELL_H=22 -> respiro vertical, 6 linhas = 132 + header 22 = 154.
+// Sem glow neon (memory feedback_zero_neon_glow): pill emerald solido.
+fn draw_datetime_dropdown(
+    canvas: &mut PixmapMut,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    palette: &LumoColors,
+    info: &DateTimeInfo,
+) {
+    let bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
+    let fg = opaque(palette.pill_fg);
+    let fg_subtle = rgba_hex(palette.pill_fg, 0xA0);
+    let sep_color = rgba_hex(palette.pill_sep, palette.pill_sep_alpha);
+    let accent = opaque(palette.accent);
+    // FG sobre pill accent: branco (contraste forte, sem glow).
+    let on_accent = opaque(0xFFFFFF);
+
+    // Background rounded rect.
+    fill_rrect(canvas, x, y, w, h, PILL_RADIUS, bg);
+
+    let cx = x + DROPDOWN_PAD;
+    let mut cy = y + DROPDOWN_PAD;
+
+    // Linha 1: weekday + dia + mes (bold).
+    let title = format!("{}, {} de {}", info.weekday_full, info.day, info.month_full);
+    draw_text(canvas, cx, cy, &title, FONT_DROPDOWN_TITLE, fg, true);
+    cy += FONT_DROPDOWN_TITLE * 1.5;
+
+    // Linha 2: HH:MM:SS grande.
+    let clock = format!("{:02}:{:02}:{:02}", info.hour, info.minute, info.second);
+    draw_text(canvas, cx, cy, &clock, FONT_DROPDOWN_CLOCK, fg, false);
+    cy += FONT_DROPDOWN_CLOCK * 1.3;
+
+    // Separator 1px.
+    if let Some(rect) = Rect::from_xywh(x + DROPDOWN_PAD, cy.round(), w - DROPDOWN_PAD * 2.0, 1.0) {
+        let mut p = Paint::default();
+        p.set_color(sep_color);
+        p.anti_alias = false;
+        canvas.fill_rect(rect, &p, Transform::identity(), None);
+    }
+    cy += 10.0;
+
+    // Grid horizontal centralizado em w. 7 colunas * DATETIME_CELL_W.
+    let grid_total_w = DATETIME_CELL_W * 7.0;
+    let grid_x = x + (w - grid_total_w) / 2.0;
+
+    // Header weekdays: D S T Q Q S S (col 0 = Dom).
+    let weekday_labels = ["D", "S", "T", "Q", "Q", "S", "S"];
+    for (i, label) in weekday_labels.iter().enumerate() {
+        let cell_x = grid_x + DATETIME_CELL_W * i as f32;
+        let label_w = measure_text(label, FONT_DROPDOWN_CALENDAR, true);
+        let lx = cell_x + (DATETIME_CELL_W - label_w) / 2.0;
+        draw_text(canvas, lx, cy, label, FONT_DROPDOWN_CALENDAR, fg_subtle, true);
+    }
+    cy += DATETIME_CELL_H;
+
+    // Grid 6x7 dias.
+    for week in 0..6 {
+        for col in 0..7 {
+            if let Some(day) = info.month_grid[week][col] {
+                let cell_x = grid_x + DATETIME_CELL_W * col as f32;
+                let cell_y = cy + DATETIME_CELL_H * week as f32;
+                let is_today = day == info.today_day;
+
+                let day_str = day.to_string();
+                let day_w = measure_text(&day_str, FONT_DROPDOWN_CALENDAR, is_today);
+                let dx = cell_x + (DATETIME_CELL_W - day_w) / 2.0;
+                // Texto baseline alinha topo + folga pra centralizar dentro de 22.
+                let dy = cell_y + (DATETIME_CELL_H - FONT_DROPDOWN_CALENDAR) / 2.0 - 1.0;
+
+                if is_today {
+                    // Pill emerald 22x18 radius 9 (sem glow).
+                    let pill_w = 22.0;
+                    let pill_h = 18.0;
+                    let px = cell_x + (DATETIME_CELL_W - pill_w) / 2.0;
+                    let py = cell_y + (DATETIME_CELL_H - pill_h) / 2.0;
+                    fill_rrect(canvas, px, py, pill_w, pill_h, 9.0, accent);
+                    draw_text(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, on_accent, true);
+                } else {
+                    draw_text(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, fg, false);
+                }
+            }
+        }
+    }
+
+    let _ = h; // h passado pela API, background usa w via fill_rrect.
+}
+
+// ============================================================
 // BarSnapshot.
 // ============================================================
 struct BarSnapshot {
@@ -1060,13 +1276,15 @@ struct BarSnapshot {
     dropdown: DropdownActive,
     battery_info: BatteryInfo,
     wifi_info: WifiInfo, // A23
+    datetime_info: DateTimeInfo, // A24
 }
 
 /// Resultado de paint_frame: posicoes calculadas pra hit-test no proximo frame.
 #[derive(Default, Clone)]
 struct PaintResult {
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
-    wifi_hit_rect: Option<(f32, f32, f32, f32)>, // A23
+    wifi_hit_rect: Option<(f32, f32, f32, f32)>,     // A23
+    datetime_hit_rect: Option<(f32, f32, f32, f32)>, // A24
     last_click_at: Option<Instant>,
 }
 
@@ -1164,9 +1382,18 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
         draw_wifi(&mut canvas, cx, pill_cy - WIFI_SIZE / 2.0, snap.wifi_on, pill_fg, pill_fg_subtle);
         result.wifi_hit_rect = Some((wifi_x_start - 4.0, pill_y, WIFI_SIZE + 8.0, PILL_H));
         cx += WIFI_SIZE + PILL_GAP;
+        // A24: hit area cobre data + hora juntas (mesmo dropdown calendario).
+        let datetime_x_start = cx;
         draw_text(&mut canvas, cx, text_top, &snap.date_str, FONT_DATE, pill_fg, false);
         cx += date_w + 8.0;
         draw_text(&mut canvas, cx, text_top, &clock_s, FONT_PILL, pill_fg, false);
+        let datetime_end = cx + clock_w;
+        result.datetime_hit_rect = Some((
+            datetime_x_start - 4.0,
+            pill_y,
+            (datetime_end - datetime_x_start) + 8.0,
+            PILL_H,
+        ));
     }
 
     // ============================================================
@@ -1206,6 +1433,25 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
                     DROPDOWN_H,
                     palette,
                     &snap.wifi_info,
+                );
+            }
+        }
+        // A24: dropdown calendario+horario (mesmo painel pra click em data OU hora).
+        DropdownActive::DateTime => {
+            if let Some((rx, ry, rw, rh)) = result.datetime_hit_rect {
+                let want_x = rx + rw / 2.0 - DROPDOWN_DATETIME_W / 2.0;
+                let max_x = snap.width as f32 - PILL_MARGIN_X - DROPDOWN_DATETIME_W;
+                let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
+                let dropdown_y = ry + rh + DROPDOWN_GAP;
+                let mut canvas = pixmap.as_mut();
+                draw_datetime_dropdown(
+                    &mut canvas,
+                    dropdown_x,
+                    dropdown_y,
+                    DROPDOWN_DATETIME_W,
+                    DROPDOWN_DATETIME_H,
+                    palette,
+                    &snap.datetime_info,
                 );
             }
         }
@@ -1333,7 +1579,8 @@ struct LumoBar {
     pointer_x: f32,
     pointer_pos: Option<(f64, f64)>,
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
-    wifi_hit_rect: Option<(f32, f32, f32, f32)>, // A23
+    wifi_hit_rect: Option<(f32, f32, f32, f32)>,     // A23
+    datetime_hit_rect: Option<(f32, f32, f32, f32)>, // A24
     last_click_at: Option<Instant>,
     dropdown: DropdownActive,
     ipc_stream: Option<UnixStream>,
@@ -1354,13 +1601,19 @@ impl LumoBar {
 
     /// Altura efetiva da surface (bar + dropdown opcional).
     /// Reserva exclusive_zone original = BAR_HEIGHT (toplevels nao afetados).
+    /// A20.11 + A24: surface ja eh sempre altura max, helper so pra referencia.
     fn computed_height(&self) -> u32 {
+        let max_drop = DROPDOWN_H.max(DROPDOWN_DATETIME_H) as u32; // A24
         match self.dropdown {
             DropdownActive::None => BAR_HEIGHT,
             DropdownActive::Battery | DropdownActive::Wifi => {
                 BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H as u32 + 8
             }
+            DropdownActive::DateTime => {
+                BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_DATETIME_H as u32 + 8
+            }
         }
+        .max(BAR_HEIGHT + DROPDOWN_GAP as u32 + max_drop + 8)
     }
 
     /// Reconfigura tamanho do layer e redesenha (toggle dropdown).
@@ -1387,7 +1640,8 @@ impl LumoBar {
             date_str: format_date_pt(&now),
             dropdown: self.dropdown,
             battery_info: self.battery_info.clone(),
-            wifi_info: self.wifi_info.clone(), // A23
+            wifi_info: self.wifi_info.clone(),  // A23
+            datetime_info: read_datetime_info(), // A24: realtime per frame
         };
 
         let stride = self.width as i32 * 4;
@@ -1408,7 +1662,8 @@ impl LumoBar {
         if let Some(mut px) = Pixmap::new(self.width, self.height) {
             let paint_result = paint_frame(&mut px, &snap);
             self.bat_hit_rect = paint_result.bat_hit_rect;
-            self.wifi_hit_rect = paint_result.wifi_hit_rect; // A23
+            self.wifi_hit_rect = paint_result.wifi_hit_rect;     // A23
+            self.datetime_hit_rect = paint_result.datetime_hit_rect; // A24
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;
@@ -1502,7 +1757,9 @@ impl LayerShellHandler for LumoBar {
         let (w, h) = cfg.new_size;
         // A19.13: forca 1920 sempre (compositor passa width parcial as vezes)
         self.width = 1920;
-        self.height = BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H as u32 + 8; // A20.11 altura max sempre
+        // A20.11 + A24: altura max cobre maior dropdown (DateTime 252 > Battery/Wifi 150).
+        let max_drop = DROPDOWN_H.max(DROPDOWN_DATETIME_H) as u32;
+        self.height = BAR_HEIGHT + DROPDOWN_GAP as u32 + max_drop + 8;
         self.first_configured = true;
         eprintln!("[lumo-bar] configured cfg_size=({},{}) FORCED width=1920 height={}", w, h, self.height);
         self.refresh();
@@ -1614,6 +1871,23 @@ impl PointerHandler for LumoBar {
                             }
                         }
                     }
+                    // A24: click data OU hora -> dropdown calendario+horario.
+                    if !handled {
+                        if let Some((rx, ry, rw, rh)) = self.datetime_hit_rect {
+                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                self.dropdown = if self.dropdown == DropdownActive::DateTime {
+                                    DropdownActive::None
+                                } else {
+                                    // datetime_info eh sempre lido por frame em redraw,
+                                    // entao nao precisa refresh aqui. Click ja gera
+                                    // frame imediato via update_size_and_redraw.
+                                    DropdownActive::DateTime
+                                };
+                                self.update_size_and_redraw(qh);
+                                handled = true;
+                            }
+                        }
+                    }
                     if !handled && self.dropdown != DropdownActive::None {
                         // Click fora -> fecha dropdown.
                         self.dropdown = DropdownActive::None;
@@ -1658,17 +1932,15 @@ fn main() {
     let layer =
         layer_shell.create_layer_surface(&qh, surface, Layer::Top, Some("lumo-bar"), None);
     layer.set_anchor(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT);
-    layer.set_size(1920, BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H as u32 + 8); // A20.11 altura max
+    // A24: altura max = MAX(DROPDOWN_H, DROPDOWN_DATETIME_H). DateTime mais alto (252).
+    let surface_max_h = BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H.max(DROPDOWN_DATETIME_H) as u32 + 8;
+    layer.set_size(1920, surface_max_h);
     layer.set_exclusive_zone(BAR_HEIGHT as i32);
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
 
-    // A20: pool dimensionado pra acomodar bar EXPANDIDA com dropdown.
-    // height max = BAR_HEIGHT + GAP + DROPDOWN_H + 8 ~= 254. Margem 2x.
-    let max_height = BAR_HEIGHT as usize
-        + DROPDOWN_GAP as usize
-        + DROPDOWN_H as usize
-        + 8;
+    // A20/A24: pool dimensionado pra acomodar bar EXPANDIDA com maior dropdown.
+    let max_height = surface_max_h as usize;
     let pool = SlotPool::new(1920 * max_height * 4 * 2, &shm)
         .expect("SlotPool init");
 
@@ -1700,7 +1972,8 @@ fn main() {
         pointer_x: 0.0,
         pointer_pos: None,
         bat_hit_rect: None,
-        wifi_hit_rect: None, // A23
+        wifi_hit_rect: None,     // A23
+        datetime_hit_rect: None, // A24
         last_click_at: None,
         dropdown: DropdownActive::None,
         ipc_stream: connect_ipc(),
