@@ -14,7 +14,7 @@ use lumo_foundation::LumoColors;
 use tiny_skia::{Paint, PixmapMut, Rect, Transform};
 
 use crate::bar::fonts::{draw_text, draw_text_mono, measure_text_mono, opaque, rgba_hex};
-use crate::bar::icons::fill_rrect;
+use crate::bar::icons::{draw_battery, fill_rrect};
 use crate::bar::tokens::*;
 
 // ============================================================
@@ -123,9 +123,14 @@ pub fn draw_battery_dropdown(
     draw_text(canvas, cx, cy, "Bateria", FONT_DROPDOWN_TITLE, fg, true);
     cy += FONT_DROPDOWN_TITLE * 1.4;
 
+    // A30: mini icone bateria com bolt charging antes do summary.
+    let charging = info.status == "Charging";
+    let icon_y = cy + FONT_DROPDOWN_BODY * 0.5 - BAT_BODY_H / 2.0;
+    draw_battery(canvas, cx, icon_y, info.pct, charging, fg, opaque(palette.accent));
+    let summary_x = cx + BAT_BODY_W + 4.0 + 8.0;
     // Linha "{N}% . {status}".
     let summary = format!("{}%  .  {}", info.pct, status_pt(&info.status));
-    draw_text(canvas, cx, cy, &summary, FONT_DROPDOWN_BODY, fg_subtle, false);
+    draw_text(canvas, summary_x, cy, &summary, FONT_DROPDOWN_BODY, fg_subtle, false);
     cy += FONT_DROPDOWN_BODY * 1.6;
 
     // Separator linha cinza 1px.

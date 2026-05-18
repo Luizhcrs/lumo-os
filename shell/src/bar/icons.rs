@@ -146,7 +146,7 @@ pub fn draw_wifi(canvas: &mut PixmapMut, x: f32, y: f32, on: bool, fg: Color, fg
 // ============================================================
 // Battery glyph (compact 22x11 body Mac-style).
 // ============================================================
-pub fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, fg: Color, accent: Color) {
+pub fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, charging: bool, fg: Color, accent: Color) {
     let body_w = BAT_BODY_W;
     let body_h = BAT_BODY_H;
     stroke_rrect(canvas, x + 0.5, y + 0.5, body_w - 1.0, body_h - 1.0, 2.2, fg, 1.2);
@@ -168,6 +168,43 @@ pub fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, fg: Color, 
         let _ = accent;
         fill_rrect(canvas, x + inset_x, y + inset_y, fw, inner_h, 1.2, fill_color);
     }
+    // A30: bolt charging icone centralizado no body. Branco (#FFFFFF) pra contraste
+    // com qualquer fill (verde/laranja/vermelho). ~6px altura, body inner 18x7.
+    if charging {
+        draw_bolt(canvas, x + body_w / 2.0, y + body_h / 2.0, 4.4, 6.6, opaque(0xFFFFFF));
+    }
+}
+
+/// A30: raio (bolt) charging. Centralizado em (cx, cy), tamanho w x h.
+/// Path 7-vertex zigzag classico Apple/Material flash_on.
+pub fn draw_bolt(canvas: &mut PixmapMut, cx: f32, cy: f32, w: f32, h: f32, color: Color) {
+    let x0 = cx - w / 2.0;
+    let y0 = cy - h / 2.0;
+    // Coords normalizadas (0..1) escaladas. Traversal contorno fechado.
+    let pts: [(f32, f32); 7] = [
+        (0.40, 0.00), // P0: topo levemente esquerda
+        (0.85, 0.00), // P1: topo direita
+        (0.50, 0.45), // P2: corte direita interno (meio)
+        (0.95, 0.45), // P3: corte direita externo
+        (0.60, 1.00), // P4: ponta inferior
+        (0.15, 0.55), // P5: corte esquerda externo
+        (0.50, 0.55), // P6: corte esquerda interno (meio)
+    ];
+    let mut pb = PathBuilder::new();
+    let (ux, uy) = pts[0];
+    pb.move_to(x0 + ux * w, y0 + uy * h);
+    for &(ux, uy) in &pts[1..] {
+        pb.line_to(x0 + ux * w, y0 + uy * h);
+    }
+    pb.close();
+    let path = match pb.finish() {
+        Some(p) => p,
+        None => return,
+    };
+    let mut p = Paint::default();
+    p.set_color(color);
+    p.anti_alias = true;
+    canvas.fill_path(&path, &p, FillRule::Winding, Transform::identity(), None);
 }
 
 pub fn battery_total_width() -> f32 {

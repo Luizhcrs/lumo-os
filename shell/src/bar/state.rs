@@ -218,8 +218,9 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
         }
         DropdownActive::Wifi => {
             if let Some((rx, ry, rw, rh)) = result.wifi_hit_rect {
-                let want_x = rx + rw / 2.0 - DROPDOWN_W / 2.0;
-                let max_x = snap.width as f32 - PILL_MARGIN_X - DROPDOWN_W;
+                // A31: wifi dropdown agora maior (gerenciador de redes).
+                let want_x = rx + rw / 2.0 - DROPDOWN_WIFI_W / 2.0;
+                let max_x = snap.width as f32 - PILL_MARGIN_X - DROPDOWN_WIFI_W;
                 let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
                 let dropdown_y = ry + rh + DROPDOWN_GAP;
                 let mut canvas = pixmap.as_mut();
@@ -227,8 +228,8 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                     &mut canvas,
                     dropdown_x,
                     dropdown_y,
-                    DROPDOWN_W,
-                    DROPDOWN_H,
+                    DROPDOWN_WIFI_W,
+                    DROPDOWN_WIFI_H,
                     palette,
                     &snap.wifi_info,
                 );
