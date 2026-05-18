@@ -223,9 +223,8 @@ impl PointerHandler for LumoBar {
                                 let want_on = !self.wifi_info.up;
                                 eprintln!("[lumo-bar] A31.2 toggle wifi -> {}", want_on);
                                 crate::bar::system_info::nm_set_radio(want_on);
-                                // A31.2.fix: optimistic + deferred refresh (nao bloqueia click).
-                                self.wifi_info.up = want_on;
-                                self.wifi_refresh_due = Some(Instant::now() + Duration::from_millis(1200));
+                                // Bug Luiz v4: optimistic update removido. UI atualiza pos nmcli confirmar.
+                                self.wifi_refresh_due = Some(Instant::now() + Duration::from_millis(1500));
                                 self.update_size_and_redraw(qh);
                                 handled = true;
                             }

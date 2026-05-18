@@ -374,6 +374,13 @@ pub fn format_date_pt(dt: &chrono::DateTime<Local>) -> String {
 /// Toggle radio wifi via nmcli. Async. Log saida.
 pub fn nm_set_radio(on: bool) {
     std::thread::spawn(move || {
+        // Bug Luiz 2026-05-18 v4: wifi voltava "desligado" sozinho.
+        // Garante hardware unblocked antes de ligar radio.
+        if on {
+            let _ = std::process::Command::new("rfkill")
+                .args(["unblock", "wifi"])
+                .output();
+        }
         let arg = if on { "on" } else { "off" };
         let res = std::process::Command::new("nmcli")
             .args(["radio", "wifi", arg])
