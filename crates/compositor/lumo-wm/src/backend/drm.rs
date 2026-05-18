@@ -812,6 +812,17 @@ fn render_drm(state: &mut LumoState) {
     }
     let boot_curtain_alpha = state.boot_curtain_alpha;
 
+    // R1: calcular cursor_moved ANTES do destructure pra evitar borrow conflict.
+    // Bypass pending_flip quando cursor se moveu = elimina delay visual.
+    let cursor_moved = {
+        let last = state.last_rendered_cursor_pos;
+        let cur = state.pointer_location;
+        (last.x - cur.x).abs() > 0.01 || (last.y - cur.y).abs() > 0.01
+    };
+    if cursor_moved {
+        state.last_rendered_cursor_pos = state.pointer_location;
+    }
+
     // Destructure pra split borrow: backend mut + state.* imut em paralelo.
     let LumoState {
         ref mut drm_backend,
@@ -835,7 +846,7 @@ fn render_drm(state: &mut LumoState) {
         return;
     };
 
-    if surface.pending_flip && !force_repaint {
+    if surface.pending_flip && !force_repaint && !cursor_moved {
         return;
     }
 

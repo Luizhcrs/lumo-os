@@ -173,6 +173,10 @@ pub struct LumoState {
     pub boot_ready: bool,
     pub boot_curtain_alpha: f32,
     pub boot_last_tick: std::time::Instant,
+    /// R1: posicao do cursor no ultimo frame renderizado. Bypass pending_flip
+    /// quando cursor se moveu pra eliminar delay visual.
+    #[cfg(feature = "drm-backend")]
+    pub last_rendered_cursor_pos: smithay::utils::Point<f64, smithay::utils::Logical>,
 }
 
 impl LumoState {
@@ -280,6 +284,8 @@ impl LumoState {
             boot_ready: false,
             boot_curtain_alpha: 1.0,
             boot_last_tick: std::time::Instant::now(),
+            #[cfg(feature = "drm-backend")]
+            last_rendered_cursor_pos: (0.0, 0.0).into(),
         }
     }
 
