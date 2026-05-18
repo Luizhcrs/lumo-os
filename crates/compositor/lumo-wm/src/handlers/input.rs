@@ -157,6 +157,61 @@ impl LumoState {
                 tracing::debug!(button, state = ?state, pos = ?(self.pointer_location.x as i32, self.pointer_location.y as i32), "C3 PointerButton");
 
                 if state == ButtonState::Pressed {
+                    // M1: SSD hit-test antes de repassar o click ao cliente.
+                    // Verifica close button e titlebar para janelas com SSD ativo.
+                    if button == 0x110 {
+                        use crate::backend::render_common::{
+                            ssd_close_btn_rect_logical, ssd_titlebar_rect_logical,
+                        };
+                        use smithay::input::pointer::Focus;
+                        let ptr_pos = self.pointer_location.to_i32_round();
+                        let mut ssd_handled = false;
+                        let windows: Vec<_> = self.space.elements().cloned().collect();
+                        for window in &windows {
+                            let surf_opt = window.toplevel().map(|t| t.wl_surface().clone());
+                            let surf = match surf_opt { Some(s) => s, None => continue };
+                            if !self.ssd_windows.contains(&surf) { continue; }
+                            let loc = self.space.element_location(window).unwrap_or_default();
+                            let geo = window.geometry();
+                            let close_rect = ssd_close_btn_rect_logical(loc, geo.size.w);
+                            if close_rect.contains(ptr_pos) {
+                                if let Some(toplevel) = window.toplevel() {
+                                    toplevel.send_close();
+                                }
+                                ssd_handled = true;
+                                break;
+                            }
+                            let title_rect = ssd_titlebar_rect_logical(loc, geo.size.w);
+                            if title_rect.contains(ptr_pos) {
+                                let pointer = self.pointer.clone();
+                                let start_data = smithay::input::pointer::GrabStartData {
+                                    focus: pointer.current_focus().map(|s| {
+                                        let fl = self
+                                            .surface_under(self.pointer_location)
+                                            .map(|(_, l)| l.to_f64())
+                                            .unwrap_or_default();
+                                        (s, fl)
+                                    }),
+                                    button: 0x110,
+                                    location: self.pointer_location,
+                                };
+                                let initial_window_location = loc;
+                                let grab = crate::input::move_grab::MoveSurfaceGrab {
+                                    start_data,
+                                    window: window.clone(),
+                                    initial_window_location,
+                                };
+                                pointer.set_grab(self, grab, serial, Focus::Clear);
+                                ssd_handled = true;
+                                break;
+                            }
+                        }
+                        if ssd_handled {
+                            pointer.frame(self);
+                            return;
+                        }
+                    }
+
                     let kb = self.keyboard.clone();
                     let new_focus = if let Some((surface, _)) = self.surface_under(self.pointer_location) {
                         // L1: FocusManager centraliza policy de foco.

@@ -70,7 +70,10 @@ pub struct LidHandlerState {
 }
 
 fn handle_lid_event(event: LidEvent, _state: &mut LumoState, lid: &Arc<std::sync::Mutex<LidHandlerState>>) {
-    let mut s = lid.lock().unwrap();
+    let mut s = match lid.lock() {
+        Ok(g) => g,
+        Err(_) => return,
+    };
     match event {
         LidEvent::Closed => {
             if s.closed_at.is_some() {
@@ -100,7 +103,10 @@ fn handle_lid_event(event: LidEvent, _state: &mut LumoState, lid: &Arc<std::sync
 /// Poll the suspend timer — call from compositor main loop tick.
 /// Returns true if suspend was triggered.
 pub fn tick_lid_timer(lid: &Arc<std::sync::Mutex<LidHandlerState>>) -> bool {
-    let mut s = lid.lock().unwrap();
+    let mut s = match lid.lock() {
+        Ok(g) => g,
+        Err(_) => return false,
+    };
     if let Some(closed_at) = s.closed_at {
         if !s.suspended && closed_at.elapsed() >= Duration::from_secs(30) {
             tracing::info!("[lid] 30s elapsed, suspending");

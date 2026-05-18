@@ -79,6 +79,30 @@ pub fn close_btn_rect(win_loc: smithay::utils::Point<i32, smithay::utils::Logica
     )
 }
 
+/// Retorna rect do close button em coordenadas Logicas (para hit-test de input).
+pub fn ssd_close_btn_rect_logical(
+    win_loc: smithay::utils::Point<i32, smithay::utils::Logical>,
+    win_w: i32,
+) -> smithay::utils::Rectangle<i32, smithay::utils::Logical> {
+    let x = win_loc.x + win_w - CLOSE_BTN_SIZE - CLOSE_BTN_MARGIN;
+    let y = win_loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+    smithay::utils::Rectangle::new(
+        smithay::utils::Point::from((x, y)),
+        (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
+    )
+}
+
+/// Retorna rect da titlebar inteira em coordenadas Logicas (para hit-test de input).
+pub fn ssd_titlebar_rect_logical(
+    win_loc: smithay::utils::Point<i32, smithay::utils::Logical>,
+    win_w: i32,
+) -> smithay::utils::Rectangle<i32, smithay::utils::Logical> {
+    smithay::utils::Rectangle::new(
+        smithay::utils::Point::from((win_loc.x, win_loc.y - TITLEBAR_H)),
+        (win_w, TITLEBAR_H).into(),
+    )
+}
+
 /// Gera elementos de titlebar (fundo + close button) pra todas SSD windows.
 /// Retorna lista front->back: close button na frente, fundo atras.
 /// Caller insere esses elementos ANTES do Space na lista de render.

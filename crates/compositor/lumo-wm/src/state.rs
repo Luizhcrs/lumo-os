@@ -168,9 +168,11 @@ pub struct LumoState {
 
     // A39: boot curtain. Tela preta inicial ate lumo-bar estar mapeada.
     // boot_ready: lumo-bar detectada pelo menos 1x via layer_map.
-    // boot_curtain_alpha: 1.0 inicial; decrementa 0.067/frame apos ready.
+    // boot_curtain_alpha: 1.0 inicial; decrementa com delta real (4.0/s) apos ready.
+    // boot_last_tick: timestamp do ultimo frame para calculo de dt.
     pub boot_ready: bool,
     pub boot_curtain_alpha: f32,
+    pub boot_last_tick: std::time::Instant,
 }
 
 impl LumoState {
@@ -277,6 +279,7 @@ impl LumoState {
             lid_handler: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
             boot_ready: false,
             boot_curtain_alpha: 1.0,
+            boot_last_tick: std::time::Instant::now(),
         }
     }
 
@@ -453,24 +456,15 @@ impl XdgDecorationHandler for LumoState {
         tracing::debug!("xdg_decoration: new_decoration -> ServerSide");
     }
 
-    fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
-        match mode {
-            Mode::ServerSide => {
-                toplevel.with_pending_state(|state| {
-                    state.decoration_mode = Some(Mode::ServerSide);
-                });
-                self.ssd_windows.insert(toplevel.wl_surface().clone());
-            }
-            Mode::ClientSide => {
-                toplevel.with_pending_state(|state| {
-                    state.decoration_mode = Some(Mode::ClientSide);
-                });
-                self.ssd_windows.remove(toplevel.wl_surface());
-            }
-            _ => {}
-        }
+    fn request_mode(&mut self, toplevel: ToplevelSurface, _mode: Mode) {
+        // P0: forca ServerSide sempre. Apps que ignoram (GTK4) continuam CSD client-side.
+        toplevel.with_pending_state(|state| {
+            state.decoration_mode = Some(Mode::ServerSide);
+        });
         toplevel.send_configure();
-        tracing::debug!(?mode, "xdg_decoration: request_mode");
+        let surf = toplevel.wl_surface().clone();
+        self.ssd_windows.insert(surf);
+        tracing::debug!("xdg_decoration: request_mode -> forced ServerSide");
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {

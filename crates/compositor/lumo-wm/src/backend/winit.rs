@@ -225,12 +225,18 @@ fn redraw(
     });
     let (ow, oh) = (mode.size.w, mode.size.h);
 
-    // A39: tick boot curtain state.
-    if !state.boot_ready && state.boot_clients_ready() {
-        state.boot_ready = true;
-    }
-    if state.boot_ready && state.boot_curtain_alpha > 0.001 {
-        state.boot_curtain_alpha = (state.boot_curtain_alpha - 0.067).max(0.0);
+    // A39: tick boot curtain com delta tempo real (P1 fix: nao acoplado a frame rate).
+    {
+        let now = std::time::Instant::now();
+        let dt = now.duration_since(state.boot_last_tick).as_secs_f32();
+        state.boot_last_tick = now;
+        if !state.boot_ready && state.boot_clients_ready() {
+            state.boot_ready = true;
+        }
+        if state.boot_ready && state.boot_curtain_alpha > 0.001 {
+            // Fade 1.0 -> 0.0 em 250ms = rate 4.0/s.
+            state.boot_curtain_alpha = (state.boot_curtain_alpha - dt * 4.0).max(0.0);
+        }
     }
 
     let inputs = OverlayInputs {
