@@ -146,9 +146,26 @@ impl LumoState {
                 tracing::debug!(button, state = ?state, pos = ?(self.pointer_location.x as i32, self.pointer_location.y as i32), "C3 PointerButton");
 
                 if state == ButtonState::Pressed {
+                    let kb = self.keyboard.clone();
                     if let Some((surface, _)) = self.surface_under(self.pointer_location) {
-                        let kb = self.keyboard.clone();
-                        kb.set_focus(self, Some(surface), serial);
+                        // L1 UX foco: so seta foco em toplevel real (xdg_surface).
+                        // Layer-shell surfaces (bar/desktop) NAO recebem keyboard
+                        // focus -- preserva toplevel anterior se houver, OU None.
+                        use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
+                        let is_toplevel = smithay::wayland::compositor::with_states(
+                            &surface,
+                            |states| states.data_map.get::<XdgToplevelSurfaceData>().is_some(),
+                        );
+                        if is_toplevel {
+                            kb.set_focus(self, Some(surface), serial);
+                        } else {
+                            // Click em layer-shell (desktop area, bar) -> remove foco
+                            // de qualquer toplevel ativo. Enable Enter no desktop (A40).
+                            kb.set_focus(self, None, serial);
+                        }
+                    } else {
+                        // Click em area sem surface (raro) -> remove foco.
+                        kb.set_focus(self, None, serial);
                     }
                 }
 
