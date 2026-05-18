@@ -140,3 +140,25 @@ NAO chutar API. NAO usar `cargo search` ou `crates.io` latest sem confirmar comp
 **Fix**: init default `width: 1920` (output Galaxy nativo). Configure handler ainda atualiza se for chamado, mas nao depende dele pra primeiro render.
 
 **Regra**: se output do compositor for diferente de 1920x1080, atualizar default OU implementar deteccao via OutputState antes do primeiro redraw. Hardcode + fallback robusto.
+
+
+## Bar layer-shell click + dropdown (FIXADO 2026-05-17 A20.x) — NAO MEXER
+
+**4 patches obrigatorios** pra bar receber click + abrir dropdown:
+
+1. **`compositor/state.rs::surface_under`** (A20.2): incluir layer-shell surfaces. Padrao Smithay so busca `space.element_under` (toplevels). Sem isso, click em bar = compositor nao acha surface = nao roteia event. Z-order: Overlay > Top > Window > Bottom > Background.
+
+2. **`bar/main.rs` loop** (A20.9): `dispatch_pending` sozinho NAO le events do socket. Precisa `prepare_read + poll + read` antes. Pattern:
+   ```rust
+   conn.flush().ok();
+   if let Some(guard) = queue.prepare_read() {
+       nix::poll::poll(&mut [PollFd::new(fd, POLLIN)], 50ms);
+       guard.read();
+   }
+   queue.dispatch_pending(&mut state).ok();
+   ```
+   Sem isso, `seat capabilities` events nunca chegam, `new_capability` callback nunca dispara, pointer nunca eh adquirido.
+
+3. **`bar/main.rs::new_capability`** (A20.x): usar `get_pointer_with_theme` (retorna ThemedPointer). `get_pointer` plain NAO dispatcha events automatico pro PointerHandler. ThemedPointer eh obrigatorio pro callback funcionar.
+
+4. **Surface altura fixa** (A20.11): NUNCA chamar `layer.set_size()` dinamico apos init. Re-size durante runtime = flicker open/close cycle. Render dropdown em surface ja grande (BAR_HEIGHT + DROPDOWN_H sempre), com area transparente quando fechado. `exclusive_zone` permanece BAR_HEIGHT (toplevels nao afetam).
