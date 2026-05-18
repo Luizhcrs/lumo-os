@@ -113,6 +113,22 @@ fn spawn_autostart(socket_name: &str) {
         tracing::warn!(bar = ?bar_path, "lumo-bar binary nao encontrado, skip autostart");
     }
 
+    // C2: lumo-osd (OSD overlay - Caps Lock, Volume, Brightness)
+    let osd_path = exe_dir.join("lumo-osd");
+    if osd_path.exists() {
+        let mut cmd = std::process::Command::new(&osd_path);
+        cmd.env("WAYLAND_DISPLAY", socket_name);
+        cmd.env("HOME", &home);
+        cmd.env("XDG_CONFIG_HOME", &xdg);
+        cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
+        match cmd.spawn() {
+            Ok(child) => tracing::info!(pid = child.id(), osd = ?osd_path, "autostart lumo-osd"),
+            Err(err) => tracing::warn!(?err, "autostart lumo-osd falhou"),
+        }
+    } else {
+        tracing::warn!(osd = ?osd_path, "lumo-osd binary nao encontrado, skip autostart");
+    }
+
     // Opcional: terminal foot se LUMO_AUTOSTART_FOOT=1.
     // Padrao OFF porque Luiz pode preferir desktop limpo no boot.
     if std::env::var("LUMO_AUTOSTART_FOOT").is_ok() {
@@ -158,6 +174,8 @@ fn main() -> Result<()> {
     }
 
     let mut state = LumoState::new(display_handle, event_loop.handle(), socket_name.clone());
+
+    lumo_wm::state::init_xdg_decoration(&mut state);
 
     // L5: lid watcher (Galaxy Book 4) - best-effort, no-op on other HW.
     lumo_wm::handlers::lid::register_lid_watcher(&event_loop.handle());

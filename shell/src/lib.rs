@@ -8,3 +8,4 @@
 pub mod bar;
 pub mod desktop;
 pub mod menu;
+pub mod osd;

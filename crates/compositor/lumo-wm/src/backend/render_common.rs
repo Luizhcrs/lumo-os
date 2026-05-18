@@ -28,6 +28,7 @@ use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::backend::renderer::Color32F;
 use smithay::desktop::space::{space_render_elements, SpaceRenderElements};
 use smithay::desktop::{Space, Window};
+use smithay::wayland::seat::WaylandFocus;
 use smithay::output::Output;
 use smithay::utils::{Logical, Physical, Point, Rectangle};
 
@@ -408,6 +409,8 @@ pub struct OverlayInputs<'a> {
     pub wallpaper: Option<&'a crate::backend::wallpaper::LumoWallpaper>,
     /// A39: boot curtain alpha. 0.0 = sem cortina; 1.0 = tela preta total.
     pub boot_curtain_alpha: f32,
+    /// M1: surfaces SSD para pintar titlebar.
+    pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
 }
 
 /// Constroi overlay completo (cursor + corner mask + shadows).
@@ -490,6 +493,8 @@ pub struct DrmCollectInputs<'a> {
     pub wallpaper: Option<&'a crate::backend::wallpaper::LumoWallpaper>,
     /// A39: boot curtain alpha.
     pub boot_curtain_alpha: f32,
+    /// M1: surfaces SSD para pintar titlebar.
+    pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
 }
 
 /// Coleta TODOS elementos pra render direto no DrmCompositor: chrome

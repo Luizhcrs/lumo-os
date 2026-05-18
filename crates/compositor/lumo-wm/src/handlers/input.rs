@@ -53,6 +53,17 @@ impl LumoState {
                         if sym == Keysym::Caps_Lock {
                             state.caps_lock_on = !state.caps_lock_on;
                             write_sys_led("capslock", state.caps_lock_on);
+                            // C2: broadcast OSD popup visual.
+                            let osd_text = if state.caps_lock_on {
+                                "Caps Lock Ligado".to_string()
+                            } else {
+                                "Caps Lock Desligado".to_string()
+                            };
+                            state.ipc.broadcast(&lumo_ipc::LumoEvent::ShowOsd {
+                                text: osd_text,
+                                icon: lumo_ipc::OsdIcon::Keyboard,
+                                duration_ms: 2000,
+                            });
                         } else if sym == Keysym::Num_Lock {
                             state.num_lock_on = !state.num_lock_on;
                             write_sys_led("numlock", state.num_lock_on);

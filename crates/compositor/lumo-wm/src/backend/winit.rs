@@ -244,6 +244,7 @@ fn redraw(
         output_w: ow,
         output_h: oh,
         corner_shader: state.corner_shader.as_ref(),
+        ssd_windows: &state.ssd_windows,
     };
     // A19: lista combinada (chrome + space + wallpaper). Passamos space iter
     // vazio pra render_output, todos elementos vao via custom_elements --

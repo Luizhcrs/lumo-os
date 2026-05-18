@@ -14,6 +14,7 @@
 //! - `handle_ipc_command` aplicando comandos do canal IPC
 //! - `set_workspace` faz broadcast a cada troca
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -32,7 +33,8 @@ use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::selection::primary_selection::PrimarySelectionState;
 use smithay::wayland::shell::wlr_layer::{Layer as WlrLayer, WlrLayerShellState};
-use smithay::wayland::shell::xdg::XdgShellState;
+use smithay::wayland::shell::xdg::{ToplevelSurface, XdgShellState};
+use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
 use smithay::wayland::shm::ShmState;
 use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xdg_activation::XdgActivationState;
@@ -57,6 +59,7 @@ pub struct LumoState {
     // Core protocols
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
+    pub xdg_decoration_state: Option<XdgDecorationState>,
     pub shm_state: ShmState,
     pub output_manager_state: OutputManagerState,
     pub seat_state: SeatState<Self>,
@@ -156,6 +159,8 @@ pub struct LumoState {
 
     /// L1: focus state machine centralizada.
     pub focus_manager: crate::focus::FocusManager,
+    /// M1: surfaces que aceitaram SSD via xdg-decoration protocol.
+    pub ssd_windows: HashSet<WlSurface>,
     /// B1: gesture state acumulado (swipe + pinch).
     pub gesture: crate::input::TouchpadGestureState,
     /// L5: lid switch handler state.
@@ -227,6 +232,7 @@ impl LumoState {
             clock,
             compositor_state,
             xdg_shell_state,
+            xdg_decoration_state: None,
             shm_state,
             output_manager_state,
             seat_state,
@@ -266,6 +272,7 @@ impl LumoState {
             wallpaper: None,
             corner_shader: None,
             focus_manager: Default::default(),
+            ssd_windows: HashSet::new(),
             gesture: Default::default(),
             lid_handler: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
             boot_ready: false,
@@ -431,6 +438,61 @@ impl LumoState {
         let ev = IpcServer::workspaces_event(self.active_workspace, MAX_WORKSPACES);
         self.ipc.broadcast(&ev);
     }
+}
+
+use smithay::wayland::shell::xdg::decoration::XdgDecorationHandler;
+use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode;
+
+impl XdgDecorationHandler for LumoState {
+    fn new_decoration(&mut self, toplevel: ToplevelSurface) {
+        toplevel.with_pending_state(|state| {
+            state.decoration_mode = Some(Mode::ServerSide);
+        });
+        self.ssd_windows.insert(toplevel.wl_surface().clone());
+        toplevel.send_configure();
+        tracing::debug!("xdg_decoration: new_decoration -> ServerSide");
+    }
+
+    fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
+        match mode {
+            Mode::ServerSide => {
+                toplevel.with_pending_state(|state| {
+                    state.decoration_mode = Some(Mode::ServerSide);
+                });
+                self.ssd_windows.insert(toplevel.wl_surface().clone());
+            }
+            Mode::ClientSide => {
+                toplevel.with_pending_state(|state| {
+                    state.decoration_mode = Some(Mode::ClientSide);
+                });
+                self.ssd_windows.remove(toplevel.wl_surface());
+            }
+            _ => {}
+        }
+        toplevel.send_configure();
+        tracing::debug!(?mode, "xdg_decoration: request_mode");
+    }
+
+    fn unset_mode(&mut self, toplevel: ToplevelSurface) {
+        toplevel.with_pending_state(|state| {
+            state.decoration_mode = Some(Mode::ServerSide);
+        });
+        self.ssd_windows.insert(toplevel.wl_surface().clone());
+        toplevel.send_configure();
+        tracing::debug!("xdg_decoration: unset_mode -> ServerSide");
+    }
+}
+
+
+smithay::delegate_xdg_decoration!(LumoState);
+
+/// Inicializa o global xdg-decoration-unstable-v1 no compositor.
+/// Deve ser chamado apos LumoState::new() pra que as delegate impls
+/// geradas em handlers::xdg_decoration estejam em scope.
+pub fn init_xdg_decoration(state: &mut LumoState) {
+    use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
+    state.xdg_decoration_state = Some(XdgDecorationState::new::<LumoState>(&state.display_handle));
+    tracing::info!("M1: xdg_decoration global registrado");
 }
 
 /// Estado por-cliente exigido pelo CompositorHandler.

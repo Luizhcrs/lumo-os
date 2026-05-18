@@ -38,3 +38,7 @@ path = "src/bin/lumo-bar.rs"
 [[bin]]
 name = "lumo-desktop"
 path = "src/bin/lumo-desktop.rs"
+
+[[bin]]
+name = "lumo-osd"
+path = "src/bin/lumo-osd.rs"

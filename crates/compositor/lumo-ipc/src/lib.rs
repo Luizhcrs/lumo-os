@@ -27,6 +27,16 @@ pub enum ThemeMode {
     Dark,
 }
 
+/// Icone exibido no OSD overlay (C2: Caps Lock, futuro: Volume/Brightness).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OsdIcon {
+    Keyboard,
+    Volume,
+    Brightness,
+    None,
+}
+
 /// Eventos emitidos pelo compositor (server) pros clientes.
 /// Tag `type` em snake_case pra parse trivial via jq/grep.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -56,6 +66,9 @@ pub enum LumoEvent {
     /// Quando nenhuma janela tem foco (focus = None), emite ActiveApp com
     /// campos vazios e pid = 0 pra bar limpar menubar.
     ActiveApp { app_id: String, title: String, pid: u32 },
+    /// C2: exibe OSD overlay visual (Caps Lock, Volume, Brightness).
+    /// Broadcast a todos os clients; lumo-osd exibe o popup, outros ignoram.
+    ShowOsd { text: String, icon: OsdIcon, duration_ms: u32 },
     /// L6: tema foi recarregado. Compositor detectou mudanca em theme.toml
     /// e broadcast pra todos os clients. Clients recarregam palette e redesenham.
     ThemeReloaded { mode: ThemeMode },
