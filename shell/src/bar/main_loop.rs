@@ -167,6 +167,14 @@ pub fn run() {
         },
         dropdown_closing: false,
         dropdown_closing_which: crate::bar::dropdowns::DropdownActive::None,
+        // M2: animador de fade da bar no F5. Inicia done (sem animacao).
+        refresh_anim: {
+            let mut a = LAAnimator::new(0.7f32, 1.0f32,
+                AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.25 });
+            a.elapsed = 1.0; // done = nenhuma animacao inicial
+            a
+        },
+        refresh_animating: false,
     };
 
     let mut last_tick = Instant::now();
@@ -181,12 +189,20 @@ pub fn run() {
             let anim_dt = last_anim_tick.elapsed().as_secs_f32();
             let scale_done = state.dropdown_scale_anim.is_done();
             let alpha_done = state.dropdown_alpha_anim.is_done();
-            let animating = !scale_done || !alpha_done || state.dropdown_closing;
+            let refresh_done = !state.refresh_animating;
+            let animating = !scale_done || !alpha_done || state.dropdown_closing || !refresh_done;
             if animating && anim_dt >= 1.0 / 62.0 {
                 last_anim_tick = Instant::now();
-                // Avanca animadores.
+                // Avanca animadores dropdown.
                 let _s = state.dropdown_scale_anim.tick(anim_dt);
                 let _a = state.dropdown_alpha_anim.tick(anim_dt);
+                // M2: avanca animador de refresh da bar.
+                if state.refresh_animating {
+                    let _ = state.refresh_anim.tick(anim_dt);
+                    if state.refresh_anim.is_done() {
+                        state.refresh_animating = false;
+                    }
+                }
                 // Quando fechando: ao terminar animacao, limpa dropdown.
                 if state.dropdown_closing {
                     if state.dropdown_scale_anim.is_done() && state.dropdown_alpha_anim.is_done() {
@@ -266,6 +282,13 @@ pub fn run() {
                     state.appmenu_open_idx = None;
                     state.appmenu_submenu.clear();
                     state.redraw(&qh);
+                }
+                // M2: ThemeReloaded -> inicia fade bar 0.7->1.0 em 250ms.
+                if res.theme_reloaded {
+                    state.refresh_anim = LAAnimator::new(0.7f32, 1.0f32,
+                        AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.25 });
+                    state.refresh_animating = true;
+                    eprintln!("[lumo-bar] M2: ThemeReloaded -> bar fade iniciado");
                 }
             }
         }

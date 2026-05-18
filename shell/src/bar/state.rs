@@ -68,6 +68,8 @@ pub(crate) struct BarSnapshot {
     // B4: fator de escala e opacidade do dropdown ativo (0.0=fechado, 1.0=aberto).
     pub dropdown_scale: f32,
     pub dropdown_alpha: f32,
+    // M2: alpha global da bar (1.0 = normal, pisca em 0.7->1.0 no F5).
+    pub bar_alpha: f32,
 }
 
 /// Resultado de paint_frame: posicoes calculadas pra hit-test no proximo frame.
@@ -589,4 +591,7 @@ pub(crate) struct LumoBar {
     pub dropdown_closing: bool,
     // B4: ultimo dropdown que estava aberto (para fechar com animacao correta).
     pub dropdown_closing_which: crate::bar::dropdowns::DropdownActive,
+    // M2: animacao de fade no F5 (bar_alpha 0.7->1.0 em 250ms).
+    pub refresh_anim: LAAnimator<f32>,
+    pub refresh_animating: bool,
 }

@@ -55,6 +55,82 @@ render_elements! {
     Rounded=RoundedSurfaceElement,
 }
 
+// M1: SSD titlebar dimensions.
+/// Altura da titlebar SSD em pixels logicos.
+pub const TITLEBAR_H: i32 = 30;
+/// Cor de fundo da titlebar: #1a1a1c (dark neutral).
+pub const TITLEBAR_BG: [f32; 4] = [0.098, 0.098, 0.106, 1.0];
+/// Cor do botao close: vermelho #c0392b (sem glow — sombra neutra).
+pub const CLOSE_BTN_COLOR: [f32; 4] = [0.753, 0.224, 0.169, 1.0];
+/// Tamanho do botao close (quadrado).
+pub const CLOSE_BTN_SIZE: i32 = 12;
+/// Margem direita do botao close.
+pub const CLOSE_BTN_MARGIN: i32 = 9;
+
+/// Retorna rect do close button dado o geometry da window no space.
+/// Coordenadas em Physical (scale 1.0).
+pub fn close_btn_rect(win_loc: smithay::utils::Point<i32, smithay::utils::Logical>, win_w: i32) -> smithay::utils::Rectangle<i32, Physical> {
+    let x = win_loc.x + win_w - CLOSE_BTN_SIZE - CLOSE_BTN_MARGIN;
+    let y = win_loc.y + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+    smithay::utils::Rectangle::new(
+        smithay::utils::Point::from((x, y)).to_physical_precise_round(1.0),
+        (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
+    )
+}
+
+/// Gera elementos de titlebar (fundo + close button) pra todas SSD windows.
+/// Retorna lista front->back: close button na frente, fundo atras.
+/// Caller insere esses elementos ANTES do Space na lista de render.
+pub fn titlebar_elements(
+    space: &Space<Window>,
+    ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+) -> Vec<SolidColorRenderElement> {
+    let mut out = Vec::new();
+    let bg_color = Color32F::new(TITLEBAR_BG[0], TITLEBAR_BG[1], TITLEBAR_BG[2], TITLEBAR_BG[3]);
+    let btn_color = Color32F::new(CLOSE_BTN_COLOR[0], CLOSE_BTN_COLOR[1], CLOSE_BTN_COLOR[2], CLOSE_BTN_COLOR[3]);
+
+    for window in space.elements() {
+        let is_ssd = window
+            .wl_surface()
+            .map(|s| ssd_windows.contains(&*s))
+            .unwrap_or(false);
+        if !is_ssd {
+            continue;
+        }
+        let loc = space.element_location(window).unwrap_or_default();
+        let geo = window.geometry();
+        let win_w = geo.size.w;
+
+        // Fundo da titlebar.
+        let bar_rect: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H))
+                .to_physical_precise_round(1.0),
+            (win_w, TITLEBAR_H).into(),
+        );
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            bar_rect,
+            0,
+            bg_color,
+            Kind::Unspecified,
+        ));
+
+        // Close button.
+        let btn_rect = close_btn_rect(
+            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H)),
+            win_w,
+        );
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            btn_rect,
+            0,
+            btn_color,
+            Kind::Unspecified,
+        ));
+    }
+    out
+}
+
 // Cursor solid fallback (10x14 cinza claro). Usado quando xcursor falha.
 pub const CURSOR_COLOR: [f32; 4] = [0.6588, 0.6588, 0.6745, 1.0];
 pub const CURSOR_W: i32 = 10;
@@ -177,34 +253,110 @@ pub fn corner_mask_elements(output_w: i32, output_h: i32) -> [SolidColorRenderEl
 /// Sombras pretas (rgba 0,0,0,0.4) deslocadas +(0,8) atras de cada
 /// toplevel. Memory feedback_zero_neon_glow: zero glow colorido.
 pub fn shadow_elements(space: &Space<Window>) -> Vec<SolidColorRenderElement> {
-    let mut out = Vec::with_capacity(space.elements().count());
+    // M2: clip sombra pra fora dos toplevels acima no z-order.
+    // Coleta todos os rects de janela (Logical) de uma vez.
+    let wins: Vec<(Point<i32, Logical>, Rectangle<i32, Logical>)> = space
+        .elements()
+        .map(|w| {
+            let loc = space.element_location(w).unwrap_or_default();
+            let geo = w.geometry();
+            (loc, geo)
+        })
+        .collect();
+
     let color = Color32F::new(
         SHADOW_COLOR[0],
         SHADOW_COLOR[1],
         SHADOW_COLOR[2],
         SHADOW_COLOR[3],
     );
-    for window in space.elements() {
-        let loc = space.element_location(window).unwrap_or_default();
-        let geo = window.geometry();
-        // Bug Luiz 2026-05-18: shadow rect cobria area inteira da window
-        // + bleed. GTK4 CSD desenha cantos transparentes, vazando sombra preta
-        // 0.4 acima do toplevel = pareceu "sombra em cima". Fix: shadow so
-        // ABAIXO da window (drop-shadow classico), nao envolve toplevel.
-        let shadow_rect = Rectangle::new(
-            Point::from((loc.x - SHADOW_BLEED, loc.y + geo.size.h))
-                .to_physical_precise_round(1.0),
-            (geo.size.w + SHADOW_BLEED * 2, SHADOW_OFFSET_Y + SHADOW_BLEED).into(),
-        );
-        out.push(SolidColorRenderElement::new(
-            Id::new(),
-            shadow_rect,
-            0,
-            color,
-            Kind::Unspecified,
-        ));
+
+    let mut out = Vec::new();
+
+    for (idx, (loc, geo)) in wins.iter().enumerate() {
+        // Faixa de sombra: so ABAIXO da janela (drop-shadow classico).
+        let sx = loc.x - SHADOW_BLEED;
+        let sy = loc.y + geo.size.h;
+        let sw = geo.size.w + SHADOW_BLEED * 2;
+        let sh = SHADOW_OFFSET_Y + SHADOW_BLEED;
+
+        if sw <= 0 || sh <= 0 {
+            continue;
+        }
+
+        // Inicia com o rect completo, depois clipa contra janelas acima.
+        let mut rects: Vec<(i32, i32, i32, i32)> = vec![(sx, sy, sw, sh)];
+
+        // Janelas ACIMA no z-order (back-to-front: indices idx+1.. sao mais altos).
+        for (abv_loc, abv_geo) in wins.iter().skip(idx + 1) {
+            let occ_x = abv_loc.x;
+            let occ_y = abv_loc.y;
+            let occ_w = abv_geo.size.w;
+            let occ_h = abv_geo.size.h;
+            let mut next: Vec<(i32, i32, i32, i32)> = Vec::new();
+            for &(rx, ry, rw, rh) in &rects {
+                shadow_subtract_rect(rx, ry, rw, rh, occ_x, occ_y, occ_w, occ_h, &mut next);
+            }
+            rects = next;
+            if rects.is_empty() {
+                break;
+            }
+        }
+
+        for (rx, ry, rw, rh) in rects {
+            if rw <= 0 || rh <= 0 {
+                continue;
+            }
+            let phys: Rectangle<i32, Physical> = Rectangle::new(
+                Point::from((rx, ry)).to_physical_precise_round(1.0),
+                (rw, rh).into(),
+            );
+            out.push(SolidColorRenderElement::new(
+                Id::new(),
+                phys,
+                0,
+                color,
+                Kind::Unspecified,
+            ));
+        }
     }
     out
+}
+
+/// Subtrai o retangulo oclusor (ox,oy,ow,oh) de (sx,sy,sw,sh).
+/// Adiciona os sub-rects restantes (ate 4) em . Coords Logical.
+fn shadow_subtract_rect(
+    sx: i32, sy: i32, sw: i32, sh: i32,
+    ox: i32, oy: i32, ow: i32, oh: i32,
+    out: &mut Vec<(i32, i32, i32, i32)>,
+) {
+    let ix = sx.max(ox);
+    let iy = sy.max(oy);
+    let ix2 = (sx + sw).min(ox + ow);
+    let iy2 = (sy + sh).min(oy + oh);
+
+    if ix >= ix2 || iy >= iy2 {
+        // Sem intersecao: source intacto.
+        out.push((sx, sy, sw, sh));
+        return;
+    }
+
+    // Fatia superior (acima da intersecao).
+    if iy > sy {
+        out.push((sx, sy, sw, iy - sy));
+    }
+    // Fatia inferior (abaixo da intersecao).
+    if iy2 < sy + sh {
+        out.push((sx, iy2, sw, (sy + sh) - iy2));
+    }
+    // Fatia esquerda (faixa vertical da intersecao, lado esquerdo).
+    if ix > sx {
+        out.push((sx, iy, ix - sx, iy2 - iy));
+    }
+    // Fatia direita (faixa vertical da intersecao, lado direito).
+    if ix2 < sx + sw {
+        out.push((ix2, iy, (sx + sw) - ix2, iy2 - iy));
+    }
 }
 
 /// Quads pintados na cor do background sobre os 4 cantos de cada toplevel.
@@ -313,6 +465,11 @@ pub fn build_overlay(
         overlay.push(LumoCustomElement::Solid(elem));
     }
 
+    // M1: SSD titlebars (fundo + close button).
+    for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
+        overlay.push(LumoCustomElement::Solid(elem));
+    }
+
     overlay
 }
 
@@ -401,6 +558,11 @@ pub fn collect_drm_elements(
 
     // 3b. Corner radius sobre cantos dos toplevels.
     for elem in window_corner_elements(inputs.space) {
+        out.push(LumoCustomElement::Solid(elem));
+    }
+
+    // M1: SSD titlebars.
+    for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }
 
@@ -504,6 +666,11 @@ pub fn build_winit_elements(
 
     // 3b. Corner radius sobre cantos dos toplevels.
     for elem in window_corner_elements(inputs.space) {
+        out.push(LumoCustomElement::Solid(elem));
+    }
+
+    // M1: SSD titlebars.
+    for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }
 

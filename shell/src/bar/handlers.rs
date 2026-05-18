@@ -150,6 +150,18 @@ impl LumoBar {
                 let v = self.dropdown_alpha_anim.tick(0.0);
                 v.clamp(0.0, 1.0)
             },
+            // M2: alpha global da bar (F5 feedback).
+            bar_alpha: {
+                if self.refresh_animating {
+                    let v = self.refresh_anim.tick(0.0);
+                    if self.refresh_anim.is_done() {
+                        self.refresh_animating = false;
+                    }
+                    v.clamp(0.0, 1.0)
+                } else {
+                    1.0
+                }
+            },
         };
 
         let stride = self.width as i32 * 4;
@@ -197,13 +209,22 @@ impl LumoBar {
             let n = (self.width * self.height) as usize;
             // tiny-skia Pixmap = RGBA premul. wl_shm Argb8888 LE = BGRA na
             // memoria. Swap canais; alpha preservado (premul ja correto).
+            // M2: aplica bar_alpha global (F5 feedback fade).
+            let bar_alpha_u8 = (snap.bar_alpha.clamp(0.0, 1.0) * 255.0) as u32;
             for i in 0..n {
                 let o = i * 4;
                 if o + 3 < dst.len() && o + 3 < src.len() {
-                    dst[o]     = src[o + 2]; // B
-                    dst[o + 1] = src[o + 1]; // G
-                    dst[o + 2] = src[o];     // R
-                    dst[o + 3] = src[o + 3]; // A
+                    if bar_alpha_u8 < 255 {
+                        dst[o]     = ((src[o + 2] as u32 * bar_alpha_u8) / 255) as u8;
+                        dst[o + 1] = ((src[o + 1] as u32 * bar_alpha_u8) / 255) as u8;
+                        dst[o + 2] = ((src[o]     as u32 * bar_alpha_u8) / 255) as u8;
+                        dst[o + 3] = ((src[o + 3] as u32 * bar_alpha_u8) / 255) as u8;
+                    } else {
+                        dst[o]     = src[o + 2]; // B
+                        dst[o + 1] = src[o + 1]; // G
+                        dst[o + 2] = src[o];     // R
+                        dst[o + 3] = src[o + 3]; // A
+                    }
                 }
             }
         }
