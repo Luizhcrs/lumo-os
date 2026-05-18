@@ -42,6 +42,16 @@ impl LumoState {
                             return FilterResult::Forward;
                         }
                         let sym = kh.modified_sym();
+                        // Bug Luiz 2026-05-18 v3: caps/num lock LED sync direto
+                        // via sysfs — SeatHandler::led_state_changed nao disparou.
+                        use smithay::input::keyboard::xkb::Keysym;
+                        if sym == Keysym::Caps_Lock {
+                            state.caps_lock_on = !state.caps_lock_on;
+                            write_sys_led("capslock", state.caps_lock_on);
+                        } else if sym == Keysym::Num_Lock {
+                            state.num_lock_on = !state.num_lock_on;
+                            write_sys_led("numlock", state.num_lock_on);
+                        }
                         if let Some(action) =
                             state.keyboard_config.match_binding(mods, sym)
                         {
@@ -371,6 +381,21 @@ impl LumoState {
                     });
                     toplevel.send_configure();
                 }
+            }
+        }
+    }
+}
+
+
+fn write_sys_led(name: &str, on: bool) {
+    let dir = std::path::Path::new("/sys/class/leds");
+    let val = if on { b"1" as &[u8] } else { b"0" };
+    let suffix = format!("::{}", name);
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for e in entries.flatten() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.ends_with(&suffix) {
+                let _ = std::fs::write(format!("/sys/class/leds/{}/brightness", n), val);
             }
         }
     }

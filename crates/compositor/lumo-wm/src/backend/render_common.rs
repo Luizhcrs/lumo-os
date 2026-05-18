@@ -208,39 +208,11 @@ pub fn shadow_elements(space: &Space<Window>) -> Vec<SolidColorRenderElement> {
 /// Quads pintados na cor do background sobre os 4 cantos de cada toplevel.
 /// Simula corner radius sem shader customizado (A37 Opcao A).
 /// Lista front->back: inserir ANTES do Space (z-order acima do toplevel).
-pub fn window_corner_elements(space: &Space<Window>) -> Vec<SolidColorRenderElement> {
-    let r = CORNER_RADIUS_WINDOW;
-    let cc = corner_color();
-    let color = Color32F::new(cc[0], cc[1], cc[2], cc[3]);
-    let mut out = Vec::with_capacity(space.elements().count() * 4);
-    for window in space.elements() {
-        let loc = space.element_location(window).unwrap_or_default();
-        let geo = window.geometry();
-        let x = loc.x;
-        let y = loc.y;
-        let w = geo.size.w;
-        let h = geo.size.h;
-        let corners = [
-            (x, y),
-            (x + w - r, y),
-            (x, y + h - r),
-            (x + w - r, y + h - r),
-        ];
-        for (cx, cy) in corners {
-            let rect = Rectangle::new(
-                Point::from((cx, cy)).to_physical_precise_round(1.0),
-                (r, r).into(),
-            );
-            out.push(SolidColorRenderElement::new(
-                Id::new(),
-                rect,
-                0,
-                color,
-                Kind::Unspecified,
-            ));
-        }
-    }
-    out
+pub fn window_corner_elements(_space: &Space<Window>) -> Vec<SolidColorRenderElement> {
+    // Bug Luiz 2026-05-18 v3: mask color era branco no tema light,
+    // criando 4 quadrados brancos nas quinas (UX feia). Toplevels voltam
+    // quadrados ate A38 implementar shader SDF real com clip transparente.
+    Vec::new()
 }
 
 /// Args agrupados pra build_overlay -- evita conflito de borrow

@@ -368,13 +368,18 @@ fn paint_icon(canvas: &mut PixmapMut, icon: &DesktopIcon, accent_hex: u32) {
     let y = icon.screen_y;
 
     if icon.selected {
-        // Selecao envolve so ICON_SIZE + label (centralizada vs cell completa).
-        // Bug Luiz 2026-05-18: selecao parecia desalinhada por ser cell inteira.
+        // Bug Luiz 2026-05-18 v2: selecao agora abraca exatamente icone+label.
+        // icone em (ICON_PAD_X, ICON_PAD_Y), label abaixo. bbox visual:
+        //   top    = y + ICON_PAD_Y (top do icone)
+        //   bottom = y + ICON_PAD_Y + ICON_SIZE + 4 (label) + ~14 (label h)
+        //   centro horizontal = x + CELL_W / 2 (icone e label centrados)
         let sel = selection_color(accent_hex);
-        let sel_w = ICON_SIZE + 16.0;
-        let sel_h = ICON_SIZE + 28.0; // icone + label + padding
-        let sel_x = x + (CELL_W - sel_w) / 2.0;
-        let sel_y = y + (CELL_H - sel_h) / 2.0;
+        let sel_pad_x = 8.0;
+        let sel_pad_y = 4.0;
+        let sel_x = x + (CELL_W - ICON_SIZE) / 2.0 - sel_pad_x;
+        let sel_y = y + ICON_PAD_Y - sel_pad_y;
+        let sel_w = ICON_SIZE + sel_pad_x * 2.0;
+        let sel_h = ICON_SIZE + 4.0 + 14.0 + sel_pad_y * 2.0;
         fill_rrect(canvas, sel_x, sel_y, sel_w, sel_h, 8.0, sel);
     }
 

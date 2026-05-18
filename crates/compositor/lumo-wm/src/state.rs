@@ -114,6 +114,10 @@ pub struct LumoState {
 
     // B2: keybindings configuracao carregada de TOML.
     pub keyboard_config: KeyboardConfig,
+    /// Bug Luiz 2026-05-18 v3: estado caps/num lock sync com /sys/class/leds.
+    /// xkb led mapping nao funcionou via SeatHandler — fallback direto.
+    pub caps_lock_on: bool,
+    pub num_lock_on: bool,
 
 
     // Fase 5.6 (A9): DRM session + watchdog.
@@ -236,6 +240,8 @@ impl LumoState {
             ipc: IpcServer::default(),
             active_workspace: 1,
             keyboard_config: KeyboardConfig::load(),
+            caps_lock_on: false,
+            num_lock_on: false,
             #[cfg(feature = "drm-backend")]
             session: None,
             #[cfg(feature = "drm-backend")]
