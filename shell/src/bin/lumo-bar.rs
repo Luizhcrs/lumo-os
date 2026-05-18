@@ -27,7 +27,7 @@
 //! Tipografia: Geist Mono / JetBrains Mono Nerd Font / monospace fallback.
 //! Cosmic-text 0.12 + tiny-skia. Glyphs grayscale AA (sem rainbow subpixel).
 
-use std::io::{ErrorKind, Read};
+use std::io::{ErrorKind, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::sync::{
     atomic::{AtomicU8, Ordering},
@@ -49,7 +49,7 @@ use smithay_client_toolkit::{
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
-        pointer::{PointerEvent, PointerEventKind, PointerHandler, ThemedPointer, BTN_LEFT},
+        pointer::{PointerEvent, PointerEventKind, PointerHandler, ThemedPointer, BTN_LEFT, BTN_RIGHT},
         Capability, SeatHandler, SeatState,
     },
     shell::{
@@ -69,7 +69,7 @@ use smithay_client_toolkit::reexports::client::{
 };
 
 use lumo_foundation::{current_colors, LumoColors, LumoTheme};
-use lumo_ipc::{default_socket_path, LumoEvent, MAX_WORKSPACES};
+use lumo_ipc::{default_socket_path, LumoCommand, LumoEvent, MAX_WORKSPACES};
 
 // ============================================================
 // Layout constants (lapidado: cada valor justificado).
@@ -149,11 +149,27 @@ const FONT_DROPDOWN_BODY: f32 = 13.0;
 // Grid cell 32x22 (uniform 7 col * 32 = 224; centralizado em 280).
 // Dia atual destacado pill emerald 22x18 radius 9 (sem glow neon).
 const DROPDOWN_DATETIME_W: f32 = 280.0;
-const DROPDOWN_DATETIME_H: f32 = 252.0;
+const DROPDOWN_DATETIME_H: f32 = 288.0; // A26 +36 = espaco pra footer com botao Hoje
 const DATETIME_CELL_W: f32 = 32.0;
 const DATETIME_CELL_H: f32 = 22.0;
 const FONT_DROPDOWN_CLOCK: f32 = 22.0;
 const FONT_DROPDOWN_CALENDAR: f32 = 12.0;
+
+// A26: navegacao interativa do calendario.
+// CAL_NAV_BTN_W=22 -> alvo de click confortavel (>= 18px touch min Apple HIG).
+// CAL_NAV_BTN_H=20 -> alinha com header weekdays (DATETIME_CELL_H=22).
+// CAL_NAV_BTN_RADIUS=8 -> arredondamento subtle (PILL_RADIUS=14 / 2 ~ 7).
+// CAL_TODAY_BTN_W=56 -> cabe Hoje 13px + pad lateral 10.
+// CAL_TODAY_BTN_H=22 -> alvo touch.
+// CAL_FOOTER_H=28 -> pad 6 + botao 22 (alinhado a baseline footer).
+const CAL_NAV_BTN_W: f32 = 22.0;
+const CAL_NAV_BTN_H: f32 = 20.0;
+const CAL_NAV_BTN_RADIUS: f32 = 8.0;
+const CAL_TODAY_BTN_W: f32 = 56.0;
+const CAL_TODAY_BTN_H: f32 = 22.0;
+const CAL_FOOTER_H: f32 = 30.0;
+const CAL_HEADER_H: f32 = 22.0;
+const FONT_CAL_NAV: f32 = 13.0;
 
 // ============================================================
 // Color helpers.
@@ -679,14 +695,21 @@ fn read_battery_info() -> BatteryInfo {
 #[derive(Clone)]
 pub struct DateTimeInfo {
     pub weekday_full: String, // "domingo"
-    pub day: u32,             // 17
-    pub month_full: String,   // "maio"
-    pub year: i32,            // 2026
+    pub day: u32,             // 17 (today)
+    pub month_full: String,   // "maio" (today)
+    pub year: i32,            // 2026 (today)
     pub hour: u8,             // 17
     pub minute: u8,           // 50
     pub second: u8,           // 32
-    pub month_grid: Vec<Vec<Option<u32>>>, // 6 weeks x 7 days, None = padding
+    pub month_grid: Vec<Vec<Option<u32>>>, // 6 weeks x 7 days, None = padding (viewed mes)
     pub today_day: u32,
+    pub today_month: u32, // A26: pra destacar today so quando viewed = today month/year
+    pub today_year: i32,  // A26
+    // A26: mes/ano visualizado no calendar (pode != today se user navegou).
+    pub viewed_year: i32,
+    pub viewed_month: u32,
+    pub viewed_month_full: String,
+    pub selected_day: Option<u32>,
 }
 
 impl Default for DateTimeInfo {
@@ -701,6 +724,12 @@ impl Default for DateTimeInfo {
             second: 0,
             month_grid: vec![vec![None; 7]; 6],
             today_day: 1,
+            today_month: 1,
+            today_year: 2026,
+            viewed_year: 2026,
+            viewed_month: 1,
+            viewed_month_full: String::new(),
+            selected_day: None,
         }
     }
 }
@@ -750,7 +779,7 @@ fn month_grid_for(year: i32, month: u32) -> Vec<Vec<Option<u32>>> {
     grid
 }
 
-fn read_datetime_info() -> DateTimeInfo {
+fn read_datetime_info(viewed_year: i32, viewed_month: u32, selected_day: Option<u32>) -> DateTimeInfo {
     let now = Local::now();
     DateTimeInfo {
         weekday_full: weekday_full_pt(now.weekday()).to_string(),
@@ -760,8 +789,14 @@ fn read_datetime_info() -> DateTimeInfo {
         hour: now.hour() as u8,
         minute: now.minute() as u8,
         second: now.second() as u8,
-        month_grid: month_grid_for(now.year(), now.month()),
+        month_grid: month_grid_for(viewed_year, viewed_month),
         today_day: now.day(),
+        today_month: now.month(),
+        today_year: now.year(),
+        viewed_year,
+        viewed_month,
+        viewed_month_full: month_full_pt(viewed_month).to_string(),
+        selected_day,
     }
 }
 
@@ -1171,6 +1206,15 @@ fn draw_wifi_dropdown(
 //   DATETIME_CELL_W=32 -> 7*32=224, centralizado em 280 sem PAD_X.
 //   DATETIME_CELL_H=22 -> respiro vertical, 6 linhas = 132 + header 22 = 154.
 // Sem glow neon (memory feedback_zero_neon_glow): pill emerald solido.
+/// A26: hit-tests retornados pelo draw_datetime_dropdown pra pointer_frame.
+#[derive(Default, Clone)]
+struct DateTimeHits {
+    prev_rect: Option<(f32, f32, f32, f32)>,
+    next_rect: Option<(f32, f32, f32, f32)>,
+    today_rect: Option<(f32, f32, f32, f32)>,
+    day_rects: Vec<(u32, (f32, f32, f32, f32))>,
+}
+
 fn draw_datetime_dropdown(
     canvas: &mut PixmapMut,
     x: f32,
@@ -1179,14 +1223,16 @@ fn draw_datetime_dropdown(
     h: f32,
     palette: &LumoColors,
     info: &DateTimeInfo,
-) {
+) -> DateTimeHits {
     let bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
     let fg = opaque(palette.pill_fg);
     let fg_subtle = rgba_hex(palette.pill_fg, 0xA0);
     let sep_color = rgba_hex(palette.pill_sep, palette.pill_sep_alpha);
     let accent = opaque(palette.accent);
-    // FG sobre pill accent: branco (contraste forte, sem glow).
+    let accent_subtle = rgba_hex(palette.accent_subtle, 0x60);
     let on_accent = opaque(0xFFFFFF);
+
+    let mut hits = DateTimeHits::default();
 
     // Background rounded rect.
     fill_rrect(canvas, x, y, w, h, PILL_RADIUS, bg);
@@ -1194,7 +1240,7 @@ fn draw_datetime_dropdown(
     let cx = x + DROPDOWN_PAD;
     let mut cy = y + DROPDOWN_PAD;
 
-    // Linha 1: weekday + dia + mes (bold).
+    // Linha 1: weekday + dia + mes (bold) - sempre today (info pessoal).
     let title = format!("{}, {} de {}", info.weekday_full, info.day, info.month_full);
     draw_text(canvas, cx, cy, &title, FONT_DROPDOWN_TITLE, fg, true);
     cy += FONT_DROPDOWN_TITLE * 1.5;
@@ -1211,7 +1257,40 @@ fn draw_datetime_dropdown(
         p.anti_alias = false;
         canvas.fill_rect(rect, &p, Transform::identity(), None);
     }
-    cy += 10.0;
+    cy += 8.0;
+
+    // A26: Header navegacao "[<] mes ano [>]".
+    let header_y = cy;
+    let header_label = format!("{} {}", info.viewed_month_full, info.viewed_year);
+    let header_text_w = measure_text(&header_label, FONT_CAL_NAV, true);
+
+    // Botao prev: alinhado a esquerda do grid.
+    let prev_x = x + DROPDOWN_PAD;
+    let prev_y = header_y + (CAL_HEADER_H - CAL_NAV_BTN_H) / 2.0;
+    fill_rrect(canvas, prev_x, prev_y, CAL_NAV_BTN_W, CAL_NAV_BTN_H, CAL_NAV_BTN_RADIUS, accent_subtle);
+    let arrow_l = "<";
+    let arrow_l_w = measure_text(arrow_l, FONT_CAL_NAV, true);
+    let arrow_l_x = prev_x + (CAL_NAV_BTN_W - arrow_l_w) / 2.0;
+    let arrow_l_y = prev_y + (CAL_NAV_BTN_H - FONT_CAL_NAV) / 2.0 - 1.0;
+    draw_text(canvas, arrow_l_x, arrow_l_y, arrow_l, FONT_CAL_NAV, fg, true);
+    hits.prev_rect = Some((prev_x, prev_y, CAL_NAV_BTN_W, CAL_NAV_BTN_H));
+
+    // Botao next: alinhado a direita.
+    let next_x = x + w - DROPDOWN_PAD - CAL_NAV_BTN_W;
+    let next_y = prev_y;
+    fill_rrect(canvas, next_x, next_y, CAL_NAV_BTN_W, CAL_NAV_BTN_H, CAL_NAV_BTN_RADIUS, accent_subtle);
+    let arrow_r = ">";
+    let arrow_r_w = measure_text(arrow_r, FONT_CAL_NAV, true);
+    let arrow_r_x = next_x + (CAL_NAV_BTN_W - arrow_r_w) / 2.0;
+    let arrow_r_y = next_y + (CAL_NAV_BTN_H - FONT_CAL_NAV) / 2.0 - 1.0;
+    draw_text(canvas, arrow_r_x, arrow_r_y, arrow_r, FONT_CAL_NAV, fg, true);
+    hits.next_rect = Some((next_x, next_y, CAL_NAV_BTN_W, CAL_NAV_BTN_H));
+
+    // Label centralizado entre os botoes.
+    let header_label_x = x + (w - header_text_w) / 2.0;
+    let header_label_y = header_y + (CAL_HEADER_H - FONT_CAL_NAV) / 2.0 - 1.0;
+    draw_text(canvas, header_label_x, header_label_y, &header_label, FONT_CAL_NAV, fg, true);
+    cy += CAL_HEADER_H + 2.0;
 
     // Grid horizontal centralizado em w. 7 colunas * DATETIME_CELL_W.
     let grid_total_w = DATETIME_CELL_W * 7.0;
@@ -1227,36 +1306,62 @@ fn draw_datetime_dropdown(
     }
     cy += DATETIME_CELL_H;
 
+    // Today destacado SO quando viewed_month/year == today_month/year.
+    let viewing_today_month = info.viewed_year == info.today_year && info.viewed_month == info.today_month;
+
     // Grid 6x7 dias.
     for week in 0..6 {
         for col in 0..7 {
             if let Some(day) = info.month_grid[week][col] {
                 let cell_x = grid_x + DATETIME_CELL_W * col as f32;
                 let cell_y = cy + DATETIME_CELL_H * week as f32;
-                let is_today = day == info.today_day;
+                let is_today = viewing_today_month && day == info.today_day;
+                let is_selected = info.selected_day == Some(day);
 
                 let day_str = day.to_string();
                 let day_w = measure_text(&day_str, FONT_DROPDOWN_CALENDAR, is_today);
                 let dx = cell_x + (DATETIME_CELL_W - day_w) / 2.0;
-                // Texto baseline alinha topo + folga pra centralizar dentro de 22.
                 let dy = cell_y + (DATETIME_CELL_H - FONT_DROPDOWN_CALENDAR) / 2.0 - 1.0;
 
+                // A26: hit-rect celula inteira (alvo de click).
+                hits.day_rects.push((day, (cell_x, cell_y, DATETIME_CELL_W, DATETIME_CELL_H)));
+
                 if is_today {
-                    // Pill emerald 22x18 radius 9 (sem glow).
                     let pill_w = 22.0;
                     let pill_h = 18.0;
-                    let px = cell_x + (DATETIME_CELL_W - pill_w) / 2.0;
-                    let py = cell_y + (DATETIME_CELL_H - pill_h) / 2.0;
-                    fill_rrect(canvas, px, py, pill_w, pill_h, 9.0, accent);
+                    let pxp = cell_x + (DATETIME_CELL_W - pill_w) / 2.0;
+                    let pyp = cell_y + (DATETIME_CELL_H - pill_h) / 2.0;
+                    fill_rrect(canvas, pxp, pyp, pill_w, pill_h, 9.0, accent);
                     draw_text(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, on_accent, true);
+                } else if is_selected {
+                    let pill_w = 22.0;
+                    let pill_h = 18.0;
+                    let pxp = cell_x + (DATETIME_CELL_W - pill_w) / 2.0;
+                    let pyp = cell_y + (DATETIME_CELL_H - pill_h) / 2.0;
+                    fill_rrect(canvas, pxp, pyp, pill_w, pill_h, 9.0, accent_subtle);
+                    draw_text(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, fg, true);
                 } else {
                     draw_text(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, fg, false);
                 }
             }
         }
     }
+    cy += DATETIME_CELL_H * 6.0;
 
-    let _ = h; // h passado pela API, background usa w via fill_rrect.
+    // A26: footer com botao Hoje centralizado.
+    let footer_y = y + h - CAL_FOOTER_H;
+    let today_label = "Hoje";
+    let today_x = x + (w - CAL_TODAY_BTN_W) / 2.0;
+    let today_y = footer_y + (CAL_FOOTER_H - CAL_TODAY_BTN_H) / 2.0;
+    fill_rrect(canvas, today_x, today_y, CAL_TODAY_BTN_W, CAL_TODAY_BTN_H, CAL_NAV_BTN_RADIUS, accent_subtle);
+    let today_w_text = measure_text(today_label, FONT_CAL_NAV, true);
+    let today_label_x = today_x + (CAL_TODAY_BTN_W - today_w_text) / 2.0;
+    let today_label_y = today_y + (CAL_TODAY_BTN_H - FONT_CAL_NAV) / 2.0 - 1.0;
+    draw_text(canvas, today_label_x, today_label_y, today_label, FONT_CAL_NAV, fg, true);
+    hits.today_rect = Some((today_x, today_y, CAL_TODAY_BTN_W, CAL_TODAY_BTN_H));
+
+    let _ = cy;
+    hits
 }
 
 // ============================================================
@@ -1285,6 +1390,12 @@ struct PaintResult {
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
     wifi_hit_rect: Option<(f32, f32, f32, f32)>,     // A23
     datetime_hit_rect: Option<(f32, f32, f32, f32)>, // A24
+    // A26: hit-tests do calendar interativo (so populados quando dropdown=DateTime).
+    cal_prev_rect: Option<(f32, f32, f32, f32)>,
+    cal_next_rect: Option<(f32, f32, f32, f32)>,
+    cal_today_rect: Option<(f32, f32, f32, f32)>,
+    /// Cada (day, rect). Day = dia do mes visualizado (1..=31), rect em coords surface.
+    cal_day_rects: Vec<(u32, (f32, f32, f32, f32))>,
     last_click_at: Option<Instant>,
 }
 
@@ -1444,7 +1555,7 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
                 let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
                 let dropdown_y = ry + rh + DROPDOWN_GAP;
                 let mut canvas = pixmap.as_mut();
-                draw_datetime_dropdown(
+                let hits = draw_datetime_dropdown(
                     &mut canvas,
                     dropdown_x,
                     dropdown_y,
@@ -1453,6 +1564,11 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
                     palette,
                     &snap.datetime_info,
                 );
+                // A26: hits ja vem em coords da surface (mesmo sistema dos outros rects).
+                result.cal_prev_rect = hits.prev_rect;
+                result.cal_next_rect = hits.next_rect;
+                result.cal_today_rect = hits.today_rect;
+                result.cal_day_rects = hits.day_rects;
             }
         }
         DropdownActive::None => {}
@@ -1557,6 +1673,9 @@ fn drain_ipc(stream: &mut UnixStream, rx_buf: &mut Vec<u8>, active_ws: &Arc<Atom
                         // Sinaliza pra loop main fechar + redraw imediato.
                         close_dropdowns = true;
                     }
+                    LumoEvent::CloseDesktopMenu => {
+                        // A26: evento destinado ao lumo-desktop, bar ignora.
+                    }
                 }
             }
         }
@@ -1589,8 +1708,19 @@ struct LumoBar {
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
     wifi_hit_rect: Option<(f32, f32, f32, f32)>,     // A23
     datetime_hit_rect: Option<(f32, f32, f32, f32)>, // A24
+    // A26: hit-tests calendar interativo.
+    cal_prev_rect: Option<(f32, f32, f32, f32)>,
+    cal_next_rect: Option<(f32, f32, f32, f32)>,
+    cal_today_rect: Option<(f32, f32, f32, f32)>,
+    cal_day_rects: Vec<(u32, (f32, f32, f32, f32))>,
     last_click_at: Option<Instant>,
     dropdown: DropdownActive,
+    // A26: mes/ano visualizado no calendar (independente do today real).
+    // Init = today; user navega via < e >. Botao Hoje reseta.
+    viewed_year: i32,
+    viewed_month: u32,
+    /// Dia selecionado (highlight extra alem do today). None = nenhum.
+    selected_day: Option<u32>,
     ipc_stream: Option<UnixStream>,
     ipc_rx_buf: Vec<u8>,
     theme: LumoTheme,
@@ -1598,6 +1728,40 @@ struct LumoBar {
 }
 
 impl LumoBar {
+    /// A26: envia LumoCommand::CloseDesktopMenu pelo socket IPC.
+    /// Usado quando bar abre dropdown -> mutex pede lumo-desktop fechar menu.
+    fn send_ipc_close_desktop_menu(&mut self) {
+        let Some(s) = self.ipc_stream.as_mut() else { return };
+        let mut payload = match serde_json::to_string(&LumoCommand::CloseDesktopMenu) {
+            Ok(p) => p,
+            Err(_) => return,
+        };
+        payload.push('\n');
+        if let Err(e) = s.write_all(payload.as_bytes()) {
+            if e.kind() != ErrorKind::WouldBlock {
+                eprintln!("[lumo-bar] IPC write CloseDesktopMenu erro: {}; dropando socket", e);
+                self.ipc_stream = None;
+            }
+        }
+    }
+
+    /// A26: envia LumoCommand::CloseDropdowns (broadcast a todos os clients).
+    /// Usado pelo right-click na bar.
+    fn send_ipc_close_dropdowns(&mut self) {
+        let Some(s) = self.ipc_stream.as_mut() else { return };
+        let mut payload = match serde_json::to_string(&LumoCommand::CloseDropdowns) {
+            Ok(p) => p,
+            Err(_) => return,
+        };
+        payload.push('\n');
+        if let Err(e) = s.write_all(payload.as_bytes()) {
+            if e.kind() != ErrorKind::WouldBlock {
+                eprintln!("[lumo-bar] IPC write CloseDropdowns erro: {}; dropando socket", e);
+                self.ipc_stream = None;
+            }
+        }
+    }
+
     fn refresh(&mut self) {
         // A20: leitura completa /sys/class/power_supply.
         self.battery_info = read_battery_info();
@@ -1649,7 +1813,7 @@ impl LumoBar {
             dropdown: self.dropdown,
             battery_info: self.battery_info.clone(),
             wifi_info: self.wifi_info.clone(),  // A23
-            datetime_info: read_datetime_info(), // A24: realtime per frame
+            datetime_info: read_datetime_info(self.viewed_year, self.viewed_month, self.selected_day), // A24+A26: realtime + viewed/selected
         };
 
         let stride = self.width as i32 * 4;
@@ -1672,6 +1836,11 @@ impl LumoBar {
             self.bat_hit_rect = paint_result.bat_hit_rect;
             self.wifi_hit_rect = paint_result.wifi_hit_rect;     // A23
             self.datetime_hit_rect = paint_result.datetime_hit_rect; // A24
+            // A26: calendar hit-tests salvos pra pointer_frame consumir.
+            self.cal_prev_rect = paint_result.cal_prev_rect;
+            self.cal_next_rect = paint_result.cal_next_rect;
+            self.cal_today_rect = paint_result.cal_today_rect;
+            self.cal_day_rects = paint_result.cal_day_rects;
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;
@@ -1837,6 +2006,19 @@ impl PointerHandler for LumoBar {
                 }
                 PointerEventKind::Press { button, serial, time } => {
                     eprintln!("[lumo-bar] Press button={} serial={} time={} pos={:?} bat_rect={:?} wifi_rect={:?}", button, serial, time, ev.position, self.bat_hit_rect, self.wifi_hit_rect);
+
+                    // A26: right-click em qualquer lugar da bar = fecha tudo
+                    // (proprio dropdown + broadcast CloseDropdowns pra outros clients).
+                    if button == BTN_RIGHT {
+                        let need_redraw = self.dropdown != DropdownActive::None;
+                        self.dropdown = DropdownActive::None;
+                        self.send_ipc_close_dropdowns();
+                        if need_redraw {
+                            self.update_size_and_redraw(qh);
+                        }
+                        continue;
+                    }
+
                     if button != BTN_LEFT { continue; }
                     // A20.10: debounce 200ms (re-size surface multipla = bug visual)
                     let now = Instant::now();
@@ -1849,29 +2031,91 @@ impl PointerHandler for LumoBar {
                     self.last_click_at = Some(now);
                     let (px, py) = (ev.position.0 as f32, ev.position.1 as f32);
                     let mut handled = false;
-                    if let Some((rx, ry, rw, rh)) = self.bat_hit_rect {
-                        if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
-                            self.dropdown = if self.dropdown == DropdownActive::Battery {
-                                DropdownActive::None
-                            } else {
-                                // Atualiza info bateria no momento do click
-                                // (memory feedback_input_feedback_imediato).
-                                self.refresh();
-                                DropdownActive::Battery
-                            };
-                            self.update_size_and_redraw(qh);
-                            handled = true;
+
+                    // A26: PRIMEIRO testa controles internos do calendar quando aberto.
+                    // Memory feedback_input_feedback_imediato: redraw frame imediato apos click.
+                    if !handled && self.dropdown == DropdownActive::DateTime {
+                        // prev
+                        if let Some((rx, ry, rw, rh)) = self.cal_prev_rect {
+                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                if self.viewed_month == 1 {
+                                    self.viewed_month = 12;
+                                    self.viewed_year -= 1;
+                                } else {
+                                    self.viewed_month -= 1;
+                                }
+                                // Reset selected pra evitar highlight em dia inexistente.
+                                self.selected_day = None;
+                                self.update_size_and_redraw(qh);
+                                handled = true;
+                            }
+                        }
+                        // next
+                        if !handled {
+                            if let Some((rx, ry, rw, rh)) = self.cal_next_rect {
+                                if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                    if self.viewed_month == 12 {
+                                        self.viewed_month = 1;
+                                        self.viewed_year += 1;
+                                    } else {
+                                        self.viewed_month += 1;
+                                    }
+                                    self.selected_day = None;
+                                    self.update_size_and_redraw(qh);
+                                    handled = true;
+                                }
+                            }
+                        }
+                        // today (reset)
+                        if !handled {
+                            if let Some((rx, ry, rw, rh)) = self.cal_today_rect {
+                                if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                    let now_local = chrono::Local::now();
+                                    self.viewed_year = now_local.year();
+                                    self.viewed_month = now_local.month();
+                                    self.selected_day = Some(now_local.day());
+                                    self.update_size_and_redraw(qh);
+                                    handled = true;
+                                }
+                            }
+                        }
+                        // day cells
+                        if !handled {
+                            for (day, (rx, ry, rw, rh)) in &self.cal_day_rects {
+                                if px >= *rx && px <= *rx + *rw && py >= *ry && py <= *ry + *rh {
+                                    self.selected_day = Some(*day);
+                                    self.update_size_and_redraw(qh);
+                                    handled = true;
+                                    break;
+                                }
+                            }
                         }
                     }
-                    // A23: hit wifi icone toggle dropdown wifi.
+
+                    if !handled {
+                        if let Some((rx, ry, rw, rh)) = self.bat_hit_rect {
+                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                self.dropdown = if self.dropdown == DropdownActive::Battery {
+                                    DropdownActive::None
+                                } else {
+                                    self.refresh();
+                                    // A26: mutex - abriu dropdown bar -> fecha menu desktop.
+                                    self.send_ipc_close_desktop_menu();
+                                    DropdownActive::Battery
+                                };
+                                self.update_size_and_redraw(qh);
+                                handled = true;
+                            }
+                        }
+                    }
                     if !handled {
                         if let Some((rx, ry, rw, rh)) = self.wifi_hit_rect {
                             if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
                                 self.dropdown = if self.dropdown == DropdownActive::Wifi {
                                     DropdownActive::None
                                 } else {
-                                    // Feedback imediato: leitura no instante do click.
                                     self.refresh();
+                                    self.send_ipc_close_desktop_menu();
                                     DropdownActive::Wifi
                                 };
                                 self.update_size_and_redraw(qh);
@@ -1879,16 +2123,18 @@ impl PointerHandler for LumoBar {
                             }
                         }
                     }
-                    // A24: click data OU hora -> dropdown calendario+horario.
                     if !handled {
                         if let Some((rx, ry, rw, rh)) = self.datetime_hit_rect {
                             if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
                                 self.dropdown = if self.dropdown == DropdownActive::DateTime {
                                     DropdownActive::None
                                 } else {
-                                    // datetime_info eh sempre lido por frame em redraw,
-                                    // entao nao precisa refresh aqui. Click ja gera
-                                    // frame imediato via update_size_and_redraw.
+                                    // A26: ao abrir, sincroniza viewed_* com today (pode estar stale).
+                                    let now_local = chrono::Local::now();
+                                    self.viewed_year = now_local.year();
+                                    self.viewed_month = now_local.month();
+                                    self.selected_day = None;
+                                    self.send_ipc_close_desktop_menu();
                                     DropdownActive::DateTime
                                 };
                                 self.update_size_and_redraw(qh);
@@ -1897,7 +2143,6 @@ impl PointerHandler for LumoBar {
                         }
                     }
                     if !handled && self.dropdown != DropdownActive::None {
-                        // Click fora -> fecha dropdown.
                         self.dropdown = DropdownActive::None;
                         self.update_size_and_redraw(qh);
                     }
@@ -1982,8 +2227,15 @@ fn main() {
         bat_hit_rect: None,
         wifi_hit_rect: None,     // A23
         datetime_hit_rect: None, // A24
+        cal_prev_rect: None,
+        cal_next_rect: None,
+        cal_today_rect: None,
+        cal_day_rects: Vec::new(),
         last_click_at: None,
         dropdown: DropdownActive::None,
+        viewed_year: chrono::Local::now().year(),
+        viewed_month: chrono::Local::now().month(),
+        selected_day: None,
         ipc_stream: connect_ipc(),
         ipc_rx_buf: Vec::with_capacity(256),
         theme,

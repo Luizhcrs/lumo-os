@@ -325,6 +325,12 @@ impl LumoState {
                 // clients sem dropdown ativo ignoram.
                 self.ipc.broadcast(&LumoEvent::CloseDropdowns);
             }
+            LumoCommand::CloseDesktopMenu => {
+                // A26: mutex de popups. Bar abriu dropdown -> pede pra
+                // lumo-desktop fechar menu contextual (e vice-versa).
+                // Idempotente — clients sem menu ativo ignoram.
+                self.ipc.broadcast(&LumoEvent::CloseDesktopMenu);
+            }
         }
     }
 

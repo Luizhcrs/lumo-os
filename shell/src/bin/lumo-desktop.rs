@@ -2,8 +2,10 @@
 //! na area de trabalho (estilo macOS Finder / Windows desktop).
 //!
 //! A21: novo binario.
-//! A25: menu visual alinhado com pill bar (transparencia, sem sombra,
-//! altura exata, hover wash accent_subtle, font 13px Geist/JetBrains).
+//! A25: menu visual alinhado com pill bar.
+//! A27: menu redesign Apple-style (hover pill SOLIDO accent + separators
+//! entre grupos) + items MVP wallpaper/sobre/atualizar/store. Render
+//! compartilhado com lumo-bar via modulo `shell/src/menu.rs`.
 //!
 //! Comportamento:
 //!   - Layer::Background full-screen (1920x1080 Galaxy).
@@ -11,14 +13,18 @@
 //!   - Click esquerdo em area vazia: envia LumoCommand::CloseDropdowns
 //!     pelo socket IPC -> compositor traduz em LumoEvent::CloseDropdowns
 //!     pra bar (A25 frente 2).
-//!   - Click direito: abre menu contextual estilo pill bar com 3 items
-//!     (Configuracoes / Trocar wallpaper / Sobre Lumo).
+//!   - Click direito: abre menu contextual estilo pill bar.
 //!
-//! Memory feedback_zero_neon_glow: zero sombra colorida, zero glow.
-//! Bar pills A19.12 nao tem sombra; menu segue mesma decisao A25.
-//! Memory feedback_design_lapidado: cada constante com justificativa.
+//! Memory feedback_zero_neon_glow: hover pill accent SOLIDO sem glow.
+//! Memory feedback_design_lapidado: cada constante com justificativa
+//! (ver `menu.rs`).
+//! Memory feedback_lumo_arquitetura_clean: render compartilhado em
+//! modulo `menu` (Opcao A: arquivo unico em shell/src/menu.rs).
 
-use std::io::{ErrorKind, Write};
+#[path = "../menu.rs"]
+mod menu;
+
+use std::io::{ErrorKind, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -57,39 +63,32 @@ use smithay_client_toolkit::reexports::client::{
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, PixmapMut, Transform};
 
 use lumo_foundation::{current_colors, LumoColors};
-use lumo_ipc::{default_socket_path, LumoCommand};
+use lumo_ipc::{default_socket_path, LumoCommand, LumoEvent};
 
 // ============================================================
-// Layout constants A25 (lapidado, alinhado com pill bar).
+// Layout constants A27 (menu redesign Apple-style).
 // ============================================================
 
 /// Output Galaxy nativo (DEPS.md A19.18 mesmo padrao bar).
 const OUTPUT_W: u32 = 1920;
 const OUTPUT_H: u32 = 1080;
 
-/// Menu width 220 = cabe textos curtos com 14px pad lateral + folga 13px font.
-const MENU_W: f32 = 220.0;
-/// Padding vertical (topo/base). 6 = compacto Apple-grade. 6+6 = 12.
-const MENU_PAD_Y: f32 = 6.0;
-/// Padding horizontal (interno row). 14 = igual PILL_PAD_X bar (continuidade).
-const MENU_PAD_X: f32 = 14.0;
-/// Altura por row clicavel. 30 = balanco touch/mouse + 13px font + respiro.
-const MENU_ROW_H: f32 = 30.0;
-/// Border-radius. 14 = igual PILL_RADIUS bar (continuidade total).
-const MENU_RADIUS: f32 = 14.0;
-/// Font size dos items. 13 = igual FONT_PILL bar.
-const FONT_MENU: f32 = 13.0;
-/// Margem entre cursor e canto do menu.
+/// Largura do menu desktop (vem do modulo compartilhado).
+const MENU_W: f32 = menu::MENU_W_DESKTOP;
+/// Margem entre cursor e canto do menu. 2px = grude no cursor sem encavalar.
 const MENU_OFFSET: f32 = 2.0;
-/// Row hover radius interno (sub-rrect). 9 = arredondado dentro do menu 14.
-const MENU_ROW_HOVER_RADIUS: f32 = 9.0;
-/// Inset lateral do hover wash.
-const MENU_ROW_HOVER_INSET: f32 = 4.0;
 
-/// Altura computada exata = pad_top + 3 rows + pad_bottom.
-const fn menu_h(items: usize) -> f32 {
-    MENU_PAD_Y + (items as f32) * MENU_ROW_H + MENU_PAD_Y
-}
+/// Items do menu desktop estilo macOS Finder.
+///
+/// A27: items MVP (futuro: despachar comandos reais wallpaper picker / About
+/// dialog / lumo-store launch via IPC).
+const MENU_ITEMS: &[menu::MenuItem] = &[
+    menu::MenuItem::action("Trocar wallpaper..."),
+    menu::MenuItem::action("Sobre este Galaxy Book..."),
+    menu::MenuItem::separator(),
+    menu::MenuItem::action("Atualizar Lumo..."),
+    menu::MenuItem::action("Lumo Store"),
+];
 
 // ============================================================
 // FontSystem singleton (alinhado com lumo-bar: Geist/JetBrains).
@@ -319,6 +318,32 @@ fn send_close_dropdowns(stream: &mut Option<UnixStream>) {
     }
 }
 
+/// A26: drena eventos do compositor. Retorna (alive, close_menu_requested).
+fn drain_ipc_events(stream: &mut UnixStream, rx_buf: &mut Vec<u8>) -> (bool, bool) {
+    let mut tmp = [0u8; 256];
+    let mut alive = true;
+    let mut close_menu = false;
+    loop {
+        match stream.read(&mut tmp) {
+            Ok(0) => { alive = false; break; }
+            Ok(n) => rx_buf.extend_from_slice(&tmp[..n]),
+            Err(e) if e.kind() == ErrorKind::WouldBlock => break,
+            Err(_) => { alive = false; break; }
+        }
+    }
+    while let Some(nl) = rx_buf.iter().position(|b| *b == b'\n') {
+        let line: Vec<u8> = rx_buf.drain(..=nl).collect();
+        if let Ok(s) = std::str::from_utf8(&line[..line.len() - 1]) {
+            if let Ok(ev) = serde_json::from_str::<LumoEvent>(s.trim()) {
+                if matches!(ev, LumoEvent::CloseDesktopMenu) {
+                    close_menu = true;
+                }
+            }
+        }
+    }
+    (alive, close_menu)
+}
+
 // ============================================================
 // LumoDesktop state.
 // ============================================================
@@ -328,10 +353,10 @@ struct MenuActive {
     visible: bool,
     x: f32,
     y: f32,
-    hover_row: i32,
+    /// Indice do item Action/Toggle em hover. `usize::MAX` quando nenhum
+    /// (sentinel; `menu::draw_menu` trata fora-de-range como sem hover).
+    hover_idx: usize,
 }
-
-const MENU_ITEMS: [&str; 3] = ["Configuracoes", "Trocar wallpaper", "Sobre Lumo"];
 
 struct LumoDesktop {
     registry: RegistryState,
@@ -348,58 +373,43 @@ struct LumoDesktop {
     pointer_pos: Option<(f64, f64)>,
     menu: MenuActive,
     ipc_stream: Option<UnixStream>,
+    ipc_rx_buf: Vec<u8>,
     last_click_at: Option<Instant>,
     palette: LumoColors,
-}
-
-fn clamp_menu_origin(x: f32, y: f32, surf_w: u32, surf_h: u32) -> (f32, f32) {
-    let menu_h_val = menu_h(MENU_ITEMS.len());
-    let mut mx = x + MENU_OFFSET;
-    let mut my = y + MENU_OFFSET;
-    if mx + MENU_W > surf_w as f32 {
-        mx = (x - MENU_W - MENU_OFFSET).max(0.0);
-    }
-    if my + menu_h_val > surf_h as f32 {
-        my = (y - menu_h_val - MENU_OFFSET).max(0.0);
-    }
-    (mx, my)
+    /// A26: flag setado por drain_ipc_events quando compositor pede pra
+    /// fechar menu (mutex bar dropdown vs desktop menu). Loop principal
+    /// consome e redesenha.
+    need_redraw: bool,
 }
 
 fn paint_menu_at(
     canvas: &mut PixmapMut,
-    menu: MenuActive,
+    menu_active: MenuActive,
     surf_w: u32,
     surf_h: u32,
     palette: &LumoColors,
 ) {
-    let (mx, my) = clamp_menu_origin(menu.x, menu.y, surf_w, surf_h);
-    let menu_h_val = menu_h(MENU_ITEMS.len());
+    let (mx, my) = menu::clamp_menu_origin(
+        MENU_ITEMS,
+        menu_active.x,
+        menu_active.y,
+        MENU_W,
+        surf_w,
+        surf_h,
+        MENU_OFFSET,
+    );
 
-    // Background pill: cor + alpha do tema (igual pill bar A19.15).
-    let bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
-    fill_rrect(canvas, mx, my, MENU_W, menu_h_val, MENU_RADIUS, bg);
-
-    // SEM sombra (A25): bar pills shadow_alpha=0, menu segue mesma decisao.
-
-    let fg = opaque(palette.pill_fg);
-    let hover_bg = rgba_hex(palette.accent_subtle, 0x60);
-
-    for (i, label) in MENU_ITEMS.iter().enumerate() {
-        let row_y = my + MENU_PAD_Y + (i as f32) * MENU_ROW_H;
-        if menu.hover_row == i as i32 {
-            fill_rrect(
-                canvas,
-                mx + MENU_ROW_HOVER_INSET,
-                row_y + 2.0,
-                MENU_W - MENU_ROW_HOVER_INSET * 2.0,
-                MENU_ROW_H - 4.0,
-                MENU_ROW_HOVER_RADIUS,
-                hover_bg,
-            );
-        }
-        let text_y = row_y + (MENU_ROW_H - FONT_MENU * 1.4) / 2.0;
-        draw_text(canvas, mx + MENU_PAD_X, text_y.round(), label, FONT_MENU, fg);
-    }
+    menu::draw_menu(
+        canvas,
+        mx,
+        my,
+        MENU_W,
+        MENU_ITEMS,
+        menu_active.hover_idx,
+        palette,
+        |c, x, y, w, h, r, color| fill_rrect(c, x, y, w, h, r, color),
+        |c, x, y, label, size, color| draw_text(c, x, y, label, size, color),
+    );
 }
 
 impl LumoDesktop {
@@ -447,26 +457,22 @@ impl LumoDesktop {
         surface.commit();
     }
 
-    fn clamp_menu_origin(&self, x: f32, y: f32) -> (f32, f32) {
-        clamp_menu_origin(x, y, self.width, self.height)
-    }
-
-    fn hit_test_menu(&self, px: f32, py: f32) -> Option<i32> {
+    /// Hit-test absoluto: retorna Some(idx) se cursor sobre item clicavel.
+    /// None = fora do menu OU sobre separator.
+    fn hit_test_menu(&self, px: f32, py: f32) -> Option<usize> {
         if !self.menu.visible {
             return None;
         }
-        let (mx, my) = self.clamp_menu_origin(self.menu.x, self.menu.y);
-        let menu_h_val = menu_h(MENU_ITEMS.len());
-        if px < mx || px > mx + MENU_W || py < my || py > my + menu_h_val {
-            return None;
-        }
-        for i in 0..MENU_ITEMS.len() {
-            let row_y = my + MENU_PAD_Y + (i as f32) * MENU_ROW_H;
-            if py >= row_y && py <= row_y + MENU_ROW_H {
-                return Some(i as i32);
-            }
-        }
-        Some(-1)
+        let (mx, my) = menu::clamp_menu_origin(
+            MENU_ITEMS,
+            self.menu.x,
+            self.menu.y,
+            MENU_W,
+            self.width,
+            self.height,
+            MENU_OFFSET,
+        );
+        menu::hit_test(MENU_ITEMS, mx, my, MENU_W, px, py)
     }
 }
 
@@ -553,19 +559,19 @@ impl PointerHandler for LumoDesktop {
                 PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
                     self.pointer_pos = Some(ev.position);
                     if self.menu.visible {
-                        let row = self
+                        let new_idx = self
                             .hit_test_menu(ev.position.0 as f32, ev.position.1 as f32)
-                            .unwrap_or(-1);
-                        if row != self.menu.hover_row {
-                            self.menu.hover_row = row;
+                            .unwrap_or(usize::MAX);
+                        if new_idx != self.menu.hover_idx {
+                            self.menu.hover_idx = new_idx;
                             need_redraw = true;
                         }
                     }
                 }
                 PointerEventKind::Leave { .. } => {
                     self.pointer_pos = None;
-                    if self.menu.visible && self.menu.hover_row != -1 {
-                        self.menu.hover_row = -1;
+                    if self.menu.visible && self.menu.hover_idx != usize::MAX {
+                        self.menu.hover_idx = usize::MAX;
                         need_redraw = true;
                     }
                 }
@@ -584,21 +590,20 @@ impl PointerHandler for LumoDesktop {
                             visible: true,
                             x: px,
                             y: py,
-                            hover_row: -1,
+                            hover_idx: usize::MAX,
                         };
                         need_redraw = true;
                         eprintln!("[lumo-desktop] right-click ({}, {}) -> menu open", px, py);
                     } else if button == BTN_LEFT {
                         if self.menu.visible {
-                            let row = self.hit_test_menu(px, py).unwrap_or(-1);
-                            if row >= 0 {
+                            if let Some(idx) = self.hit_test_menu(px, py) {
                                 eprintln!(
-                                    "[lumo-desktop] menu item={} '{}' (stub)",
-                                    row, MENU_ITEMS[row as usize]
+                                    "[lumo-desktop] menu item: '{}' (stub)",
+                                    MENU_ITEMS[idx].label
                                 );
                             }
                             self.menu.visible = false;
-                            self.menu.hover_row = -1;
+                            self.menu.hover_idx = usize::MAX;
                             need_redraw = true;
                         } else {
                             send_close_dropdowns(&mut self.ipc_stream);
@@ -671,14 +676,17 @@ fn main() {
         first_configured: false,
         pointer: None,
         pointer_pos: None,
-        menu: MenuActive { visible: false, x: 0.0, y: 0.0, hover_row: -1 },
+        menu: MenuActive { visible: false, x: 0.0, y: 0.0, hover_idx: usize::MAX },
         ipc_stream: connect_ipc(),
+        ipc_rx_buf: Vec::with_capacity(256),
         last_click_at: None,
         palette: current_colors(),
+        need_redraw: false,
     };
 
-    eprintln!("[lumo-desktop] A25: menu pill-style + CloseDropdowns IPC");
+    eprintln!("[lumo-desktop] A27: menu Apple-style + CloseDropdowns IPC");
 
+    let mut last_ipc_tick = Instant::now();
     while state.running {
         conn.flush().ok();
         if let Some(guard) = queue.prepare_read() {
@@ -702,6 +710,30 @@ fn main() {
         if conn.flush().is_err() {
             eprintln!("[lumo-desktop] flush falhou, saindo");
             break;
+        }
+
+        // A26: drena IPC events do compositor. Tick 8ms = ~120Hz pra reagir
+        // imediato (memory feedback_input_feedback_imediato).
+        if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
+            last_ipc_tick = Instant::now();
+            if let Some(mut s) = state.ipc_stream.take() {
+                let (alive, close_menu) = drain_ipc_events(&mut s, &mut state.ipc_rx_buf);
+                if alive {
+                    state.ipc_stream = Some(s);
+                } else {
+                    eprintln!("[lumo-desktop] IPC peer fechou; desktop continua passivo");
+                }
+                if close_menu && state.menu.visible {
+                    state.menu.visible = false;
+                    state.menu.hover_idx = usize::MAX;
+                    state.need_redraw = true;
+                    eprintln!("[lumo-desktop] CloseDesktopMenu IPC -> menu fechado");
+                }
+            }
+        }
+        if state.need_redraw {
+            state.need_redraw = false;
+            state.redraw(&qh);
         }
     }
 }

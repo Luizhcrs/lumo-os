@@ -32,6 +32,10 @@ pub enum LumoEvent {
     /// click esquerdo no desktop (lumo-desktop) em area vazia.
     /// A21: clientes que nao tem dropdown ignoram silenciosamente.
     CloseDropdowns,
+    /// A26: pedido pra fechar menu contextual do lumo-desktop. Emitido
+    /// pelo compositor quando bar abre dropdown (mutex: so um popup
+    /// aberto na tela por vez). Clients sem menu ativo ignoram.
+    CloseDesktopMenu,
 }
 
 /// Comandos enviados pelos clientes (lumo-bar, lumoctl, etc) ao
@@ -47,6 +51,10 @@ pub enum LumoCommand {
     /// click esquerdo em area vazia da area de trabalho.
     /// Compositor traduz em broadcast LumoEvent::CloseDropdowns.
     CloseDropdowns,
+    /// A26: pede pro compositor avisar lumo-desktop pra fechar seu menu
+    /// contextual. Enviado por lumo-bar quando abre dropdown (mutex).
+    /// Compositor traduz em broadcast LumoEvent::CloseDesktopMenu.
+    CloseDesktopMenu,
 }
 
 /// Path padrao do socket. Falha se `XDG_RUNTIME_DIR` ausente.
