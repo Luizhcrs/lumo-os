@@ -177,10 +177,14 @@ pub fn shadow_elements(space: &Space<Window>) -> Vec<SolidColorRenderElement> {
     for window in space.elements() {
         let loc = space.element_location(window).unwrap_or_default();
         let geo = window.geometry();
+        // Bug Luiz 2026-05-18: shadow rect cobria area inteira da window
+        // + bleed. GTK4 CSD desenha cantos transparentes, vazando sombra preta
+        // 0.4 acima do toplevel = pareceu "sombra em cima". Fix: shadow so
+        // ABAIXO da window (drop-shadow classico), nao envolve toplevel.
         let shadow_rect = Rectangle::new(
-            Point::from((loc.x - SHADOW_BLEED, loc.y + SHADOW_OFFSET_Y - SHADOW_BLEED))
+            Point::from((loc.x - SHADOW_BLEED, loc.y + geo.size.h))
                 .to_physical_precise_round(1.0),
-            (geo.size.w + SHADOW_BLEED * 2, geo.size.h + SHADOW_BLEED * 2).into(),
+            (geo.size.w + SHADOW_BLEED * 2, SHADOW_OFFSET_Y + SHADOW_BLEED).into(),
         );
         out.push(SolidColorRenderElement::new(
             Id::new(),
