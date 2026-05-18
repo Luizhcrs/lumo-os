@@ -116,12 +116,11 @@ pub fn run() {
             break;
         }
 
-        // A26: drena IPC events do compositor. Tick 8ms = ~120Hz pra reagir
-        // imediato (memory feedback_input_feedback_imediato).
+        // A40: drena IPC events do compositor. Tick 8ms = ~120Hz.
         if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
             last_ipc_tick = Instant::now();
             if let Some(mut s) = state.ipc_stream.take() {
-                let (alive, close_menu) = drain_ipc_events(&mut s, &mut state.ipc_rx_buf);
+                let (alive, close_menu, open_selected) = drain_ipc_events(&mut s, &mut state.ipc_rx_buf);
                 if alive {
                     state.ipc_stream = Some(s);
                 } else {
@@ -132,6 +131,9 @@ pub fn run() {
                     state.menu.hover_idx = usize::MAX;
                     state.need_redraw = true;
                     eprintln!("[lumo-desktop] CloseDesktopMenu IPC -> menu fechado");
+                }
+                if open_selected {
+                    state.icons.open_selected();
                 }
             }
         }

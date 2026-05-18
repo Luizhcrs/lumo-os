@@ -36,6 +36,10 @@ pub enum LumoEvent {
     /// pelo compositor quando bar abre dropdown (mutex: so um popup
     /// aberto na tela por vez). Clients sem menu ativo ignoram.
     CloseDesktopMenu,
+    /// A40: pedido pra abrir o item selecionado no desktop (equivalente
+    /// a duplo-click). Emitido pelo compositor quando Return e pressionado
+    /// sem toplevel ativo. lumo-desktop chama xdg-open no icone selecionado.
+    DesktopOpenSelected,
 }
 
 /// Comandos enviados pelos clientes (lumo-bar, lumoctl, etc) ao

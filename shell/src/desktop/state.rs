@@ -260,11 +260,12 @@ pub fn send_close_dropdowns(stream: &mut Option<UnixStream>) {
     }
 }
 
-/// A26: drena eventos do compositor. Retorna (alive, close_menu_requested).
-pub fn drain_ipc_events(stream: &mut UnixStream, rx_buf: &mut Vec<u8>) -> (bool, bool) {
+/// A40: drena eventos do compositor. Retorna (alive, close_menu, open_selected).
+pub fn drain_ipc_events(stream: &mut UnixStream, rx_buf: &mut Vec<u8>) -> (bool, bool, bool) {
     let mut tmp = [0u8; 256];
     let mut alive = true;
     let mut close_menu = false;
+    let mut open_selected = false;
     loop {
         match stream.read(&mut tmp) {
             Ok(0) => { alive = false; break; }
@@ -277,13 +278,15 @@ pub fn drain_ipc_events(stream: &mut UnixStream, rx_buf: &mut Vec<u8>) -> (bool,
         let line: Vec<u8> = rx_buf.drain(..=nl).collect();
         if let Ok(s) = std::str::from_utf8(&line[..line.len() - 1]) {
             if let Ok(ev) = serde_json::from_str::<LumoEvent>(s.trim()) {
-                if matches!(ev, LumoEvent::CloseDesktopMenu) {
-                    close_menu = true;
+                match ev {
+                    LumoEvent::CloseDesktopMenu => close_menu = true,
+                    LumoEvent::DesktopOpenSelected => open_selected = true,
+                    _ => {}
                 }
             }
         }
     }
-    (alive, close_menu)
+    (alive, close_menu, open_selected)
 }
 
 // ============================================================

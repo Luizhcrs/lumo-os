@@ -69,6 +69,9 @@ pub fn drain_ipc(
                     LumoEvent::CloseDesktopMenu => {
                         // A26: evento destinado ao lumo-desktop, bar ignora.
                     }
+                    LumoEvent::DesktopOpenSelected => {
+                        // A40: evento destinado ao lumo-desktop, bar ignora.
+                    }
                 }
             }
         }

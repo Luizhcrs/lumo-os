@@ -31,6 +31,10 @@ impl LumoState {
                 let keyboard = self.keyboard.clone();
                 let press = state == KeyState::Pressed;
 
+                // A40: Cell pra capturar sym calculado dentro do closure.
+                let last_sym_for_a40 = std::cell::Cell::new(
+                    smithay::input::keyboard::xkb::Keysym::NoSymbol
+                );
                 let action_opt = keyboard.input::<KeyAction, _>(
                     self,
                     keycode,
@@ -42,6 +46,7 @@ impl LumoState {
                             return FilterResult::Forward;
                         }
                         let sym = kh.modified_sym();
+                        last_sym_for_a40.set(sym);
                         // Bug Luiz 2026-05-18 v3: caps/num lock LED sync direto
                         // via sysfs — SeatHandler::led_state_changed nao disparou.
                         use smithay::input::keyboard::xkb::Keysym;
@@ -64,6 +69,15 @@ impl LumoState {
 
                 if let Some(action) = action_opt {
                     self.execute_key_action(action);
+                }
+                // A40: Return sem binding + sem toplevel focado
+                // -> roteia pra desktop abrir icone selecionado.
+                if press && last_sym_for_a40.get() == smithay::input::keyboard::xkb::Keysym::Return {
+                    let has_focus = self.keyboard.current_focus().is_some();
+                    if !has_focus {
+                        tracing::info!("A40: Return sem toplevel -> DesktopOpenSelected");
+                        self.broadcast_desktop_open_selected();
+                    }
                 }
             }
 

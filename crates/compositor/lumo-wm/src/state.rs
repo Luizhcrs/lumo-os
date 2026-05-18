@@ -350,6 +350,12 @@ impl LumoState {
         }
     }
 
+    /// A40: broadcast DesktopOpenSelected pra lumo-desktop abrir
+    /// o icone selecionado via xdg-open.
+    pub fn broadcast_desktop_open_selected(&mut self) {
+        self.ipc.broadcast(&LumoEvent::DesktopOpenSelected);
+    }
+
     /// Troca workspace ativo. Validacao + broadcast IPC.
     /// Memory feedback_input_feedback_imediato: aplicar no
     /// proximo frame (state muda; redraw da bar acontece no

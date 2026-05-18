@@ -344,6 +344,16 @@ impl IconsState {
         self.scan();
     }
 
+    /// A40: abre o primeiro icone selecionado via xdg-open.
+    pub fn open_selected(&self) {
+        for (idx, icon) in self.icons.iter().enumerate() {
+            if icon.selected {
+                self.open_icon(idx);
+                return;
+            }
+        }
+    }
+
     pub fn open_icon(&self, idx: usize) {
         if let Some(icon) = self.icons.get(idx) {
             let path = icon.path.to_string_lossy().to_string();
