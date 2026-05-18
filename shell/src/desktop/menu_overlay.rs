@@ -17,10 +17,10 @@ pub const MENU_W: f32 = menu::MENU_W_DESKTOP;
 /// A27: items MVP (futuro: despachar comandos reais wallpaper picker / About
 /// dialog / lumo-store launch via IPC).
 pub const MENU_ITEMS: &[menu::MenuItem] = &[
-    menu::MenuItem::action("Trocar wallpaper..."),
-    menu::MenuItem::action("Sobre este Galaxy Book..."),
+    menu::MenuItem::action("Trocar wallpaper"),
+    menu::MenuItem::action("Sobre este Galaxy Book"),
     menu::MenuItem::separator(),
-    menu::MenuItem::action("Atualizar Lumo..."),
+    menu::MenuItem::action("Atualizar Lumo"),
     menu::MenuItem::action("Lumo Store"),
 ];
 
