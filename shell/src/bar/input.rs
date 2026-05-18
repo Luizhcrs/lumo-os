@@ -330,15 +330,12 @@ impl PointerHandler for LumoBar {
                                 handled = true;
                             }
                         }
-                        // Click linha rede atual -> disconnect.
+                        // Click linha rede atual -> no-op (UX: nao derruba conexao acidental).
+                        // Futuro A31.4: abre menu Desconectar / Esquecer / Detalhes.
                         if !handled {
                             if let Some((rx, ry, rw, rh)) = self.wifi_disconnect_rect {
                                 if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
-                                    if let Some(iface) = self.wifi_info.iface.clone() {
-                                        eprintln!("[lumo-bar] A31.2 disconnect iface={}", iface);
-                                        crate::bar::system_info::nm_disconnect_iface(iface);
-                                        self.wifi_refresh_due = Some(Instant::now() + Duration::from_millis(1500));
-                                    }
+                                    eprintln!("[lumo-bar] click linha rede atual (no-op; A31.4 menu pendente)");
                                     handled = true;
                                 }
                             }

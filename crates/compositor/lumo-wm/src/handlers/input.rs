@@ -183,6 +183,13 @@ impl LumoState {
                             }
                             let title_rect = ssd_titlebar_rect_logical(loc, geo.size.w);
                             if title_rect.contains(ptr_pos) {
+                                // Q1: raise + focus antes do move grab.
+                                self.space.raise_element(window, true);
+                                if let Some(tl) = window.toplevel() {
+                                    let surf_raise = tl.wl_surface().clone();
+                                    let kb_raise = self.keyboard.clone();
+                                    kb_raise.set_focus(self, Some(surf_raise), serial);
+                                }
                                 let pointer = self.pointer.clone();
                                 let start_data = smithay::input::pointer::GrabStartData {
                                     focus: pointer.current_focus().map(|s| {
@@ -221,6 +228,14 @@ impl LumoState {
                             |states| states.data_map.get::<XdgToplevelSurfaceData>().is_some(),
                         );
                         if is_toplevel {
+                            // Q1: raise toplevel ao topo no click.
+                            // Coletar antes de mutar (borrow check).
+                            let win_to_raise = self.space.elements()
+                                .find(|w| w.wl_surface().map(|s| *s == surface).unwrap_or(false))
+                                .cloned();
+                            if let Some(win) = win_to_raise {
+                                self.space.raise_element(&win, true);
+                            }
                             self.focus_manager.click_toplevel(surface)
                         } else {
                             // Layer-shell (bar, desktop) -> sem foco de teclado.
@@ -405,6 +420,10 @@ impl LumoState {
         if let Some(sock) = self.socket_name.as_deref() {
             proc.env("WAYLAND_DISPLAY", sock);
         }
+        // Q3: GTK/Qt env pra appmenu funcionar em GTK3.
+        proc.env("GTK_MODULES", "appmenu-gtk-module");
+        proc.env("QT_QPA_PLATFORMTHEME", "appmenu-qt5");
+        proc.env("UBUNTU_MENUPROXY", "1");
         if cmd == "foot" {
             proc.arg("-c").arg(format!("{home}/.config/foot/foot.ini"));
         }
