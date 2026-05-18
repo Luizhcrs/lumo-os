@@ -554,7 +554,8 @@ fn battery_total_width() -> f32 {
 pub enum DropdownActive {
     None,
     Battery,
-    // Wifi, Date pra A21
+    Wifi, // A23
+    // Date pra A24
 }
 
 // ============================================================
@@ -796,6 +797,253 @@ fn draw_battery_dropdown(
 }
 
 // ============================================================
+// WifiInfo - leitura via `iw dev <iface> link` + `ip -4 -o addr` + sysfs (A23).
+// ============================================================
+//
+// Estrategia: sem dep extra (nl80211 crate pesa). Exec processos curtos
+// `iw` e `ip` que ja sao trans dependency userland Arch. Parse stdout linha
+// a linha. Falha qualquer = campo None, dropdown mostra "-".
+
+#[derive(Clone, Default, Debug)]
+pub struct WifiInfo {
+    pub up: bool,
+    pub ssid: Option<String>,
+    pub signal_dbm: Option<i32>,
+    pub signal_pct: Option<u8>,
+    pub freq_ghz: Option<f32>,
+    pub bitrate_mbps: Option<u32>,
+    pub ip: Option<String>,
+    pub iface: Option<String>,
+}
+
+/// Procura primeira interface wireless (wl*) com operstate=up.
+fn find_wifi_iface() -> Option<String> {
+    let entries = std::fs::read_dir("/sys/class/net").ok()?;
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        if !name.starts_with("wl") {
+            continue;
+        }
+        // Filtra so wireless real: precisa ter subdir "wireless" OU
+        // phy80211 (nl80211). wlan0 ok, mas evita confusao.
+        let op = std::fs::read_to_string(e.path().join("operstate"))
+            .unwrap_or_default();
+        if op.trim() == "up" {
+            return Some(name);
+        }
+    }
+    None
+}
+
+/// Converte dBm em percentual usando rampa linear simples 100..0 em -50..-100.
+fn dbm_to_pct(dbm: i32) -> u8 {
+    if dbm >= -50 {
+        100
+    } else if dbm <= -100 {
+        0
+    } else {
+        ((dbm + 100) * 2).clamp(0, 100) as u8
+    }
+}
+
+/// Le info real do wifi via `iw dev <iface> link` + `ip -4 -o addr show <iface>`.
+fn read_wifi_info() -> WifiInfo {
+    let iface = match find_wifi_iface() {
+        Some(n) => n,
+        None => return WifiInfo::default(),
+    };
+
+    let mut info = WifiInfo {
+        up: true,
+        iface: Some(iface.clone()),
+        ..Default::default()
+    };
+
+    // ---- iw dev <iface> link ----
+    if let Ok(out) = std::process::Command::new("iw")
+        .args(["dev", &iface, "link"])
+        .output()
+    {
+        if out.status.success() {
+            let s = String::from_utf8_lossy(&out.stdout);
+            // Se "Not connected" => up mas sem rede ativa.
+            if s.contains("Not connected") {
+                info.up = false;
+            } else {
+                for raw in s.lines() {
+                    let line = raw.trim();
+                    if let Some(v) = line.strip_prefix("SSID:") {
+                        info.ssid = Some(v.trim().to_string());
+                    } else if let Some(v) = line.strip_prefix("freq:") {
+                        // "freq: 5180" ou "freq: 5180.0"
+                        let mhz: f32 = v.trim().parse().unwrap_or(0.0);
+                        if mhz > 0.0 {
+                            info.freq_ghz = Some((mhz / 1000.0 * 10.0).round() / 10.0);
+                        }
+                    } else if let Some(v) = line.strip_prefix("signal:") {
+                        // "-49 dBm"
+                        let tok = v.trim().split_whitespace().next().unwrap_or("");
+                        if let Ok(d) = tok.parse::<i32>() {
+                            info.signal_dbm = Some(d);
+                            info.signal_pct = Some(dbm_to_pct(d));
+                        }
+                    } else if let Some(v) = line.strip_prefix("tx bitrate:") {
+                        // "433.3 MBit/s VHT-MCS 9 ..."
+                        let tok = v.trim().split_whitespace().next().unwrap_or("");
+                        if let Ok(f) = tok.parse::<f32>() {
+                            info.bitrate_mbps = Some(f.round() as u32);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- ip -4 -o addr show <iface> ----
+    if let Ok(out) = std::process::Command::new("ip")
+        .args(["-4", "-o", "addr", "show", &iface])
+        .output()
+    {
+        if out.status.success() {
+            let s = String::from_utf8_lossy(&out.stdout);
+            // Linha tipica: "3: wlan0    inet 192.168.0.106/24 brd ..."
+            for line in s.lines() {
+                if let Some(pos) = line.find("inet ") {
+                    let rest = &line[pos + 5..];
+                    let ip = rest
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or("")
+                        .split('/')
+                        .next()
+                        .unwrap_or("")
+                        .to_string();
+                    if !ip.is_empty() {
+                        info.ip = Some(ip);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    eprintln!(
+        "[lumo-bar] read_wifi_info: iface={:?} ssid={:?} dbm={:?} pct={:?} freq={:?} bitrate={:?} ip={:?}",
+        info.iface, info.ssid, info.signal_dbm, info.signal_pct, info.freq_ghz, info.bitrate_mbps, info.ip
+    );
+
+    info
+}
+
+// ============================================================
+// draw_wifi_dropdown (A23).
+// ============================================================
+//
+// Layout (mesma largura/altura DROPDOWN_W/H = bateria; consistencia visual):
+//
+//   y0  Wi-Fi (title bold)
+//   y1  SSID - 78% (medium)   OU   "Desconectado"
+//   sep
+//   y2  IP:         192.168.0.106
+//   y3  Sinal:      -52 dBm
+//   y4  Frequencia: 5 GHz
+//   y5  Velocidade: 433 Mbps
+//
+// Se !info.up: so titulo + "Sem rede ativa" centralizado fg_subtle.
+fn draw_wifi_dropdown(
+    canvas: &mut PixmapMut,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    palette: &LumoColors,
+    info: &WifiInfo,
+) {
+    let bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
+    let fg = opaque(palette.pill_fg);
+    let fg_subtle = rgba_hex(palette.pill_fg, 0xA0);
+    let sep_color = rgba_hex(palette.pill_sep, palette.pill_sep_alpha);
+
+    fill_rrect(canvas, x, y, w, h, PILL_RADIUS, bg);
+
+    let cx = x + DROPDOWN_PAD;
+    let mut cy = y + DROPDOWN_PAD;
+
+    // Title "Wi-Fi" 14px bold.
+    draw_text(canvas, cx, cy, "Wi-Fi", FONT_DROPDOWN_TITLE, fg, true);
+    cy += FONT_DROPDOWN_TITLE * 1.4;
+
+    if !info.up || info.ssid.is_none() {
+        // Estado desconectado.
+        draw_text(canvas, cx, cy, "Desconectado", FONT_DROPDOWN_BODY, fg_subtle, false);
+        cy += FONT_DROPDOWN_BODY * 1.6;
+        if let Some(rect) = Rect::from_xywh(x + DROPDOWN_PAD, cy.round(), w - DROPDOWN_PAD * 2.0, 1.0) {
+            let mut p = Paint::default();
+            p.set_color(sep_color);
+            p.anti_alias = false;
+            canvas.fill_rect(rect, &p, Transform::identity(), None);
+        }
+        cy += 8.0;
+        draw_text(canvas, cx, cy, "Sem rede ativa", FONT_DROPDOWN_BODY, fg_subtle, false);
+        return;
+    }
+
+    // Linha 2: "SSID - signal%".
+    let ssid = info.ssid.as_deref().unwrap_or("-");
+    let pct_str = info
+        .signal_pct
+        .map(|p| format!(" - {}%", p))
+        .unwrap_or_default();
+    let summary = format!("{}{}", ssid, pct_str);
+    // Truncar SSID longo pra caber.
+    let mut s = summary.clone();
+    if s.chars().count() > 28 {
+        s.truncate(s.char_indices().nth(26).map(|(i, _)| i).unwrap_or(s.len()));
+        s.push_str("..");
+    }
+    draw_text(canvas, cx, cy, &s, FONT_DROPDOWN_BODY, fg_subtle, false);
+    cy += FONT_DROPDOWN_BODY * 1.6;
+
+    // Separator 1px.
+    if let Some(rect) = Rect::from_xywh(x + DROPDOWN_PAD, cy.round(), w - DROPDOWN_PAD * 2.0, 1.0) {
+        let mut p = Paint::default();
+        p.set_color(sep_color);
+        p.anti_alias = false;
+        canvas.fill_rect(rect, &p, Transform::identity(), None);
+    }
+    cy += 8.0;
+
+    // Rows key:value (4 linhas).
+    let value_x = x + w - DROPDOWN_PAD;
+    let rows: [(&str, String); 4] = [
+        ("IP", info.ip.clone().unwrap_or_else(|| "-".into())),
+        (
+            "Sinal",
+            info.signal_dbm.map(|d| format!("{} dBm", d)).unwrap_or_else(|| "-".into()),
+        ),
+        (
+            "Frequencia",
+            info.freq_ghz.map(|f| format!("{} GHz", f)).unwrap_or_else(|| "-".into()),
+        ),
+        (
+            "Velocidade",
+            info.bitrate_mbps.map(|b| format!("{} Mbps", b)).unwrap_or_else(|| "-".into()),
+        ),
+    ];
+    for (key, value) in rows.iter() {
+        draw_text(canvas, cx, cy, key, FONT_DROPDOWN_BODY, fg_subtle, false);
+        let mut v = value.clone();
+        if v.chars().count() > 22 {
+            v.truncate(v.char_indices().nth(20).map(|(i, _)| i).unwrap_or(v.len()));
+            v.push_str("..");
+        }
+        let vw = measure_text(&v, FONT_DROPDOWN_BODY, false);
+        draw_text(canvas, value_x - vw, cy, &v, FONT_DROPDOWN_BODY, fg, false);
+        cy += DROPDOWN_ROW_H;
+    }
+}
+
+// ============================================================
 // BarSnapshot.
 // ============================================================
 struct BarSnapshot {
@@ -811,12 +1059,14 @@ struct BarSnapshot {
     date_str: String,
     dropdown: DropdownActive,
     battery_info: BatteryInfo,
+    wifi_info: WifiInfo, // A23
 }
 
 /// Resultado de paint_frame: posicoes calculadas pra hit-test no proximo frame.
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone)]
 struct PaintResult {
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
+    wifi_hit_rect: Option<(f32, f32, f32, f32)>, // A23
     last_click_at: Option<Instant>,
 }
 
@@ -909,7 +1159,10 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
         // Y expande pra PILL_H pra facilitar click vertical sem precisar bater exato no icone.
         result.bat_hit_rect = Some((bat_x_start - 4.0, pill_y, bat_icon_w + 8.0, PILL_H));
         cx += bat_icon_w + PILL_GAP;
+        // A23: salvar wifi_hit_rect igual bat (Y = PILL_H pra facilitar click).
+        let wifi_x_start = cx;
         draw_wifi(&mut canvas, cx, pill_cy - WIFI_SIZE / 2.0, snap.wifi_on, pill_fg, pill_fg_subtle);
+        result.wifi_hit_rect = Some((wifi_x_start - 4.0, pill_y, WIFI_SIZE + 8.0, PILL_H));
         cx += WIFI_SIZE + PILL_GAP;
         draw_text(&mut canvas, cx, text_top, &snap.date_str, FONT_DATE, pill_fg, false);
         cx += date_w + 8.0;
@@ -917,27 +1170,46 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
     }
 
     // ============================================================
-    // DROPDOWN (A20) — render abaixo da pill direita se ativo.
+    // DROPDOWN (A20/A23) — render abaixo da pill direita se ativo.
     // ============================================================
-    if snap.dropdown == DropdownActive::Battery {
-        if let Some((rx, ry, rw, rh)) = result.bat_hit_rect {
-            // Centralizado horizontalmente sobre o icone bateria, mas
-            // ancorado pra nao sair da tela direita.
-            let want_x = rx + rw / 2.0 - DROPDOWN_W / 2.0;
-            let max_x = snap.width as f32 - PILL_MARGIN_X - DROPDOWN_W;
-            let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
-            let dropdown_y = ry + rh + DROPDOWN_GAP;
-            let mut canvas = pixmap.as_mut();
-            draw_battery_dropdown(
-                &mut canvas,
-                dropdown_x,
-                dropdown_y,
-                DROPDOWN_W,
-                DROPDOWN_H,
-                palette,
-                &snap.battery_info,
-            );
+    match snap.dropdown {
+        DropdownActive::Battery => {
+            if let Some((rx, ry, rw, rh)) = result.bat_hit_rect {
+                let want_x = rx + rw / 2.0 - DROPDOWN_W / 2.0;
+                let max_x = snap.width as f32 - PILL_MARGIN_X - DROPDOWN_W;
+                let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
+                let dropdown_y = ry + rh + DROPDOWN_GAP;
+                let mut canvas = pixmap.as_mut();
+                draw_battery_dropdown(
+                    &mut canvas,
+                    dropdown_x,
+                    dropdown_y,
+                    DROPDOWN_W,
+                    DROPDOWN_H,
+                    palette,
+                    &snap.battery_info,
+                );
+            }
         }
+        DropdownActive::Wifi => {
+            if let Some((rx, ry, rw, rh)) = result.wifi_hit_rect {
+                let want_x = rx + rw / 2.0 - DROPDOWN_W / 2.0;
+                let max_x = snap.width as f32 - PILL_MARGIN_X - DROPDOWN_W;
+                let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
+                let dropdown_y = ry + rh + DROPDOWN_GAP;
+                let mut canvas = pixmap.as_mut();
+                draw_wifi_dropdown(
+                    &mut canvas,
+                    dropdown_x,
+                    dropdown_y,
+                    DROPDOWN_W,
+                    DROPDOWN_H,
+                    palette,
+                    &snap.wifi_info,
+                );
+            }
+        }
+        DropdownActive::None => {}
     }
 
     // Suppress unused warns nos campos do snapshot (theme so usado pra debug log).
@@ -1027,10 +1299,10 @@ fn drain_ipc(stream: &mut UnixStream, rx_buf: &mut Vec<u8>, active_ws: &Arc<Atom
         let line: Vec<u8> = rx_buf.drain(..=nl).collect();
         if let Ok(s) = std::str::from_utf8(&line[..line.len() - 1]) {
             if let Ok(ev) = serde_json::from_str::<LumoEvent>(s.trim()) {
-                match ev {
-                    LumoEvent::Workspaces { active, .. } => {
-                        active_ws.store(active.clamp(1, MAX_WORKSPACES), Ordering::Relaxed);
-                    }
+                // A23: pattern-match nao-exaustivo via if-let pra evitar
+                // acoplamento com variants futuros (ex: CloseDropdowns A21).
+                if let LumoEvent::Workspaces { active, .. } = ev {
+                    active_ws.store(active.clamp(1, MAX_WORKSPACES), Ordering::Relaxed);
                 }
             }
         }
@@ -1054,12 +1326,14 @@ struct LumoBar {
     battery_pct: u8,
     battery_info: BatteryInfo,
     wifi_on: bool,
+    wifi_info: WifiInfo, // A23
     running: bool,
     first_configured: bool,
     pointer: Option<ThemedPointer>,
     pointer_x: f32,
     pointer_pos: Option<(f64, f64)>,
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
+    wifi_hit_rect: Option<(f32, f32, f32, f32)>, // A23
     last_click_at: Option<Instant>,
     dropdown: DropdownActive,
     ipc_stream: Option<UnixStream>,
@@ -1074,6 +1348,8 @@ impl LumoBar {
         self.battery_info = read_battery_info();
         self.battery_pct = self.battery_info.pct;
         self.wifi_on = read_wifi();
+        // A23: leitura wifi via iw + ip.
+        self.wifi_info = read_wifi_info();
     }
 
     /// Altura efetiva da surface (bar + dropdown opcional).
@@ -1081,7 +1357,7 @@ impl LumoBar {
     fn computed_height(&self) -> u32 {
         match self.dropdown {
             DropdownActive::None => BAR_HEIGHT,
-            DropdownActive::Battery => {
+            DropdownActive::Battery | DropdownActive::Wifi => {
                 BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H as u32 + 8
             }
         }
@@ -1111,6 +1387,7 @@ impl LumoBar {
             date_str: format_date_pt(&now),
             dropdown: self.dropdown,
             battery_info: self.battery_info.clone(),
+            wifi_info: self.wifi_info.clone(), // A23
         };
 
         let stride = self.width as i32 * 4;
@@ -1131,6 +1408,7 @@ impl LumoBar {
         if let Some(mut px) = Pixmap::new(self.width, self.height) {
             let paint_result = paint_frame(&mut px, &snap);
             self.bat_hit_rect = paint_result.bat_hit_rect;
+            self.wifi_hit_rect = paint_result.wifi_hit_rect; // A23
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;
@@ -1293,7 +1571,7 @@ impl PointerHandler for LumoBar {
                     self.pointer_pos = None;
                 }
                 PointerEventKind::Press { button, serial, time } => {
-                    eprintln!("[lumo-bar] Press button={} serial={} time={} pos={:?} hit_rect={:?}", button, serial, time, ev.position, self.bat_hit_rect);
+                    eprintln!("[lumo-bar] Press button={} serial={} time={} pos={:?} bat_rect={:?} wifi_rect={:?}", button, serial, time, ev.position, self.bat_hit_rect, self.wifi_hit_rect);
                     if button != BTN_LEFT { continue; }
                     // A20.10: debounce 200ms (re-size surface multipla = bug visual)
                     let now = Instant::now();
@@ -1318,6 +1596,22 @@ impl PointerHandler for LumoBar {
                             };
                             self.update_size_and_redraw(qh);
                             handled = true;
+                        }
+                    }
+                    // A23: hit wifi icone toggle dropdown wifi.
+                    if !handled {
+                        if let Some((rx, ry, rw, rh)) = self.wifi_hit_rect {
+                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                self.dropdown = if self.dropdown == DropdownActive::Wifi {
+                                    DropdownActive::None
+                                } else {
+                                    // Feedback imediato: leitura no instante do click.
+                                    self.refresh();
+                                    DropdownActive::Wifi
+                                };
+                                self.update_size_and_redraw(qh);
+                                handled = true;
+                            }
                         }
                     }
                     if !handled && self.dropdown != DropdownActive::None {
@@ -1399,12 +1693,14 @@ fn main() {
         battery_pct: 100,
         battery_info: BatteryInfo::default(),
         wifi_on: true,
+        wifi_info: WifiInfo::default(), // A23
         running: true,
         first_configured: false,
         pointer: None,
         pointer_x: 0.0,
         pointer_pos: None,
         bat_hit_rect: None,
+        wifi_hit_rect: None, // A23
         last_click_at: None,
         dropdown: DropdownActive::None,
         ipc_stream: connect_ipc(),
