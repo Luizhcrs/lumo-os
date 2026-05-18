@@ -72,9 +72,12 @@ pub fn corner_color() -> [f32; 4] {
 }
 
 // Sombras pretas neutras atras de toplevels (independente de tema).
-pub const SHADOW_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.4];
-pub const SHADOW_OFFSET_Y: i32 = 8;
-pub const SHADOW_BLEED: i32 = 4;
+// Bug Luiz 2026-05-18 v2: sombra solida grande -> sutil. Alpha 0.4 -> 0.15,
+// offset 8 -> 3, bleed 4 -> 2. Tiny-skia SolidColor nao tem blur real;
+// solucao final eh shader SDF (futuro A37/A38). Por ora suaviza.
+pub const SHADOW_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.15];
+pub const SHADOW_OFFSET_Y: i32 = 3;
+pub const SHADOW_BLEED: i32 = 2;
 
 /// Cor de clear do framebuffer. Le LUMO_THEME do env e devolve linear
 /// pronto pra surface sRGB. A13: substitui constante `CLEAR_INK_DEEP`

@@ -368,8 +368,14 @@ fn paint_icon(canvas: &mut PixmapMut, icon: &DesktopIcon, accent_hex: u32) {
     let y = icon.screen_y;
 
     if icon.selected {
+        // Selecao envolve so ICON_SIZE + label (centralizada vs cell completa).
+        // Bug Luiz 2026-05-18: selecao parecia desalinhada por ser cell inteira.
         let sel = selection_color(accent_hex);
-        fill_rrect(canvas, x + 2.0, y + 2.0, CELL_W - 4.0, CELL_H - 4.0, 6.0, sel);
+        let sel_w = ICON_SIZE + 16.0;
+        let sel_h = ICON_SIZE + 28.0; // icone + label + padding
+        let sel_x = x + (CELL_W - sel_w) / 2.0;
+        let sel_y = y + (CELL_H - sel_h) / 2.0;
+        fill_rrect(canvas, sel_x, sel_y, sel_w, sel_h, 8.0, sel);
     }
 
     let ix = x + ICON_PAD_X;
