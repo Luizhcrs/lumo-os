@@ -96,7 +96,7 @@ impl LumoBar {
         let Some(s) = self.ipc_stream.as_mut() else { return };
         let mut payload = match serde_json::to_string(&LumoCommand::CloseDesktopMenu) {
             Ok(p) => p,
-            Err(_) => return,
+            Err(e) => { eprintln!("[lumo-bar] serialize CloseDesktopMenu falhou: {e}"); return; }
         };
         payload.push('\n');
         if let Err(e) = s.write_all(payload.as_bytes()) {
@@ -113,7 +113,7 @@ impl LumoBar {
         let Some(s) = self.ipc_stream.as_mut() else { return };
         let mut payload = match serde_json::to_string(&LumoCommand::CloseDropdowns) {
             Ok(p) => p,
-            Err(_) => return,
+            Err(e) => { eprintln!("[lumo-bar] serialize CloseDropdowns falhou: {e}"); return; }
         };
         payload.push('\n');
         if let Err(e) = s.write_all(payload.as_bytes()) {

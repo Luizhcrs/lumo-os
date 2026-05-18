@@ -91,9 +91,9 @@ impl LumoWallpaper {
         if magic != CACHE_MAGIC {
             return Err(anyhow!("magic invalido: {:?}", magic));
         }
-        let w = u32::from_le_bytes(data[4..8].try_into().unwrap()) as i32;
-        let h = u32::from_le_bytes(data[8..12].try_into().unwrap()) as i32;
-        let version = u32::from_le_bytes(data[12..16].try_into().unwrap());
+        let w = u32::from_le_bytes(data[4..8].try_into().expect("slice 4B garantido pelo bounds check")) as i32;
+        let h = u32::from_le_bytes(data[8..12].try_into().expect("slice 4B garantido pelo bounds check")) as i32;
+        let version = u32::from_le_bytes(data[12..16].try_into().expect("slice 4B garantido pelo bounds check"));
 
         if version != CACHE_VERSION {
             return Err(anyhow!("versao de cache incompativel: {version}"));

@@ -118,6 +118,9 @@ pub fn run() {
         cal_next_rect: None,
         cal_today_rect: None,
         cal_day_rects: Vec::new(),
+        // L5: battery interactive hit-rects.
+        bat_charge_limit_toggle_rect: None,
+        bat_profile_cycle_rect: None,
         // A31.2: wifi hit-rects.
         wifi_toggle_rect: None,
         wifi_disconnect_rect: None,
@@ -214,7 +217,7 @@ pub fn run() {
             use std::os::fd::AsFd;
             let fd = conn.as_fd();
             let mut pfd = [nix::poll::PollFd::new(fd, nix::poll::PollFlags::POLLIN)];
-            let _ = nix::poll::poll(&mut pfd, nix::poll::PollTimeout::try_from(50i32).unwrap());
+            let _ = nix::poll::poll(&mut pfd, nix::poll::PollTimeout::try_from(50i32).expect("50 e literal valido para PollTimeout"));
             let _ = guard.read();
         }
         if let Err(e) = queue.dispatch_pending(&mut state) {

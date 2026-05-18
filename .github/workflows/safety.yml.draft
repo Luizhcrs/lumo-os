@@ -1,0 +1,66 @@
+# safety.yml.draft — rascunho para L4 ativar renomeando para safety.yml
+#
+# Contém 3 jobs:
+#   1. miri     — detecta UB em crates puras (sem smithay)
+#   2. asan     — address sanitizer em lumo-ipc
+#   3. deny     — audit de advisories de segurança
+#
+# Requerimentos antes de ativar:
+#   - Adicionar toolchain nightly no rust-toolchain.toml ou no job
+#   - Garantir que lumo-ipc e lumo-animation nao dependem de smithay
+#   - Segredo GITHUB_TOKEN ja disponivel por default nos workflows
+
+name: Safety
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  miri:
+    name: Miri (UB detection)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nightly + miri
+        run: |
+          rustup toolchain install nightly --component miri
+          rustup override set nightly
+          cargo miri setup
+
+      - name: Run miri on pure crates
+        run: |
+          cargo +nightly miri test --workspace -p lumo-ipc -p lumo-animation
+        env:
+          MIRIFLAGS: "-Zmiri-strict-provenance"
+
+  asan:
+    name: AddressSanitizer (lumo-ipc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nightly
+        run: rustup toolchain install nightly
+
+      - name: Run tests with ASAN
+        run: |
+          cargo +nightly test --release -p lumo-ipc
+        env:
+          RUSTFLAGS: "-Z sanitizer=address"
+          RUSTDOCFLAGS: "-Z sanitizer=address"
+
+  deny:
+    name: cargo-deny (advisories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Check advisories
+        run: cargo deny check advisories

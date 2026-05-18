@@ -19,6 +19,7 @@ use smithay_client_toolkit::reexports::client::{
 };
 
 use lumo_foundation::current_colors;
+use lumo_ipc;
 
 use crate::desktop::state::{
     connect_ipc, drain_ipc_events, font_system, swash_cache, LumoDesktop, MenuActive, OUTPUT_H,
@@ -97,7 +98,7 @@ pub fn run() {
             use std::os::fd::AsFd;
             let fd = conn.as_fd();
             let mut pfd = [nix::poll::PollFd::new(fd, nix::poll::PollFlags::POLLIN)];
-            let _ = nix::poll::poll(&mut pfd, nix::poll::PollTimeout::try_from(50i32).unwrap());
+            let _ = nix::poll::poll(&mut pfd, nix::poll::PollTimeout::try_from(50i32).expect("50 e literal valido para PollTimeout"));
             let _ = guard.read();
         }
         if let Err(e) = queue.dispatch_pending(&mut state) {
@@ -120,7 +121,7 @@ pub fn run() {
         if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
             last_ipc_tick = Instant::now();
             if let Some(mut s) = state.ipc_stream.take() {
-                let (alive, close_menu, open_selected) = drain_ipc_events(&mut s, &mut state.ipc_rx_buf);
+                let (alive, close_menu, open_selected, theme_mode) = drain_ipc_events(&mut s, &mut state.ipc_rx_buf);
                 if alive {
                     state.ipc_stream = Some(s);
                 } else {
@@ -134,6 +135,13 @@ pub fn run() {
                 }
                 if open_selected {
                     state.icons.open_selected();
+                }
+                // L6: ThemeReloaded -> recarrega palette e redesenha.
+                if let Some(mode) = theme_mode {
+                    let tokens = lumo_foundation::LumoTokens::load_from_disk();
+                    state.palette = tokens.resolve();
+                    eprintln!("[lumo-desktop] L6: ThemeReloaded {:?} -> redraw", mode);
+                    state.need_redraw = true;
                 }
             }
         }

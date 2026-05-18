@@ -94,7 +94,7 @@ impl PointerHandler for LumoDesktop {
                         let mut closed_ctx = false;
                         if let Some((_, cx, cy)) = self.icons.ctx_menu {
                             if let Some(item_idx) = ctx_menu_hit(px, py, cx, cy) {
-                                let icon_idx = self.icons.ctx_menu.unwrap().0;
+                                let icon_idx = self.icons.ctx_menu.map(|(i, _, _)| i).expect("ctx_menu garantido pelo if-let acima");
                                 handle_ctx_item(&mut self.icons, icon_idx, item_idx);
                                 self.icons.ctx_menu = None;
                                 self.icons.scan();

@@ -180,8 +180,8 @@ pub fn draw_text(
 ) {
     let fs_mutex = font_system();
     let sc_mutex = swash_cache();
-    let mut fs = fs_mutex.lock().unwrap();
-    let mut sc = sc_mutex.lock().unwrap();
+    let mut fs = fs_mutex.lock().expect("FontSystem mutex: sem poisoning esperado");
+    let mut sc = sc_mutex.lock().expect("SwashCache mutex: sem poisoning esperado");
     let metrics = Metrics::new(size, size * 1.4);
     let mut buffer = CosmicBuffer::new(&mut fs, metrics);
     let family_name = current_family().to_string();
@@ -249,7 +249,7 @@ pub fn send_close_dropdowns(stream: &mut Option<UnixStream>) {
     let Some(s) = stream.as_mut() else { return };
     let mut payload = match serde_json::to_string(&LumoCommand::CloseDropdowns) {
         Ok(s) => s,
-        Err(_) => return,
+        Err(e) => { eprintln!("[lumo-desktop] serialize CloseDropdowns falhou: {e}"); return; }
     };
     payload.push('\n');
     if let Err(e) = s.write_all(payload.as_bytes()) {
@@ -261,11 +261,13 @@ pub fn send_close_dropdowns(stream: &mut Option<UnixStream>) {
 }
 
 /// A40: drena eventos do compositor. Retorna (alive, close_menu, open_selected).
-pub fn drain_ipc_events(stream: &mut UnixStream, rx_buf: &mut Vec<u8>) -> (bool, bool, bool) {
+/// Returns (alive, close_menu, open_selected, theme_reloaded).
+pub fn drain_ipc_events(stream: &mut UnixStream, rx_buf: &mut Vec<u8>) -> (bool, bool, bool, Option<lumo_ipc::ThemeMode>) {
     let mut tmp = [0u8; 256];
     let mut alive = true;
     let mut close_menu = false;
     let mut open_selected = false;
+    let mut theme_reloaded: Option<lumo_ipc::ThemeMode> = None;
     loop {
         match stream.read(&mut tmp) {
             Ok(0) => { alive = false; break; }
@@ -281,12 +283,13 @@ pub fn drain_ipc_events(stream: &mut UnixStream, rx_buf: &mut Vec<u8>) -> (bool,
                 match ev {
                     LumoEvent::CloseDesktopMenu => close_menu = true,
                     LumoEvent::DesktopOpenSelected => open_selected = true,
+                    LumoEvent::ThemeReloaded { mode } => theme_reloaded = Some(mode),
                     _ => {}
                 }
             }
         }
     }
-    (alive, close_menu, open_selected)
+    (alive, close_menu, open_selected, theme_reloaded)
 }
 
 // ============================================================

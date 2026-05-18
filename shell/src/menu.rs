@@ -189,7 +189,7 @@ pub fn rgba_hex(hex: u32, alpha: u8) -> Color {
     let g = ((hex >> 8) & 0xff) as f32 / 255.0;
     let b = (hex & 0xff) as f32 / 255.0;
     let a = alpha as f32 / 255.0;
-    Color::from_rgba(r, g, b, a).unwrap()
+    Color::from_rgba(r, g, b, a).expect("r,g,b,a derivados de u8: sempre em [0,1]")
 }
 
 pub fn opaque(hex: u32) -> Color {

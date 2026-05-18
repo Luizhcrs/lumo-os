@@ -80,3 +80,27 @@ da sessao grafica.
   loop em `WAYLAND_DISPLAY` para conectar imediato quando compositor subir
 - `lumo-desktop.service` / `lumo-osd.service`: mesmo padrao
 - Socket activation: IPC socket criado por systemd antes do compositor
+
+## Safety smoke test (valgrind)
+
+O script `scripts/safety-check.sh` roda uma sessao de 30s do compositor
+sob valgrind e reporta leaks definitivos.
+
+### Prerequisitos
+
+```
+sudo pacman -S valgrind
+cargo build --release -p lumo-wm
+```
+
+### Uso
+
+```
+./scripts/safety-check.sh
+# ou com path explicito:
+./scripts/safety-check.sh ./target/release/lumo-wm
+```
+
+O log completo e salvo em `/tmp/lumo-valgrind.log`.
+A secao `definitely lost` indica leaks reais que precisam de fix.
+Leaks `still reachable` sao normais em shutdown (buffers GL, smithay internals).

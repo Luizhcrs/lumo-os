@@ -23,7 +23,7 @@ fn write_led(name: &str, on: bool) {
 
 fn glob_simple(pattern: &str) -> Result<Vec<String>, std::io::Error> {
     let dir = std::path::Path::new("/sys/class/leds");
-    let parts: Vec<&str> = pattern.rsplit("/").next().unwrap().splitn(2, "*").collect();
+    let parts: Vec<&str> = pattern.rsplit("/").next().unwrap_or("").splitn(2, "*").collect();
     let prefix = parts.get(0).copied().unwrap_or("");
     let suffix = parts.get(1).copied().unwrap_or("");
     let mut out = Vec::new();
@@ -59,7 +59,7 @@ impl SeatHandler for LumoState {
         let (app_id, title, pid) = if let Some(surf) = focused {
             let (app_id, title) = wl_compositor::with_states(surf, |states| {
                 if let Some(data) = states.data_map.get::<XdgToplevelSurfaceData>() {
-                    let lock = data.lock().unwrap();
+                    let lock = data.lock().expect("XdgToplevelSurfaceData mutex: nao deve envenenar");
                     (
                         lock.app_id.clone().unwrap_or_default(),
                         lock.title.clone().unwrap_or_default(),

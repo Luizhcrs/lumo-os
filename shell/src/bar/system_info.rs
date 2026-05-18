@@ -88,6 +88,10 @@ pub fn read_battery_info() -> BatteryInfo {
         voltage_now_mv: voltage_mv,
         model: sys_read_string(&format!("{}/model_name", dir)),
         manufacturer: sys_read_string(&format!("{}/manufacturer", dir)),
+        current_now: current_now_ua,
+        charge_limit: sys_read_u32(&format!("{}/charge_control_end_threshold", dir)).map(|v| v.clamp(0, 100) as u8),
+        platform_profile: sys_read_string("/sys/firmware/acpi/platform_profile"),
+        cpu_temp_c: read_cpu_temp_celsius(),
     }
 }
 
@@ -297,14 +301,14 @@ pub fn read_wifi() -> bool {
 /// Constroi grid 6x7 do mes. Coluna 0 = Domingo (padrao PT-BR D S T Q Q S S).
 pub fn month_grid_for(year: i32, month: u32) -> Vec<Vec<Option<u32>>> {
     use chrono::NaiveDate;
-    let first = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+    let first = NaiveDate::from_ymd_opt(year, month, 1).expect("year e month validados pelo caller; dia 1 sempre existe");
     let first_weekday = first.weekday().num_days_from_sunday() as usize;
     let next_month_first = if month == 12 {
-        NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap()
+        NaiveDate::from_ymd_opt(year + 1, 1, 1).expect("janeiro dia 1 sempre existe")
     } else {
-        NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap()
+        NaiveDate::from_ymd_opt(year, month + 1, 1).expect("mes + 1 com dia 1 valido quando month < 12")
     };
-    let days_in_month = next_month_first.pred_opt().unwrap().day();
+    let days_in_month = next_month_first.pred_opt().expect("pred_opt de Jan 1 nunca e None para datas razoaveis").day();
 
     let mut grid = vec![vec![None; 7]; 6];
     let mut day = 1u32;
@@ -436,4 +440,37 @@ pub fn nm_disconnect_iface(iface: String) {
             Err(e) => eprintln!("[lumo-bar] nmcli spawn falha: {}", e),
         }
     });
+}
+
+// ============================================================
+// L5: CPU thermal + platform profile helpers.
+// ============================================================
+
+/// Returns x86_pkg_temp (or first TCPU zone) temperature in Celsius.
+/// Returns None if no suitable zone found.
+pub fn read_cpu_temp_celsius() -> Option<f32> {
+    for idx in 0..16 {
+        let base = format!("/sys/class/thermal/thermal_zone{}", idx);
+        let type_path = format!("{}/type", base);
+        let temp_path = format!("{}/temp", base);
+        let kind = sys_read_string(&type_path).unwrap_or_default();
+        let lower = kind.to_ascii_lowercase();
+        if lower.contains("x86_pkg") || lower.contains("tcpu") {
+            if let Some(raw) = sys_read_u32(&temp_path) {
+                return Some(raw as f32 / 1000.0);
+            }
+        }
+    }
+    None
+}
+
+/// Reads current platform_profile, cycles to the next in the ordered list,
+/// writes it, and returns the new value as a String.
+pub fn platform_profile_cycle_next() -> Option<String> {
+    let order = ["low-power", "quiet", "balanced", "performance"];
+    let current = sys_read_string("/sys/firmware/acpi/platform_profile")?;
+    let idx = order.iter().position(|&s| s == current.trim()).unwrap_or(2);
+    let next = order[(idx + 1) % order.len()];
+    std::fs::write("/sys/firmware/acpi/platform_profile", next).ok()?;
+    Some(next.to_string())
 }
