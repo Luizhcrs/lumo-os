@@ -3689,6 +3689,7 @@ dependencies = [
  "serde_json",
  "smithay-client-toolkit",
  "tiny-skia",
+ "zbus",
 ]
 
 [[package]]

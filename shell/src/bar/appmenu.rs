@@ -1,30 +1,29 @@
-//! bar/appmenu.rs - Integracao DBus appmenu via com.canonical.dbusmenu.
+//! bar/appmenu.rs - STUB (C5 menubar pendente nova sessao com API zbus 5 correta).
 //!
-//! C5 WIP: internals pendentes de correcao da API zbus 5 (feature blocking-api).
-//! Interface publica estavel, stubs retornam default silencioso.
+//! Interface publica estavel: AppMenuItem + AppMenuState retornam vazio.
 
-/// Item de menu top-level exportado pelo app.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AppMenuItem {
     pub id: i32,
     pub label: String,
+    pub enabled: bool,
 }
 
-/// Cache do menu atual.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AppMenuState {
+    pub items: Vec<AppMenuItem>,
     pub service: String,
     pub object_path: String,
-    pub items: Vec<AppMenuItem>,
-    pub app_id: String,
 }
 
 impl AppMenuState {
-    pub fn fetch(_pid: u32, _app_id: &str) -> Self {
+    pub fn fetch(_pid: u32) -> Self {
         Self::default()
     }
-    pub fn activate(&self, _item_id: i32) {}
-    pub fn fetch_submenu(&self, _parent_id: i32) -> Vec<AppMenuItem> {
+
+    pub fn fetch_submenu(&self, _id: i32) -> Vec<AppMenuItem> {
         Vec::new()
     }
+
+    pub fn activate(&self, _id: i32) {}
 }
