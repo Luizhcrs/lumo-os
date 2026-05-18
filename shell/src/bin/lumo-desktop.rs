@@ -179,17 +179,8 @@ fn current_family() -> &'static str {
 // Color helpers (alinhados com bar).
 // ============================================================
 
-fn rgba_hex(hex: u32, alpha: u8) -> Color {
-    let r = ((hex >> 16) & 0xff) as f32 / 255.0;
-    let g = ((hex >> 8) & 0xff) as f32 / 255.0;
-    let b = (hex & 0xff) as f32 / 255.0;
-    let a = alpha as f32 / 255.0;
-    Color::from_rgba(r, g, b, a).unwrap()
-}
-
-fn opaque(hex: u32) -> Color {
-    rgba_hex(hex, 0xff)
-}
+// A27: `rgba_hex` e `opaque` migraram pro modulo `menu` compartilhado
+// (callers diretos foram substituidos por `menu::draw_menu`).
 
 fn to_cosmic(c: Color) -> CosmicColor {
     let r = (c.red() * 255.0).round().clamp(0.0, 255.0) as u8;

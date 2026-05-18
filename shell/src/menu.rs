@@ -1,3 +1,8 @@
+// Cada bin compila este modulo via `#[path = "../menu.rs"] mod menu;`,
+// entao itens usados so por um dos bins viram dead_code no outro.
+// `allow(dead_code)` evita ruido nos builds.
+#![allow(dead_code)]
+
 //! Menu compartilhado entre lumo-bar (menu Lumo) e lumo-desktop (right-click).
 //!
 //! A27: extraido como modulo unico pra evitar duplicacao (memory

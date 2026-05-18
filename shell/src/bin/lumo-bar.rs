@@ -71,6 +71,11 @@ use smithay_client_toolkit::reexports::client::{
 use lumo_foundation::{current_colors, LumoColors, LumoTheme};
 use lumo_ipc::{default_socket_path, LumoCommand, LumoEvent, MAX_WORKSPACES};
 
+// A27: modulo compartilhado pra menu Apple-style (callbacks render).
+// Memory feedback_lumo_arquitetura_clean: arquivo unico shell/src/menu.rs.
+#[path = "../menu.rs"]
+mod menu;
+
 // ============================================================
 // Layout constants (lapidado: cada valor justificado).
 // ============================================================
@@ -170,6 +175,28 @@ const CAL_TODAY_BTN_H: f32 = 22.0;
 const CAL_FOOTER_H: f32 = 30.0;
 const CAL_HEADER_H: f32 = 22.0;
 const FONT_CAL_NAV: f32 = 13.0;
+
+// ============================================================
+// A27: Menu Lumo (click brand "Lumo" da pill esquerda).
+// ============================================================
+//
+// Itens estilo macOS Apple-menu. Largura 240 = cabe textos longos PT-BR
+// ("Sobre este Galaxy Book...", "Preferencias do Sistema...") com folga.
+// Altura computada exata via `menu::menu_height` (2 separators + 10 items).
+// Render compartilhado com lumo-desktop via `menu::draw_menu`.
+const MENU_LUMO_W: f32 = menu::MENU_W_LUMO;
+const MENU_LUMO_ITEMS: &[menu::MenuItem] = &[
+    menu::MenuItem::action("Sobre este Galaxy Book..."),
+    menu::MenuItem::action("Software Update..."),
+    menu::MenuItem::action("Lumo Store"),
+    menu::MenuItem::separator(),
+    menu::MenuItem::action("Preferencias do Sistema..."),
+    menu::MenuItem::separator(),
+    menu::MenuItem::action("Bloquear tela"),
+    menu::MenuItem::action("Suspender"),
+    menu::MenuItem::action("Reiniciar..."),
+    menu::MenuItem::action("Desligar..."),
+];
 
 // ============================================================
 // Color helpers.
@@ -591,6 +618,7 @@ pub enum DropdownActive {
     Battery,
     Wifi,     // A23
     DateTime, // A24 - calendario + hora detalhada
+    LumoMenu, // A27 - menu Apple-style abaixo brand "Lumo" pill esquerda
 }
 
 // ============================================================
@@ -1382,6 +1410,8 @@ struct BarSnapshot {
     battery_info: BatteryInfo,
     wifi_info: WifiInfo, // A23
     datetime_info: DateTimeInfo, // A24
+    /// A27: indice do item em hover no menu Lumo (usize::MAX = nenhum).
+    lumo_menu_hover_idx: usize,
 }
 
 /// Resultado de paint_frame: posicoes calculadas pra hit-test no proximo frame.
@@ -1390,6 +1420,7 @@ struct PaintResult {
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
     wifi_hit_rect: Option<(f32, f32, f32, f32)>,     // A23
     datetime_hit_rect: Option<(f32, f32, f32, f32)>, // A24
+    lumo_hit_rect: Option<(f32, f32, f32, f32)>,     // A27: brand "Lumo" pill esquerda
     // A26: hit-tests do calendar interativo (so populados quando dropdown=DateTime).
     cal_prev_rect: Option<(f32, f32, f32, f32)>,
     cal_next_rect: Option<(f32, f32, f32, f32)>,
@@ -1450,11 +1481,20 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
         draw_pill_bg(&mut canvas, pill_l_x, pill_y, pill_l_w, PILL_H, pill_bg, 0);
 
         let mut cx = pill_l_x + PILL_PAD_X;
+        // A27: hit-rect cobre brand dot + texto "Lumo" (4px folga em cada lado).
+        let lumo_hit_x_start = cx - 4.0;
         // Brand dot (accent emerald/blue).
         fill_circle(&mut canvas, cx + BRAND_DOT_RADIUS, pill_cy, BRAND_DOT_RADIUS, accent);
         cx += BRAND_DOT_RADIUS * 2.0 + PILL_GAP;
         // "Lumo" bold.
         draw_text(&mut canvas, cx, text_top, "Lumo", FONT_PILL, pill_fg, true);
+        let lumo_hit_x_end = cx + lumo_w + 4.0;
+        result.lumo_hit_rect = Some((
+            lumo_hit_x_start,
+            pill_y,
+            lumo_hit_x_end - lumo_hit_x_start,
+            PILL_H,
+        ));
         cx += lumo_w + PILL_GAP;
         // Separator dot middle.
         fill_circle(&mut canvas, cx + SEP_DOT_RADIUS, pill_cy, SEP_DOT_RADIUS, pill_sep);
@@ -1569,6 +1609,27 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
                 result.cal_next_rect = hits.next_rect;
                 result.cal_today_rect = hits.today_rect;
                 result.cal_day_rects = hits.day_rects;
+            }
+        }
+        // A27: dropdown menu Lumo abaixo da pill esquerda (alinhado a esquerda da pill).
+        DropdownActive::LumoMenu => {
+            if let Some((rx, ry, _rw, rh)) = result.lumo_hit_rect {
+                let dropdown_x = rx.max(PILL_MARGIN_X);
+                let dropdown_y = ry + rh + DROPDOWN_GAP;
+                let mut canvas = pixmap.as_mut();
+                menu::draw_menu(
+                    &mut canvas,
+                    dropdown_x,
+                    dropdown_y,
+                    MENU_LUMO_W,
+                    MENU_LUMO_ITEMS,
+                    snap.lumo_menu_hover_idx,
+                    palette,
+                    |c, x, y, w, h, r, color| fill_rrect(c, x, y, w, h, r, color),
+                    |c, x, y, label, size, color| {
+                        draw_text(c, x, y, label, size, color, false);
+                    },
+                );
             }
         }
         DropdownActive::None => {}
@@ -1708,6 +1769,8 @@ struct LumoBar {
     bat_hit_rect: Option<(f32, f32, f32, f32)>,
     wifi_hit_rect: Option<(f32, f32, f32, f32)>,     // A23
     datetime_hit_rect: Option<(f32, f32, f32, f32)>, // A24
+    lumo_hit_rect: Option<(f32, f32, f32, f32)>,     // A27
+    lumo_menu_hover_idx: usize,                      // A27
     // A26: hit-tests calendar interativo.
     cal_prev_rect: Option<(f32, f32, f32, f32)>,
     cal_next_rect: Option<(f32, f32, f32, f32)>,
@@ -1771,11 +1834,24 @@ impl LumoBar {
         self.wifi_info = read_wifi_info();
     }
 
+    /// A27: hit-test absoluto sobre o menu Lumo aberto. Origem do menu
+    /// segue mesma logica do paint (`rx.max(PILL_MARGIN_X)` + dropdown_y
+    /// abaixo da pill). Retorna Some(idx) so se item clicavel sob cursor.
+    fn lumo_menu_hit_test(&self, px: f32, py: f32) -> Option<usize> {
+        let (rx, ry, _rw, rh) = self.lumo_hit_rect?;
+        let mx = rx.max(PILL_MARGIN_X);
+        let my = ry + rh + DROPDOWN_GAP;
+        menu::hit_test(MENU_LUMO_ITEMS, mx, my, MENU_LUMO_W, px, py)
+    }
+
     /// Altura efetiva da surface (bar + dropdown opcional).
     /// Reserva exclusive_zone original = BAR_HEIGHT (toplevels nao afetados).
     /// A20.11 + A24: surface ja eh sempre altura max, helper so pra referencia.
     fn computed_height(&self) -> u32 {
-        let max_drop = DROPDOWN_H.max(DROPDOWN_DATETIME_H) as u32; // A24
+        let lumo_menu_h = menu::menu_height(MENU_LUMO_ITEMS) as u32; // A27
+        let max_drop = DROPDOWN_H
+            .max(DROPDOWN_DATETIME_H)
+            .max(lumo_menu_h as f32) as u32; // A24+A27
         match self.dropdown {
             DropdownActive::None => BAR_HEIGHT,
             DropdownActive::Battery | DropdownActive::Wifi => {
@@ -1783,6 +1859,9 @@ impl LumoBar {
             }
             DropdownActive::DateTime => {
                 BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_DATETIME_H as u32 + 8
+            }
+            DropdownActive::LumoMenu => {
+                BAR_HEIGHT + DROPDOWN_GAP as u32 + lumo_menu_h + 8
             }
         }
         .max(BAR_HEIGHT + DROPDOWN_GAP as u32 + max_drop + 8)
@@ -1814,6 +1893,7 @@ impl LumoBar {
             battery_info: self.battery_info.clone(),
             wifi_info: self.wifi_info.clone(),  // A23
             datetime_info: read_datetime_info(self.viewed_year, self.viewed_month, self.selected_day), // A24+A26: realtime + viewed/selected
+            lumo_menu_hover_idx: self.lumo_menu_hover_idx, // A27
         };
 
         let stride = self.width as i32 * 4;
@@ -1836,6 +1916,7 @@ impl LumoBar {
             self.bat_hit_rect = paint_result.bat_hit_rect;
             self.wifi_hit_rect = paint_result.wifi_hit_rect;     // A23
             self.datetime_hit_rect = paint_result.datetime_hit_rect; // A24
+            self.lumo_hit_rect = paint_result.lumo_hit_rect;     // A27
             // A26: calendar hit-tests salvos pra pointer_frame consumir.
             self.cal_prev_rect = paint_result.cal_prev_rect;
             self.cal_next_rect = paint_result.cal_next_rect;
@@ -1934,8 +2015,11 @@ impl LayerShellHandler for LumoBar {
         let (w, h) = cfg.new_size;
         // A19.13: forca 1920 sempre (compositor passa width parcial as vezes)
         self.width = 1920;
-        // A20.11 + A24: altura max cobre maior dropdown (DateTime 252 > Battery/Wifi 150).
-        let max_drop = DROPDOWN_H.max(DROPDOWN_DATETIME_H) as u32;
+        // A20.11 + A24 + A27: altura max cobre maior dropdown (DateTime > Battery/Wifi > LumoMenu).
+        let lumo_menu_h = menu::menu_height(MENU_LUMO_ITEMS) as u32;
+        let max_drop = DROPDOWN_H
+            .max(DROPDOWN_DATETIME_H)
+            .max(lumo_menu_h as f32) as u32;
         self.height = BAR_HEIGHT + DROPDOWN_GAP as u32 + max_drop + 8;
         self.first_configured = true;
         eprintln!("[lumo-bar] configured cfg_size=({},{}) FORCED width=1920 height={}", w, h, self.height);
@@ -2000,9 +2084,26 @@ impl PointerHandler for LumoBar {
                 PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
                     self.pointer_x = ev.position.0 as f32;
                     self.pointer_pos = Some(ev.position);
+                    // A27: hover tracking dentro do menu Lumo aberto.
+                    if self.dropdown == DropdownActive::LumoMenu {
+                        let new_idx = self.lumo_menu_hit_test(
+                            ev.position.0 as f32,
+                            ev.position.1 as f32,
+                        ).unwrap_or(usize::MAX);
+                        if new_idx != self.lumo_menu_hover_idx {
+                            self.lumo_menu_hover_idx = new_idx;
+                            self.update_size_and_redraw(qh);
+                        }
+                    }
                 }
                 PointerEventKind::Leave { .. } => {
                     self.pointer_pos = None;
+                    if self.dropdown == DropdownActive::LumoMenu
+                        && self.lumo_menu_hover_idx != usize::MAX
+                    {
+                        self.lumo_menu_hover_idx = usize::MAX;
+                        self.update_size_and_redraw(qh);
+                    }
                 }
                 PointerEventKind::Press { button, serial, time } => {
                     eprintln!("[lumo-bar] Press button={} serial={} time={} pos={:?} bat_rect={:?} wifi_rect={:?}", button, serial, time, ev.position, self.bat_hit_rect, self.wifi_hit_rect);
@@ -2142,8 +2243,38 @@ impl PointerHandler for LumoBar {
                             }
                         }
                     }
+                    // A27: click no brand "Lumo" pill esquerda -> toggle menu Lumo.
+                    if !handled {
+                        if let Some((rx, ry, rw, rh)) = self.lumo_hit_rect {
+                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                self.dropdown = if self.dropdown == DropdownActive::LumoMenu {
+                                    DropdownActive::None
+                                } else {
+                                    self.lumo_menu_hover_idx = usize::MAX;
+                                    self.send_ipc_close_desktop_menu(); // A26 mutex
+                                    DropdownActive::LumoMenu
+                                };
+                                self.update_size_and_redraw(qh);
+                                handled = true;
+                            }
+                        }
+                    }
+                    // A27: click em item do menu Lumo aberto -> log stub + fecha.
+                    if !handled && self.dropdown == DropdownActive::LumoMenu {
+                        if let Some(idx) = self.lumo_menu_hit_test(px, py) {
+                            eprintln!(
+                                "[lumo-bar] menu Lumo item: '{}' (stub)",
+                                MENU_LUMO_ITEMS[idx].label
+                            );
+                            self.dropdown = DropdownActive::None;
+                            self.lumo_menu_hover_idx = usize::MAX;
+                            self.update_size_and_redraw(qh);
+                            handled = true;
+                        }
+                    }
                     if !handled && self.dropdown != DropdownActive::None {
                         self.dropdown = DropdownActive::None;
+                        self.lumo_menu_hover_idx = usize::MAX; // A27
                         self.update_size_and_redraw(qh);
                     }
                 }
@@ -2186,7 +2317,14 @@ fn main() {
         layer_shell.create_layer_surface(&qh, surface, Layer::Top, Some("lumo-bar"), None);
     layer.set_anchor(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT);
     // A24: altura max = MAX(DROPDOWN_H, DROPDOWN_DATETIME_H). DateTime mais alto (252).
-    let surface_max_h = BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H.max(DROPDOWN_DATETIME_H) as u32 + 8;
+    // A27: cobre tambem altura do menu Lumo.
+    let lumo_menu_h_main = menu::menu_height(MENU_LUMO_ITEMS) as u32;
+    let surface_max_h = BAR_HEIGHT
+        + DROPDOWN_GAP as u32
+        + DROPDOWN_H
+            .max(DROPDOWN_DATETIME_H)
+            .max(lumo_menu_h_main as f32) as u32
+        + 8;
     layer.set_size(1920, surface_max_h);
     layer.set_exclusive_zone(BAR_HEIGHT as i32);
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
@@ -2227,6 +2365,8 @@ fn main() {
         bat_hit_rect: None,
         wifi_hit_rect: None,     // A23
         datetime_hit_rect: None, // A24
+        lumo_hit_rect: None,     // A27
+        lumo_menu_hover_idx: usize::MAX, // A27
         cal_prev_rect: None,
         cal_next_rect: None,
         cal_today_rect: None,
@@ -2293,6 +2433,7 @@ fn main() {
                 // A25: CloseDropdowns IPC (lumo-desktop click esquerdo desktop).
                 if close_dropdowns && state.dropdown != DropdownActive::None {
                     state.dropdown = DropdownActive::None;
+                    state.lumo_menu_hover_idx = usize::MAX; // A27
                     state.update_size_and_redraw(&qh);
                     eprintln!("[lumo-bar] CloseDropdowns recebido -> dropdown fechado");
                 }
