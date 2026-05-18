@@ -123,6 +123,20 @@ impl LumoBar {
                     );
                 }
             }
+            DropdownActive::Brightness => {
+                if let Some((rx, ry, rw, rh)) = self.brightness_hit_rect {
+                    let dx = (rx + rw / 2.0 - DROPDOWN_BRIGHTNESS_W / 2.0)
+                        .max(PILL_MARGIN_X)
+                        .min(self.width as f32 - PILL_MARGIN_X - DROPDOWN_BRIGHTNESS_W);
+                    let dy = ry + rh + DROPDOWN_GAP;
+                    region.add(
+                        dx.floor() as i32 - 8,
+                        dy.floor() as i32 - 4,
+                        DROPDOWN_BRIGHTNESS_W.ceil() as i32 + 16,
+                        DROPDOWN_BRIGHTNESS_H.ceil() as i32 + 16,
+                    );
+                }
+            }
         }
 
         self.layer

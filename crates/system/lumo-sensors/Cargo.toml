@@ -1,0 +1,11 @@
+[package]
+name = "lumo-sensors"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo OS sysfs sensor registry for Galaxy Book 4"
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+tempfile = "3"

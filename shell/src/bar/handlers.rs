@@ -29,7 +29,7 @@ use tiny_skia::Pixmap;
 use crate::bar::dropdowns::DropdownActive;
 use lumo_animation::{AnimCurve, LAAnimator, LACurve};
 use crate::bar::state::{paint_frame, BarSnapshot, LumoBar};
-use crate::bar::system_info::{format_date_pt, read_battery_info, read_datetime_info, read_wifi, read_wifi_info};
+use crate::bar::system_info::{format_date_pt, read_battery_info, read_brightness_info, read_datetime_info, read_wifi, read_wifi_info};
 use crate::bar::tokens::*;
 use crate::menu;
 
@@ -38,6 +38,7 @@ impl LumoBar {
         // A20: leitura completa /sys/class/power_supply.
         self.battery_info = read_battery_info();
         self.battery_pct = self.battery_info.pct;
+        self.brightness_info = read_brightness_info();
         self.wifi_on = read_wifi();
         // A23: leitura wifi via iw + ip.
         self.wifi_info = read_wifi_info();
@@ -102,6 +103,9 @@ impl LumoBar {
             DropdownActive::LumoMenu => {
                 BAR_HEIGHT + DROPDOWN_GAP as u32 + lumo_menu_h + 8
             }
+            DropdownActive::Brightness => {
+                BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_BRIGHTNESS_H as u32 + 8
+            }
         }
         .max(BAR_HEIGHT + DROPDOWN_GAP as u32 + max_drop + 8)
     }
@@ -130,6 +134,7 @@ impl LumoBar {
             dropdown: self.dropdown,
             battery_info: self.battery_info.clone(),
             wifi_info: self.wifi_info.clone(),  // A23
+            brightness_info: self.brightness_info.clone(), // L5
             datetime_info: read_datetime_info(self.viewed_year, self.viewed_month, self.selected_day), // A24+A26
             lumo_menu_hover_idx: self.lumo_menu_hover_idx, // A27
             // C5: appmenu do app em foco.
@@ -173,6 +178,13 @@ impl LumoBar {
             self.cal_next_rect = paint_result.cal_next_rect;
             self.cal_today_rect = paint_result.cal_today_rect;
             self.cal_day_rects = paint_result.cal_day_rects;
+            // L5: battery dropdown interactive hit-rects.
+            self.bat_charge_limit_toggle_rect = paint_result.bat_charge_limit_toggle_rect;
+            self.bat_profile_cycle_rect = paint_result.bat_profile_cycle_rect;
+            self.brightness_hit_rect = paint_result.brightness_hit_rect;
+            self.brightness_slider_rect = paint_result.brightness_slider_rect;
+            self.brightness_preset_day_rect = paint_result.brightness_preset_day_rect;
+            self.brightness_preset_night_rect = paint_result.brightness_preset_night_rect;
             // A31.2: wifi hit-rects.
             self.wifi_toggle_rect = paint_result.wifi_toggle_rect;
             self.wifi_disconnect_rect = paint_result.wifi_disconnect_rect;

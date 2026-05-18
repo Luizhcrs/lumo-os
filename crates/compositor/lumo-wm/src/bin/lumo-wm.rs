@@ -159,6 +159,9 @@ fn main() -> Result<()> {
 
     let mut state = LumoState::new(display_handle, event_loop.handle(), socket_name.clone());
 
+    // L5: lid watcher (Galaxy Book 4) - best-effort, no-op on other HW.
+    lumo_wm::handlers::lid::register_lid_watcher(&event_loop.handle());
+
     // IPC socket: best-effort. Falha = avisa e continua sem.
     match lumo_wm::ipc::init(event_loop.handle()) {
         Ok(ipc) => {

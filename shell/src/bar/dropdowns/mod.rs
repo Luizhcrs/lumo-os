@@ -5,6 +5,7 @@
 //! abstrato "DropdownProvider".
 
 pub mod battery;
+pub mod brightness;
 pub mod datetime;
 pub mod lumo_menu;
 pub mod wifi;
@@ -14,6 +15,7 @@ pub mod wifi;
 pub enum DropdownActive {
     None,
     Battery,
+    Brightness, // L5
     Wifi,     // A23
     DateTime, // A24 - calendario + hora detalhada
     LumoMenu, // A27 - menu Apple-style abaixo brand "Lumo" pill esquerda

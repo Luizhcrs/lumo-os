@@ -474,3 +474,51 @@ pub fn platform_profile_cycle_next() -> Option<String> {
     std::fs::write("/sys/firmware/acpi/platform_profile", next).ok()?;
     Some(next.to_string())
 }
+
+// ============================================================
+// L5: Brightness info.
+// ============================================================
+
+pub fn read_brightness_info() -> crate::bar::dropdowns::brightness::BrightnessInfo {
+    let dirs = [
+        "/sys/class/backlight/intel_backlight",
+        "/sys/class/backlight/amdgpu_bl0",
+        "/sys/class/backlight/acpi_video0",
+    ];
+    for dir in &dirs {
+        let cur_path = format!("{}/brightness", dir);
+        let max_path = format!("{}/max_brightness", dir);
+        if let (Some(cur), Some(max)) = (sys_read_u32(&cur_path), sys_read_u32(&max_path)) {
+            if max > 0 {
+                let pct = ((cur as f32 / max as f32) * 100.0).round().clamp(0.0, 100.0) as u8;
+                return crate::bar::dropdowns::brightness::BrightnessInfo { pct };
+            }
+        }
+    }
+    crate::bar::dropdowns::brightness::BrightnessInfo::default()
+}
+
+/// Sets backlight brightness from percentage 0-100 via sysfs direct write.
+/// Requires group video or polkit rule.
+pub fn set_brightness_pct(pct: u8) {
+    let dirs = [
+        "/sys/class/backlight/intel_backlight",
+        "/sys/class/backlight/amdgpu_bl0",
+        "/sys/class/backlight/acpi_video0",
+    ];
+    for dir in &dirs {
+        let max_path = format!("{}/max_brightness", dir);
+        let cur_path = format!("{}/brightness", dir);
+        if let Some(max) = sys_read_u32(&max_path) {
+            if max > 0 {
+                let raw = ((pct as f32 / 100.0) * max as f32).round() as u32;
+                let raw = raw.max(1);
+                if std::fs::write(&cur_path, raw.to_string()).is_ok() {
+                    eprintln!("[lumo-bar] L5 brightness: {}% = {}/{}", pct, raw, max);
+                    return;
+                }
+            }
+        }
+    }
+    eprintln!("[lumo-bar] L5 brightness: no backlight found");
+}

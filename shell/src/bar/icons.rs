@@ -217,3 +217,41 @@ pub fn battery_total_width() -> f32 {
 pub fn draw_brand_dot(canvas: &mut PixmapMut, cx: f32, cy: f32, accent: Color) {
     fill_circle(canvas, cx, cy, BRAND_DOT_RADIUS, accent);
 }
+
+// ============================================================
+// L5: Brightness sun icon (simple circle + rays).
+// ============================================================
+/// Draw a minimal sun icon: filled circle + 4 short ray strokes.
+/// cx/cy = center. pct used for opacity hint (dim when low).
+pub fn draw_brightness_sun(
+    canvas: &mut PixmapMut,
+    cx: f32,
+    cy: f32,
+    pct: u8,
+    color: Color,
+    _accent: Color,
+) {
+    use tiny_skia::{Paint, Stroke, PathBuilder, Transform};
+
+    let alpha = ((pct as f32 / 100.0) * 0.7 + 0.3).clamp(0.0, 1.0);
+    let mut c = color;
+    c.set_alpha(alpha);
+
+    // Inner circle radius 3.
+    fill_circle(canvas, cx, cy, 3.0, c);
+
+    // 4 rays (N/S/E/W), from r=5 to r=7.
+    let offsets: [(f32, f32); 4] = [(0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0)];
+    let mut pb = PathBuilder::new();
+    for (dx, dy) in offsets {
+        pb.move_to(cx + dx * 5.0, cy + dy * 5.0);
+        pb.line_to(cx + dx * 7.0, cy + dy * 7.0);
+    }
+    if let Some(path) = pb.finish() {
+        let mut p = Paint::default();
+        p.set_color(c);
+        p.anti_alias = true;
+        let stroke = Stroke { width: 1.5, ..Default::default() };
+        canvas.stroke_path(&path, &p, &stroke, Transform::identity(), None);
+    }
+}

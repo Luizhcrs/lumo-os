@@ -25,6 +25,7 @@ use lumo_foundation::{LumoColors, LumoTheme};
 use lumo_animation::{AnimCurve, LAAnimator, LACurve};
 
 use crate::bar::dropdowns::battery::{draw_battery_dropdown, BatteryInfo};
+use crate::bar::dropdowns::brightness::{draw_brightness_dropdown, BrightnessInfo};
 use crate::bar::dropdowns::datetime::{draw_datetime_dropdown, DateTimeInfo};
 use crate::bar::dropdowns::lumo_menu::draw_lumo_menu;
 use crate::bar::dropdowns::wifi::{draw_wifi_dropdown, WifiInfo};
@@ -32,7 +33,7 @@ use crate::bar::dropdowns::DropdownActive;
 use crate::bar::fonts::{
     draw_text, draw_text_mono, measure_text, measure_text_mono, opaque, rgba_hex,
 };
-use crate::bar::icons::{
+use crate::bar::icons::{draw_brightness_sun, 
     battery_total_width, draw_battery, draw_brand_dot, draw_wifi, fill_circle,
 };
 use crate::bar::pills::draw_pill_bg;
@@ -56,6 +57,7 @@ pub(crate) struct BarSnapshot {
     pub dropdown: DropdownActive,
     pub battery_info: BatteryInfo,
     pub wifi_info: WifiInfo, // A23
+    pub brightness_info: BrightnessInfo, // L5
     pub datetime_info: DateTimeInfo, // A24
     /// A27: indice do item em hover no menu Lumo (usize::MAX = nenhum).
     pub lumo_menu_hover_idx: usize,
@@ -81,6 +83,14 @@ pub(crate) struct PaintResult {
     pub cal_today_rect: Option<(f32, f32, f32, f32)>,
     /// Cada (day, rect). Day = dia do mes visualizado (1..=31), rect em coords surface.
     pub cal_day_rects: Vec<(u32, (f32, f32, f32, f32))>,
+    // L5: brightness pill hit-rect.
+    pub brightness_hit_rect: Option<(f32, f32, f32, f32)>,
+    pub brightness_slider_rect: Option<(f32, f32, f32, f32)>,
+    pub brightness_preset_day_rect: Option<(f32, f32, f32, f32)>,
+    pub brightness_preset_night_rect: Option<(f32, f32, f32, f32)>,
+    // L5: battery dropdown interactive hit-rects.
+    pub bat_charge_limit_toggle_rect: Option<(f32, f32, f32, f32)>,
+    pub bat_profile_cycle_rect: Option<(f32, f32, f32, f32)>,
     // A31.2: hit-rects do dropdown wifi (so populados quando dropdown=Wifi).
     pub wifi_toggle_rect: Option<(f32, f32, f32, f32)>,
     pub wifi_disconnect_rect: Option<(f32, f32, f32, f32)>,
@@ -156,8 +166,9 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     let clock_w = measure_text_mono(&clock_s, FONT_PILL, false);
 
     let date_w = measure_text(&snap.date_str, FONT_DATE, false);
+    let brightness_icon_w: f32 = 14.0; // sun icon width
     let pill_r_content_w =
-        bat_icon_w + PILL_GAP + WIFI_SIZE + PILL_GAP + date_w + 8.0 + clock_w;
+        bat_icon_w + PILL_GAP + WIFI_SIZE + PILL_GAP + brightness_icon_w + PILL_GAP + date_w + 8.0 + clock_w;
     let pill_r_w = pill_r_content_w + PILL_PAD_X * 2.0;
     let pill_r_x = snap.width as f32 - PILL_MARGIN_X - pill_r_w;
 
@@ -178,6 +189,11 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
         draw_wifi(&mut canvas, cx, pill_cy - WIFI_SIZE / 2.0, snap.wifi_on, pill_fg, pill_fg_subtle);
         result.wifi_hit_rect = Some((wifi_x_start - 4.0, pill_y, WIFI_SIZE + 8.0, PILL_H));
         cx += WIFI_SIZE + PILL_GAP;
+        // L5: brightness pill (sun icon + pct).
+        let brightness_x_start = cx;
+        draw_brightness_sun(&mut canvas, cx + 7.0, pill_cy, snap.brightness_info.pct, pill_fg, opaque(palette.accent));
+        result.brightness_hit_rect = Some((brightness_x_start - 4.0, pill_y, brightness_icon_w + 8.0, PILL_H));
+        cx += brightness_icon_w + PILL_GAP;
         // A24: hit area cobre data + hora juntas (mesmo dropdown calendario).
         let datetime_x_start = cx;
         draw_text(&mut canvas, cx, text_top, &snap.date_str, FONT_DATE, pill_fg, false);
@@ -209,7 +225,7 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                 let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
                 let dropdown_y = ry + rh + DROPDOWN_GAP;
                 if let Some(mut sub) = Pixmap::new(DROPDOWN_W as u32, DROPDOWN_H as u32) {
-                    {
+                    let bat_hits = {
                         let mut canvas = sub.as_mut();
                         draw_battery_dropdown(
                             &mut canvas,
@@ -219,8 +235,38 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                             DROPDOWN_H,
                             palette,
                             &snap.battery_info,
-                        );
-                    }
+                        )
+                    };
+                    result.bat_charge_limit_toggle_rect = bat_hits.charge_limit_toggle_rect
+                        .map(|(bx,by,bw,bh)| (bx+dropdown_x, by+dropdown_y, bw, bh));
+                    result.bat_profile_cycle_rect = bat_hits.profile_cycle_rect
+                        .map(|(bx,by,bw,bh)| (bx+dropdown_x, by+dropdown_y, bw, bh));
+                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                }
+            }
+        }
+        DropdownActive::Brightness => {
+            if let Some((rx, ry, rw, rh)) = result.brightness_hit_rect {
+                let want_x = rx + rw / 2.0 - DROPDOWN_BRIGHTNESS_W / 2.0;
+                let max_x = snap.width as f32 - PILL_MARGIN_X - DROPDOWN_BRIGHTNESS_W;
+                let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
+                let dropdown_y = ry + rh + DROPDOWN_GAP;
+                if let Some(mut sub) = Pixmap::new(DROPDOWN_BRIGHTNESS_W as u32, DROPDOWN_BRIGHTNESS_H as u32) {
+                    let br_hits = {
+                        let mut canvas = sub.as_mut();
+                        draw_brightness_dropdown(
+                            &mut canvas,
+                            0.0,
+                            0.0,
+                            DROPDOWN_BRIGHTNESS_W,
+                            DROPDOWN_BRIGHTNESS_H,
+                            palette,
+                            &snap.brightness_info,
+                        )
+                    };
+                    result.brightness_slider_rect = br_hits.slider_rect.map(|(bx,by,bw,bh)| (bx+dropdown_x, by+dropdown_y, bw, bh));
+                    result.brightness_preset_day_rect = br_hits.preset_day_rect.map(|(bx,by,bw,bh)| (bx+dropdown_x, by+dropdown_y, bw, bh));
+                    result.brightness_preset_night_rect = br_hits.preset_night_rect.map(|(bx,by,bw,bh)| (bx+dropdown_x, by+dropdown_y, bw, bh));
                     composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
                 }
             }
@@ -409,6 +455,15 @@ pub(crate) struct LumoBar {
     pub cal_next_rect: Option<(f32, f32, f32, f32)>,
     pub cal_today_rect: Option<(f32, f32, f32, f32)>,
     pub cal_day_rects: Vec<(u32, (f32, f32, f32, f32))>,
+    // L5: battery dropdown interactive hit-rects.
+    pub bat_charge_limit_toggle_rect: Option<(f32, f32, f32, f32)>,
+    pub bat_profile_cycle_rect: Option<(f32, f32, f32, f32)>,
+    // L5: brightness.
+    pub brightness_info: BrightnessInfo,
+    pub brightness_hit_rect: Option<(f32, f32, f32, f32)>,
+    pub brightness_slider_rect: Option<(f32, f32, f32, f32)>,
+    pub brightness_preset_day_rect: Option<(f32, f32, f32, f32)>,
+    pub brightness_preset_night_rect: Option<(f32, f32, f32, f32)>,
     // A31.2: hit-rects wifi (toggle + linhas).
     pub wifi_toggle_rect: Option<(f32, f32, f32, f32)>,
     pub wifi_disconnect_rect: Option<(f32, f32, f32, f32)>,

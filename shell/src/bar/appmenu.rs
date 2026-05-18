@@ -42,10 +42,20 @@ impl AppMenuState {
         if pid == 0 {
             return Self::default();
         }
+        // Tenta lookup direto por PID primeiro.
         match fetch_inner(pid, app_id) {
+            Ok(state) if !state.items.is_empty() => return state,
+            Err(e) => {
+                eprintln!("[appmenu] C5: fetch direto pid={} falhou: {}", pid, e);
+            }
+            _ => {}
+        }
+        // Fallback: apps GTK3 registram com gtk_window_id (random), nao PID.
+        // Tenta listar TODOS windows registrados + pegar primeiro com items.
+        match fetch_any_registered(app_id) {
             Ok(state) => state,
             Err(e) => {
-                eprintln!("[appmenu] C5: fetch falhou pid={} app_id={}: {}", pid, app_id, e);
+                eprintln!("[appmenu] C5: fetch fallback falhou: {}", e);
                 Self::default()
             }
         }
@@ -212,6 +222,12 @@ fn activate_inner(
         &(item_id, "clicked", zbus::zvariant::Value::U32(0), 0u32),
     )?;
     Ok(())
+}
+
+/// Fallback: busca qualquer janela registrada no DBus com items de menu.
+/// Stub — implementacao real necessitaria enumerar servicos registrados.
+fn fetch_any_registered(_app_id: &str) -> Result<AppMenuState, Box<dyn std::error::Error>> {
+    Err("fetch_any_registered: not implemented".into())
 }
 
 fn fetch_submenu_inner(

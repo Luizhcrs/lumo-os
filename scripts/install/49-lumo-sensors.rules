@@ -1,0 +1,28 @@
+// 49-lumo-sensors.rules - Polkit rules for Lumo OS sensor writes.
+// Allows user luizhcrds to write battery charge limit, platform profile,
+// and backlight brightness without sudo.
+//
+// Install: sudo cp 49-lumo-sensors.rules /etc/polkit-1/rules.d/
+// Groups: ensure user is in 'video' group for backlight (kernel default).
+//         samsung-galaxybook sysfs files need group 'power' or rule below.
+
+polkit.addRule(function(action, subject) {
+    // UPower battery related actions.
+    if (action.id.indexOf("org.freedesktop.UPower.") == 0 &&
+        subject.user == "luizhcrds") {
+        return polkit.Result.YES;
+    }
+});
+
+// Note: sysfs direct writes for charge_control_end_threshold and
+// platform_profile require either:
+//   (a) udev rule granting group write permission, or
+//   (b) sudo with NOPASSWD for specific paths.
+// Recommended: add udev rule in 99-lumo-sensors.rules:
+//
+//   ACTION=="add|change", SUBSYSTEM=="power_supply", KERNEL=="BAT1",
+//   ATTR{charge_control_end_threshold}="100",
+//   RUN+="/bin/chmod g+w /sys/class/power_supply/BAT1/charge_control_end_threshold"
+//
+//   ACTION=="add|change", SUBSYSTEM=="platform", KERNEL=="thinkpad_acpi",
+//   RUN+="/bin/chmod g+w /sys/firmware/acpi/platform_profile"

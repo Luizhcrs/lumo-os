@@ -156,6 +156,8 @@ pub struct LumoState {
 
     /// B1: gesture state acumulado (swipe + pinch).
     pub gesture: crate::input::TouchpadGestureState,
+    /// L5: lid switch handler state.
+    pub lid_handler: std::sync::Arc<std::sync::Mutex<crate::handlers::lid::LidHandlerState>>,
 }
 
 impl LumoState {
@@ -256,6 +258,7 @@ impl LumoState {
             wallpaper: None,
             corner_shader: None,
             gesture: Default::default(),
+            lid_handler: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
         }
     }
 

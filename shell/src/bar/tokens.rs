@@ -120,3 +120,14 @@ pub const MENU_LUMO_ITEMS: &[menu::MenuItem] = &[
     menu::MenuItem::action("Reiniciar..."),
     menu::MenuItem::action("Desligar..."),
 ];
+
+// ============================================================
+// L5: Brightness dropdown.
+// ============================================================
+/// Width of brightness dropdown. Same as battery dropdown for visual consistency.
+pub const DROPDOWN_BRIGHTNESS_W: f32 = 280.0;
+/// Height: pad + title + spacer + slider_row + spacer + preset_row + pad.
+/// 14 + 20 + 8 + 24 + 8 + 22 + 14 = 110.
+pub const DROPDOWN_BRIGHTNESS_H: f32 = 110.0;
+/// Slider track height (horizontal fill bar).
+pub const BRIGHTNESS_SLIDER_H: f32 = 8.0;

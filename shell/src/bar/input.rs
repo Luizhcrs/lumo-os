@@ -180,6 +180,22 @@ impl PointerHandler for LumoBar {
                         }
                     }
                     if !handled {
+                        // L5: brilho pill -> abre dropdown Brightness.
+                        if let Some((rx, ry, rw, rh)) = self.brightness_hit_rect {
+                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                if self.dropdown == DropdownActive::Brightness {
+                                    self.start_close_anim(DropdownActive::Brightness);
+                                } else {
+                                    self.send_ipc_close_desktop_menu();
+                                    self.dropdown = DropdownActive::Brightness;
+                                    self.start_open_anim();
+                                }
+                                self.update_size_and_redraw(qh);
+                                handled = true;
+                            }
+                        }
+                    }
+                    if !handled {
                         if let Some((rx, ry, rw, rh)) = self.datetime_hit_rect {
                             if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
                                 if self.dropdown == DropdownActive::DateTime {
@@ -212,6 +228,73 @@ impl PointerHandler for LumoBar {
                                 }
                                 self.update_size_and_redraw(qh);
                                 handled = true;
+                            }
+                        }
+                    }
+                    // L5: click em dropdown brilho aberto -> slider ou preset.
+                    if !handled && self.dropdown == DropdownActive::Brightness {
+                        // Preset Dia 80%.
+                        if let Some((rx, ry, rw, rh)) = self.brightness_preset_day_rect {
+                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                eprintln!("[lumo-bar] L5 brightness preset Dia 80%");
+                                crate::bar::system_info::set_brightness_pct(80);
+                                self.brightness_info.pct = 80;
+                                self.update_size_and_redraw(qh);
+                                handled = true;
+                            }
+                        }
+                        if !handled {
+                            if let Some((rx, ry, rw, rh)) = self.brightness_preset_night_rect {
+                                if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                    eprintln!("[lumo-bar] L5 brightness preset Noite 35%");
+                                    crate::bar::system_info::set_brightness_pct(35);
+                                    self.brightness_info.pct = 35;
+                                    self.update_size_and_redraw(qh);
+                                    handled = true;
+                                }
+                            }
+                        }
+                        // Slider: click sets pct from x position.
+                        if !handled {
+                            if let Some((rx, ry, rw, rh)) = self.brightness_slider_rect {
+                                if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                    let rel = ((px - rx) / rw).clamp(0.0, 1.0);
+                                    let new_pct = (rel * 100.0).round() as u8;
+                                    eprintln!("[lumo-bar] L5 brightness slider -> {}%", new_pct);
+                                    crate::bar::system_info::set_brightness_pct(new_pct);
+                                    self.brightness_info.pct = new_pct;
+                                    self.update_size_and_redraw(qh);
+                                    handled = true;
+                                }
+                            }
+                        }
+                    }
+                    // L5: click em dropdown bateria aberto -> charge_limit toggle / profile cycle.
+                    if !handled && self.dropdown == DropdownActive::Battery {
+                        if let Some((rx, ry, rw, rh)) = self.bat_charge_limit_toggle_rect {
+                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                let current_limit = self.battery_info.charge_limit.unwrap_or(100);
+                                let new_limit: u8 = if current_limit <= 80 { 100 } else { 80 };
+                                eprintln!("[lumo-bar] L5 charge limit -> {}", new_limit);
+                                let path = std::path::PathBuf::from(
+                                    "/sys/class/power_supply/BAT1/charge_control_end_threshold");
+                                let _ = std::fs::write(&path, new_limit.to_string());
+                                self.battery_info.charge_limit = Some(new_limit);
+                                self.update_size_and_redraw(qh);
+                                handled = true;
+                            }
+                        }
+                        if !handled {
+                            if let Some((rx, ry, rw, rh)) = self.bat_profile_cycle_rect {
+                                if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                    let next = crate::bar::system_info::platform_profile_cycle_next();
+                                    eprintln!("[lumo-bar] L5 profile cycle -> {:?}", next);
+                                    if let Some(p) = next {
+                                        self.battery_info.platform_profile = Some(p);
+                                    }
+                                    self.update_size_and_redraw(qh);
+                                    handled = true;
+                                }
                             }
                         }
                     }
