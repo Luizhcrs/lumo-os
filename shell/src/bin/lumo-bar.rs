@@ -905,9 +905,9 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
         // A20: salvar bat_hit_rect (cx atual + bat_icon_w, altura PILL_H pra click facil)
         let bat_x_start = cx;
         draw_battery(&mut canvas, cx, pill_cy - BAT_BODY_H / 2.0, snap.battery_pct, pill_fg, accent);
-        let _ = bat_x_start;
-        // A20.4: hit area = pill inteira (facilita click)
-        result.bat_hit_rect = Some((pill_r_x, pill_y, pill_r_w, PILL_H));
+        // A20.13: hit area = SO o icone bateria (era pill inteira A20.4)
+        // Y expande pra PILL_H pra facilitar click vertical sem precisar bater exato no icone.
+        result.bat_hit_rect = Some((bat_x_start - 4.0, pill_y, bat_icon_w + 8.0, PILL_H));
         cx += bat_icon_w + PILL_GAP;
         draw_wifi(&mut canvas, cx, pill_cy - WIFI_SIZE / 2.0, snap.wifi_on, pill_fg, pill_fg_subtle);
         cx += WIFI_SIZE + PILL_GAP;
