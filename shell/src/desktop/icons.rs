@@ -157,8 +157,9 @@ pub struct IconsState {
     pub icons: Vec<DesktopIcon>,
     pub last_scan: Instant,
     pub layout: DesktopLayout,
-    /// Drag: (icon_idx, press_x, press_y, dragging_started).
-    pub drag: Option<(usize, f32, f32, bool)>,
+    /// Drag: (icon_idx, off_x, off_y, dragging_started, press_x, press_y).
+    /// A33.fix: off precisa ser estatico (calculado no press), nao recalc no motion.
+    pub drag: Option<(usize, f32, f32, bool, f32, f32)>,
     /// Duplo-click tracking: (icon_idx, timestamp).
     pub last_click: Option<(usize, Instant)>,
     /// Context menu de icon: (icon_idx, menu_x, menu_y).
@@ -277,20 +278,24 @@ impl IconsState {
 
     /// Inicia tracking de possivel drag (ainda nao iniciou ate DRAG_THRESHOLD).
     pub fn press_icon(&mut self, idx: usize, mouse_x: f32, mouse_y: f32) {
-        self.drag = Some((idx, mouse_x, mouse_y, false));
+        let icon = &self.icons[idx];
+        let off_x = mouse_x - icon.screen_x;
+        let off_y = mouse_y - icon.screen_y;
+        self.drag = Some((idx, off_x, off_y, false, mouse_x, mouse_y));
     }
 
     /// Mouse move: se passou threshold, considera drag ativo.
     pub fn motion_drag(&mut self, mouse_x: f32, mouse_y: f32) -> bool {
-        if let Some((idx, px, py, ref mut started)) = self.drag {
-            let dx = (mouse_x - px).abs();
-            let dy = (mouse_y - py).abs();
+        if let Some((idx, off_x, off_y, ref mut started, press_x, press_y)) = self.drag {
+            let dx = (mouse_x - press_x).abs();
+            let dy = (mouse_y - press_y).abs();
             if !*started && (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
                 *started = true;
             }
             if *started {
-                let off_x = px - self.icons[idx].screen_x;
-                let off_y = py - self.icons[idx].screen_y;
+                // A33.fix: off ja foi calculado no press_icon (estatico).
+                // Bug anterior: off recalc cada motion contra screen_x mutado
+                // -> aceleracao exponencial -> icon foge pra fora da tela.
                 self.icons[idx].screen_x = mouse_x - off_x;
                 self.icons[idx].screen_y = mouse_y - off_y;
                 self.icons[idx].custom_pos =
@@ -303,7 +308,7 @@ impl IconsState {
 
     /// Retorna true se drag estava ativo (devemos suprimir click).
     pub fn release_drag(&mut self) -> bool {
-        if let Some((idx, _, _, started)) = self.drag.take() {
+        if let Some((idx, _off_x, _off_y, started, _px, _py)) = self.drag.take() {
             if started {
                 let icon = &self.icons[idx];
                 self.layout

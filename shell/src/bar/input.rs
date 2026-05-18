@@ -215,9 +215,9 @@ impl PointerHandler for LumoBar {
                                 let want_on = !self.wifi_info.up;
                                 eprintln!("[lumo-bar] A31.2 toggle wifi -> {}", want_on);
                                 crate::bar::system_info::nm_set_radio(want_on);
-                                // Optimistic update local; refresh real em 30s tick OU 800ms abaixo.
+                                // A31.2.fix: optimistic + deferred refresh (nao bloqueia click).
                                 self.wifi_info.up = want_on;
-                                self.refresh();
+                                self.wifi_refresh_due = Some(Instant::now() + Duration::from_millis(1200));
                                 self.update_size_and_redraw(qh);
                                 handled = true;
                             }
@@ -229,7 +229,7 @@ impl PointerHandler for LumoBar {
                                     if let Some(iface) = self.wifi_info.iface.clone() {
                                         eprintln!("[lumo-bar] A31.2 disconnect iface={}", iface);
                                         crate::bar::system_info::nm_disconnect_iface(iface);
-                                        self.refresh();
+                                        self.wifi_refresh_due = Some(Instant::now() + Duration::from_millis(1500));
                                     }
                                     handled = true;
                                 }
@@ -247,7 +247,7 @@ impl PointerHandler for LumoBar {
                             if let Some(ssid) = hit_ssid {
                                 eprintln!("[lumo-bar] A31.2 connect ssid={}", ssid);
                                 crate::bar::system_info::nm_connect(ssid);
-                                self.refresh();
+                                self.wifi_refresh_due = Some(Instant::now() + Duration::from_millis(2500));
                                 handled = true;
                             }
                         }

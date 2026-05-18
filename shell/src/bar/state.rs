@@ -287,6 +287,9 @@ pub(crate) struct LumoBar {
     pub battery_info: BatteryInfo,
     pub wifi_on: bool,
     pub wifi_info: WifiInfo, // A23
+    /// A31.2.fix: agenda refresh wifi async pra evitar bloquear click handler
+    /// com nmcli list (~500ms). Main loop checa e dispara refresh ao expirar.
+    pub wifi_refresh_due: Option<Instant>,
     pub running: bool,
     pub first_configured: bool,
     pub pointer: Option<ThemedPointer>,

@@ -102,6 +102,7 @@ pub fn run() {
         battery_info: BatteryInfo::default(),
         wifi_on: true,
         wifi_info: WifiInfo::default(), // A23
+        wifi_refresh_due: None,
         running: true,
         first_configured: false,
         pointer: None,
@@ -139,6 +140,14 @@ pub fn run() {
         if last_clock_tick.elapsed() >= Duration::from_secs(1) {
             last_clock_tick = Instant::now();
             state.redraw(&qh);
+        }
+        // A31.2.fix: deferred wifi refresh apos action click (nao bloqueia handler).
+        if let Some(due) = state.wifi_refresh_due {
+            if Instant::now() >= due {
+                state.refresh();
+                state.redraw(&qh);
+                state.wifi_refresh_due = None;
+            }
         }
         if last_tick.elapsed() >= Duration::from_secs(30) {
             state.refresh();

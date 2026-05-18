@@ -65,13 +65,8 @@ impl LumoBar {
         // Dropdown ativo: cobre area do painel pra capturar click dentro.
         match self.dropdown {
             DropdownActive::None => {}
-            DropdownActive::Battery | DropdownActive::Wifi => {
-                let anchor = if self.dropdown == DropdownActive::Battery {
-                    self.bat_hit_rect
-                } else {
-                    self.wifi_hit_rect
-                };
-                if let Some((rx, ry, rw, rh)) = anchor {
+            DropdownActive::Battery => {
+                if let Some((rx, ry, rw, rh)) = self.bat_hit_rect {
                     let dx = (rx + rw / 2.0 - DROPDOWN_W / 2.0)
                         .max(PILL_MARGIN_X)
                         .min(self.width as f32 - PILL_MARGIN_X - DROPDOWN_W);
@@ -81,6 +76,23 @@ impl LumoBar {
                         dy.floor() as i32 - 4,
                         DROPDOWN_W.ceil() as i32 + 16,
                         DROPDOWN_H.ceil() as i32 + 16,
+                    );
+                }
+            }
+            DropdownActive::Wifi => {
+                // A31.2 fix: usar DROPDOWN_WIFI_W/H (era DROPDOWN_W/H = battery).
+                // Causa raiz: clicks em redes meio/fim do dropdown wifi
+                // (Y > 150) passavam pro desktop pq input_region cortava.
+                if let Some((rx, ry, rw, rh)) = self.wifi_hit_rect {
+                    let dx = (rx + rw / 2.0 - DROPDOWN_WIFI_W / 2.0)
+                        .max(PILL_MARGIN_X)
+                        .min(self.width as f32 - PILL_MARGIN_X - DROPDOWN_WIFI_W);
+                    let dy = ry + rh + DROPDOWN_GAP;
+                    region.add(
+                        dx.floor() as i32 - 8,
+                        dy.floor() as i32 - 4,
+                        DROPDOWN_WIFI_W.ceil() as i32 + 16,
+                        DROPDOWN_WIFI_H.ceil() as i32 + 16,
                     );
                 }
             }

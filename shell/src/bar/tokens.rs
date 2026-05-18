@@ -67,7 +67,7 @@ pub const BAT_BODY_H: f32 = 11.0;
 // Gap 6px abaixo da pill (respiro visual sem desconectar).
 // Padding interno 14 igual PILL_PAD_X (continuidade).
 pub const DROPDOWN_W: f32 = 280.0;
-pub const DROPDOWN_H: f32 = 150.0; // A20.1 menor (3 rows) - bateria
+pub const DROPDOWN_H: f32 = 124.0; // A31.2.fix: era 150, sobra 26px embaixo "Tempo" // A20.1 menor (3 rows) - bateria
 pub const DROPDOWN_GAP: f32 = 6.0;
 pub const DROPDOWN_PAD: f32 = 14.0;
 pub const DROPDOWN_ROW_H: f32 = 18.0;
