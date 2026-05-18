@@ -188,6 +188,13 @@ export LUMO_TRACE_POINTER=1
 #   LUMO_THEME=dark ./scripts/lumo-tty.sh
 export LUMO_THEME="${LUMO_THEME:-light}"
 
+# C5: GTK3 apps exportam appmenu via DBus quando appmenu-gtk-module carregado.
+export GTK_MODULES="${GTK_MODULES:+$GTK_MODULES:}appmenu-gtk-module"
+# Qt5/Qt6 apps via appmenu-qt5 platformtheme (se instalado).
+export QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-appmenu-qt5}"
+# Ubuntu legacy var: alguns apps ainda usam pra detectar global menu host.
+export UBUNTU_MENUPROXY=1
+
 echo "[2/3] TTY = $current_tty, user = $(id -un)"
 echo "[3/3] Iniciando lumo-wm DRM..."
 echo ""
