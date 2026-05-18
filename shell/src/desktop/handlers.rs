@@ -19,7 +19,9 @@ use smithay_client_toolkit::reexports::client::{
 };
 use tiny_skia::Pixmap;
 
+use crate::desktop::icons::{paint_icons, paint_ctx_menu};
 use crate::desktop::menu_overlay::{paint_menu_at, MENU_ITEMS, MENU_W};
+use crate::desktop::rubber_band::paint_rubber_band;
 use crate::desktop::state::{LumoDesktop, MENU_OFFSET, OUTPUT_H, OUTPUT_W};
 use crate::menu;
 
@@ -43,10 +45,25 @@ impl LumoDesktop {
         let surf_w = self.width;
         let surf_h = self.height;
         let palette = self.palette;
+        let accent_hex = palette.accent;
+        let rb_snap = self.rubber_band;
+        let ctx_snap = self.icons.ctx_menu;
+        let ctx_hover = self.icons.ctx_hover;
         if let Some(mut px) = Pixmap::new(self.width, self.height) {
-            if menu_snap.visible {
+            {
                 let mut canvas_mut = px.as_mut();
-                paint_menu_at(&mut canvas_mut, menu_snap, surf_w, surf_h, &palette);
+                // A34: rubber-band ANTES dos icons (background).
+                paint_rubber_band(&mut canvas_mut, &rb_snap, accent_hex);
+                // A33: icons.
+                paint_icons(&mut canvas_mut, &self.icons, accent_hex);
+                // A33: context menu de icon.
+                if let Some((_, cx, cy)) = ctx_snap {
+                    paint_ctx_menu(&mut canvas_mut, cx, cy, ctx_hover, accent_hex);
+                }
+                // A27: desktop menu.
+                if menu_snap.visible {
+                    paint_menu_at(&mut canvas_mut, menu_snap, surf_w, surf_h, &palette);
+                }
             }
             let src = px.data();
             let dst = canvas;

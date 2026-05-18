@@ -17,12 +17,17 @@ pub const MENU_W: f32 = menu::MENU_W_DESKTOP;
 /// A27: items MVP (futuro: despachar comandos reais wallpaper picker / About
 /// dialog / lumo-store launch via IPC).
 pub const MENU_ITEMS: &[menu::MenuItem] = &[
+    menu::MenuItem::action("Criar pasta"),
+    menu::MenuItem::separator(),
     menu::MenuItem::action("Trocar wallpaper"),
     menu::MenuItem::action("Sobre este Galaxy Book"),
     menu::MenuItem::separator(),
     menu::MenuItem::action("Atualizar Lumo"),
     menu::MenuItem::action("Lumo Store"),
 ];
+
+/// Indice do item "Criar pasta" no MENU_ITEMS.
+pub const MENU_ITEM_CREATE_FOLDER: usize = 0;
 
 pub fn paint_menu_at(
     canvas: &mut PixmapMut,
@@ -54,10 +59,15 @@ pub fn paint_menu_at(
     );
 }
 
-/// Handler de click em item do menu. Hoje so loga; futuro: despacha IPC
-/// command pra compositor abrir wallpaper picker, dialogs, store, etc.
-pub fn handle_item(idx: usize) {
+/// Handler de click em item do menu.
+/// Retorna true se acao e "Criar pasta" (caller deve invocar icons.create_folder()).
+pub fn handle_item(idx: usize) -> bool {
+    if idx == MENU_ITEM_CREATE_FOLDER {
+        eprintln!("[lumo-desktop] menu: Criar pasta");
+        return true;
+    }
     if let Some(item) = MENU_ITEMS.get(idx) {
         eprintln!("[lumo-desktop] menu item: '{}' (stub)", item.label);
     }
+    false
 }

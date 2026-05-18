@@ -84,6 +84,8 @@ pub fn run() {
         last_click_at: None,
         palette: current_colors(),
         need_redraw: false,
+        icons: crate::desktop::icons::IconsState::new(),
+        rubber_band: crate::desktop::rubber_band::RubberBand::new(),
     };
 
     eprintln!("[lumo-desktop] A27: menu Apple-style + CloseDropdowns IPC");
@@ -133,6 +135,7 @@ pub fn run() {
                 }
             }
         }
+        state.icons.tick();
         if state.need_redraw {
             state.need_redraw = false;
             state.redraw(&qh);

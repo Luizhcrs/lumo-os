@@ -321,4 +321,8 @@ pub(crate) struct LumoDesktop {
     /// A26: flag setado por drain_ipc_events quando compositor pede pra
     /// fechar menu (mutex bar dropdown vs desktop menu).
     pub need_redraw: bool,
+    /// A33: icones do desktop.
+    pub icons: crate::desktop::icons::IconsState,
+    /// A34: rubber-band selection.
+    pub rubber_band: crate::desktop::rubber_band::RubberBand,
 }
