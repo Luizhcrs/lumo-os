@@ -59,7 +59,7 @@ Evento `SW_LID` via evdev (libinput propaga). Compositor intercepta:
 2. Timer dispara -> lock screen + suspend deferred 30s
 3. Lid open antes: cancela tudo
 
-Diferente do default systemd-logind (suspend imediato). UX Apple MacBook.
+Diferente do default systemd-logind (suspend imediato). UX laptop premium.
 
 ### Battery health display (P0)
 
@@ -156,9 +156,9 @@ Backend sysfs-only. polkit pra escrita em charge_control_end_threshold (precisa 
 
 O que Lumo OS no Galaxy Book 4 pode ter que outros sistemas no mesmo hardware NAO tem (ou tem pior):
 
-1. **UI nativa Samsung-aware**: charge limit + perfil + saude bateria + thermal zones lapidados em UI Apple-grade. Windows expoe parcial via Samsung Settings; Linux distros genericas nao expoem.
+1. **UI nativa Samsung-aware**: charge limit + perfil + saude bateria + thermal zones lapidados em UI lapidada. Windows expoe parcial via Samsung Settings; Linux distros genericas nao expoem.
 2. **Lid close UX customizado**: dim+timer em vez de suspend imediato.
-3. **Fn+F* binding configuravel**: usuario remap. Windows fixo, macOS fixo, Linux distros sem.
+3. **Fn+F* binding configuravel**: usuario remap. Windows e outros sistemas fixos, Linux distros sem.
 4. **4-modo platform profile**: maioria das implementacoes mostra 3 (low/balanced/perf). Lumo mostra 4 (inclui quiet).
 
 ## Fontes
