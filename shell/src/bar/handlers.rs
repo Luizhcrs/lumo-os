@@ -106,6 +106,10 @@ impl LumoBar {
             DropdownActive::Brightness => {
                 BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_BRIGHTNESS_H as u32 + 8
             }
+            DropdownActive::AppFallback => {
+                // S2: dropdown fallback ~5 items * 28 + pad.
+                BAR_HEIGHT + DROPDOWN_GAP as u32 + 160 + 8
+            }
         }
         .max(BAR_HEIGHT + DROPDOWN_GAP as u32 + max_drop + 8)
     }
@@ -141,6 +145,10 @@ impl LumoBar {
             appmenu_items: self.appmenu.items.clone(),
             appmenu_open_idx: self.appmenu_open_idx,
             appmenu_submenu: self.appmenu_submenu.clone(),
+            // S2: fallback app state.
+            appmenu_app_id: self.appmenu.app_id.clone(),
+            appmenu_title: self.appmenu.title.clone(),
+            appmenu_fallback_hover_idx: self.appmenu_fallback_hover_idx,
             // B4: valores correntes do animador (tick ja foi chamado antes do redraw).
             dropdown_scale: {
                 let v = self.dropdown_scale_anim.tick(0.0);
@@ -204,6 +212,9 @@ impl LumoBar {
             // C5: appmenu pill hit-rects.
             self.appmenu_pill_rects = paint_result.appmenu_pill_rects;
             self.appmenu_submenu_rects = paint_result.appmenu_submenu_rects;
+            // S2: fallback pill hit-rects.
+            self.appmenu_fallback_rect = paint_result.appmenu_fallback_rect;
+            self.appmenu_fallback_dropdown_rects = paint_result.appmenu_fallback_dropdown_rects;
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;

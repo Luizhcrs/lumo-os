@@ -20,3 +20,6 @@ pub use animator::{AnimCurve, LAAnimator};
 pub use easing::LACurve;
 pub use interpolate::{LAColor, LAInterpolable};
 pub use spring::{LASpring, Spring};
+
+pub mod closed_form;
+pub use closed_form::{ClosedFormSpring, DampingRegime, SpringPreset};
