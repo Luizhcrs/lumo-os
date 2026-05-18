@@ -1,0 +1,7 @@
+// Lumo OS: user luizhcrds pode gerenciar NetworkManager (wifi connect/disconnect)
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.freedesktop.NetworkManager.") == 0 &&
+        subject.user == "luizhcrds") {
+        return polkit.Result.YES;
+    }
+});
