@@ -366,3 +366,67 @@ pub fn month_abbr_pt(m: u32) -> &'static str {
 pub fn format_date_pt(dt: &chrono::DateTime<Local>) -> String {
     format!("{} {} {}", weekday_abbr_pt(dt.weekday()), dt.day(), month_abbr_pt(dt.month()))
 }
+
+// ============================================================
+// A31.2: actions wifi via nmcli (spawn async thread, fire-and-forget).
+// ============================================================
+
+/// Toggle radio wifi via nmcli. Async. Log saida.
+pub fn nm_set_radio(on: bool) {
+    std::thread::spawn(move || {
+        let arg = if on { "on" } else { "off" };
+        let res = std::process::Command::new("nmcli")
+            .args(["radio", "wifi", arg])
+            .output();
+        match res {
+            Ok(o) if o.status.success() => {
+                eprintln!("[lumo-bar] nmcli radio wifi {} OK", arg);
+            }
+            Ok(o) => {
+                let e = String::from_utf8_lossy(&o.stderr);
+                eprintln!("[lumo-bar] nmcli radio wifi {} falha: {}", arg, e.trim());
+            }
+            Err(e) => eprintln!("[lumo-bar] nmcli spawn falha: {}", e),
+        }
+    });
+}
+
+/// Conecta a uma rede salva ou nova (sem senha = funciona so se salva).
+/// Async. Log saida.
+pub fn nm_connect(ssid: String) {
+    std::thread::spawn(move || {
+        let res = std::process::Command::new("nmcli")
+            .args(["dev", "wifi", "connect", &ssid])
+            .output();
+        match res {
+            Ok(o) if o.status.success() => {
+                eprintln!("[lumo-bar] nmcli connect {} OK", ssid);
+            }
+            Ok(o) => {
+                let e = String::from_utf8_lossy(&o.stderr);
+                eprintln!("[lumo-bar] nmcli connect {} falha: {}", ssid, e.trim());
+                // Senha exigida -> fallback nm-applet picker GUI (futuro A31.3).
+            }
+            Err(e) => eprintln!("[lumo-bar] nmcli spawn falha: {}", e),
+        }
+    });
+}
+
+/// Desconecta interface wifi ativa. Async.
+pub fn nm_disconnect_iface(iface: String) {
+    std::thread::spawn(move || {
+        let res = std::process::Command::new("nmcli")
+            .args(["dev", "disconnect", &iface])
+            .output();
+        match res {
+            Ok(o) if o.status.success() => {
+                eprintln!("[lumo-bar] nmcli disconnect {} OK", iface);
+            }
+            Ok(o) => {
+                let e = String::from_utf8_lossy(&o.stderr);
+                eprintln!("[lumo-bar] nmcli disconnect {} falha: {}", iface, e.trim());
+            }
+            Err(e) => eprintln!("[lumo-bar] nmcli spawn falha: {}", e),
+        }
+    });
+}

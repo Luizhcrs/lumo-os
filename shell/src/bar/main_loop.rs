@@ -116,6 +116,10 @@ pub fn run() {
         cal_next_rect: None,
         cal_today_rect: None,
         cal_day_rects: Vec::new(),
+        // A31.2: wifi hit-rects.
+        wifi_toggle_rect: None,
+        wifi_disconnect_rect: None,
+        wifi_connect_rects: Vec::new(),
         last_click_at: None,
         dropdown: DropdownActive::None,
         viewed_year: Local::now().year(),

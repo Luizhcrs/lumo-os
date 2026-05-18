@@ -207,6 +207,51 @@ impl PointerHandler for LumoBar {
                             }
                         }
                     }
+                    // A31.2: click em dropdown wifi aberto -> toggle/connect/disconnect.
+                    if !handled && self.dropdown == DropdownActive::Wifi {
+                        // Toggle pill: liga/desliga radio wifi.
+                        if let Some((rx, ry, rw, rh)) = self.wifi_toggle_rect {
+                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                let want_on = !self.wifi_info.up;
+                                eprintln!("[lumo-bar] A31.2 toggle wifi -> {}", want_on);
+                                crate::bar::system_info::nm_set_radio(want_on);
+                                // Optimistic update local; refresh real em 30s tick OU 800ms abaixo.
+                                self.wifi_info.up = want_on;
+                                self.refresh();
+                                self.update_size_and_redraw(qh);
+                                handled = true;
+                            }
+                        }
+                        // Click linha rede atual -> disconnect.
+                        if !handled {
+                            if let Some((rx, ry, rw, rh)) = self.wifi_disconnect_rect {
+                                if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                    if let Some(iface) = self.wifi_info.iface.clone() {
+                                        eprintln!("[lumo-bar] A31.2 disconnect iface={}", iface);
+                                        crate::bar::system_info::nm_disconnect_iface(iface);
+                                        self.refresh();
+                                    }
+                                    handled = true;
+                                }
+                            }
+                        }
+                        // Click linha rede outras -> connect.
+                        if !handled {
+                            let hit_ssid = self.wifi_connect_rects.iter().find_map(|(ssid, (rx, ry, rw, rh))| {
+                                if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
+                                    Some(ssid.clone())
+                                } else {
+                                    None
+                                }
+                            });
+                            if let Some(ssid) = hit_ssid {
+                                eprintln!("[lumo-bar] A31.2 connect ssid={}", ssid);
+                                crate::bar::system_info::nm_connect(ssid);
+                                self.refresh();
+                                handled = true;
+                            }
+                        }
+                    }
                     // A27: click em item do menu Lumo aberto -> log stub + fecha.
                     if !handled && self.dropdown == DropdownActive::LumoMenu {
                         if let Some(idx) = self.lumo_menu_hit_test(px, py) {

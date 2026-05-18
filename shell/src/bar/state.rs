@@ -73,6 +73,10 @@ pub(crate) struct PaintResult {
     pub cal_today_rect: Option<(f32, f32, f32, f32)>,
     /// Cada (day, rect). Day = dia do mes visualizado (1..=31), rect em coords surface.
     pub cal_day_rects: Vec<(u32, (f32, f32, f32, f32))>,
+    // A31.2: hit-rects do dropdown wifi (so populados quando dropdown=Wifi).
+    pub wifi_toggle_rect: Option<(f32, f32, f32, f32)>,
+    pub wifi_disconnect_rect: Option<(f32, f32, f32, f32)>,
+    pub wifi_connect_rects: Vec<(String, (f32, f32, f32, f32))>,
     pub last_click_at: Option<Instant>,
 }
 
@@ -207,7 +211,7 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                 let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
                 let dropdown_y = ry + rh + DROPDOWN_GAP;
                 let mut canvas = pixmap.as_mut();
-                draw_wifi_dropdown(
+                let hits = draw_wifi_dropdown(
                     &mut canvas,
                     dropdown_x,
                     dropdown_y,
@@ -216,6 +220,10 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                     palette,
                     &snap.wifi_info,
                 );
+                // A31.2: hits ja vem em coords da surface.
+                result.wifi_toggle_rect = hits.toggle_rect;
+                result.wifi_disconnect_rect = hits.disconnect_rect;
+                result.wifi_connect_rects = hits.connect_rects;
             }
         }
         // A24: dropdown calendario+horario (mesmo painel pra click em data OU hora).
@@ -294,6 +302,10 @@ pub(crate) struct LumoBar {
     pub cal_next_rect: Option<(f32, f32, f32, f32)>,
     pub cal_today_rect: Option<(f32, f32, f32, f32)>,
     pub cal_day_rects: Vec<(u32, (f32, f32, f32, f32))>,
+    // A31.2: hit-rects wifi (toggle + linhas).
+    pub wifi_toggle_rect: Option<(f32, f32, f32, f32)>,
+    pub wifi_disconnect_rect: Option<(f32, f32, f32, f32)>,
+    pub wifi_connect_rects: Vec<(String, (f32, f32, f32, f32))>,
     pub last_click_at: Option<Instant>,
     pub dropdown: DropdownActive,
     // A26: mes/ano visualizado no calendar (independente do today real).

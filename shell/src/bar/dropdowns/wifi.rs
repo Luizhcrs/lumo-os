@@ -43,6 +43,15 @@ pub struct WifiNetwork {
     pub connected: bool,
 }
 
+/// A31.2: hit-rects retornados pelo draw pra input dispatch.
+#[derive(Default, Clone, Debug)]
+pub struct WifiHits {
+    pub toggle_rect: Option<(f32, f32, f32, f32)>,
+    pub disconnect_rect: Option<(f32, f32, f32, f32)>,
+    /// (ssid, rect) por rede listada em "Outras redes".
+    pub connect_rects: Vec<(String, (f32, f32, f32, f32))>,
+}
+
 // ============================================================
 // WifiInfo - leitura via iw + ip + nmcli scan (A23 + A31).
 // ============================================================
@@ -105,7 +114,8 @@ pub fn draw_wifi_dropdown(
     h: f32,
     palette: &LumoColors,
     info: &WifiInfo,
-) {
+) -> WifiHits {
+    let mut hits = WifiHits::default();
     let bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
     let fg = opaque(palette.pill_fg);
     let fg_subtle = rgba_hex(palette.pill_fg, 0xA0);
@@ -140,6 +150,8 @@ pub fn draw_wifi_dropdown(
         rgba_hex(palette.pill_sep, 0xC0)
     };
     fill_rrect(canvas, toggle_x, toggle_y, toggle_w, toggle_h, toggle_h / 2.0, trail_color);
+    // A31.2: hit-area do toggle (toda capsule inclui knob).
+    hits.toggle_rect = Some((toggle_x, toggle_y, toggle_w, toggle_h));
 
     // Knob branco (sempre claro, contraste). Slide direita = on, esquerda = off.
     let knob_cx = if toggle_on {
@@ -157,7 +169,7 @@ pub fn draw_wifi_dropdown(
     // ============================================================
     if !info.up {
         draw_text(canvas, cx, cy, "Wi-Fi desligado", FONT_DROPDOWN_BODY, fg_subtle, false);
-        return;
+        return hits;
     }
 
     // ============================================================
@@ -167,6 +179,8 @@ pub fn draw_wifi_dropdown(
     let connected_ssid = info.ssid.as_deref();
 
     if let Some(ssid) = connected_ssid {
+        // A31.2: row click = disconnect.
+        hits.disconnect_rect = Some((x + pad / 2.0, cy - 4.0, w - pad, DROPDOWN_WIFI_ROW_H));
         // Linha: "v SSID    pct%"
         let prefix = "v ";
         draw_text(canvas, cx, cy, prefix, FONT_DROPDOWN_BODY, accent, true);
@@ -209,6 +223,11 @@ pub fn draw_wifi_dropdown(
         cy += FONT_DROPDOWN_BODY * 1.5;
 
         for net in &others {
+            // A31.2: row click = connect a essa rede.
+            hits.connect_rects.push((
+                net.ssid.clone(),
+                (x + pad / 2.0, cy - 4.0, w - pad, DROPDOWN_WIFI_ROW_H),
+            ));
             // Prefix ">" subtle pra outras (nao bold).
             let prefix = "> ";
             draw_text(canvas, cx, cy, prefix, FONT_DROPDOWN_BODY, fg_dim, false);
@@ -250,6 +269,7 @@ pub fn draw_wifi_dropdown(
     // Suprime warning sobre h/stroke_rrect ate hover ser implementado em A31.2.
     let _ = h;
     let _ = stroke_rrect;
+    hits
 }
 
 /// Trunca SSID preservando UTF-8 + adiciona ".." se passou de max_chars.

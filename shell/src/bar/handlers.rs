@@ -129,6 +129,10 @@ impl LumoBar {
             self.cal_next_rect = paint_result.cal_next_rect;
             self.cal_today_rect = paint_result.cal_today_rect;
             self.cal_day_rects = paint_result.cal_day_rects;
+            // A31.2: wifi hit-rects.
+            self.wifi_toggle_rect = paint_result.wifi_toggle_rect;
+            self.wifi_disconnect_rect = paint_result.wifi_disconnect_rect;
+            self.wifi_connect_rects = paint_result.wifi_connect_rects;
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;
