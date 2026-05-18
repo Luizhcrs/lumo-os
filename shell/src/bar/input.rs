@@ -407,6 +407,34 @@ impl PointerHandler for LumoBar {
                         self.update_size_and_redraw(qh);
                     }
                 }
+                // N2: 2-finger scroll vertical sobre brightness pill -> ajusta brilho.
+                PointerEventKind::Axis { vertical, .. } => {
+                    if vertical.absolute.abs() > 0.0 || vertical.discrete != 0 {
+                        if let Some(pos) = self.pointer_pos {
+                            let px = pos.0 as f32;
+                            let py = pos.1 as f32;
+                            if let Some((rx, ry, rw, rh)) = self.brightness_hit_rect {
+                                if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                    // vertical.absolute > 0 = scroll down = menos brilho.
+                                    let delta_pct: i16 = if vertical.absolute != 0.0 {
+                                        let steps = (vertical.absolute / 15.0).round() as i16;
+                                        -steps * 5
+                                    } else {
+                                        (-vertical.discrete as i16) * 5
+                                    };
+                                    let new_pct = (self.brightness_info.pct as i16 + delta_pct)
+                                        .clamp(5, 100) as u8;
+                                    if new_pct != self.brightness_info.pct {
+                                        eprintln!("[lumo-bar] N2 scroll brilho {} -> {}", self.brightness_info.pct, new_pct);
+                                        crate::bar::system_info::set_brightness_pct(new_pct);
+                                        self.brightness_info.pct = new_pct;
+                                        self.update_size_and_redraw(qh);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 _ => {}
             }
         }
