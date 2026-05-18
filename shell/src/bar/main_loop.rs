@@ -121,6 +121,12 @@ pub fn run() {
         // L5: battery interactive hit-rects.
         bat_charge_limit_toggle_rect: None,
         bat_profile_cycle_rect: None,
+        // L5: brightness.
+        brightness_info: crate::bar::dropdowns::brightness::BrightnessInfo::default(),
+        brightness_hit_rect: None,
+        brightness_slider_rect: None,
+        brightness_preset_day_rect: None,
+        brightness_preset_night_rect: None,
         // A31.2: wifi hit-rects.
         wifi_toggle_rect: None,
         wifi_disconnect_rect: None,

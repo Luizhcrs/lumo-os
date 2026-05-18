@@ -385,3 +385,310 @@ pub fn px_offset_to_ndc(dx_px: f32, dy_px: f32, viewport: [f32; 2]) -> [f32; 2] 
 pub fn px_to_ndc_radius(px: f32, viewport_height: f32) -> f32 {
     LFGeometry::px_to_ndc_radius(px, viewport_height)
 }
+
+// ---------------------------------------------------------------------------
+// LumoTokens (runtime) -- carregavel de disco / TOML
+// ---------------------------------------------------------------------------
+//
+// Diferente de LFTokens (compile-time consts), LumoTokens armazena
+// o tema ativo como dados runtime. Lido de ~/.config/lumo/theme.toml,
+// com fallback para as constantes do design system quando o arquivo
+// nao existe ou esta invalido.
+//
+// Formato theme.toml:
+//   [theme]
+//   mode = "light"   # ou "dark"
+//
+//   [colors]
+//   accent      = "#3B82F6"
+//   ink_deep    = "#0a0a0c"
+//   pill_bg     = "#1F1F22"
+//   ...outros tokens opcionais...
+
+#[derive(Debug, Clone)]
+pub struct LumoTokens {
+    pub mode: LumoTheme,
+    /// Cor accent (hex 0xRRGGBB). Sobrescreve accent da paleta base.
+    pub accent: Option<u32>,
+    /// ink_deep override (hex 0xRRGGBB). None = usa paleta padrao.
+    pub ink_deep: Option<u32>,
+    /// pill_bg override (hex 0xRRGGBB).
+    pub pill_bg: Option<u32>,
+}
+
+/// Erros de I/O ao ler/escrever theme.toml.
+#[derive(Debug)]
+pub enum TokenError {
+    Io(std::io::Error),
+    Toml(String),
+}
+
+impl std::fmt::Display for TokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenError::Io(e) => write!(f, "IO: {e}"),
+            TokenError::Toml(s) => write!(f, "TOML: {s}"),
+        }
+    }
+}
+
+impl LumoTokens {
+    /// Retorna o path padrao: ~/.config/lumo/theme.toml
+    pub fn config_path() -> Option<std::path::PathBuf> {
+        let home = std::env::var_os("HOME")?;
+        let mut p = std::path::PathBuf::from(home);
+        p.push(".config/lumo/theme.toml");
+        Some(p)
+    }
+
+    /// Le ~/.config/lumo/theme.toml. Fallback para defaults se nao existe
+    /// ou se o arquivo esta malformado.
+    pub fn load_from_disk() -> Self {
+        let path = match Self::config_path() {
+            Some(p) => p,
+            None => return Self::default_tokens(),
+        };
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(_) => return Self::default_tokens(),
+        };
+        Self::parse_toml(&text).unwrap_or_else(|_| Self::default_tokens())
+    }
+
+    /// Salva o estado atual pra ~/.config/lumo/theme.toml.
+    pub fn save_to_disk(&self) -> Result<(), TokenError> {
+        let path = Self::config_path().ok_or_else(|| {
+            TokenError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "HOME nao definido",
+            ))
+        })?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(TokenError::Io)?;
+        }
+        let content = self.to_toml();
+        std::fs::write(&path, content).map_err(TokenError::Io)?;
+        Ok(())
+    }
+
+    /// Resolve tokens como LumoColors, aplicando overrides sobre a paleta base.
+    pub fn resolve(&self) -> LumoColors {
+        let mut colors = match self.mode {
+            LumoTheme::Light => LumoColors::light(),
+            LumoTheme::Dark => LumoColors::dark(),
+        };
+        if let Some(accent) = self.accent {
+            colors.accent = accent;
+        }
+        if let Some(ink) = self.ink_deep {
+            colors.bg = ink;
+        }
+        if let Some(pill) = self.pill_bg {
+            colors.pill_bg = pill;
+        }
+        colors
+    }
+
+    fn default_tokens() -> Self {
+        let mode = match std::env::var("LUMO_THEME").as_deref() {
+            Ok("dark") | Ok("Dark") | Ok("DARK") => LumoTheme::Dark,
+            _ => LumoTheme::Light,
+        };
+        Self { mode, accent: None, ink_deep: None, pill_bg: None }
+    }
+
+    fn parse_toml(text: &str) -> Result<Self, TokenError> {
+        let mut mode = LumoTheme::Light;
+        let mut accent: Option<u32> = None;
+        let mut ink_deep: Option<u32> = None;
+        let mut pill_bg: Option<u32> = None;
+
+        // Parser minimalista: nao depende de serde para manter zero deps extras.
+        // Percorre linhas, extrai pares key = "value".
+        let mut section = "";
+        for raw_line in text.lines() {
+            let line = raw_line.trim();
+            if line.starts_with('[') && line.ends_with(']') {
+                section = &line[1..line.len() - 1];
+                continue;
+            }
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let Some(eq) = line.find('=') else { continue };
+            let key = line[..eq].trim();
+            let val = line[eq + 1..].trim().trim_matches('"').trim_matches('\'');
+            match (section, key) {
+                ("theme", "mode") => {
+                    mode = match val {
+                        "dark" | "Dark" | "DARK" => LumoTheme::Dark,
+                        _ => LumoTheme::Light,
+                    };
+                }
+                ("colors", "accent") => accent = parse_hex_color(val),
+                ("colors", "ink_deep") => ink_deep = parse_hex_color(val),
+                ("colors", "pill_bg") => pill_bg = parse_hex_color(val),
+                _ => {}
+            }
+        }
+        Ok(Self { mode, accent, ink_deep, pill_bg })
+    }
+
+    fn to_toml(&self) -> String {
+        let mut out = String::new();
+        out.push_str("[theme]\n");
+        let mode_str = match self.mode {
+            LumoTheme::Light => "light",
+            LumoTheme::Dark => "dark",
+        };
+        out.push_str(&format!("mode = \"{mode_str}\"\n\n"));
+        out.push_str("[colors]\n");
+        if let Some(a) = self.accent {
+            out.push_str(&format!("accent = \"#{:06X}\"\n", a));
+        }
+        if let Some(i) = self.ink_deep {
+            out.push_str(&format!("ink_deep = \"#{:06X}\"\n", i));
+        }
+        if let Some(p) = self.pill_bg {
+            out.push_str(&format!("pill_bg = \"#{:06X}\"\n", p));
+        }
+        out
+    }
+}
+
+/// Parseia "#RRGGBB" ou "RRGGBB" em 0xRRGGBB. None se invalido.
+fn parse_hex_color(s: &str) -> Option<u32> {
+    let s = s.strip_prefix('#').unwrap_or(s);
+    if s.len() != 6 {
+        return None;
+    }
+    u32::from_str_radix(s, 16).ok()
+}
+
+// ---------------------------------------------------------------------------
+// watch_theme -- file watcher via notify
+// ---------------------------------------------------------------------------
+
+/// Inicia um thread que observa ~/.config/lumo/theme.toml e chama
+/// `callback` com o LumoTokens atualizado sempre que o arquivo muda.
+///
+/// Usa `notify` crate (backend inotify no Linux). O callback roda
+/// em thread separada; use mpsc para sincronizar com o main loop.
+///
+/// Retorna silenciosamente se o path de config nao puder ser determinado
+/// ou se o watcher falhar (nao bloqueia o boot do client).
+pub fn watch_theme<F: Fn(LumoTokens) + Send + 'static>(callback: F) {
+    let Some(path) = LumoTokens::config_path() else { return };
+    std::thread::Builder::new()
+        .name("lumo-theme-watcher".into())
+        .spawn(move || {
+            use notify::{EventKind, RecursiveMode, Watcher};
+            use notify::event::{ModifyKind, CreateKind};
+
+            // Garante que o diretorio existe antes de registrar o watcher.
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+
+            let (tx, rx) = std::sync::mpsc::channel();
+            let mut watcher = match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+                if let Ok(ev) = res {
+                    let _ = tx.send(ev);
+                }
+            }) {
+                Ok(w) => w,
+                Err(e) => {
+                    eprintln!("[lumo-foundation] watch_theme: watcher init falhou: {e}");
+                    return;
+                }
+            };
+
+            // Observa o diretorio pai para capturar criacao/atomic-rename do arquivo.
+            let watch_dir = path.parent().unwrap_or(path.as_path());
+            if let Err(e) = watcher.watch(watch_dir, RecursiveMode::NonRecursive) {
+                eprintln!("[lumo-foundation] watch_theme: watch({}) falhou: {e}", watch_dir.display());
+                return;
+            }
+
+            for event in rx {
+                let is_theme_file = event.paths.iter().any(|p| p == &path);
+                if !is_theme_file {
+                    continue;
+                }
+                let relevant = matches!(
+                    event.kind,
+                    EventKind::Modify(ModifyKind::Data(_))
+                    | EventKind::Modify(ModifyKind::Any)
+                    | EventKind::Create(CreateKind::File)
+                    | EventKind::Create(CreateKind::Any)
+                );
+                if relevant {
+                    let tokens = LumoTokens::load_from_disk();
+                    callback(tokens);
+                }
+            }
+        })
+        .ok();
+}
+
+// ---------------------------------------------------------------------------
+// Tests LumoTokens
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod theme_tests {
+    use super::*;
+
+    #[test]
+    fn load_fallback_when_no_file() {
+        // Com HOME apontando pra dir inexistente, deve retornar defaults.
+        std::env::set_var("HOME", "/tmp/lumo_test_nonexistent_xyz");
+        let tokens = LumoTokens::load_from_disk();
+        assert!(matches!(tokens.mode, LumoTheme::Light));
+        assert!(tokens.accent.is_none());
+    }
+
+    #[test]
+    fn parse_toml_basic() {
+        let toml = "[theme]\nmode = \"dark\"\n\n[colors]\naccent = \"#3B82F6\"\nink_deep = \"#0a0a0c\"\n";
+        let tokens = LumoTokens::parse_toml(toml).unwrap();
+        assert!(matches!(tokens.mode, LumoTheme::Dark));
+        assert_eq!(tokens.accent, Some(0x3B82F6));
+        assert_eq!(tokens.ink_deep, Some(0x0a0a0c));
+    }
+
+    #[test]
+    fn parse_hex_color_valid() {
+        assert_eq!(parse_hex_color("#FF6B35"), Some(0xFF6B35));
+        assert_eq!(parse_hex_color("3B82F6"), Some(0x3B82F6));
+        assert_eq!(parse_hex_color("#ZZZZZZ"), None);
+    }
+
+    #[test]
+    fn roundtrip_toml() {
+        let t = LumoTokens {
+            mode: LumoTheme::Dark,
+            accent: Some(0xFF6B35),
+            ink_deep: None,
+            pill_bg: Some(0x1F1F22),
+        };
+        let toml = t.to_toml();
+        let t2 = LumoTokens::parse_toml(&toml).unwrap();
+        assert!(matches!(t2.mode, LumoTheme::Dark));
+        assert_eq!(t2.accent, Some(0xFF6B35));
+        assert_eq!(t2.pill_bg, Some(0x1F1F22));
+        assert!(t2.ink_deep.is_none());
+    }
+
+    #[test]
+    fn resolve_applies_overrides() {
+        let t = LumoTokens {
+            mode: LumoTheme::Light,
+            accent: Some(0xABCDEF),
+            ink_deep: None,
+            pill_bg: None,
+        };
+        let colors = t.resolve();
+        assert_eq!(colors.accent, 0xABCDEF);
+    }
+}

@@ -82,6 +82,9 @@ pub fn drain_ipc(
                     LumoEvent::ActiveApp { app_id, title, pid } => {
                         active_app = Some((app_id, title, pid));
                     }
+                    LumoEvent::ThemeReloaded { .. } => {
+                        // L5: bar ignora ThemeReloaded (tema recarrega em proximo frame).
+                    }
                 }
             }
         }

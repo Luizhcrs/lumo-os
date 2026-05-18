@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::io::{ErrorKind, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
+use std::sync::mpsc;
 
 use anyhow::{anyhow, Result};
 use lumo_ipc::{
@@ -106,10 +107,21 @@ impl IpcClient {
 }
 
 /// Estado do servidor IPC.
-#[derive(Default)]
 pub struct IpcServer {
     pub socket_path: Option<PathBuf>,
     pub clients: Vec<IpcClient>,
+    /// L6: receiver de eventos de theme change do watcher thread.
+    pub theme_rx: Option<mpsc::Receiver<lumo_ipc::ThemeMode>>,
+}
+
+impl Default for IpcServer {
+    fn default() -> Self {
+        Self {
+            socket_path: None,
+            clients: Vec::new(),
+            theme_rx: None,
+        }
+    }
 }
 
 impl IpcServer {
@@ -137,6 +149,20 @@ impl IpcServer {
             self.clients.swap_remove(i);
         }
     }
+}
+
+/// L6: inicia thread watcher de ~/.config/lumo/theme.toml.
+/// Retorna Receiver que tick() usa pra drenar notificacoes.
+pub fn spawn_theme_watcher() -> Option<mpsc::Receiver<lumo_ipc::ThemeMode>> {
+    let (tx, rx) = mpsc::channel::<lumo_ipc::ThemeMode>();
+    lumo_foundation::watch_theme(move |tokens| {
+        let mode = match tokens.mode {
+            lumo_foundation::LumoTheme::Light => lumo_ipc::ThemeMode::Light,
+            lumo_foundation::LumoTheme::Dark => lumo_ipc::ThemeMode::Dark,
+        };
+        let _ = tx.send(mode);
+    });
+    Some(rx)
 }
 
 /// Inicializa listener e registra source de accept no calloop.
@@ -201,6 +227,7 @@ pub fn init(loop_handle: LoopHandle<'static, LumoState>) -> Result<IpcServer> {
     Ok(IpcServer {
         socket_path: Some(path),
         clients: Vec::new(),
+        theme_rx: spawn_theme_watcher(),
     })
 }
 
@@ -239,5 +266,23 @@ pub fn tick(state: &mut LumoState) {
     }
     for cmd in commands {
         state.handle_ipc_command(cmd);
+    }
+    // L6: drena notificacoes do theme watcher e broadcast ThemeReloaded.
+    // Coleta modos primeiro (borrow imutavel de theme_rx), depois broadcast
+    // (borrow mutavel de ipc.clients). Nao podem ser combinados no mesmo scope.
+    let pending_modes: Vec<lumo_ipc::ThemeMode> = {
+        if let Some(rx) = state.ipc.theme_rx.as_ref() {
+            let mut v = Vec::new();
+            while let Ok(mode) = rx.try_recv() {
+                v.push(mode);
+            }
+            v
+        } else {
+            Vec::new()
+        }
+    };
+    for mode in pending_modes {
+        tracing::info!(?mode, "L6: theme change detectado via watcher, broadcast");
+        state.ipc.broadcast(&LumoEvent::ThemeReloaded { mode });
     }
 }

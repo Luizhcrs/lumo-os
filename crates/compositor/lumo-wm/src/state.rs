@@ -350,6 +350,17 @@ impl LumoState {
                 // Idempotente — clients sem menu ativo ignoram.
                 self.ipc.broadcast(&LumoEvent::CloseDesktopMenu);
             }
+            LumoCommand::ReloadTheme => {
+                // L6: lumoctl pediu reload de theme.toml.
+                // Le tokens atualizados e broadcast ThemeReloaded pros clients.
+                let tokens = lumo_foundation::LumoTokens::load_from_disk();
+                let mode = match tokens.mode {
+                    lumo_foundation::LumoTheme::Light => lumo_ipc::ThemeMode::Light,
+                    lumo_foundation::LumoTheme::Dark => lumo_ipc::ThemeMode::Dark,
+                };
+                tracing::info!(?mode, "L6: ThemeReloaded broadcast");
+                self.ipc.broadcast(&LumoEvent::ThemeReloaded { mode });
+            }
         }
     }
 

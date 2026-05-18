@@ -19,6 +19,14 @@ pub const SOCKET_BASENAME: &str = "lumo-wm.sock";
 /// (alinhado com lumo-bar que ja desenha 5 pills).
 pub const MAX_WORKSPACES: u8 = 5;
 
+/// Modo do tema: light ou dark.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemeMode {
+    Light,
+    Dark,
+}
+
 /// Eventos emitidos pelo compositor (server) pros clientes.
 /// Tag `type` em snake_case pra parse trivial via jq/grep.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -48,6 +56,9 @@ pub enum LumoEvent {
     /// Quando nenhuma janela tem foco (focus = None), emite ActiveApp com
     /// campos vazios e pid = 0 pra bar limpar menubar.
     ActiveApp { app_id: String, title: String, pid: u32 },
+    /// L6: tema foi recarregado. Compositor detectou mudanca em theme.toml
+    /// e broadcast pra todos os clients. Clients recarregam palette e redesenham.
+    ThemeReloaded { mode: ThemeMode },
 }
 
 /// Comandos enviados pelos clientes (lumo-bar, lumoctl, etc) ao
@@ -67,6 +78,9 @@ pub enum LumoCommand {
     /// contextual. Enviado por lumo-bar quando abre dropdown (mutex).
     /// Compositor traduz em broadcast LumoEvent::CloseDesktopMenu.
     CloseDesktopMenu,
+    /// L6: pede pro compositor recarregar theme.toml e broadcast ThemeReloaded.
+    /// Enviado por lumoctl apos escrever novo theme.toml.
+    ReloadTheme,
 }
 
 /// Path padrao do socket. Falha se `XDG_RUNTIME_DIR` ausente.
@@ -119,5 +133,21 @@ mod tests {
     fn blank_line_is_skipped() {
         assert!(parse_command("").is_none());
         assert!(parse_command("   \n").is_none());
+    }
+
+    #[test]
+    fn theme_reloaded_roundtrip() {
+        let ev = LumoEvent::ThemeReloaded { mode: ThemeMode::Dark };
+        let line = encode_event(&ev);
+        let parsed: LumoEvent = serde_json::from_str(line.trim()).unwrap();
+        assert_eq!(parsed, ev);
+    }
+
+    #[test]
+    fn reload_theme_command_roundtrip() {
+        let cmd = LumoCommand::ReloadTheme;
+        let json = serde_json::to_string(&cmd).unwrap();
+        let parsed: LumoCommand = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, cmd);
     }
 }

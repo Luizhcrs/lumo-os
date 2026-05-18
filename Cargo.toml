@@ -12,6 +12,8 @@ members = [
     "crates/compositor/lumo-wm",
     "crates/compositor/lumo-ipc",
     "crates/lumo-gfx-core",
+    "crates/system/lumo-sensors",
+    "crates/cli/lumoctl",
 ]
 
 [profile.release]
