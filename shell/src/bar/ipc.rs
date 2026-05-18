@@ -30,16 +30,23 @@ pub fn connect_ipc() -> Option<UnixStream> {
     }
 }
 
-/// A25: retorna (alive, close_dropdowns_requested). Caller usa flag pra
-/// fechar dropdown ativo + redraw imediato (memory feedback_input_feedback_imediato).
+/// C5: resultado do drain_ipc.
+pub struct DrainResult {
+    pub alive: bool,
+    pub close_dropdowns: bool,
+    pub active_app: Option<(String, String, u32)>,
+}
+
+/// Drena eventos do socket IPC. Non-blocking.
 pub fn drain_ipc(
     stream: &mut UnixStream,
     rx_buf: &mut Vec<u8>,
     active_ws: &Arc<AtomicU8>,
-) -> (bool, bool) {
+) -> DrainResult {
     let mut tmp = [0u8; 256];
     let mut alive = true;
     let mut close_dropdowns = false;
+    let mut active_app: Option<(String, String, u32)> = None;
     loop {
         match stream.read(&mut tmp) {
             Ok(0) => {
@@ -72,14 +79,14 @@ pub fn drain_ipc(
                     LumoEvent::DesktopOpenSelected => {
                         // A40: evento destinado ao lumo-desktop, bar ignora.
                     }
-                    LumoEvent::ActiveApp { .. } => {
-                        // C5 WIP: bar futuramente exibe menubar Mac-style aqui.
+                    LumoEvent::ActiveApp { app_id, title, pid } => {
+                        active_app = Some((app_id, title, pid));
                     }
                 }
             }
         }
     }
-    (alive, close_dropdowns)
+    DrainResult { alive, close_dropdowns, active_app }
 }
 
 impl LumoBar {

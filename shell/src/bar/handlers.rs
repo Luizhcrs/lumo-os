@@ -34,12 +34,6 @@ use crate::bar::tokens::*;
 use crate::menu;
 
 impl LumoBar {
-    /// C5: salva hit-rects do PaintResult pra input handler.
-    pub fn update_appmenu_rects_from_paint(&mut self, result: &crate::bar::state::PaintResult) {
-        self.appmenu_pill_rects = result.appmenu_pill_rects.clone();
-        self.appmenu_submenu_rects = result.appmenu_submenu_rects.clone();
-    }
-
     pub fn refresh(&mut self) {
         // A20: leitura completa /sys/class/power_supply.
         self.battery_info = read_battery_info();

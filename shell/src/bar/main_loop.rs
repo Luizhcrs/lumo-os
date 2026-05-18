@@ -29,7 +29,7 @@ use crate::bar::dropdowns::battery::BatteryInfo;
 use crate::bar::dropdowns::wifi::WifiInfo;
 use crate::bar::dropdowns::DropdownActive;
 use crate::bar::fonts::{font_system, swash_cache};
-use crate::bar::ipc::{connect_ipc, drain_ipc, DrainResult};
+use crate::bar::ipc::{connect_ipc, drain_ipc};
 use lumo_animation::{AnimCurve, LAAnimator, LACurve, Spring};
 use crate::bar::state::LumoBar;
 use crate::bar::tokens::*;
@@ -223,7 +223,9 @@ pub fn run() {
         if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
             last_ipc_tick = Instant::now();
             if let Some(mut s) = state.ipc_stream.take() {
-                let (alive, close_dropdowns) = drain_ipc(&mut s, &mut state.ipc_rx_buf, &state.active_workspace);
+                let res = drain_ipc(&mut s, &mut state.ipc_rx_buf, &state.active_workspace);
+                let alive = res.alive;
+                let close_dropdowns = res.close_dropdowns;
                 if alive {
                     state.ipc_stream = Some(s);
                 } else {

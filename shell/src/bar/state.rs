@@ -82,6 +82,10 @@ pub(crate) struct PaintResult {
     pub wifi_disconnect_rect: Option<(f32, f32, f32, f32)>,
     pub wifi_connect_rects: Vec<(String, (f32, f32, f32, f32))>,
     pub last_click_at: Option<Instant>,
+    // C5: hit-rects pills appmenu top-level (idx, rect).
+    pub appmenu_pill_rects: Vec<(usize, (f32, f32, f32, f32))>,
+    // C5: hit-rects subitens submenu aberto (sidx, rect).
+    pub appmenu_submenu_rects: Vec<(usize, (f32, f32, f32, f32))>,
 }
 
 // ============================================================
