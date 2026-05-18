@@ -6,8 +6,10 @@
 //! a acao correspondente.
 
 use smithay::backend::input::{
-    AbsolutePositionEvent, ButtonState, Event as _, InputBackend, InputEvent, KeyState,
-    KeyboardKeyEvent, PointerButtonEvent, PointerMotionEvent,
+    AbsolutePositionEvent, ButtonState, Event as _, GestureBeginEvent,
+    GestureEndEvent, GesturePinchUpdateEvent, GestureSwipeUpdateEvent,
+    InputBackend, InputEvent, KeyState, KeyboardKeyEvent, PointerButtonEvent,
+    PointerMotionEvent,
 };
 use smithay::input::keyboard::FilterResult;
 use smithay::input::pointer::{ButtonEvent, MotionEvent};
@@ -15,6 +17,7 @@ use smithay::utils::SERIAL_COUNTER;
 use smithay::wayland::seat::WaylandFocus;
 
 use crate::input::keyboard::{KeyAction, TileDir};
+use crate::input::touchpad::SwipeDirection;
 use crate::state::LumoState;
 
 impl LumoState {
@@ -134,7 +137,72 @@ impl LumoState {
                 pointer.frame(self);
             }
 
+            InputEvent::GestureSwipeBegin { event } => {
+                let fingers = event.fingers();
+                self.gesture.on_swipe_begin(fingers);
+                tracing::debug!(fingers, "gesture swipe begin");
+            }
+
+            InputEvent::GestureSwipeUpdate { event } => {
+                self.gesture.on_swipe_update(event.delta_x(), event.delta_y());
+            }
+
+            InputEvent::GestureSwipeEnd { event } => {
+                if let Some((fingers, dir)) = self.gesture.on_swipe_end(event.cancelled()) {
+                    self.handle_swipe_gesture(fingers, dir);
+                }
+            }
+
+            InputEvent::GesturePinchBegin { event } => {
+                self.gesture.on_pinch_begin(event.fingers());
+                tracing::debug!("gesture pinch begin");
+            }
+
+            InputEvent::GesturePinchUpdate { event } => {
+                self.gesture.on_pinch_update(event.scale());
+            }
+
+            InputEvent::GesturePinchEnd { event } => {
+                if let Some(scale) = self.gesture.on_pinch_end(event.cancelled()) {
+                    tracing::info!(scale, "gesture pinch end -> forward cliente (futuro)");
+                }
+            }
+
             _ => {}
+        }
+    }
+
+    fn handle_swipe_gesture(&mut self, fingers: u32, dir: SwipeDirection) {
+        use lumo_ipc::MAX_WORKSPACES;
+        match fingers {
+            3 => match dir {
+                SwipeDirection::Left => {
+                    let next = (self.active_workspace % MAX_WORKSPACES) + 1;
+                    tracing::info!(from = self.active_workspace, to = next, "3-finger left -> workspace next");
+                    self.set_workspace(next);
+                }
+                SwipeDirection::Right => {
+                    let prev = if self.active_workspace <= 1 {
+                        MAX_WORKSPACES
+                    } else {
+                        self.active_workspace - 1
+                    };
+                    tracing::info!(from = self.active_workspace, to = prev, "3-finger right -> workspace prev");
+                    self.set_workspace(prev);
+                }
+                SwipeDirection::Up => {
+                    tracing::info!("3-finger up -> mission control (stub)");
+                }
+                SwipeDirection::Down => {
+                    tracing::info!("3-finger down -> app expose (stub)");
+                }
+            },
+            4 => {
+                tracing::info!(dir = ?dir, "4-finger swipe -> desktop reveal (stub)");
+            }
+            _ => {
+                tracing::debug!(fingers, dir = ?dir, "swipe gesture nao mapeado");
+            }
         }
     }
 
