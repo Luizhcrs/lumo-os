@@ -121,35 +121,43 @@ fn load_extra_fonts(fs: &mut FontSystem) {
         Some("/usr/local/share/fonts".to_string()),
     ];
     for opt in candidates.iter().flatten() {
-        if let Ok(entries) = std::fs::read_dir(opt) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                let ext_ok = p
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| {
-                        let l = e.to_ascii_lowercase();
-                        l == "ttf" || l == "otf"
-                    })
-                    .unwrap_or(false);
-                if ext_ok {
-                    let name = p.to_string_lossy().to_lowercase();
-                    if name.contains("geist") || name.contains("jetbrains") {
-                        fs.db_mut().load_font_file(&p).ok();
-                    }
-                }
-            }
+        walk_load(fs, std::path::Path::new(opt));
+    }
+}
+
+fn walk_load(fs: &mut FontSystem, dir: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.is_dir() {
+            walk_load(fs, &p);
+            continue;
+        }
+        let ext_ok = p
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| {
+                let l = e.to_ascii_lowercase();
+                l == "ttf" || l == "otf"
+            })
+            .unwrap_or(false);
+        if !ext_ok {
+            continue;
+        }
+        let name = p.to_string_lossy().to_lowercase();
+        if name.contains("geist") || name.contains("jetbrains") || name.contains("inter") {
+            fs.db_mut().load_font_file(&p).ok();
         }
     }
 }
 
 fn pick_font_family(fs: &FontSystem) -> String {
+    // A29: desktop renderiza SO menus (UI). Geist Sans first.
     let preferred = [
-        "Geist Mono",
-        "GeistMono Nerd Font",
+        "Geist",
+        "Inter",
         "JetBrainsMono Nerd Font",
-        "JetBrains Mono",
-        "JetBrainsMono Nerd Font Mono",
+        "sans-serif",
     ];
     let faces: Vec<String> = fs
         .db()
@@ -163,16 +171,16 @@ fn pick_font_family(fs: &FontSystem) -> String {
     }
     for p in preferred {
         let pl = p.to_lowercase();
-        let token = pl.split_whitespace().next().unwrap_or("monospace");
+        let token = pl.split_whitespace().next().unwrap_or("sans-serif");
         if let Some(found) = faces.iter().find(|f| f.to_lowercase().contains(token)) {
             return found.clone();
         }
     }
-    "monospace".to_string()
+    "sans-serif".to_string()
 }
 
 fn current_family() -> &'static str {
-    FONT_FAMILY.get().map(|s| s.as_str()).unwrap_or("monospace")
+    FONT_FAMILY.get().map(|s| s.as_str()).unwrap_or("sans-serif")
 }
 
 // ============================================================

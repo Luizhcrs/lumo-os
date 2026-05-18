@@ -42,7 +42,7 @@ use cosmic_text::{
     SwashCache,
 };
 use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
+    compositor::{CompositorHandler, CompositorState, Region},
     delegate_compositor, delegate_layer, delegate_output, delegate_pointer, delegate_registry,
     delegate_seat, delegate_shm,
     output::{OutputHandler, OutputState},
@@ -229,15 +229,20 @@ fn to_cosmic(c: Color) -> CosmicColor {
 
 static FONT_SYSTEM: OnceLock<Mutex<FontSystem>> = OnceLock::new();
 static SWASH_CACHE: OnceLock<Mutex<SwashCache>> = OnceLock::new();
-static FONT_FAMILY: OnceLock<String> = OnceLock::new();
+// A29: 2 familias. UI = Geist Sans (menus, labels, dropdowns). MONO =
+// Geist Mono (clock HH:MM, workspace numero, valores calendario).
+static FONT_FAMILY_UI: OnceLock<String> = OnceLock::new();
+static FONT_FAMILY_MONO: OnceLock<String> = OnceLock::new();
 
 fn font_system() -> &'static Mutex<FontSystem> {
     FONT_SYSTEM.get_or_init(|| {
         let mut fs = FontSystem::new();
         load_extra_fonts(&mut fs);
-        let family = pick_font_family(&fs);
-        eprintln!("[lumo-bar] font_family escolhida = {}", family);
-        let _ = FONT_FAMILY.set(family);
+        let ui = pick_font_family(&fs, false);
+        let mono = pick_font_family(&fs, true);
+        eprintln!("[lumo-bar] font_family UI = {} | MONO = {}", ui, mono);
+        let _ = FONT_FAMILY_UI.set(ui);
+        let _ = FONT_FAMILY_MONO.set(mono);
         Mutex::new(fs)
     })
 }
@@ -254,36 +259,55 @@ fn load_extra_fonts(fs: &mut FontSystem) {
         Some("/usr/local/share/fonts".to_string()),
     ];
     for opt in candidates.iter().flatten() {
-        if let Ok(entries) = std::fs::read_dir(opt) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                let ext_ok = p
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| {
-                        let l = e.to_ascii_lowercase();
-                        l == "ttf" || l == "otf"
-                    })
-                    .unwrap_or(false);
-                if ext_ok {
-                    let name = p.to_string_lossy().to_lowercase();
-                    if name.contains("geist") || name.contains("jetbrains") {
-                        fs.db_mut().load_font_file(&p).ok();
-                    }
-                }
-            }
+        walk_load(fs, std::path::Path::new(opt));
+    }
+}
+
+fn walk_load(fs: &mut FontSystem, dir: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let p = entry.path();
+        if p.is_dir() {
+            walk_load(fs, &p);
+            continue;
+        }
+        let ext_ok = p
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| {
+                let l = e.to_ascii_lowercase();
+                l == "ttf" || l == "otf"
+            })
+            .unwrap_or(false);
+        if !ext_ok {
+            continue;
+        }
+        let name = p.to_string_lossy().to_lowercase();
+        if name.contains("geist") || name.contains("jetbrains") || name.contains("inter") {
+            fs.db_mut().load_font_file(&p).ok();
         }
     }
 }
 
-fn pick_font_family(fs: &FontSystem) -> String {
-    let preferred = [
-        "Geist Mono",
-        "GeistMono Nerd Font",
-        "JetBrainsMono Nerd Font",
-        "JetBrains Mono",
-        "JetBrainsMono Nerd Font Mono",
-    ];
+/// A29: escolhe familia com base no perfil. `prefer_mono=true` -> Geist Mono
+/// (clock, numeros). `false` -> Geist Sans (UI, menus, labels).
+fn pick_font_family(fs: &FontSystem, prefer_mono: bool) -> String {
+    let preferred: &[&str] = if prefer_mono {
+        &[
+            "Geist Mono",
+            "GeistMono Nerd Font",
+            "JetBrainsMono Nerd Font Mono",
+            "JetBrainsMono Nerd Font",
+            "JetBrains Mono",
+        ]
+    } else {
+        &[
+            "Geist",
+            "Inter",
+            "JetBrainsMono Nerd Font",
+            "sans-serif",
+        ]
+    };
     let faces: Vec<String> = fs
         .db()
         .faces()
@@ -291,7 +315,7 @@ fn pick_font_family(fs: &FontSystem) -> String {
         .collect();
     for p in preferred {
         if faces.iter().any(|f| f.eq_ignore_ascii_case(p)) {
-            return p.to_string();
+            return (*p).to_string();
         }
     }
     for p in preferred {
@@ -301,12 +325,26 @@ fn pick_font_family(fs: &FontSystem) -> String {
             return found.clone();
         }
     }
-    eprintln!("[lumo-bar] warning: nem Geist nem JetBrains Mono encontrada; usando monospace generico");
-    "monospace".to_string()
+    if prefer_mono {
+        eprintln!("[lumo-bar] warning: Geist Mono nao encontrada; fallback monospace");
+        "monospace".to_string()
+    } else {
+        eprintln!("[lumo-bar] warning: Geist Sans nao encontrada; fallback sans-serif");
+        "sans-serif".to_string()
+    }
 }
 
-fn current_family() -> &'static str {
-    FONT_FAMILY.get().map(|s| s.as_str()).unwrap_or("monospace")
+fn current_family_ui() -> &'static str {
+    FONT_FAMILY_UI.get().map(|s| s.as_str()).unwrap_or("sans-serif")
+}
+
+fn current_family_mono() -> &'static str {
+    FONT_FAMILY_MONO.get().map(|s| s.as_str()).unwrap_or("monospace")
+}
+
+/// A29: helper pra escolher familia conforme contexto. `mono=true` -> Geist Mono.
+fn family_for(mono: bool) -> &'static str {
+    if mono { current_family_mono() } else { current_family_ui() }
 }
 
 // ============================================================
@@ -428,11 +466,12 @@ fn stroke_arc(
 // Text rendering.
 // ============================================================
 
-fn measure_text(text: &str, size: f32, bold: bool) -> f32 {
+/// A29: medida com escolha de familia. `mono=true` -> Geist Mono.
+fn measure_text_ex(text: &str, size: f32, bold: bool, mono: bool) -> f32 {
     let mut fs = font_system().lock().expect("font_system poisoned");
     let metrics = Metrics::new(size, size * 1.2);
     let mut buffer = CosmicBuffer::new(&mut fs, metrics);
-    let family = current_family().to_string();
+    let family = family_for(mono).to_string();
     let mut attrs = Attrs::new().family(Family::Name(&family));
     if bold {
         attrs = attrs.weight(cosmic_text::Weight::BOLD);
@@ -453,7 +492,18 @@ fn measure_text(text: &str, size: f32, bold: bool) -> f32 {
     w.ceil()
 }
 
-fn draw_text(
+#[inline]
+fn measure_text(text: &str, size: f32, bold: bool) -> f32 {
+    measure_text_ex(text, size, bold, false)
+}
+
+#[inline]
+fn measure_text_mono(text: &str, size: f32, bold: bool) -> f32 {
+    measure_text_ex(text, size, bold, true)
+}
+
+/// A29: render com escolha de familia. `mono=true` -> Geist Mono.
+fn draw_text_ex(
     canvas: &mut PixmapMut,
     x: f32,
     y_top: f32,
@@ -461,15 +511,23 @@ fn draw_text(
     size: f32,
     color: Color,
     bold: bool,
+    mono: bool,
 ) -> f32 {
     let mut fs = font_system().lock().expect("font_system poisoned");
     let mut cache = swash_cache().lock().expect("swash_cache poisoned");
     let metrics = Metrics::new(size, size * 1.2);
     let mut buffer = CosmicBuffer::new(&mut fs, metrics);
-    let family = current_family().to_string();
+    let family = family_for(mono).to_string();
     let mut attrs = Attrs::new().family(Family::Name(&family));
     if bold {
-        attrs = attrs.weight(cosmic_text::Weight::BOLD);
+        // A29: bold UI = 600 (SemiBold) pra match macOS spec; mono usa BOLD natural.
+        attrs = attrs.weight(if mono {
+            cosmic_text::Weight::BOLD
+        } else {
+            cosmic_text::Weight::SEMIBOLD
+        });
+    } else {
+        attrs = attrs.weight(cosmic_text::Weight::NORMAL);
     }
     buffer.set_text(&mut fs, text, attrs, Shaping::Advanced);
     buffer.set_size(&mut fs, Some(f32::INFINITY), Some(size * 1.4));
@@ -506,6 +564,32 @@ fn draw_text(
         }
     });
     max_w
+}
+
+#[inline]
+fn draw_text(
+    canvas: &mut PixmapMut,
+    x: f32,
+    y_top: f32,
+    text: &str,
+    size: f32,
+    color: Color,
+    bold: bool,
+) -> f32 {
+    draw_text_ex(canvas, x, y_top, text, size, color, bold, false)
+}
+
+#[inline]
+fn draw_text_mono(
+    canvas: &mut PixmapMut,
+    x: f32,
+    y_top: f32,
+    text: &str,
+    size: f32,
+    color: Color,
+    bold: bool,
+) -> f32 {
+    draw_text_ex(canvas, x, y_top, text, size, color, bold, true)
 }
 
 // ============================================================
@@ -965,8 +1049,9 @@ fn draw_battery_dropdown(
             v.truncate(v.char_indices().nth(20).map(|(i, _)| i).unwrap_or(v.len()));
             v.push_str("..");
         }
-        let vw = measure_text(&v, FONT_DROPDOWN_BODY, false);
-        draw_text(canvas, value_x - vw, cy, &v, FONT_DROPDOWN_BODY, fg, false);
+        // A29: valor numerico = Geist Mono (alinhamento tabular).
+        let vw = measure_text_mono(&v, FONT_DROPDOWN_BODY, false);
+        draw_text_mono(canvas, value_x - vw, cy, &v, FONT_DROPDOWN_BODY, fg, false);
         cy += DROPDOWN_ROW_H;
     }
 }
@@ -1212,8 +1297,9 @@ fn draw_wifi_dropdown(
             v.truncate(v.char_indices().nth(20).map(|(i, _)| i).unwrap_or(v.len()));
             v.push_str("..");
         }
-        let vw = measure_text(&v, FONT_DROPDOWN_BODY, false);
-        draw_text(canvas, value_x - vw, cy, &v, FONT_DROPDOWN_BODY, fg, false);
+        // A29: valor (IP, dBm, GHz, Mbps) = Geist Mono (alinhamento tabular).
+        let vw = measure_text_mono(&v, FONT_DROPDOWN_BODY, false);
+        draw_text_mono(canvas, value_x - vw, cy, &v, FONT_DROPDOWN_BODY, fg, false);
         cy += DROPDOWN_ROW_H;
     }
 }
@@ -1273,9 +1359,9 @@ fn draw_datetime_dropdown(
     draw_text(canvas, cx, cy, &title, FONT_DROPDOWN_TITLE, fg, true);
     cy += FONT_DROPDOWN_TITLE * 1.5;
 
-    // Linha 2: HH:MM:SS grande.
+    // Linha 2: HH:MM:SS grande. A29: Geist Mono (digito tabular).
     let clock = format!("{:02}:{:02}:{:02}", info.hour, info.minute, info.second);
-    draw_text(canvas, cx, cy, &clock, FONT_DROPDOWN_CLOCK, fg, false);
+    draw_text_mono(canvas, cx, cy, &clock, FONT_DROPDOWN_CLOCK, fg, false);
     cy += FONT_DROPDOWN_CLOCK * 1.3;
 
     // Separator 1px.
@@ -1347,7 +1433,8 @@ fn draw_datetime_dropdown(
                 let is_selected = info.selected_day == Some(day);
 
                 let day_str = day.to_string();
-                let day_w = measure_text(&day_str, FONT_DROPDOWN_CALENDAR, is_today);
+                // A29: digito calendario = Geist Mono (tabular figures).
+                let day_w = measure_text_mono(&day_str, FONT_DROPDOWN_CALENDAR, is_today);
                 let dx = cell_x + (DATETIME_CELL_W - day_w) / 2.0;
                 let dy = cell_y + (DATETIME_CELL_H - FONT_DROPDOWN_CALENDAR) / 2.0 - 1.0;
 
@@ -1360,16 +1447,16 @@ fn draw_datetime_dropdown(
                     let pxp = cell_x + (DATETIME_CELL_W - pill_w) / 2.0;
                     let pyp = cell_y + (DATETIME_CELL_H - pill_h) / 2.0;
                     fill_rrect(canvas, pxp, pyp, pill_w, pill_h, 9.0, accent);
-                    draw_text(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, on_accent, true);
+                    draw_text_mono(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, on_accent, true);
                 } else if is_selected {
                     let pill_w = 22.0;
                     let pill_h = 18.0;
                     let pxp = cell_x + (DATETIME_CELL_W - pill_w) / 2.0;
                     let pyp = cell_y + (DATETIME_CELL_H - pill_h) / 2.0;
                     fill_rrect(canvas, pxp, pyp, pill_w, pill_h, 9.0, accent_subtle);
-                    draw_text(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, fg, true);
+                    draw_text_mono(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, fg, true);
                 } else {
-                    draw_text(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, fg, false);
+                    draw_text_mono(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, fg, false);
                 }
             }
         }
@@ -1461,7 +1548,8 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
     // ============================================================
     let workspace_str = snap.active_ws.to_string();
     let lumo_w = measure_text("Lumo", FONT_PILL, true);
-    let ws_w = measure_text(&workspace_str, FONT_PILL, false);
+    // A29: workspace numero = Geist Mono (tabular, fixa largura entre 1..9).
+    let ws_w = measure_text_mono(&workspace_str, FONT_PILL, false);
 
     // Largura interna pill esquerda:
     //   pad + brand_dot(8) + gap + Lumo + gap + sep(4) + gap + ws + pad
@@ -1499,8 +1587,8 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
         // Separator dot middle.
         fill_circle(&mut canvas, cx + SEP_DOT_RADIUS, pill_cy, SEP_DOT_RADIUS, pill_sep);
         cx += SEP_DOT_RADIUS * 2.0 + PILL_GAP;
-        // Workspace numero.
-        draw_text(&mut canvas, cx, text_top, &workspace_str, FONT_PILL, pill_fg, false);
+        // Workspace numero. A29: Geist Mono.
+        draw_text_mono(&mut canvas, cx, text_top, &workspace_str, FONT_PILL, pill_fg, false);
     }
 
     // ============================================================
@@ -1508,7 +1596,8 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
     // ============================================================
     let bat_icon_w = battery_total_width();
     let clock_s = format!("{:02}:{:02}", snap.clock_hh, snap.clock_mm);
-    let clock_w = measure_text(&clock_s, FONT_PILL, false);
+    // A29: clock = Geist Mono (digito tabular, "11:11" vs "10:08" mesmo width).
+    let clock_w = measure_text_mono(&clock_s, FONT_PILL, false);
 
     let date_w = measure_text(&snap.date_str, FONT_DATE, false);
     let pill_r_content_w =
@@ -1537,7 +1626,8 @@ fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
         let datetime_x_start = cx;
         draw_text(&mut canvas, cx, text_top, &snap.date_str, FONT_DATE, pill_fg, false);
         cx += date_w + 8.0;
-        draw_text(&mut canvas, cx, text_top, &clock_s, FONT_PILL, pill_fg, false);
+        // A29: clock HH:MM = Geist Mono (digito tabular).
+        draw_text_mono(&mut canvas, cx, text_top, &clock_s, FONT_PILL, pill_fg, false);
         let datetime_end = cx + clock_w;
         result.datetime_hit_rect = Some((
             datetime_x_start - 4.0,
@@ -1752,6 +1842,8 @@ struct LumoBar {
     output_state: OutputState,
     shm: Shm,
     seat_state: SeatState,
+    /// A29: precisa pra criar wl_regions (set_input_region).
+    compositor_state: CompositorState,
     layer: LayerSurface,
     pool: SlotPool,
     width: u32,
@@ -1938,10 +2030,120 @@ impl LumoBar {
             }
         }
 
+        // A29: input_region = SO pills (esquerda + direita) + dropdown ativo.
+        // Resto da bar (Y < BAR_HEIGHT mas entre pills) e tudo abaixo de BAR_HEIGHT
+        // quando NAO ha dropdown = transparente ao input -> click passa pro
+        // desktop layer-shell (Background), permitindo menu right-click no top.
+        self.update_input_region();
+
         let surface = self.layer.wl_surface();
         surface.damage_buffer(0, 0, self.width as i32, self.height as i32);
         buffer.attach_to(surface).ok();
         surface.commit();
+    }
+
+    /// A29: define input_region da surface pra cobrir SO as pills + dropdown
+    /// quando aberto. Areas transparentes da surface passam input pro layer
+    /// abaixo (desktop), liberando o right-click do menu desktop em qualquer
+    /// posicao Y da tela.
+    fn update_input_region(&self) {
+        let Ok(region) = Region::new(&self.compositor_state) else {
+            // Se nao conseguir criar region, ficamos com default (surface toda
+            // captura input). Pior caso = comportamento atual.
+            return;
+        };
+
+        // Pill esquerda (Lumo + workspace). Tudo dentro da pill = clicavel.
+        if let Some((rx, ry, rw, rh)) = self.lumo_hit_rect {
+            region.add(
+                rx.floor() as i32,
+                ry.floor() as i32,
+                rw.ceil() as i32,
+                rh.ceil() as i32,
+            );
+        }
+
+        // Pill direita (bat + wifi + data + clock). Union dos 3 hit-rects = mesma
+        // PILL_H + intervalo continuo. Hit-rects ja tem 8px folga; union cobre
+        // pill direita inteira.
+        let right_rects = [self.bat_hit_rect, self.wifi_hit_rect, self.datetime_hit_rect];
+        let mut union: Option<(f32, f32, f32, f32)> = None;
+        for r in right_rects.iter().flatten() {
+            union = Some(match union {
+                None => *r,
+                Some((ux, uy, uw, uh)) => {
+                    let x0 = ux.min(r.0);
+                    let y0 = uy.min(r.1);
+                    let x1 = (ux + uw).max(r.0 + r.2);
+                    let y1 = (uy + uh).max(r.1 + r.3);
+                    (x0, y0, x1 - x0, y1 - y0)
+                }
+            });
+        }
+        if let Some((rx, ry, rw, rh)) = union {
+            region.add(
+                rx.floor() as i32,
+                ry.floor() as i32,
+                rw.ceil() as i32,
+                rh.ceil() as i32,
+            );
+        }
+
+        // Dropdown ativo: cobre area do painel pra capturar click dentro.
+        match self.dropdown {
+            DropdownActive::None => {}
+            DropdownActive::Battery | DropdownActive::Wifi => {
+                let anchor = if self.dropdown == DropdownActive::Battery {
+                    self.bat_hit_rect
+                } else {
+                    self.wifi_hit_rect
+                };
+                if let Some((rx, ry, rw, rh)) = anchor {
+                    let dx = (rx + rw / 2.0 - DROPDOWN_W / 2.0)
+                        .max(PILL_MARGIN_X)
+                        .min(self.width as f32 - PILL_MARGIN_X - DROPDOWN_W);
+                    let dy = ry + rh + DROPDOWN_GAP;
+                    region.add(
+                        dx.floor() as i32 - 8,
+                        dy.floor() as i32 - 4,
+                        DROPDOWN_W.ceil() as i32 + 16,
+                        DROPDOWN_H.ceil() as i32 + 16,
+                    );
+                }
+            }
+            DropdownActive::DateTime => {
+                if let Some((rx, ry, rw, rh)) = self.datetime_hit_rect {
+                    let dx = (rx + rw / 2.0 - DROPDOWN_DATETIME_W / 2.0)
+                        .max(PILL_MARGIN_X)
+                        .min(self.width as f32 - PILL_MARGIN_X - DROPDOWN_DATETIME_W);
+                    let dy = ry + rh + DROPDOWN_GAP;
+                    region.add(
+                        dx.floor() as i32 - 8,
+                        dy.floor() as i32 - 4,
+                        DROPDOWN_DATETIME_W.ceil() as i32 + 16,
+                        DROPDOWN_DATETIME_H.ceil() as i32 + 16,
+                    );
+                }
+            }
+            DropdownActive::LumoMenu => {
+                if let Some((rx, ry, _rw, rh)) = self.lumo_hit_rect {
+                    let dx = rx.max(PILL_MARGIN_X);
+                    let dy = ry + rh + DROPDOWN_GAP;
+                    let mh = menu::menu_height(MENU_LUMO_ITEMS);
+                    region.add(
+                        dx.floor() as i32 - 8,
+                        dy.floor() as i32 - 4,
+                        MENU_LUMO_W.ceil() as i32 + 16,
+                        mh.ceil() as i32 + 16,
+                    );
+                }
+            }
+        }
+
+        self.layer
+            .wl_surface()
+            .set_input_region(Some(region.wl_region()));
+        // region Drop -> wl_region.destroy() automatico.
     }
 }
 
@@ -2348,6 +2550,7 @@ fn main() {
         output_state: OutputState::new(&globals, &qh),
         shm,
         seat_state: SeatState::new(&globals, &qh),
+        compositor_state: compositor, // A29: pra set_input_region
         layer,
         pool,
         width: 1920, // A19.18 default = output Galaxy nativo
