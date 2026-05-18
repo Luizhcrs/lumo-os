@@ -104,6 +104,9 @@ pub struct DrmSurfaceData {
     pub drm_output: LumoDrmOutput,
     pub pending_flip: bool,
     pub last_frame_time: Instant,
+    // L2: frame timing log p50/p95/p99 a cada 60s.
+    pub frame_durations: Vec<Duration>,
+    pub last_timing_log: Instant,
 }
 
 /// Estado completo do backend DRM. Mantido em UserDataMap do state
@@ -590,6 +593,9 @@ pub fn run(
             drm_output,
             pending_flip: false,
             last_frame_time: Instant::now(),
+            // L2: frame timing log.
+            frame_durations: Vec::with_capacity(512),
+            last_timing_log: Instant::now(),
         }),
         gpu_node: primary,
     });
@@ -769,11 +775,21 @@ fn pick_crtc_for_connector(
     None
 }
 
-/// Renderiza 1 frame DRM. No-op se paused (VT switched) ou pending_flip.
-/// Chamado pelo frame timer a cada 16ms.
+/// Renderiza 1 frame DRM. No-op se paused, lid fechado, ou pending_flip.
+/// L2: lid closed skip + frame timing log p50/p95/p99.
 fn render_drm(state: &mut LumoState) {
     if state.paused {
         return;
+    }
+
+    // L2: lid fechado -> skip render (economiza GPU + bateria).
+    {
+        let lid_closed = state.lid_handler.lock()
+            .map(|l| l.closed_at.is_some())
+            .unwrap_or(false);
+        if lid_closed {
+            return;
+        }
     }
 
     state.frame_counter = state.frame_counter.wrapping_add(1);
@@ -853,10 +869,34 @@ fn render_drm(state: &mut LumoState) {
                 // Damage existe -> queue page-flip.
                 match surface.drm_output.queue_frame(()) {
                     Ok(()) => {
+                        let now = Instant::now();
+                        // L2: coleta duracao deste frame.
+                        let frame_dur = now.duration_since(surface.last_frame_time);
+                        surface.last_frame_time = now;
                         surface.pending_flip = true;
-                        surface.last_frame_time = Instant::now();
+                        surface.frame_durations.push(frame_dur);
                         if trace {
                             tracing::debug!(frame = frame_counter, "frame queued");
+                        }
+                        // L2: log p50/p95/p99 a cada 60s.
+                        if surface.last_timing_log.elapsed() >= Duration::from_secs(60)
+                            && surface.frame_durations.len() >= 10
+                        {
+                            let mut durs = surface.frame_durations.clone();
+                            durs.sort_unstable();
+                            let n = durs.len();
+                            let p50 = durs[n / 2].as_millis();
+                            let p95 = durs[(n * 95 / 100).min(n - 1)].as_millis();
+                            let p99 = durs[(n * 99 / 100).min(n - 1)].as_millis();
+                            tracing::info!(
+                                samples = n,
+                                p50_ms = p50,
+                                p95_ms = p95,
+                                p99_ms = p99,
+                                "L2: frame timing 60s window"
+                            );
+                            surface.frame_durations.clear();
+                            surface.last_timing_log = Instant::now();
                         }
                     }
                     Err(err) => {
