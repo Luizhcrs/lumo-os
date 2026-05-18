@@ -127,6 +127,12 @@ pub fn run() {
         viewed_year: Local::now().year(),
         viewed_month: Local::now().month(),
         selected_day: None,
+        // C5: appmenu.
+        appmenu: crate::bar::appmenu::AppMenuState::default(),
+        appmenu_open_idx: None,
+        appmenu_submenu: Vec::new(),
+        appmenu_pill_rects: Vec::new(),
+        appmenu_submenu_rects: Vec::new(),
         ipc_stream: connect_ipc(),
         ipc_rx_buf: Vec::with_capacity(256),
         theme,

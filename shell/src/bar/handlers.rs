@@ -132,6 +132,10 @@ impl LumoBar {
             wifi_info: self.wifi_info.clone(),  // A23
             datetime_info: read_datetime_info(self.viewed_year, self.viewed_month, self.selected_day), // A24+A26
             lumo_menu_hover_idx: self.lumo_menu_hover_idx, // A27
+            // C5: appmenu do app em foco.
+            appmenu_items: self.appmenu.items.clone(),
+            appmenu_open_idx: self.appmenu_open_idx,
+            appmenu_submenu: self.appmenu_submenu.clone(),
             // B4: valores correntes do animador (tick ja foi chamado antes do redraw).
             dropdown_scale: {
                 let v = self.dropdown_scale_anim.tick(0.0);

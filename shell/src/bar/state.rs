@@ -59,6 +59,10 @@ pub(crate) struct BarSnapshot {
     pub datetime_info: DateTimeInfo, // A24
     /// A27: indice do item em hover no menu Lumo (usize::MAX = nenhum).
     pub lumo_menu_hover_idx: usize,
+    // C5: appmenu pills (app em foco).
+    pub appmenu_items: Vec<crate::bar::appmenu::AppMenuItem>,
+    pub appmenu_open_idx: Option<usize>,
+    pub appmenu_submenu: Vec<crate::bar::appmenu::AppMenuItem>,
     // B4: fator de escala e opacidade do dropdown ativo (0.0=fechado, 1.0=aberto).
     pub dropdown_scale: f32,
     pub dropdown_alpha: f32,
@@ -416,6 +420,12 @@ pub(crate) struct LumoBar {
     pub viewed_month: u32,
     /// Dia selecionado (highlight extra alem do today). None = nenhum.
     pub selected_day: Option<u32>,
+    // C5: cache appmenu do app em foco.
+    pub appmenu: crate::bar::appmenu::AppMenuState,
+    pub appmenu_open_idx: Option<usize>,
+    pub appmenu_submenu: Vec<crate::bar::appmenu::AppMenuItem>,
+    pub appmenu_pill_rects: Vec<(usize, (f32, f32, f32, f32))>,
+    pub appmenu_submenu_rects: Vec<(usize, (f32, f32, f32, f32))>,
     pub ipc_stream: Option<UnixStream>,
     pub ipc_rx_buf: Vec<u8>,
     pub theme: LumoTheme,
