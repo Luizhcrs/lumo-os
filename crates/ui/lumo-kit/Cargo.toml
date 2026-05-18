@@ -2,7 +2,7 @@
 name = "lumo-kit"
 version = "0.1.0"
 edition = "2021"
-description = "Lumo Kit: widget primitives (Button + state machine). Apple AppKit-style namespace."
+description = "Lumo Kit: widget primitives (Button + state machine). widget primitives."
 
 [lib]
 path = "src/lib.rs"

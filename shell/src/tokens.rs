@@ -18,7 +18,7 @@ use std::time::Duration;
 pub use lumo_foundation::{current_colors, current_theme, LumoColors, LumoTheme};
 
 // ============================================================
-// Gallery legacy palette (dark, fixed) — Apple-fluid demo show-off.
+// Gallery legacy palette (dark, fixed) — polish fluido demo show-off.
 // Mantido por design: Gallery sempre dark intencional. Caller que quiser
 // theme-aware usa `current_colors()`.
 // ============================================================
@@ -41,7 +41,7 @@ pub const C_BACKDROP: u32    = 0x000000a6; // black .65
 pub const C_BACKDROP_SOFT: u32 = 0x00000080; // black .50
 
 // ============================================================
-// Durations (Apple HIG)
+// Durations (HIG)
 // ============================================================
 pub const DUR_QUICK: Duration  = Duration::from_millis(180);
 pub const DUR_BASE: Duration   = Duration::from_millis(280);

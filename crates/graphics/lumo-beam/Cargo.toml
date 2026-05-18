@@ -2,7 +2,7 @@
 name = "lumo-beam"
 version = "0.1.0"
 edition = "2021"
-description = "Lumo Beam: wgpu device + surface + triangle primitive. 'Feixe de luz rasteriza pixels'. Apple Metal-style namespace."
+description = "Lumo Beam: wgpu device + surface + triangle primitive. 'Feixe de luz rasteriza pixels'. GPU primitives."
 
 [lib]
 path = "src/lib.rs"

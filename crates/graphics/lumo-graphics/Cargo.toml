@@ -2,7 +2,7 @@
 name = "lumo-graphics"
 version = "0.1.0"
 edition = "2021"
-description = "Lumo Graphics: quad SDF + drop shadow + rounded corners primitive. Apple CoreGraphics-style namespace."
+description = "Lumo Graphics: quad SDF + drop shadow + rounded corners primitive. graphics primitives."
 
 [lib]
 path = "src/lib.rs"

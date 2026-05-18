@@ -50,7 +50,7 @@ impl LumoBar {
         // Scale: arranca de 0.85, curva rapida ~280ms.
         self.dropdown_scale_anim = LAAnimator::new(
             0.85f32, 1.0f32,
-            AnimCurve::Bezier { curve: LACurve::apple_spring_default(), duration: 0.28 },
+            AnimCurve::Bezier { curve: LACurve::ease_in_out(), duration: 0.28 },
         );
         // Alpha: fade-in mais curto ~220ms.
         self.dropdown_alpha_anim = LAAnimator::new(

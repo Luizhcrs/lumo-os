@@ -1,4 +1,4 @@
-//! luiz-shell — Apple-fluid widget gallery em GPUI.
+//! luiz-shell — polish fluido widget gallery em GPUI.
 //! Code review fixes P0+P1+P2 aplicados.
 
 mod tokens;

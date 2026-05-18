@@ -33,18 +33,26 @@ pub struct AppMenuState {
     pub items: Vec<AppMenuItem>,
     /// app_id do app que originou este cache (pra invalidar na troca).
     pub app_id: String,
+    // S2: titulo da janela do app com foco (fallback pill).
+    pub title: String,
 }
 
 impl AppMenuState {
     /// Busca menubar via DBus AppMenu.Registrar + dbusmenu.
     /// Em caso de falha retorna estado vazio (silencio).
-    pub fn fetch(pid: u32, app_id: &str) -> Self {
+    pub fn fetch(pid: u32, app_id: &str, title: &str) -> Self {
         if pid == 0 {
-            return Self::default();
+            let mut s = Self::default();
+            s.app_id = app_id.to_string();
+            s.title = title.to_string();
+            return s;
         }
         // Tenta lookup direto por PID primeiro.
         match fetch_inner(pid, app_id) {
-            Ok(state) if !state.items.is_empty() => return state,
+            Ok(mut state) if !state.items.is_empty() => {
+                state.title = title.to_string();
+                return state;
+            }
             Err(e) => {
                 eprintln!("[appmenu] C5: fetch direto pid={} falhou: {}", pid, e);
             }
@@ -53,10 +61,16 @@ impl AppMenuState {
         // Fallback: apps GTK3 registram com gtk_window_id (random), nao PID.
         // Tenta listar TODOS windows registrados + pegar primeiro com items.
         match fetch_any_registered(app_id) {
-            Ok(state) => state,
+            Ok(mut state) => {
+                state.title = title.to_string();
+                state
+            }
             Err(e) => {
                 eprintln!("[appmenu] C5: fetch fallback falhou: {}", e);
-                Self::default()
+                let mut s = Self::default();
+                s.app_id = app_id.to_string();
+                s.title = title.to_string();
+                s
             }
         }
     }
@@ -137,7 +151,8 @@ fn fetch_inner(pid: u32, app_id: &str) -> Result<AppMenuState, Box<dyn std::erro
         service,
         object_path: obj_path,
         items,
-        app_id: app_id.to_string(),
+        title: String::new(),
+            app_id: app_id.to_string(),
     })
 }
 

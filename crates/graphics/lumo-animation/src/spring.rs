@@ -1,7 +1,7 @@
 //! spring.rs - Spring: mola amortecida 1D.
 //!
 //! Euler semi-implicito: barato, estavel para dt < 32ms (clamped).
-//! Presets mapeam o "feel" Apple CoreAnimation:
+//! Presets mapeam o "feel" spring/animation:
 //!   snappy   : resposta rapida, settle ~250ms
 //!   smooth   : critically damped, zero overshoot
 //!   bouncy   : underdamped, overshoot pronunciado
@@ -54,7 +54,7 @@ impl Spring {
     }
 
     /// Tracking de input: response=0.15s, damping alto.
-    /// Simula Apple UISpringTimingParameters(mass:1, stiffness:440, damping:74).
+    /// Simula UI spring timing parameters(mass:1, stiffness:440, damping:74).
     /// Excelente pra cursor follow ou rubber-band.
     pub fn interactive() -> Self {
         Self::new(440.0, 74.0)
@@ -91,7 +91,7 @@ impl Spring {
     }
 }
 
-/// Alias Apple-style (LASpring = Spring). Prefira este em call sites novos.
+/// Alias Lumo-style (LASpring = Spring). Prefira este em call sites novos.
 pub type LASpring = Spring;
 
 #[cfg(test)]

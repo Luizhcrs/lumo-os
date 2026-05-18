@@ -1,4 +1,4 @@
-//! Touchpad UX Apple-like.
+//! Touchpad UX Lumo-like.
 //!
 //! Config serde-able para ~/.config/lumo/touchpad.toml.
 //! apply_to_device() chamado em DeviceAdded no backend libinput.
@@ -25,7 +25,7 @@ pub struct TouchpadConfig {
     /// Tap and drag (segurar drag entre toques).
     pub tap_drag: bool,
     /// Drag lock: mantem drag apos lift do dedo ate proximo tap.
-    /// Lumo default = false (Apple real default). Quando true, atrapalha
+    /// Lumo default = false (industry default). Quando true, atrapalha
     /// rubber-band selection no desktop (rect demora a sumir).
     #[serde(default)]
     pub tap_drag_lock: bool,
@@ -37,7 +37,7 @@ pub struct TouchpadConfig {
     pub gestures_enabled: bool,
     /// Perfil de aceleracao: "adaptive" ou "flat".
     pub accel_profile: AccelProfileCfg,
-    /// Velocidade de aceleracao [-1.0, 1.0]. 0.0 = Apple mid.
+    /// Velocidade de aceleracao [-1.0, 1.0]. 0.0 = valor padrao.
     pub accel_speed: f64,
     /// Desabilitar touchpad enquanto digitando.
     pub disable_while_typing: bool,
@@ -83,7 +83,7 @@ impl TouchpadConfig {
         match Self::load_inner() {
             Ok(cfg) => cfg,
             Err(err) => {
-                tracing::debug!(?err, "touchpad.toml nao carregado, usando defaults Apple");
+                tracing::debug!(?err, "touchpad.toml nao carregado, usando defaults industry");
                 Self::default()
             }
         }

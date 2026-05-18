@@ -3753,11 +3753,13 @@ dependencies = [
  "lumo-animation",
  "lumo-foundation",
  "lumo-ipc",
+ "lumo-sensors",
  "nix 0.30.1",
  "serde",
  "serde_json",
  "smithay-client-toolkit",
  "tiny-skia",
+ "toml 0.8.23",
  "zbus",
 ]
 

@@ -1,6 +1,6 @@
 //! Sistema de keybindings global do lumo-wm.
 //!
-//! B2: 16+ bindings Apple-style, TOML remapeaveis em
+//! B2: 16+ bindings Lumo-style, TOML remapeaveis em
 //! ~/.config/lumo/keyboard.toml. Fallback para default_bindings()
 //! se arquivo ausente ou invalido.
 
@@ -155,7 +155,7 @@ impl KeyboardConfig {
     }
 }
 
-/// 16+ bindings padrao Apple-style.
+/// 16+ bindings padrao Lumo-style.
 pub fn default_bindings() -> Vec<KeyBinding> {
     let s  = ModifiersMask::super_only;
     let ss = ModifiersMask::super_shift;

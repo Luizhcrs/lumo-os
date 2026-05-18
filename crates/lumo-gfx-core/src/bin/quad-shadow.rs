@@ -2,7 +2,7 @@
 //!
 //! **Layer 4.1.8 update**: fundo trocado de INK_DEEP -> PEARL pra dar
 //! contraste com sombras pretas. Em fundo escuro a sombra preta sumia
-//! (preto sobre preto). Estilo Apple Big Sur+ cards flutuantes.
+//! (preto sobre preto). Estilo cards flutuantes premium.
 //!
 //! 4 cards 200x140 num grid 2x2, gap 32, canvas 800x600:
 //!

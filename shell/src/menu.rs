@@ -10,11 +10,11 @@
 //! layout + render via callbacks (caller injeta `draw_text_fn` e
 //! `fill_rrect_fn` pra preservar o FontSystem/SwashCache local de cada bin).
 //!
-//! Estilo (foto macOS desktop context menu):
+//! Estilo (foto sistema desktop context menu):
 //!   - Hover pill solido accent (sem glow — memory feedback_zero_neon_glow).
 //!   - Separator linha 1px border entre grupos.
 //!   - Suffix "..." vem ja na string (renderiza como esta).
-//!   - Padding interno generoso pra parecer Apple-grade.
+//!   - Padding interno generoso pra parecer Lumo-grade.
 //!   - Font 13px regular.
 
 use lumo_foundation::LumoColors;
@@ -31,7 +31,7 @@ pub const MENU_W_DESKTOP: f32 = 220.0;
 pub const MENU_W_LUMO: f32 = 240.0;
 /// Border-radius pill geral. 14 = identico PILL_RADIUS bar (continuidade A19.12).
 pub const MENU_RADIUS: f32 = 14.0;
-/// Padding vertical topo/base. 6 = compacto Apple-grade, abertura/fecho discretos.
+/// Padding vertical topo/base. 6 = compacto Lumo-grade, abertura/fecho discretos.
 pub const MENU_PAD_Y: f32 = 6.0;
 /// Padding horizontal interno (margem texto -> borda). 14 = igual PILL_PAD_X bar.
 pub const MENU_PAD_X: f32 = 14.0;

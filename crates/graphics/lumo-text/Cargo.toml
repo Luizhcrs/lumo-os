@@ -2,7 +2,7 @@
 name = "lumo-text"
 version = "0.1.0"
 edition = "2021"
-description = "Lumo Text: cosmic-text + atlas R8 + glyph instanced. Apple CoreText-style namespace."
+description = "Lumo Text: cosmic-text + atlas R8 + glyph instanced. text rendering primitives."
 
 [lib]
 path = "src/lib.rs"

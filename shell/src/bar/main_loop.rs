@@ -166,7 +166,7 @@ pub fn run() {
         // B4: animadores dropdown. Iniciam em done (scale=1, alpha=1) = nenhuma animacao.
         dropdown_scale_anim: {
             let mut a = LAAnimator::new(1.0f32, 1.0f32,
-                AnimCurve::Bezier { curve: LACurve::apple_spring_default(), duration: 0.28 });
+                AnimCurve::Bezier { curve: LACurve::ease_in_out(), duration: 0.28 });
             a.elapsed = 1.0; // marca como done
             a
         },
@@ -186,6 +186,10 @@ pub fn run() {
             a
         },
         refresh_animating: false,
+        // S2: fallback pill state.
+        appmenu_fallback_rect: None,
+        appmenu_fallback_dropdown_rects: Vec::new(),
+        appmenu_fallback_hover_idx: None,
     };
 
     let mut last_tick = Instant::now();
@@ -287,8 +291,8 @@ pub fn run() {
                     eprintln!("[lumo-bar] CloseDropdowns recebido -> dropdown fechado");
                 }
                 // C5.1: ActiveApp -> fetch appmenu via Registrar.
-                if let Some((app_id, _title, pid)) = res.active_app {
-                    let new_menu = crate::bar::appmenu::AppMenuState::fetch(pid, &app_id);
+                if let Some((app_id, title, pid)) = res.active_app {
+                    let new_menu = crate::bar::appmenu::AppMenuState::fetch(pid, &app_id, &title);
                     state.appmenu = new_menu;
                     state.appmenu_open_idx = None;
                     state.appmenu_submenu.clear();

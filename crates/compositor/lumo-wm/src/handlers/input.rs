@@ -1,6 +1,6 @@
 //! Input dispatch - converte eventos de backend em acoes do compositor.
 //!
-//! B2: KeyboardConfig com 16+ bindings Apple-style carregados de
+//! B2: KeyboardConfig com 16+ bindings Lumo-style carregados de
 //! ~/.config/lumo/keyboard.toml (fallback para default_bindings()).
 //! Handler handle_input procura match na lista de bindings e executa
 //! a acao correspondente.

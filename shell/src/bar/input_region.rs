@@ -65,6 +65,7 @@ impl LumoBar {
         // Dropdown ativo: cobre area do painel pra capturar click dentro.
         match self.dropdown {
             DropdownActive::None => {}
+            DropdownActive::AppFallback => {}
             DropdownActive::Battery => {
                 if let Some((rx, ry, rw, rh)) = self.bat_hit_rect {
                     let dx = (rx + rw / 2.0 - DROPDOWN_W / 2.0)

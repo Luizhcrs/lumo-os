@@ -1,11 +1,11 @@
-//! easing.rs - Curvas de easing cubic-bezier + presets Apple/iOS.
+//! easing.rs - Curvas de easing cubic-bezier + presets Material/iOS.
 //!
 //! `LACurve` representa qualquer curva definida por 4 parametros
 //! cubic-bezier. `eval(t)` avalia pelo metodo Newton-Raphson: dado t (0..1
 //! no tempo), resolve para o parametro u da curva e retorna o valor y(u).
 //!
-//! Presets matcham os valores usados pelo sistema iOS/macOS; validados
-//! contra o Apple Fluid Lab (lab/apple-fluid-demo/).
+//! Presets matcham os valores usados pelo sistema OS; validados
+//! contra o Material Fluid Lab (lab/apple-fluid-demo/).
 
 /// Curva cubic-bezier 1D parametrizada por P1 e P2 (P0=0,0 e P3=1,1 fixos).
 ///
@@ -44,14 +44,14 @@ impl LACurve {
         Self::new(0.175, 0.885, 0.32, 1.275)
     }
 
-    /// Apple "smooth" = ease-in-out suavizado. Usado em transicoes neutras.
-    pub const fn apple_smooth() -> Self {
+    /// Material "smooth" = ease-in-out suavizado. Usado em transicoes neutras.
+    pub const fn material_standard() -> Self {
         Self::new(0.42, 0.0, 0.58, 1.0)
     }
 
-    /// Apple spring default cubic approx. Arranca rapido, desacelera
+    /// Material spring default cubic approx. Arranca rapido, desacelera
     /// suavemente. Usado em dropdowns + sheets iOS.
-    pub const fn apple_spring_default() -> Self {
+    pub const fn material_deceleration() -> Self {
         Self::new(0.32, 0.72, 0.0, 1.0)
     }
 
@@ -117,8 +117,8 @@ mod tests {
 
     #[test]
     fn apple_spring_monotonic_ish() {
-        // apple_spring_default deve alcancar ~0.8 em t=0.3 (arranca rapido).
-        let c = LACurve::apple_spring_default();
+        // material_deceleration deve alcancar ~0.8 em t=0.3 (arranca rapido).
+        let c = LACurve::material_deceleration();
         let mid = c.eval(0.3);
         assert!(mid > 0.5, "spring deve arrancar rapido, got {mid}");
     }
@@ -144,13 +144,13 @@ mod extended_tests {
     }
 
     #[test]
-    fn apple_smooth_quarter_below_half() {
-        // apple_smooth ease-in-out: first half should be below 0.5
-        let c = LACurve::apple_smooth();
+    fn material_standard_quarter_below_half() {
+        // material_standard ease-in-out: first half should be below 0.5
+        let c = LACurve::material_standard();
         let v = c.eval(0.25);
         // ease-in-out: slow start, so v(0.25) < 0.25 is not guaranteed
         // but v(0.25) < 0.5 always for well-formed ease curves
-        assert!(v < 0.5, "apple_smooth quarter={v}");
+        assert!(v < 0.5, "material_standard quarter={v}");
     }
 
     #[test]
@@ -170,8 +170,8 @@ mod extended_tests {
         for c in [
             LACurve::ease_in_out(),
             LACurve::ease_out_cubic(),
-            LACurve::apple_smooth(),
-            LACurve::apple_spring_default(),
+            LACurve::material_standard(),
+            LACurve::material_deceleration(),
         ] {
             assert!((c.eval(0.0)).abs() < 1e-5, "eval(0) != 0");
             assert!((c.eval(1.0) - 1.0).abs() < 1e-5, "eval(1) != 1");

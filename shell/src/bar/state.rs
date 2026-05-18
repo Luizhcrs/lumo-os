@@ -65,6 +65,10 @@ pub(crate) struct BarSnapshot {
     pub appmenu_items: Vec<crate::bar::appmenu::AppMenuItem>,
     pub appmenu_open_idx: Option<usize>,
     pub appmenu_submenu: Vec<crate::bar::appmenu::AppMenuItem>,
+    // S2: appmenu fallback metadata.
+    pub appmenu_app_id: String,
+    pub appmenu_title: String,
+    pub appmenu_fallback_hover_idx: Option<usize>,
     // B4: fator de escala e opacidade do dropdown ativo (0.0=fechado, 1.0=aberto).
     pub dropdown_scale: f32,
     pub dropdown_alpha: f32,
@@ -85,6 +89,9 @@ pub(crate) struct PaintResult {
     pub cal_today_rect: Option<(f32, f32, f32, f32)>,
     /// Cada (day, rect). Day = dia do mes visualizado (1..=31), rect em coords surface.
     pub cal_day_rects: Vec<(u32, (f32, f32, f32, f32))>,
+    // S2: appmenu fallback hit-rects pill + dropdown.
+    pub appmenu_fallback_rect: Option<(f32, f32, f32, f32)>,
+    pub appmenu_fallback_dropdown_rects: Vec<(usize, (f32, f32, f32, f32))>,
     // L5: brightness pill hit-rect.
     pub brightness_hit_rect: Option<(f32, f32, f32, f32)>,
     pub brightness_slider_rect: Option<(f32, f32, f32, f32)>,
@@ -269,7 +276,8 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     // desde o topo (ancora topo-centro da pill, crescimento pra baixo).
     // ============================================================
     match snap.dropdown {
-        DropdownActive::Battery => {
+        DropdownActive::AppFallback => {}
+            DropdownActive::Battery => {
             if let Some((rx, ry, rw, rh)) = result.bat_hit_rect {
                 let want_x = rx + rw / 2.0 - DROPDOWN_W / 2.0;
                 let max_x = snap.width as f32 - pill_margin - DROPDOWN_W;
@@ -592,6 +600,10 @@ pub(crate) struct LumoBar {
     pub appmenu_submenu: Vec<crate::bar::appmenu::AppMenuItem>,
     pub appmenu_pill_rects: Vec<(usize, (f32, f32, f32, f32))>,
     pub appmenu_submenu_rects: Vec<(usize, (f32, f32, f32, f32))>,
+    // S2: appmenu fallback mirror.
+    pub appmenu_fallback_rect: Option<(f32, f32, f32, f32)>,
+    pub appmenu_fallback_dropdown_rects: Vec<(usize, (f32, f32, f32, f32))>,
+    pub appmenu_fallback_hover_idx: Option<usize>,
     // C5.1: handle compartilhado com thread Registrar DBus.
     pub registrar_handle: crate::bar::registrar::RegistrarHandle,
     pub ipc_stream: Option<UnixStream>,

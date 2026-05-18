@@ -665,8 +665,8 @@ impl TextRenderer {
 }
 
 // ----------------------------------------------------------------------------
-// LT* aliases (A9-rename) -- Apple CoreText-style namespace.
+// LT* aliases (A9-rename) -- text rendering primitives.
 // ----------------------------------------------------------------------------
 
-/// Alias Apple-style. Prefira `LTRenderer` em call sites novos.
+/// Alias Lumo-style. Prefira `LTRenderer` em call sites novos.
 pub type LTRenderer = TextRenderer;

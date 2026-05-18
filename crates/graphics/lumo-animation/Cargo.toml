@@ -2,7 +2,7 @@
 name = "lumo-animation"
 version = "0.1.0"
 edition = "2021"
-description = "Lumo Animation: spring physics 1D. Apple CoreAnimation-style namespace."
+description = "Lumo Animation: spring physics 1D. spring/animation primitives."
 
 [lib]
 path = "src/lib.rs"

@@ -18,5 +18,6 @@ pub enum DropdownActive {
     Brightness, // L5
     Wifi,     // A23
     DateTime, // A24 - calendario + hora detalhada
-    LumoMenu, // A27 - menu Apple-style abaixo brand "Lumo" pill esquerda
+    LumoMenu, // A27 - menu Lumo-style abaixo brand "Lumo" pill esquerda
+    AppFallback, // S2 - pill "AppName v" pra apps sem dbusmenu
 }

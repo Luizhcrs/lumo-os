@@ -609,16 +609,16 @@ fn visual_for_state(
 
 
 // ----------------------------------------------------------------------------
-// LK* aliases (A9-rename) -- Apple AppKit-style namespace.
+// LK* aliases (A9-rename) -- widget primitives.
 // ----------------------------------------------------------------------------
 
-/// Alias Apple-style. Prefira `LKButton` em call sites novos.
+/// Alias Lumo-style. Prefira `LKButton` em call sites novos.
 pub type LKButton = Button;
-/// Alias Apple-style. Prefira `LKButtonHandle` em call sites novos.
+/// Alias Lumo-style. Prefira `LKButtonHandle` em call sites novos.
 pub type LKButtonHandle = ButtonHandle;
-/// Alias Apple-style. Prefira `LKRect` em call sites novos.
+/// Alias Lumo-style. Prefira `LKRect` em call sites novos.
 pub type LKRect = Rect;
-/// Alias Apple-style. Prefira `LKWidgetState` em call sites novos.
+/// Alias Lumo-style. Prefira `LKWidgetState` em call sites novos.
 pub type LKWidgetState = WidgetState;
 
 // ============================================================================
