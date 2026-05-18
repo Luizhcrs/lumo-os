@@ -8,7 +8,7 @@ use chrono::{Datelike, Local, Timelike};
 
 use crate::bar::dropdowns::battery::BatteryInfo;
 use crate::bar::dropdowns::datetime::{month_full_pt, weekday_full_pt, DateTimeInfo};
-use crate::bar::dropdowns::wifi::{dbm_to_pct, find_wifi_iface, WifiInfo};
+use crate::bar::dropdowns::wifi::{dbm_to_pct, find_wifi_iface, WifiInfo, WifiNetwork};
 
 // ============================================================
 // /sys helpers.
@@ -172,12 +172,104 @@ pub fn read_wifi_info() -> WifiInfo {
         }
     }
 
+    // A31: lista redes proximas via nmcli (scan cache + filtra).
+    info.networks = list_wifi_networks();
     eprintln!(
-        "[lumo-bar] read_wifi_info: iface={:?} ssid={:?} dbm={:?} pct={:?} freq={:?} bitrate={:?} ip={:?}",
-        info.iface, info.ssid, info.signal_dbm, info.signal_pct, info.freq_ghz, info.bitrate_mbps, info.ip
+        "[lumo-bar] read_wifi_info: iface={:?} ssid={:?} dbm={:?} pct={:?} freq={:?} bitrate={:?} ip={:?} networks={}",
+        info.iface, info.ssid, info.signal_dbm, info.signal_pct, info.freq_ghz, info.bitrate_mbps, info.ip,
+        info.networks.len()
     );
 
     info
+}
+
+/// A31: enumera redes wifi via `nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY dev wifi list`.
+///
+/// Output `-t` (terse) usa `:` como separador. SSIDs com `:` literal vem
+/// escapados como `\:`. Dedupe por SSID (mantem signal maior). Sort desc.
+pub fn list_wifi_networks() -> Vec<WifiNetwork> {
+    let out = match std::process::Command::new("nmcli")
+        .args(["-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "dev", "wifi", "list"])
+        .output()
+    {
+        Ok(o) if o.status.success() => o,
+        _ => {
+            eprintln!("[lumo-bar] list_wifi_networks: nmcli falhou (vazio)");
+            return Vec::new();
+        }
+    };
+
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut acc: std::collections::HashMap<String, WifiNetwork> = std::collections::HashMap::new();
+
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.is_empty() {
+            continue;
+        }
+        // Parse manual respeitando `\:` escape do nmcli terse.
+        let fields = nmcli_split(line);
+        if fields.len() < 4 {
+            continue;
+        }
+        let in_use = fields[0].trim();
+        let ssid = fields[1].trim();
+        let signal_str = fields[2].trim();
+        let security = fields[3].trim();
+
+        // Skip linhas sem SSID OU placeholder "--".
+        if ssid.is_empty() || ssid == "--" {
+            continue;
+        }
+        let signal_pct: u8 = signal_str.parse().unwrap_or(0).min(100);
+        let connected = in_use == "*";
+        let secured = !security.is_empty() && security != "--";
+
+        let entry = acc.entry(ssid.to_string()).or_insert(WifiNetwork {
+            ssid: ssid.to_string(),
+            signal_pct: 0,
+            secured,
+            connected,
+        });
+        if signal_pct > entry.signal_pct {
+            entry.signal_pct = signal_pct;
+        }
+        entry.connected = entry.connected || connected;
+        entry.secured = entry.secured || secured;
+    }
+
+    let mut list: Vec<WifiNetwork> = acc.into_values().collect();
+    list.sort_by(|a, b| {
+        b.connected
+            .cmp(&a.connected)
+            .then_with(|| b.signal_pct.cmp(&a.signal_pct))
+    });
+
+    eprintln!("[lumo-bar] nmcli list parsed {} networks", list.len());
+    list
+}
+
+/// Split terse nmcli line por `:` respeitando escape `\:` dentro de campos.
+fn nmcli_split(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(&nxt) = chars.peek() {
+                cur.push(nxt);
+                chars.next();
+                continue;
+            }
+        }
+        if c == ':' {
+            out.push(std::mem::take(&mut cur));
+        } else {
+            cur.push(c);
+        }
+    }
+    out.push(cur);
+    out
 }
 
 /// Check rapido se ha interface wireless up. Usado pelo render do icone wifi.

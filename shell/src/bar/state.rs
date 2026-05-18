@@ -170,7 +170,9 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
         let mut cx = pill_r_x + PILL_PAD_X;
         // A19.10: ordem bat -> wifi -> data -> hora (Mac-style)
         let bat_x_start = cx;
-        draw_battery(&mut canvas, cx, pill_cy - BAT_BODY_H / 2.0, snap.battery_pct, pill_fg, accent);
+        // A31 fix: A30 alterou signature de draw_battery pra incluir flag charging.
+        let bat_charging = snap.battery_info.status == "Charging";
+        draw_battery(&mut canvas, cx, pill_cy - BAT_BODY_H / 2.0, snap.battery_pct, bat_charging, pill_fg, accent);
         // A20.13: hit area = SO o icone bateria (era pill inteira A20.4)
         result.bat_hit_rect = Some((bat_x_start - 4.0, pill_y, bat_icon_w + 8.0, PILL_H));
         cx += bat_icon_w + PILL_GAP;

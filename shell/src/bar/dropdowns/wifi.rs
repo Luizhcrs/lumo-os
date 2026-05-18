@@ -1,23 +1,50 @@
-//! bar/dropdowns/wifi.rs - Dropdown wifi + struct WifiInfo + dbm/iface helpers.
+//! bar/dropdowns/wifi.rs - Dropdown wifi (gerenciador de redes A31).
 //!
-//! Layout (A23):
-//!   y0  Wi-Fi (title bold)
-//!   y1  SSID - 78% (medium)   OU   "Desconectado"
-//!   sep
-//!   y2  IP:         192.168.0.106
-//!   y3  Sinal:      -52 dBm
-//!   y4  Frequencia: 5 GHz
-//!   y5  Velocidade: 433 Mbps
+//! Layout A31 (substitui A23 key:value dBm/freq/speed):
+//!
+//!   +-------------------------------+
+//!   | Wi-Fi             [Toggle ON] |
+//!   | v BBG_ERICA_5G        100%    |
+//!   |                               |
+//!   | Outras redes                  |
+//!   | > VIVO_5G_NEIGHBOR     78%    |
+//!   | > NET_VIRTUA           65%    |
+//!   | > FREE_WIFI            45%    |
+//!   |                               |
+//!   | Conectar a outra rede...      |
+//!   +-------------------------------+
+//!
+//! - Rede atual: prefix "v" (check), bold, fg full
+//! - Outras: prefix ">", fg_subtle, % sinal direita Mono
+//! - Toggle wifi: pill visual no header right (MVP so visual, sem callback real)
+//! - Footer: "Conectar a outra rede..." placeholder (A31.2 future)
+//!
+//! Memory feedback_design_lapidado: row height 22 = font 13 + 9 padding
+//! vertical = aria de click confortavel sem inflar dropdown. Max 6 redes
+//! visiveis (truncate apos sort por signal desc).
 
 use lumo_foundation::LumoColors;
 use tiny_skia::{Paint, PixmapMut, Rect, Transform};
 
-use crate::bar::fonts::{draw_text, draw_text_mono, measure_text_mono, opaque, rgba_hex};
-use crate::bar::icons::fill_rrect;
+use crate::bar::fonts::{draw_text, draw_text_mono, measure_text, measure_text_mono, opaque, rgba_hex};
+use crate::bar::icons::{fill_rrect, stroke_rrect};
 use crate::bar::tokens::*;
 
 // ============================================================
-// WifiInfo - leitura via iw dev <iface> link + ip -4 -o addr + sysfs (A23).
+// WifiNetwork - linha individual da lista (A31).
+// ============================================================
+
+#[derive(Clone, Default, Debug)]
+pub struct WifiNetwork {
+    pub ssid: String,
+    pub signal_pct: u8,
+    pub secured: bool,
+    /// True se eh a rede atualmente conectada (IN-USE=*).
+    pub connected: bool,
+}
+
+// ============================================================
+// WifiInfo - leitura via iw + ip + nmcli scan (A23 + A31).
 // ============================================================
 
 #[derive(Clone, Default, Debug)]
@@ -30,6 +57,8 @@ pub struct WifiInfo {
     pub bitrate_mbps: Option<u32>,
     pub ip: Option<String>,
     pub iface: Option<String>,
+    /// A31: redes proximas (sorted by signal desc, max 32).
+    pub networks: Vec<WifiNetwork>,
 }
 
 /// Procura primeira interface wireless (wl*) com operstate=up.
@@ -61,8 +90,12 @@ pub fn dbm_to_pct(dbm: i32) -> u8 {
 }
 
 // ============================================================
-// draw_wifi_dropdown (A23).
+// draw_wifi_dropdown (A31 redesign - gerenciador redes).
 // ============================================================
+
+/// Max redes "outras" visiveis na lista. 6 cabe sem scroll, redes mais
+/// fracas que isso usualmente nao conectam de qualquer jeito (signal<30%).
+const MAX_OTHER_NETWORKS: usize = 6;
 
 pub fn draw_wifi_dropdown(
     canvas: &mut PixmapMut,
@@ -76,83 +109,155 @@ pub fn draw_wifi_dropdown(
     let bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
     let fg = opaque(palette.pill_fg);
     let fg_subtle = rgba_hex(palette.pill_fg, 0xA0);
-    let sep_color = rgba_hex(palette.pill_sep, palette.pill_sep_alpha);
+    let fg_dim = rgba_hex(palette.pill_fg, 0x60);
+    let accent = opaque(palette.accent);
 
     fill_rrect(canvas, x, y, w, h, PILL_RADIUS, bg);
 
-    let cx = x + DROPDOWN_PAD;
-    let mut cy = y + DROPDOWN_PAD;
+    let pad = DROPDOWN_PAD;
+    let cx = x + pad;
+    let value_x = x + w - pad;
 
-    // Title "Wi-Fi" 14px bold.
+    // ============================================================
+    // Header: "Wi-Fi" + toggle pill direita (A31 - MVP visual so).
+    // ============================================================
+    let mut cy = y + pad;
     draw_text(canvas, cx, cy, "Wi-Fi", FONT_DROPDOWN_TITLE, fg, true);
-    cy += FONT_DROPDOWN_TITLE * 1.4;
 
-    if !info.up || info.ssid.is_none() {
-        // Estado desconectado.
-        draw_text(canvas, cx, cy, "Desconectado", FONT_DROPDOWN_BODY, fg_subtle, false);
-        cy += FONT_DROPDOWN_BODY * 1.6;
-        if let Some(rect) = Rect::from_xywh(x + DROPDOWN_PAD, cy.round(), w - DROPDOWN_PAD * 2.0, 1.0) {
-            let mut p = Paint::default();
-            p.set_color(sep_color);
-            p.anti_alias = false;
-            canvas.fill_rect(rect, &p, Transform::identity(), None);
-        }
-        cy += 8.0;
-        draw_text(canvas, cx, cy, "Sem rede ativa", FONT_DROPDOWN_BODY, fg_subtle, false);
+    // Toggle pill: 36x18 (Apple-like switch), arredondamento total = capsule.
+    // Estado: on = wifi up, off = down. Visual only (TODO A31 hookup nmcli radio).
+    let toggle_w = 36.0;
+    let toggle_h = 18.0;
+    let toggle_x = value_x - toggle_w;
+    let toggle_y = cy + (FONT_DROPDOWN_TITLE - toggle_h) / 2.0 + 1.0;
+    let toggle_on = info.up;
+    let knob_r = (toggle_h - 4.0) / 2.0;
+
+    // Trilho.
+    let trail_color = if toggle_on {
+        accent
+    } else {
+        rgba_hex(palette.pill_sep, 0xC0)
+    };
+    fill_rrect(canvas, toggle_x, toggle_y, toggle_w, toggle_h, toggle_h / 2.0, trail_color);
+
+    // Knob branco (sempre claro, contraste). Slide direita = on, esquerda = off.
+    let knob_cx = if toggle_on {
+        toggle_x + toggle_w - knob_r - 2.0
+    } else {
+        toggle_x + knob_r + 2.0
+    };
+    let knob_cy = toggle_y + toggle_h / 2.0;
+    crate::bar::icons::fill_circle(canvas, knob_cx, knob_cy, knob_r, opaque(0xFFFFFF));
+
+    cy += FONT_DROPDOWN_TITLE * 1.6;
+
+    // ============================================================
+    // Conteudo: depende de up/down.
+    // ============================================================
+    if !info.up {
+        draw_text(canvas, cx, cy, "Wi-Fi desligado", FONT_DROPDOWN_BODY, fg_subtle, false);
         return;
     }
 
-    // Linha 2: "SSID - signal%".
-    let ssid = info.ssid.as_deref().unwrap_or("-");
-    let pct_str = info
-        .signal_pct
-        .map(|p| format!(" - {}%", p))
-        .unwrap_or_default();
-    let summary = format!("{}{}", ssid, pct_str);
-    let mut s = summary.clone();
-    if s.chars().count() > 28 {
-        s.truncate(s.char_indices().nth(26).map(|(i, _)| i).unwrap_or(s.len()));
-        s.push_str("..");
-    }
-    draw_text(canvas, cx, cy, &s, FONT_DROPDOWN_BODY, fg_subtle, false);
-    cy += FONT_DROPDOWN_BODY * 1.6;
+    // ============================================================
+    // Rede conectada (se houver).
+    // ============================================================
+    let connected_net = info.networks.iter().find(|n| n.connected);
+    let connected_ssid = info.ssid.as_deref();
 
-    // Separator 1px.
-    if let Some(rect) = Rect::from_xywh(x + DROPDOWN_PAD, cy.round(), w - DROPDOWN_PAD * 2.0, 1.0) {
+    if let Some(ssid) = connected_ssid {
+        // Linha: "v SSID    pct%"
+        let prefix = "v ";
+        draw_text(canvas, cx, cy, prefix, FONT_DROPDOWN_BODY, accent, true);
+        let prefix_w = measure_text(prefix, FONT_DROPDOWN_BODY, true);
+
+        // SSID truncado pra deixar espaco pro pct.
+        let s = truncate_ssid(ssid, 22);
+        draw_text(canvas, cx + prefix_w, cy, &s, FONT_DROPDOWN_BODY, fg, false);
+
+        // Pct: prioriza signal_pct do iw (mais preciso pra rede atual);
+        // fallback connected_net (vem do nmcli).
+        let pct = info
+            .signal_pct
+            .or(connected_net.map(|n| n.signal_pct))
+            .unwrap_or(0);
+        let pct_str = format!("{}%", pct);
+        let vw = measure_text_mono(&pct_str, FONT_DROPDOWN_BODY, false);
+        draw_text_mono(canvas, value_x - vw, cy, &pct_str, FONT_DROPDOWN_BODY, fg, false);
+        cy += DROPDOWN_WIFI_ROW_H;
+    } else {
+        draw_text(canvas, cx, cy, "Desconectado", FONT_DROPDOWN_BODY, fg_subtle, false);
+        cy += DROPDOWN_WIFI_ROW_H;
+    }
+
+    // Spacer + label "Outras redes".
+    cy += 6.0;
+
+    // ============================================================
+    // Outras redes.
+    // ============================================================
+    let others: Vec<&WifiNetwork> = info
+        .networks
+        .iter()
+        .filter(|n| !n.connected && !n.ssid.is_empty())
+        .take(MAX_OTHER_NETWORKS)
+        .collect();
+
+    if !others.is_empty() {
+        draw_text(canvas, cx, cy, "Outras redes", FONT_DROPDOWN_BODY, fg_dim, false);
+        cy += FONT_DROPDOWN_BODY * 1.5;
+
+        for net in &others {
+            // Prefix ">" subtle pra outras (nao bold).
+            let prefix = "> ";
+            draw_text(canvas, cx, cy, prefix, FONT_DROPDOWN_BODY, fg_dim, false);
+            let prefix_w = measure_text(prefix, FONT_DROPDOWN_BODY, false);
+
+            let s = truncate_ssid(&net.ssid, 22);
+            draw_text(canvas, cx + prefix_w, cy, &s, FONT_DROPDOWN_BODY, fg_subtle, false);
+
+            let pct_str = format!("{}%", net.signal_pct);
+            let vw = measure_text_mono(&pct_str, FONT_DROPDOWN_BODY, false);
+            draw_text_mono(canvas, value_x - vw, cy, &pct_str, FONT_DROPDOWN_BODY, fg_subtle, false);
+            cy += DROPDOWN_WIFI_ROW_H;
+        }
+    }
+
+    // ============================================================
+    // Separator + footer "Conectar a outra rede..." (A31.2 placeholder).
+    // ============================================================
+    cy += 4.0;
+    if let Some(rect) = Rect::from_xywh(x + pad, cy.round(), w - pad * 2.0, 1.0) {
         let mut p = Paint::default();
-        p.set_color(sep_color);
+        p.set_color(rgba_hex(palette.pill_sep, palette.pill_sep_alpha));
         p.anti_alias = false;
         canvas.fill_rect(rect, &p, Transform::identity(), None);
     }
     cy += 8.0;
 
-    // Rows key:value (4 linhas).
-    let value_x = x + w - DROPDOWN_PAD;
-    let rows: [(&str, String); 4] = [
-        ("IP", info.ip.clone().unwrap_or_else(|| "-".into())),
-        (
-            "Sinal",
-            info.signal_dbm.map(|d| format!("{} dBm", d)).unwrap_or_else(|| "-".into()),
-        ),
-        (
-            "Frequencia",
-            info.freq_ghz.map(|f| format!("{} GHz", f)).unwrap_or_else(|| "-".into()),
-        ),
-        (
-            "Velocidade",
-            info.bitrate_mbps.map(|b| format!("{} Mbps", b)).unwrap_or_else(|| "-".into()),
-        ),
-    ];
-    for (key, value) in rows.iter() {
-        draw_text(canvas, cx, cy, key, FONT_DROPDOWN_BODY, fg_subtle, false);
-        let mut v = value.clone();
-        if v.chars().count() > 22 {
-            v.truncate(v.char_indices().nth(20).map(|(i, _)| i).unwrap_or(v.len()));
-            v.push_str("..");
-        }
-        // A29: valor (IP, dBm, GHz, Mbps) = Geist Mono (alinhamento tabular).
-        let vw = measure_text_mono(&v, FONT_DROPDOWN_BODY, false);
-        draw_text_mono(canvas, value_x - vw, cy, &v, FONT_DROPDOWN_BODY, fg, false);
-        cy += DROPDOWN_ROW_H;
+    // TODO A31.2: footer interativo com input de senha (precisa keyboard).
+    draw_text(
+        canvas,
+        cx,
+        cy,
+        "Conectar a outra rede...",
+        FONT_DROPDOWN_BODY,
+        fg_dim,
+        false,
+    );
+
+    // Suprime warning sobre h/stroke_rrect ate hover ser implementado em A31.2.
+    let _ = h;
+    let _ = stroke_rrect;
+}
+
+/// Trunca SSID preservando UTF-8 + adiciona ".." se passou de max_chars.
+fn truncate_ssid(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        return s.to_string();
     }
+    let mut out: String = s.chars().take(max_chars.saturating_sub(2)).collect();
+    out.push_str("..");
+    out
 }

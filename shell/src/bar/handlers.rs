@@ -54,12 +54,16 @@ impl LumoBar {
     pub fn computed_height(&self) -> u32 {
         let lumo_menu_h = menu::menu_height(MENU_LUMO_ITEMS) as u32; // A27
         let max_drop = DROPDOWN_H
+            .max(DROPDOWN_WIFI_H) // A31: wifi maior que battery
             .max(DROPDOWN_DATETIME_H)
             .max(lumo_menu_h as f32) as u32; // A24+A27
         match self.dropdown {
             DropdownActive::None => BAR_HEIGHT,
-            DropdownActive::Battery | DropdownActive::Wifi => {
+            DropdownActive::Battery => {
                 BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H as u32 + 8
+            }
+            DropdownActive::Wifi => {
+                BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_WIFI_H as u32 + 8
             }
             DropdownActive::DateTime => {
                 BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_DATETIME_H as u32 + 8
