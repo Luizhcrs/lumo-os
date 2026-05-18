@@ -1,32 +1,21 @@
-//! Input dispatch - converte WinitEvent::Input em eventos pra Seat.
+//! Input dispatch - converte eventos de backend em acoes do compositor.
 //!
-//! Fase 5.5 (A8): SUPER+1..5 agora chama state.set_workspace(N) e
-//! dispara broadcast IPC pra lumo-bar. Antes era no-op.
-//!
-//! Keybinds:
-//!   SUPER+Q ou SUPER+Return  -> spawn `foot`
-//!   SUPER+L                  -> sai do compositor (debug)
-//!   SUPER+1..5               -> troca workspace ativo + broadcast IPC
-//!   Ctrl+Alt+F1..F12         -> switch_vt (so DRM backend; winit ignora)
-//!   Ctrl+Alt+Backspace       -> exit clean (DRM safety)
+//! B2: KeyboardConfig com 16+ bindings Apple-style carregados de
+//! ~/.config/lumo/keyboard.toml (fallback para default_bindings()).
+//! Handler handle_input procura match na lista de bindings e executa
+//! a acao correspondente.
 
 use smithay::backend::input::{
     AbsolutePositionEvent, ButtonState, Event as _, InputBackend, InputEvent, KeyState,
     KeyboardKeyEvent, PointerButtonEvent, PointerMotionEvent,
 };
-use smithay::input::keyboard::{FilterResult, Keysym};
+use smithay::input::keyboard::FilterResult;
 use smithay::input::pointer::{ButtonEvent, MotionEvent};
 use smithay::utils::SERIAL_COUNTER;
+use smithay::wayland::seat::WaylandFocus;
 
+use crate::input::keyboard::{KeyAction, TileDir};
 use crate::state::LumoState;
-
-/// Acao interceptada por keybind do compositor.
-pub enum Action {
-    SpawnFoot,
-    Quit,
-    Workspace(u8),
-    SwitchVt(i32),
-}
 
 impl LumoState {
     pub fn handle_input<I: InputBackend>(&mut self, event: InputEvent<I>) {
@@ -37,121 +26,31 @@ impl LumoState {
                 let keycode = event.key_code();
                 let state = event.state();
                 let keyboard = self.keyboard.clone();
-                let socket_name = self.socket_name.clone();
                 let press = state == KeyState::Pressed;
-                let action = keyboard.input::<Action, _>(
+
+                let action_opt = keyboard.input::<KeyAction, _>(
                     self,
                     keycode,
                     state,
                     serial,
                     time,
-                    |_state, mods, kh| {
+                    |state, mods, kh| {
                         if !press {
                             return FilterResult::Forward;
                         }
                         let sym = kh.modified_sym();
-                        // Ctrl+Alt+F1..F12 -> VT switch (DRM only).
-                        // Ctrl+Alt+Backspace -> quit safety.
-                        if mods.ctrl && mods.alt {
-                            match sym {
-                                Keysym::XF86_Switch_VT_1 | Keysym::F1 => {
-                                    return FilterResult::Intercept(Action::SwitchVt(1));
-                                }
-                                Keysym::XF86_Switch_VT_2 | Keysym::F2 => {
-                                    return FilterResult::Intercept(Action::SwitchVt(2));
-                                }
-                                Keysym::XF86_Switch_VT_3 | Keysym::F3 => {
-                                    return FilterResult::Intercept(Action::SwitchVt(3));
-                                }
-                                Keysym::XF86_Switch_VT_4 | Keysym::F4 => {
-                                    return FilterResult::Intercept(Action::SwitchVt(4));
-                                }
-                                Keysym::XF86_Switch_VT_5 | Keysym::F5 => {
-                                    return FilterResult::Intercept(Action::SwitchVt(5));
-                                }
-                                Keysym::XF86_Switch_VT_6 | Keysym::F6 => {
-                                    return FilterResult::Intercept(Action::SwitchVt(6));
-                                }
-                                Keysym::XF86_Switch_VT_7 | Keysym::F7 => {
-                                    return FilterResult::Intercept(Action::SwitchVt(7));
-                                }
-                                Keysym::BackSpace => {
-                                    return FilterResult::Intercept(Action::Quit);
-                                }
-                                _ => {}
-                            }
-                        }
-                        if !mods.logo {
-                            return FilterResult::Forward;
-                        }
-                        match sym {
-                            Keysym::q | Keysym::Q | Keysym::Return => {
-                                FilterResult::Intercept(Action::SpawnFoot)
-                            }
-                            Keysym::l | Keysym::L => FilterResult::Intercept(Action::Quit),
-                            Keysym::_1 => FilterResult::Intercept(Action::Workspace(1)),
-                            Keysym::_2 => FilterResult::Intercept(Action::Workspace(2)),
-                            Keysym::_3 => FilterResult::Intercept(Action::Workspace(3)),
-                            Keysym::_4 => FilterResult::Intercept(Action::Workspace(4)),
-                            Keysym::_5 => FilterResult::Intercept(Action::Workspace(5)),
-                            _ => FilterResult::Forward,
+                        if let Some(action) =
+                            state.keyboard_config.match_binding(mods, sym)
+                        {
+                            FilterResult::Intercept(action.clone())
+                        } else {
+                            FilterResult::Forward
                         }
                     },
                 );
-                if let Some(action) = action {
-                    match action {
-                        Action::SpawnFoot => {
-                            let home = std::env::var("HOME")
-                                .unwrap_or_else(|_| "/root".to_string());
-                            let xdg = std::env::var("XDG_CONFIG_HOME")
-                                .unwrap_or_else(|_| format!("{home}/.config"));
-                            let foot_cfg = format!("{home}/.config/foot/foot.ini");
-                            let mut cmd = std::process::Command::new("foot");
-                            cmd.arg("-c").arg(&foot_cfg);
-                            cmd.env("HOME", &home);
-                            cmd.env("XDG_CONFIG_HOME", &xdg);
-                            cmd.env("LC_CTYPE", "C.UTF-8");
-                            if let Some(sock) = socket_name.as_deref() {
-                                cmd.env("WAYLAND_DISPLAY", sock);
-                            }
-                            match cmd.spawn() {
-                                Ok(child) => {
-                                    tracing::info!(pid = child.id(), "spawn foot");
-                                }
-                                Err(err) => {
-                                    tracing::warn!(?err, "Falha spawn foot");
-                                }
-                            }
-                        }
-                        Action::Quit => {
-                            tracing::info!("SUPER+L / Ctrl+Alt+Backspace -> sair");
-                            self.running = false;
-                        }
-                        Action::Workspace(n) => {
-                            self.set_workspace(n);
-                        }
-                        Action::SwitchVt(n) => {
-                            // DRM real: chama session.change_vt(n). Se nao
-                            // tem session (winit) so loga.
-                            #[cfg(feature = "drm-backend")]
-                            {
-                                use smithay::backend::session::Session as _;
-                                if let Some(sess) = self.session.as_mut() {
-                                    if let Err(err) = sess.change_vt(n) {
-                                        tracing::warn!(vt = n, ?err, "change_vt falhou");
-                                    } else {
-                                        tracing::info!(vt = n, "change_vt ok");
-                                    }
-                                } else {
-                                    tracing::info!(vt = n, "switch_vt request sem session");
-                                }
-                            }
-                            #[cfg(not(feature = "drm-backend"))]
-                            {
-                                tracing::info!(vt = n, "switch_vt request (no-op fora de DRM)");
-                            }
-                        }
-                    }
+
+                if let Some(action) = action_opt {
+                    self.execute_key_action(action);
                 }
             }
 
@@ -176,9 +75,6 @@ impl LumoState {
                 );
                 pointer.frame(self);
 
-                // Forca repaint pro cursor mover visualmente no proximo frame.
-                // Campo so existe sob feature drm-backend; winit nao precisa
-                // (winit redraw eh imediato via window.request_redraw).
                 #[cfg(feature = "drm-backend")]
                 {
                     self.drm_force_repaint = true;
@@ -239,6 +135,175 @@ impl LumoState {
             }
 
             _ => {}
+        }
+    }
+
+    /// Executa uma KeyAction. Centraliza o dispatch pos-match.
+    pub fn execute_key_action(&mut self, action: KeyAction) {
+        match action {
+            KeyAction::Spawn(cmd) => {
+                self.spawn_cmd(&cmd);
+            }
+            KeyAction::CloseWindow => {
+                self.close_focused_window();
+            }
+            KeyAction::Lock => {
+                tracing::info!("lock pendente A40");
+            }
+            KeyAction::Launcher => {
+                tracing::info!("launcher pendente A38");
+            }
+            KeyAction::Workspace(n) => {
+                self.set_workspace(n);
+            }
+            KeyAction::MoveToWorkspace(n) => {
+                tracing::info!(workspace = n, "MoveToWorkspace pendente (sem multi-workspace map)");
+            }
+            KeyAction::CycleWindow(delta) => {
+                self.cycle_window_focus(delta);
+            }
+            KeyAction::TileMove(dir) => {
+                let dir_str = match dir {
+                    TileDir::Up    => "Up",
+                    TileDir::Down  => "Down",
+                    TileDir::Left  => "Left",
+                    TileDir::Right => "Right",
+                };
+                tracing::info!(dir = dir_str, "TileMove pendente (tiling nao implementado)");
+            }
+            KeyAction::FullscreenToggle => {
+                self.toggle_fullscreen_focused();
+            }
+            KeyAction::Minimize => {
+                tracing::info!("minimize pendente (sem iconify protocol)");
+            }
+            KeyAction::Quit => {
+                tracing::info!("Ctrl+Alt+Backspace -> sair");
+                self.running = false;
+            }
+            KeyAction::SwitchVt(n) => {
+                #[cfg(feature = "drm-backend")]
+                {
+                    use smithay::backend::session::Session as _;
+                    if let Some(sess) = self.session.as_mut() {
+                        if let Err(err) = sess.change_vt(n) {
+                            tracing::warn!(vt = n, ?err, "change_vt falhou");
+                        } else {
+                            tracing::info!(vt = n, "change_vt ok");
+                        }
+                    } else {
+                        tracing::info!(vt = n, "switch_vt request sem session");
+                    }
+                }
+                #[cfg(not(feature = "drm-backend"))]
+                {
+                    tracing::info!(vt = n, "switch_vt request (no-op fora de DRM)");
+                }
+            }
+        }
+    }
+
+    /// Spawna um processo com o ambiente Wayland correto.
+    fn spawn_cmd(&self, cmd: &str) {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+        let xdg = std::env::var("XDG_CONFIG_HOME")
+            .unwrap_or_else(|_| format!("{home}/.config"));
+        let mut proc = std::process::Command::new(cmd);
+        proc.env("HOME", &home);
+        proc.env("XDG_CONFIG_HOME", &xdg);
+        proc.env("LC_CTYPE", "C.UTF-8");
+        if let Some(sock) = self.socket_name.as_deref() {
+            proc.env("WAYLAND_DISPLAY", sock);
+        }
+        if cmd == "foot" {
+            proc.arg("-c").arg(format!("{home}/.config/foot/foot.ini"));
+        }
+        match proc.spawn() {
+            Ok(child) => tracing::info!(pid = child.id(), cmd, "spawn ok"),
+            Err(err) => tracing::warn!(?err, cmd, "spawn falhou"),
+        }
+    }
+
+    /// Fecha a janela com foco via xdg_toplevel send_close.
+    fn close_focused_window(&self) {
+        let kb = self.keyboard.clone();
+        if let Some(focused) = kb.current_focus() {
+            let window = self
+                .space
+                .elements()
+                .find(|w| {
+                    w.wl_surface()
+                        .map(|s| *s == focused)
+                        .unwrap_or(false)
+                })
+                .cloned();
+            if let Some(win) = window {
+                if let Some(toplevel) = win.toplevel() {
+                    toplevel.send_close();
+                }
+            }
+        }
+    }
+
+    /// Cicla o foco entre janelas no espaco.
+    fn cycle_window_focus(&mut self, delta: i8) {
+        let windows: Vec<_> = self.space.elements().cloned().collect();
+        if windows.is_empty() {
+            return;
+        }
+        let kb = self.keyboard.clone();
+        let current = kb.current_focus();
+        let current_idx = current.as_ref().and_then(|focused| {
+            windows.iter().position(|w| {
+                w.wl_surface()
+                    .map(|s| *s == *focused)
+                    .unwrap_or(false)
+            })
+        });
+        let len = windows.len() as isize;
+        let next_idx = match current_idx {
+            Some(i) => ((i as isize + delta as isize).rem_euclid(len)) as usize,
+            None => 0,
+        };
+        if let Some(next_win) = windows.get(next_idx) {
+            if let Some(surface) = next_win.wl_surface() {
+                let serial = SERIAL_COUNTER.next_serial();
+                let owned = surface.into_owned();
+                kb.set_focus(self, Some(owned), serial);
+            }
+        }
+    }
+
+    /// Alterna fullscreen na janela com foco.
+    fn toggle_fullscreen_focused(&self) {
+        use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
+        let kb = self.keyboard.clone();
+        if let Some(focused) = kb.current_focus() {
+            let window = self
+                .space
+                .elements()
+                .find(|w| {
+                    w.wl_surface()
+                        .map(|s| *s == focused)
+                        .unwrap_or(false)
+                })
+                .cloned();
+            if let Some(win) = window {
+                if let Some(toplevel) = win.toplevel() {
+                    let is_fs = toplevel
+                        .current_state()
+                        .states
+                        .contains(XdgState::Fullscreen);
+                    toplevel.with_pending_state(|state| {
+                        if is_fs {
+                            state.states.unset(XdgState::Fullscreen);
+                        } else {
+                            state.states.set(XdgState::Fullscreen);
+                        }
+                    });
+                    toplevel.send_configure();
+                }
+            }
         }
     }
 }

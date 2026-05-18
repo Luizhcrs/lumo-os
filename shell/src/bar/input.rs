@@ -144,14 +144,15 @@ impl PointerHandler for LumoBar {
                     if !handled {
                         if let Some((rx, ry, rw, rh)) = self.bat_hit_rect {
                             if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
-                                self.dropdown = if self.dropdown == DropdownActive::Battery {
-                                    DropdownActive::None
+                                if self.dropdown == DropdownActive::Battery {
+                                    // B4: fechar com animacao.
+                                    self.start_close_anim(DropdownActive::Battery);
                                 } else {
                                     self.refresh();
-                                    // A26: mutex - abriu dropdown bar -> fecha menu desktop.
                                     self.send_ipc_close_desktop_menu();
-                                    DropdownActive::Battery
-                                };
+                                    self.dropdown = DropdownActive::Battery;
+                                    self.start_open_anim();
+                                }
                                 self.update_size_and_redraw(qh);
                                 handled = true;
                             }
@@ -160,13 +161,14 @@ impl PointerHandler for LumoBar {
                     if !handled {
                         if let Some((rx, ry, rw, rh)) = self.wifi_hit_rect {
                             if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
-                                self.dropdown = if self.dropdown == DropdownActive::Wifi {
-                                    DropdownActive::None
+                                if self.dropdown == DropdownActive::Wifi {
+                                    self.start_close_anim(DropdownActive::Wifi);
                                 } else {
                                     self.refresh();
                                     self.send_ipc_close_desktop_menu();
-                                    DropdownActive::Wifi
-                                };
+                                    self.dropdown = DropdownActive::Wifi;
+                                    self.start_open_anim();
+                                }
                                 self.update_size_and_redraw(qh);
                                 handled = true;
                             }
@@ -175,17 +177,17 @@ impl PointerHandler for LumoBar {
                     if !handled {
                         if let Some((rx, ry, rw, rh)) = self.datetime_hit_rect {
                             if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
-                                self.dropdown = if self.dropdown == DropdownActive::DateTime {
-                                    DropdownActive::None
+                                if self.dropdown == DropdownActive::DateTime {
+                                    self.start_close_anim(DropdownActive::DateTime);
                                 } else {
-                                    // A26: ao abrir, sincroniza viewed_* com today (pode estar stale).
                                     let now_local = Local::now();
                                     self.viewed_year = now_local.year();
                                     self.viewed_month = now_local.month();
                                     self.selected_day = None;
                                     self.send_ipc_close_desktop_menu();
-                                    DropdownActive::DateTime
-                                };
+                                    self.dropdown = DropdownActive::DateTime;
+                                    self.start_open_anim();
+                                }
                                 self.update_size_and_redraw(qh);
                                 handled = true;
                             }
@@ -195,13 +197,14 @@ impl PointerHandler for LumoBar {
                     if !handled {
                         if let Some((rx, ry, rw, rh)) = self.lumo_hit_rect {
                             if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
-                                self.dropdown = if self.dropdown == DropdownActive::LumoMenu {
-                                    DropdownActive::None
+                                if self.dropdown == DropdownActive::LumoMenu {
+                                    self.start_close_anim(DropdownActive::LumoMenu);
                                 } else {
                                     self.lumo_menu_hover_idx = usize::MAX;
-                                    self.send_ipc_close_desktop_menu(); // A26 mutex
-                                    DropdownActive::LumoMenu
-                                };
+                                    self.send_ipc_close_desktop_menu();
+                                    self.dropdown = DropdownActive::LumoMenu;
+                                    self.start_open_anim();
+                                }
                                 self.update_size_and_redraw(qh);
                                 handled = true;
                             }

@@ -42,6 +42,7 @@ use smithay::wayland::xdg_toplevel_icon::XdgToplevelIconManager;
 use lumo_ipc::{LumoCommand, LumoEvent, MAX_WORKSPACES};
 
 use crate::ipc::IpcServer;
+use crate::input::keyboard::KeyboardConfig;
 
 /// Estado raiz do Lumo WM.
 pub struct LumoState {
@@ -111,6 +112,10 @@ pub struct LumoState {
     /// Default = 1 no startup.
     pub active_workspace: u8,
 
+    // B2: keybindings configuracao carregada de TOML.
+    pub keyboard_config: KeyboardConfig,
+
+
     // Fase 5.6 (A9): DRM session + watchdog.
     /// Sessao libseat (so existe no backend DRM). winit deixa None.
     /// Usado por handlers/input.rs pra change_vt (Ctrl+Alt+Fn).
@@ -142,6 +147,9 @@ pub struct LumoState {
     /// A19: wallpaper opcional carregado pelo backend (winit OU drm)
     /// apos o GlesRenderer estar pronto. None = clear color de fundo.
     pub wallpaper: Option<crate::backend::wallpaper::LumoWallpaper>,
+
+    /// B1: gesture state acumulado (swipe + pinch).
+    pub gesture: crate::input::TouchpadGestureState,
 }
 
 impl LumoState {
@@ -227,6 +235,7 @@ impl LumoState {
             cursor_buffer,
             ipc: IpcServer::default(),
             active_workspace: 1,
+            keyboard_config: KeyboardConfig::load(),
             #[cfg(feature = "drm-backend")]
             session: None,
             #[cfg(feature = "drm-backend")]
@@ -237,6 +246,7 @@ impl LumoState {
             watchdog_deadline: None,
             exit_code: 0,
             wallpaper: None,
+            gesture: Default::default(),
         }
     }
 

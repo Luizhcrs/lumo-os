@@ -30,6 +30,7 @@ use crate::bar::dropdowns::wifi::WifiInfo;
 use crate::bar::dropdowns::DropdownActive;
 use crate::bar::fonts::{font_system, swash_cache};
 use crate::bar::ipc::{connect_ipc, drain_ipc};
+use lumo_animation::{AnimCurve, LAAnimator, LACurve, Spring};
 use crate::bar::state::LumoBar;
 use crate::bar::tokens::*;
 use crate::menu;
@@ -130,13 +131,53 @@ pub fn run() {
         ipc_rx_buf: Vec::with_capacity(256),
         theme,
         palette,
+        // B4: animadores dropdown. Iniciam em done (scale=1, alpha=1) = nenhuma animacao.
+        dropdown_scale_anim: {
+            let mut a = LAAnimator::new(1.0f32, 1.0f32,
+                AnimCurve::Bezier { curve: LACurve::apple_spring_default(), duration: 0.28 });
+            a.elapsed = 1.0; // marca como done
+            a
+        },
+        dropdown_alpha_anim: {
+            let mut a = LAAnimator::new(1.0f32, 1.0f32,
+                AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.22 });
+            a.elapsed = 1.0;
+            a
+        },
+        dropdown_closing: false,
+        dropdown_closing_which: crate::bar::dropdowns::DropdownActive::None,
     };
 
     let mut last_tick = Instant::now();
     let mut last_clock_tick = Instant::now();
     let mut last_ipc_tick = Instant::now();
+    // B4: tick de animacao 60Hz quando ativa.
+    let mut last_anim_tick = Instant::now();
     while state.running {
         // Ticks PRIMEIRO (antes do dispatch nao bloquear demais)
+        // B4: tick animacao dropdown a 60Hz quando ativa.
+        {
+            let anim_dt = last_anim_tick.elapsed().as_secs_f32();
+            let scale_done = state.dropdown_scale_anim.is_done();
+            let alpha_done = state.dropdown_alpha_anim.is_done();
+            let animating = !scale_done || !alpha_done || state.dropdown_closing;
+            if animating && anim_dt >= 1.0 / 62.0 {
+                last_anim_tick = Instant::now();
+                // Avanca animadores.
+                let _s = state.dropdown_scale_anim.tick(anim_dt);
+                let _a = state.dropdown_alpha_anim.tick(anim_dt);
+                // Quando fechando: ao terminar animacao, limpa dropdown.
+                if state.dropdown_closing {
+                    if state.dropdown_scale_anim.is_done() && state.dropdown_alpha_anim.is_done() {
+                        state.dropdown = crate::bar::dropdowns::DropdownActive::None;
+                        state.dropdown_closing = false;
+                        state.dropdown_closing_which = crate::bar::dropdowns::DropdownActive::None;
+                        eprintln!("[lumo-bar] B4: dropdown fechou (anim done)");
+                    }
+                }
+                state.redraw(&qh);
+            }
+        }
         if last_clock_tick.elapsed() >= Duration::from_secs(1) {
             last_clock_tick = Instant::now();
             state.redraw(&qh);

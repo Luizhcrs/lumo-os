@@ -27,6 +27,7 @@ use smithay_client_toolkit::reexports::client::{
 use tiny_skia::Pixmap;
 
 use crate::bar::dropdowns::DropdownActive;
+use lumo_animation::{AnimCurve, LAAnimator, LACurve};
 use crate::bar::state::{paint_frame, BarSnapshot, LumoBar};
 use crate::bar::system_info::{format_date_pt, read_battery_info, read_datetime_info, read_wifi, read_wifi_info};
 use crate::bar::tokens::*;
@@ -40,6 +41,36 @@ impl LumoBar {
         self.wifi_on = read_wifi();
         // A23: leitura wifi via iw + ip.
         self.wifi_info = read_wifi_info();
+    }
+
+    /// B4: inicia animacao de abertura do dropdown (scale 0.85->1.0, alpha 0->1).
+    pub fn start_open_anim(&mut self) {
+        self.dropdown_closing = false;
+        // Scale: arranca de 0.85, curva rapida ~280ms.
+        self.dropdown_scale_anim = LAAnimator::new(
+            0.85f32, 1.0f32,
+            AnimCurve::Bezier { curve: LACurve::apple_spring_default(), duration: 0.28 },
+        );
+        // Alpha: fade-in mais curto ~220ms.
+        self.dropdown_alpha_anim = LAAnimator::new(
+            0.0f32, 1.0f32,
+            AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.22 },
+        );
+    }
+
+    /// B4: inicia animacao de fechamento (scale 1.0->0.85, alpha 1->0).
+    /// NAO muda self.dropdown ainda — o main_loop zera quando anim termina.
+    pub fn start_close_anim(&mut self, which: crate::bar::dropdowns::DropdownActive) {
+        self.dropdown_closing = true;
+        self.dropdown_closing_which = which;
+        self.dropdown_scale_anim = LAAnimator::new(
+            1.0f32, 0.85f32,
+            AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.18 },
+        );
+        self.dropdown_alpha_anim = LAAnimator::new(
+            1.0f32, 0.0f32,
+            AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.15 },
+        );
     }
 
     /// A27: hit-test absoluto sobre o menu Lumo aberto.
@@ -101,6 +132,15 @@ impl LumoBar {
             wifi_info: self.wifi_info.clone(),  // A23
             datetime_info: read_datetime_info(self.viewed_year, self.viewed_month, self.selected_day), // A24+A26
             lumo_menu_hover_idx: self.lumo_menu_hover_idx, // A27
+            // B4: valores correntes do animador (tick ja foi chamado antes do redraw).
+            dropdown_scale: {
+                let v = self.dropdown_scale_anim.tick(0.0);
+                v.clamp(0.0, 1.0)
+            },
+            dropdown_alpha: {
+                let v = self.dropdown_alpha_anim.tick(0.0);
+                v.clamp(0.0, 1.0)
+            },
         };
 
         let stride = self.width as i32 * 4;

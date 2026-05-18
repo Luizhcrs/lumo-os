@@ -22,6 +22,7 @@ use smithay_client_toolkit::{
 use tiny_skia::{Color, Pixmap};
 
 use lumo_foundation::{LumoColors, LumoTheme};
+use lumo_animation::{AnimCurve, LAAnimator, LACurve};
 
 use crate::bar::dropdowns::battery::{draw_battery_dropdown, BatteryInfo};
 use crate::bar::dropdowns::datetime::{draw_datetime_dropdown, DateTimeInfo};
@@ -58,6 +59,9 @@ pub(crate) struct BarSnapshot {
     pub datetime_info: DateTimeInfo, // A24
     /// A27: indice do item em hover no menu Lumo (usize::MAX = nenhum).
     pub lumo_menu_hover_idx: usize,
+    // B4: fator de escala e opacidade do dropdown ativo (0.0=fechado, 1.0=aberto).
+    pub dropdown_scale: f32,
+    pub dropdown_alpha: f32,
 }
 
 /// Resultado de paint_frame: posicoes calculadas pra hit-test no proximo frame.
@@ -182,7 +186,12 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     }
 
     // ============================================================
-    // DROPDOWN (A20/A23) - render abaixo da pill direita se ativo.
+    // DROPDOWN (A20/A23, B4 springy) - render abaixo das pills.
+    //
+    // B4: render em Pixmap auxiliar do tamanho do dropdown, depois
+    // composita sobre o principal com alpha global = dropdown_alpha.
+    // Scale (0.85->1.0) via clip na altura: exibe apenas scale*H pixels
+    // desde o topo (ancora topo-centro da pill, crescimento pra baixo).
     // ============================================================
     match snap.dropdown {
         DropdownActive::Battery => {
@@ -191,72 +200,90 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                 let max_x = snap.width as f32 - PILL_MARGIN_X - DROPDOWN_W;
                 let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
                 let dropdown_y = ry + rh + DROPDOWN_GAP;
-                let mut canvas = pixmap.as_mut();
-                draw_battery_dropdown(
-                    &mut canvas,
-                    dropdown_x,
-                    dropdown_y,
-                    DROPDOWN_W,
-                    DROPDOWN_H,
-                    palette,
-                    &snap.battery_info,
-                );
+                if let Some(mut sub) = Pixmap::new(DROPDOWN_W as u32, DROPDOWN_H as u32) {
+                    {
+                        let mut canvas = sub.as_mut();
+                        draw_battery_dropdown(
+                            &mut canvas,
+                            0.0,
+                            0.0,
+                            DROPDOWN_W,
+                            DROPDOWN_H,
+                            palette,
+                            &snap.battery_info,
+                        );
+                    }
+                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                }
             }
         }
         DropdownActive::Wifi => {
             if let Some((rx, ry, rw, rh)) = result.wifi_hit_rect {
-                // A31: wifi dropdown agora maior (gerenciador de redes).
                 let want_x = rx + rw / 2.0 - DROPDOWN_WIFI_W / 2.0;
                 let max_x = snap.width as f32 - PILL_MARGIN_X - DROPDOWN_WIFI_W;
                 let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
                 let dropdown_y = ry + rh + DROPDOWN_GAP;
-                let mut canvas = pixmap.as_mut();
-                let hits = draw_wifi_dropdown(
-                    &mut canvas,
-                    dropdown_x,
-                    dropdown_y,
-                    DROPDOWN_WIFI_W,
-                    DROPDOWN_WIFI_H,
-                    palette,
-                    &snap.wifi_info,
-                );
-                // A31.2: hits ja vem em coords da surface.
-                result.wifi_toggle_rect = hits.toggle_rect;
-                result.wifi_disconnect_rect = hits.disconnect_rect;
-                result.wifi_connect_rects = hits.connect_rects;
+                if let Some(mut sub) = Pixmap::new(DROPDOWN_WIFI_W as u32, DROPDOWN_WIFI_H as u32) {
+                    let hits = {
+                        let mut canvas = sub.as_mut();
+                        draw_wifi_dropdown(
+                            &mut canvas,
+                            0.0,
+                            0.0,
+                            DROPDOWN_WIFI_W,
+                            DROPDOWN_WIFI_H,
+                            palette,
+                            &snap.wifi_info,
+                        )
+                    };
+                    result.wifi_toggle_rect = hits.toggle_rect.map(|(x,y,w,h)| (x+dropdown_x, y+dropdown_y, w, h));
+                    result.wifi_disconnect_rect = hits.disconnect_rect.map(|(x,y,w,h)| (x+dropdown_x, y+dropdown_y, w, h));
+                    result.wifi_connect_rects = hits.connect_rects.iter().map(|(s,(x,y,w,h))| (s.clone(), (x+dropdown_x, y+dropdown_y, *w, *h))).collect();
+                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                }
             }
         }
-        // A24: dropdown calendario+horario (mesmo painel pra click em data OU hora).
         DropdownActive::DateTime => {
             if let Some((rx, ry, rw, rh)) = result.datetime_hit_rect {
                 let want_x = rx + rw / 2.0 - DROPDOWN_DATETIME_W / 2.0;
                 let max_x = snap.width as f32 - PILL_MARGIN_X - DROPDOWN_DATETIME_W;
                 let dropdown_x = want_x.max(PILL_MARGIN_X).min(max_x.max(PILL_MARGIN_X));
                 let dropdown_y = ry + rh + DROPDOWN_GAP;
-                let mut canvas = pixmap.as_mut();
-                let hits = draw_datetime_dropdown(
-                    &mut canvas,
-                    dropdown_x,
-                    dropdown_y,
-                    DROPDOWN_DATETIME_W,
-                    DROPDOWN_DATETIME_H,
-                    palette,
-                    &snap.datetime_info,
-                );
-                // A26: hits ja vem em coords da surface.
-                result.cal_prev_rect = hits.prev_rect;
-                result.cal_next_rect = hits.next_rect;
-                result.cal_today_rect = hits.today_rect;
-                result.cal_day_rects = hits.day_rects;
+                if let Some(mut sub) = Pixmap::new(DROPDOWN_DATETIME_W as u32, DROPDOWN_DATETIME_H as u32) {
+                    let hits = {
+                        let mut canvas = sub.as_mut();
+                        draw_datetime_dropdown(
+                            &mut canvas,
+                            0.0,
+                            0.0,
+                            DROPDOWN_DATETIME_W,
+                            DROPDOWN_DATETIME_H,
+                            palette,
+                            &snap.datetime_info,
+                        )
+                    };
+                    result.cal_prev_rect = hits.prev_rect.map(|(x,y,w,h)| (x+dropdown_x, y+dropdown_y, w, h));
+                    result.cal_next_rect = hits.next_rect.map(|(x,y,w,h)| (x+dropdown_x, y+dropdown_y, w, h));
+                    result.cal_today_rect = hits.today_rect.map(|(x,y,w,h)| (x+dropdown_x, y+dropdown_y, w, h));
+                    result.cal_day_rects = hits.day_rects.iter().map(|(d,(x,y,w,h))| (*d, (x+dropdown_x, y+dropdown_y, *w, *h))).collect();
+                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                }
             }
         }
-        // A27: dropdown menu Lumo abaixo da pill esquerda.
         DropdownActive::LumoMenu => {
             if let Some((rx, ry, _rw, rh)) = result.lumo_hit_rect {
+                use crate::menu;
+                let menu_w = MENU_LUMO_W as u32;
+                let menu_h_px = menu::menu_height(MENU_LUMO_ITEMS) as u32;
                 let dropdown_x = rx.max(PILL_MARGIN_X);
                 let dropdown_y = ry + rh + DROPDOWN_GAP;
-                let mut canvas = pixmap.as_mut();
-                draw_lumo_menu(&mut canvas, dropdown_x, dropdown_y, palette, snap.lumo_menu_hover_idx);
+                if let Some(mut sub) = Pixmap::new(menu_w, menu_h_px) {
+                    {
+                        let mut canvas = sub.as_mut();
+                        draw_lumo_menu(&mut canvas, 0.0, 0.0, palette, snap.lumo_menu_hover_idx);
+                    }
+                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                }
             }
         }
         DropdownActive::None => {}
@@ -265,6 +292,75 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     // Suppress unused warns nos campos do snapshot (theme so usado pra debug log).
     let _ = (snap.theme, h);
     result
+}
+
+// ============================================================
+// composite_dropdown (B4) - composita sub-pixmap sobre main com alpha.
+//
+// Implementa o efeito springy de abertura:
+//   scale: 0.85->1.0  (clip de altura: exibe scale*h pixels desde o topo)
+//   alpha: 0.0->1.0   (multiplicado pixel a pixel, canal A premultiplied)
+//
+// tiny-skia nao tem transform de scale em filhos. MVP: clip-by-height
+// (o dropdown "cresce" de cima pra baixo) + alpha global via loop manual.
+// ============================================================
+fn composite_dropdown(
+    dst: &mut Pixmap,
+    src: &Pixmap,
+    x: f32,
+    y: f32,
+    scale: f32,
+    alpha: f32,
+) {
+    use tiny_skia::{BlendMode, FilterQuality, PixmapPaint, Transform};
+
+    // Altura visivel = scale * src.height (cresce de cima).
+    let visible_h = (scale * src.height() as f32).round() as i32;
+    let visible_h = visible_h.max(1).min(src.height() as i32);
+
+    // Nao ha API de clip em draw_pixmap; simulamos copiando so as linhas visiveis
+    // via um sub-pixmap temporario.
+    let sub_w = src.width();
+    let sub_h = visible_h as u32;
+
+    if let Some(mut clipped) = Pixmap::new(sub_w, sub_h) {
+        // Copia as primeiras visible_h linhas do src pro clipped.
+        let src_data = src.data();
+        let dst_data = clipped.data_mut();
+        let row_bytes = (sub_w * 4) as usize;
+        for row in 0..(sub_h as usize) {
+            let src_off = row * row_bytes;
+            let dst_off = row * row_bytes;
+            if src_off + row_bytes <= src_data.len() && dst_off + row_bytes <= dst_data.len() {
+                dst_data[dst_off..dst_off + row_bytes].copy_from_slice(&src_data[src_off..src_off + row_bytes]);
+            }
+        }
+
+        // Aplica alpha global: multiplica canal A de todos os pixels.
+        let alpha_u8 = (alpha.clamp(0.0, 1.0) * 255.0) as u8;
+        if alpha_u8 < 255 {
+            for chunk in dst_data.chunks_mut(4) {
+                // Premultiplied: multiplica todos os canais pelo alpha global.
+                chunk[0] = ((chunk[0] as u32 * alpha_u8 as u32) / 255) as u8;
+                chunk[1] = ((chunk[1] as u32 * alpha_u8 as u32) / 255) as u8;
+                chunk[2] = ((chunk[2] as u32 * alpha_u8 as u32) / 255) as u8;
+                chunk[3] = ((chunk[3] as u32 * alpha_u8 as u32) / 255) as u8;
+            }
+        }
+
+        dst.draw_pixmap(
+            x as i32,
+            y as i32,
+            clipped.as_ref(),
+            &PixmapPaint {
+                blend_mode: BlendMode::SourceOver,
+                opacity: 1.0, // alpha ja aplicado manualmente acima
+                quality: FilterQuality::Nearest,
+            },
+            Transform::identity(),
+            None,
+        );
+    }
 }
 
 // ============================================================
@@ -320,4 +416,11 @@ pub(crate) struct LumoBar {
     pub ipc_rx_buf: Vec<u8>,
     pub theme: LumoTheme,
     pub palette: LumoColors,
+    // B4: animadores de abertura/fechamento de dropdown (scale 0.85->1.0, alpha 0->1).
+    pub dropdown_scale_anim: LAAnimator<f32>,
+    pub dropdown_alpha_anim: LAAnimator<f32>,
+    // B4: true quando uma animacao de fechamento esta em andamento.
+    pub dropdown_closing: bool,
+    // B4: ultimo dropdown que estava aberto (para fechar com animacao correta).
+    pub dropdown_closing_which: crate::bar::dropdowns::DropdownActive,
 }
