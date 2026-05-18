@@ -561,6 +561,9 @@ pub(crate) struct LumoBar {
     pub brightness_slider_rect: Option<(f32, f32, f32, f32)>,
     pub brightness_preset_day_rect: Option<(f32, f32, f32, f32)>,
     pub brightness_preset_night_rect: Option<(f32, f32, f32, f32)>,
+    // Q4: drag brilho — segurar e arrastar sobre pill.
+    pub brightness_dragging: bool,
+    pub brightness_drag_last_y: f32,
     // A31.2: hit-rects wifi (toggle + linhas).
     pub wifi_toggle_rect: Option<(f32, f32, f32, f32)>,
     pub wifi_disconnect_rect: Option<(f32, f32, f32, f32)>,

@@ -406,17 +406,40 @@ pub fn nm_set_radio(on: bool) {
 /// Async. Log saida.
 pub fn nm_connect(ssid: String) {
     std::thread::spawn(move || {
+        // Tenta primeiro `nmcli con up <ssid>` (rede saved com keyring secret).
+        // Mais robusto: nao derruba conexao atual se falhar.
+        let up = std::process::Command::new("nmcli")
+            .args(["con", "up", &ssid])
+            .output();
+        match up {
+            Ok(o) if o.status.success() => {
+                eprintln!("[lumo-bar] nmcli con up {} OK", ssid);
+                return;
+            }
+            Ok(o) => {
+                let e = String::from_utf8_lossy(&o.stderr);
+                if e.contains("Secrets were required") {
+                    eprintln!("[lumo-bar] nmcli con up {}: senha necessaria (A31.3 modal pendente)", ssid);
+                    return;
+                }
+                eprintln!("[lumo-bar] nmcli con up {} falhou ({}); tenta dev wifi connect", ssid, e.trim());
+            }
+            Err(e) => {
+                eprintln!("[lumo-bar] nmcli spawn falha: {}", e);
+                return;
+            }
+        }
+        // Fallback: rede nao saved -> dev wifi connect (sem senha falha, mas tenta)
         let res = std::process::Command::new("nmcli")
             .args(["dev", "wifi", "connect", &ssid])
             .output();
         match res {
             Ok(o) if o.status.success() => {
-                eprintln!("[lumo-bar] nmcli connect {} OK", ssid);
+                eprintln!("[lumo-bar] nmcli dev wifi connect {} OK", ssid);
             }
             Ok(o) => {
                 let e = String::from_utf8_lossy(&o.stderr);
-                eprintln!("[lumo-bar] nmcli connect {} falha: {}", ssid, e.trim());
-                // Senha exigida -> fallback nm-applet picker GUI (futuro A31.3).
+                eprintln!("[lumo-bar] nmcli dev wifi connect {} falha: {}", ssid, e.trim());
             }
             Err(e) => eprintln!("[lumo-bar] nmcli spawn falha: {}", e),
         }

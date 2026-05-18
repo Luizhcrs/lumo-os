@@ -127,6 +127,8 @@ pub fn run() {
         brightness_slider_rect: None,
         brightness_preset_day_rect: None,
         brightness_preset_night_rect: None,
+        brightness_dragging: false,
+        brightness_drag_last_y: 0.0,
         // A31.2: wifi hit-rects.
         wifi_toggle_rect: None,
         wifi_disconnect_rect: None,

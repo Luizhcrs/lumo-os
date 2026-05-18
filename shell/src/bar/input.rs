@@ -33,6 +33,21 @@ impl PointerHandler for LumoBar {
                 PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
                     self.pointer_x = ev.position.0 as f32;
                     self.pointer_pos = Some(ev.position);
+                    // Q4: drag brilho ativo — ajusta pct proporcional ao delta Y.
+                    if self.brightness_dragging {
+                        let py_now = ev.position.1 as f32;
+                        let dy = self.brightness_drag_last_y - py_now; // arrasto pra cima = mais brilho
+                        self.brightness_drag_last_y = py_now;
+                        if dy.abs() >= 1.0 {
+                            let delta = (dy * 0.5).round() as i16;
+                            let new_pct = (self.brightness_info.pct as i16 + delta).clamp(5, 100) as u8;
+                            if new_pct != self.brightness_info.pct {
+                                crate::bar::system_info::set_brightness_pct(new_pct);
+                                self.brightness_info.pct = new_pct;
+                                self.update_size_and_redraw(qh);
+                            }
+                        }
+                    }
                     // A27: hover tracking dentro do menu Lumo aberto.
                     if self.dropdown == DropdownActive::LumoMenu {
                         let new_idx = self.lumo_menu_hit_test(
@@ -183,6 +198,9 @@ impl PointerHandler for LumoBar {
                         // L5: brilho pill -> abre dropdown Brightness.
                         if let Some((rx, ry, rw, rh)) = self.brightness_hit_rect {
                             if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                // Q4: iniciar drag brilho.
+                                self.brightness_dragging = true;
+                                self.brightness_drag_last_y = py;
                                 if self.dropdown == DropdownActive::Brightness {
                                     self.start_close_anim(DropdownActive::Brightness);
                                 } else {
@@ -433,6 +451,12 @@ impl PointerHandler for LumoBar {
                                 }
                             }
                         }
+                    }
+                }
+                PointerEventKind::Release { .. } => {
+                    // Q4: encerra drag brilho no release.
+                    if self.brightness_dragging {
+                        self.brightness_dragging = false;
                     }
                 }
                 _ => {}

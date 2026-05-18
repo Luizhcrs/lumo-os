@@ -82,6 +82,10 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("HOME", &home);
         cmd.env("XDG_CONFIG_HOME", &xdg);
         cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
+        // Q3: propagar env GTK/Qt pra appmenu funcionar em GTK3.
+        cmd.env("GTK_MODULES", "appmenu-gtk-module");
+        cmd.env("QT_QPA_PLATFORMTHEME", "appmenu-qt5");
+        cmd.env("UBUNTU_MENUPROXY", "1");
         match cmd.spawn() {
             Ok(child) => tracing::info!(
                 pid = child.id(),
@@ -101,6 +105,10 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("HOME", &home);
         cmd.env("XDG_CONFIG_HOME", &xdg);
         cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
+        // Q3: propagar env GTK/Qt pra appmenu funcionar em GTK3.
+        cmd.env("GTK_MODULES", "appmenu-gtk-module");
+        cmd.env("QT_QPA_PLATFORMTHEME", "appmenu-qt5");
+        cmd.env("UBUNTU_MENUPROXY", "1");
         match cmd.spawn() {
             Ok(child) => tracing::info!(
                 pid = child.id(),

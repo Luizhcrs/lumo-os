@@ -76,7 +76,21 @@ impl XdgShellHandler for LumoState {
         kb.set_focus(self, new_focus, serial);
     }
 
-    fn grab(&mut self, _surface: PopupSurface, _seat: WlSeat, _serial: Serial) {}
+    fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {
+        // Q2: aceita popup grab para xdg_popup (right-click menus GTK/Qt).
+        let seat = match smithay::input::Seat::<Self>::from_resource(&seat) {
+            Some(s) => s,
+            None => return,
+        };
+        let kind = PopupKind::Xdg(surface);
+        let root = match smithay::desktop::find_popup_root_surface(&kind) {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        if let Err(err) = self.popups.grab_popup(root, kind, &seat, serial) {
+            tracing::warn!(?err, "Q2 grab_popup falhou");
+        }
+    }
 
     fn reposition_request(
         &mut self,
