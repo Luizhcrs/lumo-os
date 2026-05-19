@@ -988,7 +988,8 @@ impl App {
                           chevron: Option<(bool, PathBuf)>|
          -> iced::Element<Message> {
             let icon_color = if is_active { accent } else { muted };
-            let selected_bg = if is_active { th.accent_subtle } else { Color::TRANSPARENT };
+            // active_bar (3px left) ja sinaliza item ativo; bg transparent pra menos peso visual.
+            let selected_bg = Color::TRANSPARENT;
 
             let icon = Svg::new(SvgHandle::from_memory(svg_bytes))
                 .width(Length::Fixed(16.0))
