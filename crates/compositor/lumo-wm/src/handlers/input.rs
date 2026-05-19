@@ -176,6 +176,16 @@ impl LumoState {
                     },
                 );
                 pointer.frame(self);
+                // INSTR.F4: libinput-real motion post-dispatch.
+                {
+                    let cf = pointer.current_focus();
+                    tracing::info!(
+                        ploc = ?(self.pointer_location.x as i32, self.pointer_location.y as i32),
+                        under_some = under.is_some(),
+                        current_focus_some = cf.is_some(),
+                        "INSTR.F4 libinput_motion post-motion"
+                    );
+                }
 
                 // W12.B: update overview hover.
                 if self.overview.is_some() {
@@ -895,6 +905,16 @@ impl LumoState {
             },
         );
         pointer.frame(self);
+        // INSTR.F: log pointer.current_focus() apos motion sintetico.
+        {
+            let cf = pointer.current_focus();
+            tracing::info!(
+                x, y,
+                under_some = under.is_some(),
+                current_focus_some = cf.is_some(),
+                "INSTR.F1 synth_move post-motion"
+            );
+        }
         #[cfg(feature = "drm-backend")]
         { self.drm_force_repaint = true; }
         tracing::debug!(x, y, "SI.1: SyntheticPointerMove");
@@ -1024,6 +1044,18 @@ impl LumoState {
         }
 
         let pointer = self.pointer.clone();
+        // INSTR.F2: log focus state ANTES de pointer.button (synthetic).
+        {
+            let cf = pointer.current_focus();
+            let su = self.surface_under(self.pointer_location);
+            tracing::info!(
+                button = format!("0x{:x}", button), pressed,
+                ploc = ?(self.pointer_location.x as i32, self.pointer_location.y as i32),
+                current_focus_some = cf.is_some(),
+                surface_under_some = su.is_some(),
+                "INSTR.F2 synth_button pre-button"
+            );
+        }
         pointer.button(
             self,
             &smithay::input::pointer::ButtonEvent {
@@ -1034,6 +1066,15 @@ impl LumoState {
             },
         );
         pointer.frame(self);
+        // INSTR.F3: log focus apos button+frame (synthetic).
+        {
+            let cf = pointer.current_focus();
+            tracing::info!(
+                button = format!("0x{:x}", button), pressed,
+                current_focus_some_after = cf.is_some(),
+                "INSTR.F3 synth_button post-frame"
+            );
+        }
         #[cfg(feature = "drm-backend")]
         { self.drm_force_repaint = true; }
         tracing::debug!(button = format!("0x{:x}", button), pressed, "SI.1: SyntheticPointerButton");
