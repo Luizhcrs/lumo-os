@@ -185,6 +185,11 @@ pub struct DrmBackendData {
     /// W9.C: additional surfaces for secondary outputs (monitors 2+).
     pub extra_surfaces: Vec<DrmSurfaceData>,
     pub gpu_node: DrmNode,
+    /// W8.A fix: cache do ultimo frame composto em buffer pixel BGRA8888.
+    /// Atualizado dentro de render_drm a cada frame (path c: 1 GPU blit/frame).
+    /// screencopy do_copy le essa cache pra entregar conteudo real ao client.
+    /// None ate primeiro render bem-sucedido.
+    pub screencopy_cache: Option<crate::backend::screencopy_cache::ScreencopyCache>,
 }
 
 /// Entry point do backend DRM. Bloqueia ate sair.
@@ -657,6 +662,7 @@ pub fn run(
         output_manager,
         renderer,
         extra_surfaces: Vec::new(),
+        screencopy_cache: None,
         surface: Some(DrmSurfaceData {
             crtc: crtc_handle,
             output: output.clone(),
@@ -1086,6 +1092,24 @@ fn render_drm(state: &mut LumoState) {
 
     match render_result {
         Ok(result) => {
+            // W8.A fix: atualiza cache screencopy com mesmo set de elementos.
+            // Render off-screen num GlesRenderbuffer e copia pixels pra Vec<u8>
+            // BGRA8888 cacheado. Custo: 1 GPU re-render/frame quando ha client
+            // screencopy ativo (lazy: cache so renderiza apos primeiro pedido).
+            // Path c do plano: render manual em shadow buffer, evita ler primary
+            // plane post-scanout (dmabuf pode estar em uso pelo display engine).
+            if backend.screencopy_cache.as_ref().map(|c| c.is_armed()).unwrap_or(false) {
+                if let Some(cache) = backend.screencopy_cache.as_mut() {
+                    if let Err(err) = cache.refresh(
+                        &mut backend.renderer,
+                        &surface.output,
+                        &all_elements,
+                        clear,
+                    ) {
+                        tracing::warn!(?err, "W8.A: screencopy cache refresh falhou");
+                    }
+                }
+            }
             // W3.P2: rastreia se cursor foi para HW plane neste frame.
             // result.cursor_element.is_some() = DrmCompositor colocou cursor no HW plane.
             let cursor_on_hw = result.cursor_element.is_some();

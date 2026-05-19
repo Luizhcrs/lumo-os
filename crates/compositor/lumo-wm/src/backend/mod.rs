@@ -20,3 +20,6 @@ pub mod libinput;
 
 #[cfg(feature = "drm-backend")]
 pub mod vrr;
+
+#[cfg(feature = "drm-backend")]
+pub mod screencopy_cache;

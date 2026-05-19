@@ -8,9 +8,12 @@
 //!   2. Compositor cria ZwlrScreencopyFrameV1 e envia evento buffer()
 //!      com formato ARGB8888 e dimensoes do output
 //!   3. Client aloca wl_shm buffer e chama frame.copy(buffer)
-//!   4. Compositor escreve pixels no shm pool e envia frame.ready()
+//!   4. Compositor le pixels do `screencopy_cache` (BGRA8888 cacheado
+//!      apos cada render_frame) e copia pro shm pool, depois manda ready().
 //!
-//! W8.A simplificado: pixel data = ink-deep sRGB (placeholder funcional).
+//! W8.A fix: ANTES o do_copy escrevia uma cor fixa #131318 (placeholder).
+//! Resultado: grim retornava PNG solid color. Agora le do cache real
+//! atualizado em backend::screencopy_cache pelo render_drm.
 
 use std::sync::{Arc, Mutex};
 use smithay::reexports::wayland_server::{
@@ -116,6 +119,14 @@ fn handle_capture(
 
     let stride = w * 4;
 
+    // W8.A fix: arma cache pra render_drm passar a atualizar a cada frame.
+    // Cache TTL de 3s = se cliente para de pedir capture, custo de re-render
+    // some sozinho. Tambem dispara render-into-cache imediato pra evitar
+    // entregar buffer zero na primeira captura (grim chama Copy logo apos
+    // capture_output, antes do proximo render_drm tick).
+    #[cfg(feature = "drm-backend")]
+    arm_and_refresh_now(state);
+
     let user_data = Arc::new(FrameUserData {
         data: Mutex::new(Some(ScreencopyFrameData {
             format: 0,
@@ -176,16 +187,58 @@ fn do_copy(
         }
     };
 
+    // W8.A fix: garante cache populado antes da copia. Se cache vazio ou stale,
+    // dispara render-into-cache sincrono agora mesmo. Necessario porque grim
+    // chama Copy logo apos capture_output sem esperar um render_drm tick.
+    #[cfg(feature = "drm-backend")]
+    arm_and_refresh_now(state);
+
+    // Le pixels cacheados (BGRA8888 ja no formato ARGB8888 wl_shm little endian).
+    let cache_bytes: Option<Vec<u8>> = {
+        #[cfg(feature = "drm-backend")]
+        {
+            state
+                .drm_backend
+                .as_ref()
+                .and_then(|b| b.screencopy_cache.as_ref())
+                .filter(|c| {
+                    c.width == frame_data.width && c.height == frame_data.height
+                        && !c.pixels.is_empty()
+                })
+                .map(|c| c.pixels.clone())
+        }
+        #[cfg(not(feature = "drm-backend"))]
+        {
+            None::<Vec<u8>>
+        }
+    };
+
     let result = with_buffer_contents(&buffer, |ptr, len, _spec| {
         let expected = (frame_data.stride * frame_data.height) as usize;
-        if len >= expected {
-            // SAFETY: ptr aponta para shm pool validado pelo compositor.
-            let buf = unsafe { std::slice::from_raw_parts_mut(ptr as *mut u8, len) };
-            for chunk in buf[..expected].chunks_exact_mut(4) {
-                chunk[0] = 0x18; // B
-                chunk[1] = 0x13; // G
-                chunk[2] = 0x13; // R
-                chunk[3] = 0xff; // A
+        if len < expected {
+            return;
+        }
+        // SAFETY: ptr aponta para shm pool validado pelo compositor.
+        let buf = unsafe { std::slice::from_raw_parts_mut(ptr as *mut u8, len) };
+        match cache_bytes.as_ref() {
+            Some(src) if src.len() >= expected => {
+                buf[..expected].copy_from_slice(&src[..expected]);
+            }
+            _ => {
+                // Sem cache disponivel ainda (ex: backend winit ou primeiro
+                // frame antes do refresh). Limpa pra preto opaco em vez de
+                // entregar lixo, mas sinaliza warning.
+                for chunk in buf[..expected].chunks_exact_mut(4) {
+                    chunk[0] = 0x00;
+                    chunk[1] = 0x00;
+                    chunk[2] = 0x00;
+                    chunk[3] = 0xff;
+                }
+                tracing::warn!(
+                    w = frame_data.width,
+                    h = frame_data.height,
+                    "W8.A: cache screencopy vazio, devolvendo frame preto"
+                );
             }
         }
     });
@@ -198,12 +251,139 @@ fn do_copy(
             let sec_hi = 0u32;
             let tv_nsec = ((ms % 1000) * 1_000_000) as u32;
             frame.ready(sec_hi, sec_lo, tv_nsec);
-            tracing::info!(w = frame_data.width, h = frame_data.height, "W8.A: screencopy frame ready");
+            tracing::info!(
+                w = frame_data.width,
+                h = frame_data.height,
+                cache_hit = cache_bytes.is_some(),
+                "W8.A: screencopy frame ready"
+            );
         }
         Err(_) => {
             frame.failed();
             tracing::warn!("W8.A: screencopy copy falhou (buffer shm invalido)");
         }
+    }
+}
+
+/// W8.A fix: arma cache e dispara render-into-cache sincrono agora.
+/// Compartilhada por handle_capture e do_copy pra cobrir tanto streaming
+/// (capture_output -> frame -> Copy) quanto one-shot (grim).
+#[cfg(feature = "drm-backend")]
+fn arm_and_refresh_now(state: &mut LumoState) {
+    // Coleta inputs ANTES de pegar drm_backend mut pra evitar duplo borrow.
+    let titlebar_menu_opt = state
+        .titlebar_menu
+        .as_ref()
+        .map(|(_, pos, hover)| (*pos, *hover));
+    let snap_preview = state.snap_preview;
+    let overview_state = state.overview.as_ref();
+    let stack_picker_state = state.stack_picker.as_ref();
+    let pointer_location = state.pointer_location;
+    let start_time_elapsed = state.start_time.elapsed();
+    let frame_counter = state.frame_counter;
+    let splash_alpha_val = state.splash_alpha;
+    let boot_curtain_alpha = state.boot_curtain_alpha;
+    let _ = start_time_elapsed;
+
+    let LumoState {
+        ref mut drm_backend,
+        ref cursor,
+        ref cursor_buffer,
+        ref space,
+        ref wallpaper,
+        ref corner_shader,
+        ref ssd_windows,
+        ref splash_buffer,
+        ..
+    } = *state;
+
+    let Some(backend) = drm_backend.as_mut() else {
+        return;
+    };
+    let Some(surface) = backend.surface.as_ref() else {
+        return;
+    };
+
+    let mode = surface.output.current_mode();
+    let (ow, oh) = match mode {
+        Some(m) => (m.size.w, m.size.h),
+        None => (1920, 1080),
+    };
+    let (w_u32, h_u32) = (ow as u32, oh as u32);
+
+    // Lazy alloc / realloc cache se output size mudou.
+    let need_realloc = match &backend.screencopy_cache {
+        None => true,
+        Some(c) => c.width != w_u32 || c.height != h_u32,
+    };
+    if need_realloc {
+        match crate::backend::screencopy_cache::ScreencopyCache::new(
+            &mut backend.renderer,
+            w_u32,
+            h_u32,
+        ) {
+            Ok(c) => {
+                backend.screencopy_cache = Some(c);
+            }
+            Err(err) => {
+                tracing::warn!(?err, "W8.A: alloc ScreencopyCache falhou");
+                return;
+            }
+        }
+    }
+
+    let cache = match backend.screencopy_cache.as_mut() {
+        Some(c) => c,
+        None => return,
+    };
+    cache.arm();
+
+    // Reproduz collect_drm_elements com mesmo set usado em render_drm.
+    let overview_elements = overview_state
+        .map(|ov| crate::overview::overview_elements(ov, ow, oh))
+        .unwrap_or_default();
+    let picker_elements = stack_picker_state
+        .map(|p| crate::stack_picker::picker_elements(p, ow, oh))
+        .unwrap_or_default();
+
+    let inputs = crate::backend::render_common::DrmCollectInputs {
+        boot_curtain_alpha,
+        splash_alpha: splash_alpha_val,
+        splash_buffer: splash_buffer.as_ref(),
+        wallpaper: wallpaper.as_ref(),
+        corner_shader: corner_shader.as_ref(),
+        ssd_windows,
+        titlebar_menu: titlebar_menu_opt,
+        snap_preview,
+        overview_elements,
+        picker_elements,
+        space,
+        output: &surface.output,
+        pointer_location,
+        frame_counter,
+        cursor: cursor.as_ref(),
+        cursor_buffer: cursor_buffer.as_ref(),
+        output_w: ow,
+        output_h: oh,
+    };
+
+    let all_elements =
+        crate::backend::render_common::collect_drm_elements(&mut backend.renderer, &inputs);
+
+    let clear = crate::backend::render_common::clear_color_linear();
+    if let Err(err) = cache.refresh(
+        &mut backend.renderer,
+        &surface.output,
+        &all_elements,
+        clear,
+    ) {
+        tracing::warn!(?err, "W8.A: screencopy cache refresh sincrono falhou");
+    } else {
+        tracing::debug!(
+            w = cache.width,
+            h = cache.height,
+            "W8.A: screencopy cache atualizado sincrono"
+        );
     }
 }
 
@@ -237,10 +417,13 @@ mod tests {
     }
 
     #[test]
-    fn screencopy_pixel_ink_deep_argb() {
-        let buf: [u8; 4] = [0x18, 0x13, 0x13, 0xff];
+    fn screencopy_pixel_fallback_argb_opaque_black() {
+        // Fallback quando cache vazio (sem drm backend ou primeiro frame).
+        let buf: [u8; 4] = [0x00, 0x00, 0x00, 0xff];
         assert_eq!(buf[3], 0xFF);
-        assert!(buf[0] > 0);
+        assert_eq!(buf[0], 0x00);
+        assert_eq!(buf[1], 0x00);
+        assert_eq!(buf[2], 0x00);
     }
 
     #[test]
