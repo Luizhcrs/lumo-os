@@ -461,7 +461,7 @@ impl LumoState {
                 self.set_workspace(n);
             }
             KeyAction::MoveToWorkspace(n) => {
-                tracing::info!(workspace = n, "MoveToWorkspace pendente (sem multi-workspace map)");
+                self.move_focused_to_workspace(n);
             }
             KeyAction::CycleWindow(delta) => {
                 // L1: SUPER+Tab -> FocusManager.cycle.
