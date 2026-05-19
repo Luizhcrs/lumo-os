@@ -694,6 +694,8 @@ mod theme_tests {
             accent: Some(0xFF6B35),
             ink_deep: None,
             pill_bg: Some(0x1F1F22),
+            font_sans: None,
+            font_mono: None,
         };
         let toml = t.to_toml();
         let t2 = LumoTokens::parse_toml(&toml).unwrap();
@@ -710,9 +712,25 @@ mod theme_tests {
             accent: Some(0xABCDEF),
             ink_deep: None,
             pill_bg: None,
+            font_sans: None,
+            font_mono: None,
         };
         let colors = t.resolve();
         assert_eq!(colors.accent, 0xABCDEF);
+    }
+
+    #[test]
+    fn default_font_fields_are_none() {
+        let t = LumoTokens {
+            mode: LumoTheme::Dark,
+            accent: None,
+            ink_deep: None,
+            pill_bg: None,
+            font_sans: None,
+            font_mono: None,
+        };
+        assert!(t.font_sans.is_none());
+        assert!(t.font_mono.is_none());
     }
 }
 
@@ -1179,3 +1197,7 @@ mod bar_layout_tests {
         assert!(l.find_pill("unknown_pill_xyz").is_none());
     }
 }
+
+// W8.C
+pub mod accessibility;
+pub use accessibility::{A11yTokens, watch_accessibility};

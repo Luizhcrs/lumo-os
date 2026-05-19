@@ -10,6 +10,7 @@ pub enum Tab {
     Appearance,
     Keyboard,
     Touchpad,
+    Accessibility,
 }
 
 impl Tab {
@@ -22,6 +23,7 @@ impl Tab {
         Tab::Appearance,
         Tab::Keyboard,
         Tab::Touchpad,
+        Tab::Accessibility,
     ];
 
     pub fn label(self) -> &'static str {
@@ -34,6 +36,7 @@ impl Tab {
             Tab::Appearance => "Aparencia",
             Tab::Keyboard   => "Teclado",
             Tab::Touchpad   => "Touchpad",
+            Tab::Accessibility => "Acessibilidade",
         }
     }
 
@@ -47,6 +50,7 @@ impl Tab {
             Tab::Appearance => "[apar]",
             Tab::Keyboard   => "[kbd]",
             Tab::Touchpad   => "[tpad]",
+            Tab::Accessibility => "[a11y]",
         }
     }
 }
@@ -57,7 +61,7 @@ mod tests {
 
     #[test]
     fn test_tab_count() {
-        assert_eq!(Tab::ALL.len(), 8);
+        assert_eq!(Tab::ALL.len(), 9);
     }
 
     #[test]

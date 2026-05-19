@@ -119,6 +119,13 @@ pub enum Message {
     Quit,
     ShowAbout,
 
+    // accessibility
+    ReducedMotionToggle,
+    HighContrastToggle,
+    FontScaleChanged(f32),
+    ApplyAccessibility,
+    A11ySaved,
+
     // async ops
     BrightnessLoaded(u8),
     BatteryLoaded { percent: u8, health: u8 },
@@ -164,6 +171,11 @@ pub struct App {
     pub natural_scroll: bool,
     pub accel_enabled: bool,
 
+    // accessibility
+    pub a11y_reduced_motion: bool,
+    pub a11y_high_contrast: bool,
+    pub a11y_font_scale: f32,
+
     // ui
     pub status_msg: String,
 }
@@ -195,6 +207,9 @@ impl App {
             tap_to_click: true,
             natural_scroll: true,
             accel_enabled: true,
+            a11y_reduced_motion: false,
+            a11y_high_contrast: false,
+            a11y_font_scale: 1.0,
             status_msg: String::new(),
         };
         let task = Task::perform(load_battery(), |r| match r {
@@ -250,6 +265,18 @@ impl App {
                 self.status_msg = "Touchpad salvo.".into();
                 Task::perform(persist_touchpad(self.tap_to_click, self.natural_scroll, self.accel_enabled), |_| Message::ApplyDone)
             }
+
+            Message::ReducedMotionToggle => { self.a11y_reduced_motion = !self.a11y_reduced_motion; Task::none() }
+            Message::HighContrastToggle   => { self.a11y_high_contrast   = !self.a11y_high_contrast;   Task::none() }
+            Message::FontScaleChanged(v)  => { self.a11y_font_scale = v.clamp(0.8, 1.4);               Task::none() }
+            Message::ApplyAccessibility   => {
+                self.status_msg = "Acessibilidade salva.".into();
+                let rm = self.a11y_reduced_motion;
+                let hc = self.a11y_high_contrast;
+                let fs = self.a11y_font_scale;
+                Task::perform(persist_accessibility(rm, hc, fs), |_| Message::A11ySaved)
+            }
+            Message::A11ySaved => { Task::none() }
 
             Message::BatteryLoaded { percent, health } => {
                 self.battery_percent = percent;
@@ -319,6 +346,7 @@ impl App {
             Tab::Appearance => self.view_appearance(),
             Tab::Keyboard   => self.view_keyboard(),
             Tab::Touchpad   => self.view_touchpad(),
+            Tab::Accessibility => self.view_accessibility(),
         }
     }
 
@@ -549,6 +577,39 @@ impl App {
         .into()
     }
 
+    fn view_accessibility(&self) -> Element<Message> {
+        let rm_label = if self.a11y_reduced_motion { "Reducir animacoes: Sim" } else { "Reducir animacoes: Nao" };
+        let hc_label = if self.a11y_high_contrast  { "Alto contraste: Sim"    } else { "Alto contraste: Nao"   };
+        column![
+            Self::section_title("Acessibilidade"),
+            Space::with_height(16),
+            button(text(rm_label).size(13).color(LumoTheme::fg()))
+                .on_press(Message::ReducedMotionToggle)
+                .style(move |_, _| if self.a11y_reduced_motion { ButtonStyle::Primary.style() } else { ButtonStyle::Secondary.style() })
+                .padding([8, 16]),
+            Space::with_height(8),
+            button(text(hc_label).size(13).color(LumoTheme::fg()))
+                .on_press(Message::HighContrastToggle)
+                .style(move |_, _| if self.a11y_high_contrast { ButtonStyle::Primary.style() } else { ButtonStyle::Secondary.style() })
+                .padding([8, 16]),
+            Space::with_height(16),
+            text(format!("Escala de fonte: {:.1}x (0.8 - 1.4)", self.a11y_font_scale)).size(13).color(LumoTheme::muted()),
+            Space::with_height(8),
+            slider(0..=100, ((self.a11y_font_scale - 0.8) / 0.006) as u8, move |v| {
+                Message::FontScaleChanged(0.8 + v as f32 * 0.006)
+            }).width(Length::Fixed(320.0)),
+            Space::with_height(16),
+            button(text("Aplicar").size(13).color(LumoTheme::bg()))
+                .on_press(Message::ApplyAccessibility)
+                .style(|_, _| ButtonStyle::Primary.style())
+                .padding([8, 20]),
+            Space::with_height(8),
+            text(self.status_msg.clone()).size(11).color(LumoTheme::accent()),
+        ]
+        .spacing(0)
+        .into()
+    }
+
     pub fn subscription(&self) -> Subscription<Message> {
         appmenu_subscription()
     }
@@ -618,6 +679,23 @@ async fn persist_touchpad(tap: bool, natural: bool, accel: bool) -> Result<(), S
         tap, natural, accel
     );
     tokio::fs::write(format!("{}/touchpad.toml", dir), content).await.map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+async fn persist_accessibility(rm: bool, hc: bool, fs: f32) -> Result<(), String> {
+    let dir = dirs_from_xdg();
+    tokio::fs::create_dir_all(&dir).await.map_err(|e| e.to_string())?;
+    let content = format!(
+        "[accessibility]
+reduced_motion = {}
+high_contrast = {}
+font_scale = {:.2}
+",
+        rm, hc, fs
+    );
+    tokio::fs::write(format!("{}/accessibility.toml", dir), content)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
