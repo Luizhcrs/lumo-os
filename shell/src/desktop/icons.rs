@@ -28,8 +28,11 @@ pub const ICON_SIZE: f32 = 64.0;
 pub const ICON_PAD_X: f32 = (CELL_W - ICON_SIZE) / 2.0;
 pub const ICON_PAD_Y: f32 = 4.0;
 /// Grid ancora: top-right com margem da borda.
-pub const GRID_MARGIN_RIGHT: f32 = 16.0;
-pub const GRID_MARGIN_TOP: f32 = 56.0;
+/// T1.4: margem direita aumentada pra evitar icones sob pill direita da bar.
+pub const GRID_MARGIN_RIGHT: f32 = 40.0;
+/// T1.4: margem topo = bar height(32) + pill_margin(6) + gap (42px total) + folga de seguranca.
+/// 80px garante que icones nao ficam sob pill da bar nem sob dropdown.
+pub const GRID_MARGIN_TOP: f32 = 80.0;
 /// Scan interval.
 pub const SCAN_INTERVAL: Duration = Duration::from_secs(2);
 /// Threshold de movimento pra iniciar drag (px).

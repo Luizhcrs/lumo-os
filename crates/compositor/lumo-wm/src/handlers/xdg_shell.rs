@@ -62,14 +62,23 @@ impl XdgShellHandler for LumoState {
         if let Some(window) = to_remove {
             self.space.unmap_elem(&window);
         }
-        // N5: apos unmap, atualiza foco via FocusManager.
-        // Pega o proximo toplevel disponivel no space (o primeiro que sobrou).
-        let next_surface: Option<WlSurface> = self
-            .space
-            .elements()
-            .next()
-            .and_then(|w| w.wl_surface())
-            .map(|s| s.into_owned());
+        // T1.5: N5 MRU -- ao fechar toplevel, tenta focar a surface que
+        // estava focada antes (prev_focus), se ainda viva no space.
+        // Fallback: primeiro toplevel restante. Sem toplevels -> None.
+        let prev = self.focus_manager.prev_focus.take();
+        let prev_alive = prev.as_ref().and_then(|ps| {
+            self.space.elements()
+                .find(|w| w.wl_surface().map(|s| *s == *ps).unwrap_or(false))
+                .and_then(|w| w.wl_surface())
+                .map(|s| s.into_owned())
+        });
+        let next_surface: Option<WlSurface> = prev_alive.or_else(|| {
+            self.space
+                .elements()
+                .next()
+                .and_then(|w| w.wl_surface())
+                .map(|s| s.into_owned())
+        });
         let serial = smithay::utils::SERIAL_COUNTER.next_serial();
         let kb = self.keyboard.clone();
         let new_focus = self.focus_manager.close_toplevel(next_surface);

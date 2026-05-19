@@ -557,27 +557,17 @@ pub fn read_brightness_info() -> crate::bar::dropdowns::brightness::BrightnessIn
     crate::bar::dropdowns::brightness::BrightnessInfo::default()
 }
 
-/// Sets backlight brightness from percentage 0-100 via sysfs direct write.
-/// Requires group video or polkit rule.
+/// T1.8: usa lumo_sensors::Backlight::set_percent -- fonte de verdade unica.
+/// Remove duplicata que divergia de lid.rs. Ambos chamam o mesmo sysfs path.
 pub fn set_brightness_pct(pct: u8) {
-    let dirs = [
-        "/sys/class/backlight/intel_backlight",
-        "/sys/class/backlight/amdgpu_bl0",
-        "/sys/class/backlight/acpi_video0",
-    ];
-    for dir in &dirs {
-        let max_path = format!("{}/max_brightness", dir);
-        let cur_path = format!("{}/brightness", dir);
-        if let Some(max) = sys_read_u32(&max_path) {
-            if max > 0 {
-                let raw = ((pct as f32 / 100.0) * max as f32).round() as u32;
-                let raw = raw.max(1);
-                if std::fs::write(&cur_path, raw.to_string()).is_ok() {
-                    eprintln!("[lumo-bar] L5 brightness: {}% = {}/{}", pct, raw, max);
-                    return;
-                }
+    match lumo_sensors::Backlight::discover() {
+        Some(bl) => {
+            if let Err(e) = bl.set_percent(pct) {
+                eprintln!("[lumo-bar] brightness set_percent({pct}) erro: {e}");
             }
         }
+        None => {
+            eprintln!("[lumo-bar] brightness: nenhum backlight encontrado");
+        }
     }
-    eprintln!("[lumo-bar] L5 brightness: no backlight found");
 }

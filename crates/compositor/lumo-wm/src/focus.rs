@@ -59,6 +59,9 @@ pub struct FocusManager {
     pub state: FocusState,
     /// Surface que tinha foco antes de Dropdown.
     pub prev: Option<WlSurface>,
+    /// T1.5: MRU -- surface focada antes do toplevel atual.
+    /// Quando um toplevel fecha, foco vai pra prev_focus se ainda vivo.
+    pub prev_focus: Option<WlSurface>,
 }
 
 impl Default for FocusManager {
@@ -66,6 +69,7 @@ impl Default for FocusManager {
         Self {
             state: FocusState::None,
             prev: None,
+            prev_focus: None,
         }
     }
 }
@@ -74,6 +78,12 @@ impl FocusManager {
     /// [1,3,11] Click em toplevel xdg.
     /// Retorna Some(surface) para kb.set_focus.
     pub fn click_toplevel(&mut self, surface: WlSurface) -> Option<WlSurface> {
+        // T1.5: salva foco anterior no MRU antes de trocar.
+        if let FocusState::Toplevel(ref prev) = self.state {
+            if *prev != surface {
+                self.prev_focus = Some(prev.clone());
+            }
+        }
         self.state = FocusState::Toplevel(surface.clone());
         self.prev = None;
         Some(surface)
@@ -106,6 +116,10 @@ impl FocusManager {
 
     /// [2] Nova janela mapeada: foca imediatamente.
     pub fn new_toplevel(&mut self, surface: WlSurface) -> Option<WlSurface> {
+        // T1.5: salva foco anterior antes de focar nova janela.
+        if let FocusState::Toplevel(ref prev) = self.state {
+            self.prev_focus = Some(prev.clone());
+        }
         self.state = FocusState::Toplevel(surface.clone());
         self.prev = None;
         Some(surface)

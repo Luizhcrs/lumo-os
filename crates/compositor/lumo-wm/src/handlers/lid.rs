@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 use smithay::reexports::calloop::{channel, LoopHandle};
 
 use crate::state::LumoState;
+use lumo_sensors::Backlight;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LidEvent {
@@ -165,23 +166,10 @@ fn read_brightness_pct() -> u8 {
     50
 }
 
+/// T1.8: usa Backlight::set_percent -- fonte de verdade unica.
 fn set_brightness_pct(pct: u8) {
-    let dirs = [
-        "/sys/class/backlight/intel_backlight",
-        "/sys/class/backlight/amdgpu_bl0",
-    ];
-    for dir in &dirs {
-        let max = std::fs::read_to_string(format!("{}/max_brightness", dir))
-            .ok()
-            .and_then(|s| s.trim().parse::<u32>().ok());
-        if let Some(m) = max {
-            if m > 0 {
-                let raw = ((pct as f32 / 100.0) * m as f32).round() as u32;
-                let raw = raw.max(1);
-                let _ = std::fs::write(format!("{}/brightness", dir), raw.to_string());
-                return;
-            }
-        }
+    if let Some(bl) = Backlight::discover() {
+        let _ = bl.set_percent(pct);
     }
 }
 
