@@ -795,8 +795,12 @@ pub fn run(
                     return TimeoutAction::ToDuration(sleep_for);
                 }
                 render_drm(state);
-                // Reschedula pro proximo frame: 1ms minimo para nao spin.
-                TimeoutAction::ToDuration(Duration::from_millis(1))
+                // BUG2 FIX: 1ms causava spin ~1000 chamadas/s mesmo idle
+                // (render_frame com is_empty=true = GPU overhead sem damage).
+                // 16ms = periodo de 1 vblank 60Hz. compute_render_timeout ja
+                // afina o scheduling dentro do janela de 16ms quando vblank
+                // timestamp esta disponivel.
+                TimeoutAction::ToDuration(Duration::from_millis(16))
             },
         )
         .map_err(|e| anyhow!("insert frame timer: {e}"))?;
@@ -1018,7 +1022,7 @@ fn render_drm(state: &mut LumoState) {
 
     let pointer_location = *pointer_location;
     let start_time_elapsed = start_time.elapsed();
-    if std::env::var("LUMO_TRACE_POINTER").is_ok() {
+    if std::env::var("LUMO_TRACE_POINTER").as_deref() == Ok("1") {
         eprintln!("[trace] render cursor pos=({:.1},{:.1})", pointer_location.x, pointer_location.y);
     }
 
