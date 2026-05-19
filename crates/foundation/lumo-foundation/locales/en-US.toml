@@ -8,6 +8,9 @@ title = "Battery"
 charging = "Charging"
 full = "Full"
 level = "Level"
+not_charging = "Not charging"
+discharging = "Discharging"
+unknown = "Unknown"
 
 [wifi]
 title = "Wi-Fi"

@@ -47,6 +47,8 @@ delegate_registry!(LumoBar);
 
 /// Entry point do binario `lumo-bar`. `src/bin/lumo-bar.rs` so chama esta funcao.
 pub fn run() {
+    // W19 BUG-FIX: i18n init no startup (lia EN antes).
+    lumo_foundation::i18n::I18n::init();
     let _ = font_system();
     let _ = swash_cache();
 

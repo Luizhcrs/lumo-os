@@ -45,6 +45,9 @@ pub fn status_pt(s: &str) -> String {
     match s {
         "Charging" => I18n::get("battery.charging"),
         "Full" => I18n::get("battery.full"),
+        "Not charging" => I18n::get("battery.not_charging"),
+        "Discharging" => I18n::get("battery.discharging"),
+        "Unknown" => I18n::get("battery.unknown"),
         other => other.to_string(),
     }
 }
@@ -144,7 +147,7 @@ pub fn draw_battery_dropdown(
     let icon_y = cy + FONT_DROPDOWN_BODY * 0.5 - BAT_BODY_H / 2.0;
     draw_battery(canvas, cx, icon_y, info.pct, charging, fg, accent);
     let summary_x = cx + BAT_BODY_W + 4.0 + 8.0;
-    let summary = format!("{}%  .  {}", info.pct, status_pt(&info.status));
+    let summary = format!("{}%  \u{2022}  {}", info.pct, status_pt(&info.status));
     draw_text(canvas, summary_x, cy, &summary, FONT_DROPDOWN_BODY, fg_subtle, false);
     cy += FONT_DROPDOWN_BODY * 1.6;
 

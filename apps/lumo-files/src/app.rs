@@ -1016,10 +1016,18 @@ impl App {
             .padding([6, 10])
             .width(Length::Fill);
 
+            // W19 BUG-FIX: wrap button em container com margem horizontal pra
+            // recuar hitbox e nao vazar fora do pill visual (especialmente
+            // nos cantos arredondados de 8 px).
+            let btn_wrapped: iced::Element<Message> = container(btn)
+                .padding([0u16, 4u16])
+                .width(Length::Fill)
+                .into();
+
             if kind == SidebarKind::Drive {
-                drives_col.push(btn.into());
+                drives_col.push(btn_wrapped);
             } else {
-                locais_col.push(btn.into());
+                locais_col.push(btn_wrapped);
             }
         }
 
@@ -1268,8 +1276,13 @@ impl App {
         const COLS: usize = 7;
         let th = &self.theme;
 
-        if self.loading {
-            return self.view_grid_skeleton();
+        // W19 BUG-FIX: empty wins over skeleton. Vazio = empty-state limpo,
+        // nunca placeholders fantasmas sobrepostos com texto "Pasta vazia".
+        if entries.is_empty() {
+            if self.loading {
+                return self.view_grid_skeleton();
+            }
+            return self.view_empty_state();
         }
 
         let mut grid_rows: Vec<Element<Message>> = Vec::new();
@@ -1391,8 +1404,12 @@ impl App {
     ) -> Element<'a, Message> {
         let th = &self.theme;
 
-        if self.loading {
-            return self.view_list_skeleton();
+        // W19 BUG-FIX: empty wins over skeleton.
+        if entries.is_empty() {
+            if self.loading {
+                return self.view_list_skeleton();
+            }
+            return self.view_empty_state();
         }
 
         let sort_indicator = |col: SortBy| -> Element<'static, Message> {

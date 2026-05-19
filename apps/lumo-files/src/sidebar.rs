@@ -51,7 +51,7 @@ pub fn build_sidebar(username: &str) -> Vec<SidebarItem> {
 
     let mut items = vec![
         SidebarItem {
-            label: "Inicio".to_string(),
+            label: "Início".to_string(),
             path: home.clone(),
             kind: SidebarKind::Home,
         },
@@ -71,12 +71,12 @@ pub fn build_sidebar(username: &str) -> Vec<SidebarItem> {
             kind: SidebarKind::Pictures,
         },
         SidebarItem {
-            label: "Videos".to_string(),
+            label: "Vídeos".to_string(),
             path: home.join("Videos"),
             kind: SidebarKind::Videos,
         },
         SidebarItem {
-            label: "Musicas".to_string(),
+            label: "Músicas".to_string(),
             path: home.join("Music"),
             kind: SidebarKind::Music,
         },

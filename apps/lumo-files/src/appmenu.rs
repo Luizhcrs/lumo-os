@@ -52,22 +52,22 @@ struct MenuItem {
 fn build_menu() -> Vec<MenuItem> {
     vec![
         MenuItem { id: 0,  label: "",                 parent_id: -1, kind: ItemKind::Submenu   },
-        MenuItem { id: 1,  label: "File",             parent_id: 0,  kind: ItemKind::Submenu   },
+        MenuItem { id: 1,  label: "Arquivo",          parent_id: 0,  kind: ItemKind::Submenu   },
         MenuItem { id: 10, label: "Nova janela",      parent_id: 1,  kind: ItemKind::Action    },
         MenuItem { id: 11, label: "Nova pasta",       parent_id: 1,  kind: ItemKind::Action    },
         MenuItem { id: 12, label: "",                 parent_id: 1,  kind: ItemKind::Separator },
         MenuItem { id: 13, label: "Sair",             parent_id: 1,  kind: ItemKind::Action    },
-        MenuItem { id: 2,  label: "Edit",             parent_id: 0,  kind: ItemKind::Submenu   },
+        MenuItem { id: 2,  label: "Editar",           parent_id: 0,  kind: ItemKind::Submenu   },
         MenuItem { id: 20, label: "Recortar",         parent_id: 2,  kind: ItemKind::Action    },
         MenuItem { id: 21, label: "Copiar",           parent_id: 2,  kind: ItemKind::Action    },
         MenuItem { id: 22, label: "Colar",            parent_id: 2,  kind: ItemKind::Action    },
         MenuItem { id: 23, label: "",                 parent_id: 2,  kind: ItemKind::Separator },
         MenuItem { id: 24, label: "Selecionar tudo",  parent_id: 2,  kind: ItemKind::Action    },
-        MenuItem { id: 3,  label: "View",             parent_id: 0,  kind: ItemKind::Submenu   },
+        MenuItem { id: 3,  label: "Exibir",           parent_id: 0,  kind: ItemKind::Submenu   },
         MenuItem { id: 30, label: "Atualizar",        parent_id: 3,  kind: ItemKind::Action    },
         MenuItem { id: 31, label: "",                 parent_id: 3,  kind: ItemKind::Separator },
         MenuItem { id: 32, label: "Mostrar ocultos",  parent_id: 3,  kind: ItemKind::Action    },
-        MenuItem { id: 4,  label: "Help",             parent_id: 0,  kind: ItemKind::Submenu   },
+        MenuItem { id: 4,  label: "Ajuda",            parent_id: 0,  kind: ItemKind::Submenu   },
         MenuItem { id: 40, label: "Sobre lumo-files", parent_id: 4,  kind: ItemKind::Action    },
         MenuItem { id: 41, label: "Atalhos teclado",  parent_id: 4,  kind: ItemKind::Action    },
     ]
@@ -390,10 +390,10 @@ mod tests {
         let top: Vec<_> = menu.iter().filter(|it| it.parent_id == 0).collect();
         assert_eq!(top.len(), 4);
         let labels: Vec<_> = top.iter().map(|it| it.label).collect();
-        assert!(labels.contains(&"File"));
-        assert!(labels.contains(&"Edit"));
-        assert!(labels.contains(&"View"));
-        assert!(labels.contains(&"Help"));
+        assert!(labels.contains(&"Arquivo"));
+        assert!(labels.contains(&"Editar"));
+        assert!(labels.contains(&"Exibir"));
+        assert!(labels.contains(&"Ajuda"));
     }
 
     #[test]

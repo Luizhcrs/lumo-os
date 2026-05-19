@@ -9,6 +9,9 @@ title = "Bateria"
 charging = "Carregando"
 full = "Completa"
 level = "Nivel"
+not_charging = "Sem carregar"
+discharging = "Descarregando"
+unknown = "Estado desconhecido"
 
 [wifi]
 title = "Wi-Fi"

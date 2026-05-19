@@ -396,6 +396,18 @@ impl LumoState {
                     if let Some((surface, surf_off)) =
                         layer.surface_under(rel, WindowSurfaceType::ALL)
                     {
+                        // INSTR.D: log input_region status quando layer surface eh hit.
+                        let region_status = smithay::wayland::compositor::with_states(&surface, |states| {
+                            let mut cs = states.cached_state.get::<smithay::wayland::compositor::SurfaceAttributes>();
+                            cs.current().input_region.is_some()
+                        });
+                        tracing::info!(
+                            namespace = %layer.namespace(),
+                            pos = ?(pos.x as i32, pos.y as i32),
+                            rel = ?(rel.x as i32, rel.y as i32),
+                            input_region_set = region_status,
+                            "INSTR.D layer surface_under hit"
+                        );
                         if trace { eprintln!("[trace] FOUND layer namespace={:?} surface_alive={}", layer.namespace(), true); }
                         return Some((surface, geo.loc + surf_off));
                     } else if trace {
@@ -407,9 +419,31 @@ impl LumoState {
         // Toplevels
         if let Some((window, win_loc)) = self.space.element_under(pos) {
             let rel = pos - win_loc.to_f64();
-            if let Some((surface, surf_off)) =
-                window.surface_under(rel, WindowSurfaceType::ALL)
-            {
+            // INSTR.E (W19): log toplevel hit + app_id + surface delivery,
+            // pra investigar pq clicks em apps Iced (Y > bar) nao registram.
+            use smithay::wayland::seat::WaylandFocus;
+            use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
+            let app_id_for_log: String = window
+                .wl_surface()
+                .and_then(|s| {
+                    smithay::wayland::compositor::with_states(&s, |states| {
+                        states
+                            .data_map
+                            .get::<XdgToplevelSurfaceData>()
+                            .and_then(|d| d.lock().ok().and_then(|g| g.app_id.clone()))
+                    })
+                })
+                .unwrap_or_else(|| String::from("<no-app-id>"));
+            let hit = window.surface_under(rel, WindowSurfaceType::ALL);
+            tracing::info!(
+                pos = ?(pos.x as i32, pos.y as i32),
+                rel = ?(rel.x as i32, rel.y as i32),
+                win_loc = ?(win_loc.x, win_loc.y),
+                app_id = %app_id_for_log,
+                surface_hit = hit.is_some(),
+                "INSTR.E toplevel surface_under"
+            );
+            if let Some((surface, surf_off)) = hit {
                 return Some((surface, win_loc + surf_off));
             }
         }
