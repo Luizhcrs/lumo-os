@@ -1,0 +1,18 @@
+# 99-lumo-galaxybook.rules -- udev rules Samsung Galaxy Book 4 para Lumo OS.
+# samsung-galaxybook driver disponivel em kernel mainline >= 6.9.
+
+# Galaxy Book: garantir permissao correta para /dev/samsung-galaxybook
+SUBSYSTEM=="platform", DRIVER=="samsung-galaxybook", MODE="0660", GROUP="lumo-hw"
+
+# backlight
+SUBSYSTEM=="backlight", ACTION=="add", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness"
+SUBSYSTEM=="backlight", ACTION=="add", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
+
+# thermal zones Galaxy Book 4
+SUBSYSTEM=="thermal", ATTR{type}=="INT3400 Thermal", TAG+="systemd"
+
+# input: garantir grupo input para teclado/touchpad
+SUBSYSTEM=="input", ACTION=="add", GROUP="input"
+
+# power button
+SUBSYSTEM=="acpi", KERNEL=="PBTN", TAG+="systemd"

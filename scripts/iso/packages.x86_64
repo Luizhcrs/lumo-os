@@ -1,0 +1,95 @@
+# packages.x86_64 -- pacotes instalados no live/installed system Lumo OS.
+#
+# Secoes:
+#   [base]         -- sistema minimo
+#   [kernel]       -- kernel + firmware
+#   [wayland]      -- stack grafica
+#   [network]      -- conectividade
+#   [fonts]        -- tipografia
+#   [tools]        -- utilitarios de sistema
+#   [lumo]         -- binarios Lumo prebuilt (via repo local)
+
+# --- base ---
+base
+base-devel
+systemd
+systemd-sysvcompat
+util-linux
+e2fsprogs
+dosfstools
+btrfs-progs
+gptfdisk
+sudo
+polkit
+shadow
+pam
+dbus
+dbus-broker
+
+# --- kernel ---
+# linux mainline suporta samsung-galaxybook driver (upstream desde 6.9)
+linux
+linux-headers
+linux-firmware
+intel-ucode
+thermald
+
+# --- wayland ---
+wayland
+wayland-protocols
+xkeyboard-config
+libxkbcommon
+libinput
+mesa
+vulkan-intel
+intel-media-driver
+libva-intel-driver
+seatd
+
+# --- display / compositor deps ---
+pixman
+libegl-mesa
+libgles
+
+# --- audio ---
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+
+# --- network ---
+networkmanager
+network-manager-applet
+wpa_supplicant
+iwd
+
+# --- bluetooth ---
+bluez
+bluez-utils
+
+# --- fonts ---
+# Geist e Inter via AUR/repo local (lumo-fonts-geist, lumo-fonts-inter)
+noto-fonts
+ttf-liberation
+
+# --- tools ---
+openssh
+git
+curl
+wget
+archiso
+parted
+arch-install-scripts
+reflector
+
+# --- lumo (prebuilt via repo local) ---
+# Os PKGBUILDs estao em scripts/iso/pkgbuild/
+lumo-wm
+lumo-bar
+lumo-dock
+lumo-launcher
+lumo-store
+lumo-firstrun
+lumo-settings
+lumo-fonts-geist
+lumo-fonts-inter

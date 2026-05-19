@@ -1,0 +1,14 @@
+[Unit]
+Description=Lumo OS first-run wizard
+After=network.target seatd.service
+ConditionPathExists=!/var/lib/lumo/first-run-done
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/lumo-firstrun
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+
+[Install]
+WantedBy=graphical.target
