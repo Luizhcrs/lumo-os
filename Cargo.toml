@@ -37,6 +37,7 @@ codegen-units = 16
 
 [patch.crates-io]
 smithay = { path = "vendor/smithay" }
+winit = { path = "vendor/winit-0.30.13" }
 
 [workspace.metadata]
 # vendor smithay patched for sRGB8_ALPHA8 import (A17)
