@@ -1083,12 +1083,25 @@ fn render_drm(state: &mut LumoState) {
 
     // Render frame.
     let clear = clear_color_linear();
+    // INSTR.A: mede duracao REAL de render_frame (CPU + GPU submit) separada do
+    // intervalo de frame (last_frame_time delta = vsync 16.67ms, NAO duracao).
+    // Acumula em state.perf via record_render_duration; log a cada 60s.
+    let _render_t0 = Instant::now();
     let render_result = surface.drm_output.render_frame::<_, LumoCustomElement>(
         &mut backend.renderer,
         &all_elements,
         Color32F::new(clear[0], clear[1], clear[2], clear[3]),
         FrameFlags::DEFAULT,
     );
+    let render_elapsed = _render_t0.elapsed();
+    // INSTR.A: warning imediato se render > 10ms (suspeita de starvation calloop).
+    if render_elapsed > Duration::from_millis(10) {
+        tracing::warn!(
+            render_ms = render_elapsed.as_millis(),
+            render_us = render_elapsed.as_micros(),
+            "INSTR.A: render_frame > 10ms (suspeita starvation calloop)"
+        );
+    }
 
     match render_result {
         Ok(result) => {

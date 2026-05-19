@@ -8,6 +8,8 @@
 //! ciclo da calloop, sem buffer intermediario. Smithay calloop ja garante
 //! ordem e atomicidade.
 
+use std::time::{Duration, Instant};
+
 use anyhow::{anyhow, Result};
 use smithay::backend::input::{Event as _, InputEvent};
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
@@ -39,8 +41,22 @@ pub fn init(
 
     let backend = LibinputInputBackend::new(context);
 
+    // INSTR.B: contador de eventos libinput por segundo. Confirma se libinput
+    // dispatch esta sendo starved durante render. Se rate cair pra ~0 enquanto
+    // user mexe mouse/teclado, indica starvation real.
+    let mut event_count: u64 = 0;
+    let mut last_log = Instant::now();
     loop_handle
         .insert_source(backend, move |event, _, state| {
+            event_count = event_count.wrapping_add(1);
+            if last_log.elapsed() >= Duration::from_secs(1) {
+                tracing::info!(
+                    events_per_sec = event_count,
+                    "INSTR.B: libinput events/s"
+                );
+                event_count = 0;
+                last_log = Instant::now();
+            }
             if let InputEvent::DeviceAdded { ref device } = event {
                 let mut d: smithay::reexports::input::Device = device.clone();
                 tracing::info!(
