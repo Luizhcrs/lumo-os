@@ -33,6 +33,14 @@ impl XdgShellHandler for LumoState {
         let a11y = lumo_foundation::A11yTokens::load_from_disk();
         self.window_anim.insert_opening(surface.wl_surface(), a11y.reduced_motion);
 
+        // Opcao C: toda nova toplevel recebe SSD default. Iced 0.13 nao
+        // solicita xdg-decoration protocol, entao compositor insere aqui
+        // incondicionalmente. GTK4 tem CSD propria (ignora SSD) mas
+        // renderer pinta titlebar sobre -- aceitar double titlebar em troca
+        // de visual uniforme Lumo. Iced, Qt5, terminais: SSD automatico.
+        self.ssd_windows.insert(surface.wl_surface().clone());
+        tracing::debug!("new_toplevel: SSD default inserido");
+
         // Configure inicial: cliente decide tamanho mas anunciamos
         // estado Activated.
         surface.with_pending_state(|state| {
