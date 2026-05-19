@@ -18,7 +18,12 @@ impl Note {
             .take(2)
             .collect::<Vec<_>>()
             .join(" ");
-        if body.len() > 80 { format!("{}...", &body[..80]) } else { body }
+        let truncated: String = body.chars().take(80).collect();
+        if truncated.chars().count() < body.chars().count() {
+            format!("{}...", truncated)
+        } else {
+            body
+        }
     }
 
     pub fn matches_query(&self, q: &str) -> bool {
@@ -134,5 +139,25 @@ mod tests {
         let fname = p.file_name().unwrap().to_str().unwrap();
         assert!(fname.contains("minha-nota"));
         assert!(fname.ends_with(".md"));
+    }
+
+    #[test]
+    fn test_preview_utf8_multibyte() {
+        // 85 chars, 104 bytes -- slice por byte panicar em cedilha/acento
+        let body = "ação ações cabeça coração cancelação avaliação resolução publicação execução condição".to_string();
+        assert!(body.len() > 80, "precisa ter mais de 80 bytes pra testar o truncate");
+        let n = make_note("utf8", &body);
+        let p = n.preview();
+        // deve truncar em limite de char, nao de byte
+        assert!(p.ends_with("...") || p.chars().count() <= 80);
+        // nao panica (ja que estamos aqui)
+    }
+
+    #[test]
+    fn test_preview_emoji_nao_panica() {
+        // Emojis sao 4 bytes cada -- garantir que slice por byte nao ocorre
+        let body = "nota com emoji diversao diversao diversao diversao diversao diversao diversao".to_string();
+        let n = make_note("emoji", &body);
+        let _p = n.preview(); // nao pode paniciar
     }
 }

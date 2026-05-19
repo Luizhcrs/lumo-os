@@ -3,7 +3,7 @@
  *   ink_deep  #0a0a0c  bg principal
  *   secondary #1a1a1c  bg elementos
  *   pearl     #f5f5f7  fg
- *   accent    #3b82f6  azul
+ *   accent    #10b981  azul
  *   sep       #3a3a3c  separadores
  */
 
@@ -49,14 +49,14 @@ headerbar button:hover {
 }
 
 headerbar button.suggested-action {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
   border-color: transparent;
 }
 
 /* Close/min/max window buttons */
 headerbar button.titlebutton {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
   border-radius: 50%;
   min-width: 12px;
@@ -66,7 +66,7 @@ headerbar button.titlebutton {
 }
 
 headerbar button.titlebutton:hover {
-  background-color: #2563eb;
+  background-color: #059669;
 }
 
 /* === Button === */
@@ -84,18 +84,18 @@ button:hover {
 }
 
 button:active {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
 }
 
 button.suggested-action {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
   border-color: transparent;
 }
 
 button.suggested-action:hover {
-  background-color: #2563eb;
+  background-color: #059669;
 }
 
 button.destructive-action {
@@ -115,16 +115,16 @@ entry {
   border: 1px solid #3a3a3c;
   border-radius: 6px;
   padding: 8px 12px;
-  caret-color: #3b82f6;
+  caret-color: #10b981;
 }
 
 entry:focus {
-  border-color: #3b82f6;
+  border-color: #10b981;
   box-shadow: none;
 }
 
 entry selection {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
 }
 
@@ -169,7 +169,7 @@ row:hover {
 }
 
 row:selected {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
 }
 
@@ -190,7 +190,7 @@ menuitem {
 }
 
 menuitem:hover {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
 }
 
@@ -226,7 +226,7 @@ notebook tab {
 
 notebook tab:checked {
   color: #f5f5f7;
-  border-bottom: 2px solid #3b82f6;
+  border-bottom: 2px solid #10b981;
 }
 
 /* === Progressbar === */
@@ -236,7 +236,7 @@ progressbar trough {
 }
 
 progressbar progress {
-  background-color: #3b82f6;
+  background-color: #10b981;
   border-radius: 4px;
 }
 
@@ -247,7 +247,7 @@ switch {
 }
 
 switch:checked {
-  background-color: #3b82f6;
+  background-color: #10b981;
 }
 
 /* === Scale (slider) === */
@@ -257,7 +257,7 @@ scale trough {
 }
 
 scale highlight {
-  background-color: #3b82f6;
+  background-color: #10b981;
 }
 
 scale slider {
@@ -278,7 +278,7 @@ treeview:hover {
 }
 
 treeview:selected {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
 }
 
@@ -291,8 +291,8 @@ radio {
 
 check:checked,
 radio:checked {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
+  background-color: #10b981;
+  border-color: #10b981;
 }
 
 /* === Misc === */

@@ -982,7 +982,10 @@ fn render_drm(state: &mut LumoState) {
     // cursor para render_frame. DrmCompositor reutiliza primary plane buffer
     // (skip=true) e faz atomic commit apenas do cursor plane (Kind::Cursor).
     // Desacopla movimento de cursor da taxa de render das aplicacoes.
-    let all_elements = if cursor_moved && surface.pending_flip == false {
+    // W8.fix.P1: nao usar cursor-only path quando animacoes ativas (boot curtain
+    // ou splash) -- cursor move durante anim causava congelamento do frame animado.
+    let animations_active = boot_curtain_alpha > 0.001 || splash_alpha_val > 0.001;
+    let all_elements = if cursor_moved && surface.pending_flip == false && !animations_active {
         // Coleta apenas cursor (sem full element rebuild).
         let cursor_only = collect_cursor_only_elements(&mut backend.renderer, &collect_inputs);
         if !cursor_only.is_empty() {

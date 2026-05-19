@@ -1,6 +1,6 @@
 /* Lumo GTK-4.0 theme -- dark variant
  * libadwaita-compatible subset.
- * Palette: ink_deep #0a0a0c, secondary #1a1a1c, pearl #f5f5f7, accent #3b82f6
+ * Palette: ink_deep #0a0a0c, secondary #1a1a1c, pearl #f5f5f7, accent #10b981
  */
 
 /* === Base === */
@@ -31,18 +31,18 @@ button:hover {
 }
 
 button:active {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
 }
 
 button.suggested-action {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
   border-color: transparent;
 }
 
 button.suggested-action:hover {
-  background-color: #2563eb;
+  background-color: #059669;
 }
 
 button.destructive-action {
@@ -62,15 +62,15 @@ entry {
   border: 1px solid #3a3a3c;
   border-radius: 6px;
   padding: 8px 12px;
-  caret-color: #3b82f6;
+  caret-color: #10b981;
 }
 
 entry:focus {
-  border-color: #3b82f6;
+  border-color: #10b981;
 }
 
 entry selection {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
 }
 
@@ -99,7 +99,7 @@ row:hover {
 }
 
 row:selected {
-  background-color: #3b82f6;
+  background-color: #10b981;
   color: #ffffff;
 }
 
@@ -128,7 +128,7 @@ switch {
 }
 
 switch:checked {
-  background-color: #3b82f6;
+  background-color: #10b981;
 }
 
 /* === Scale === */
@@ -137,7 +137,7 @@ scale trough {
 }
 
 scale highlight {
-  background-color: #3b82f6;
+  background-color: #10b981;
 }
 
 /* === Misc === */
@@ -163,6 +163,6 @@ tooltip {
 }
 
 /* libadwaita accent color override */
-@define-color accent_color #3b82f6;
-@define-color accent_bg_color #3b82f6;
+@define-color accent_color #10b981;
+@define-color accent_bg_color #10b981;
 @define-color accent_fg_color #ffffff;
