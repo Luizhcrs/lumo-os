@@ -60,7 +60,7 @@ fn keysym(name: &str) -> Option<u16> {
         "semicolon" | ";" => 39,
         "apostrophe" | "'" => 40,
         "grave" | "`" => 41,
-        "backslash" | "\\\\" => 43,
+        "backslash" | "\\" => 43,
         "comma" | "," => 51,
         "dot" | "period" | "." => 52,
         "slash" | "/" => 53,

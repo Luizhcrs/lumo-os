@@ -4,13 +4,13 @@ After=graphical-session-pre.target
 
 [Service]
 Type=simple
-ExecStartPre=/bin/bash -c 'until [ -n "${WAYLAND_DISPLAY}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; do sleep 0.05; done'
+Environment=WAYLAND_DISPLAY=wayland-1
+Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStart=%h/Projects/lumo-shell/target/release/lumo-bridge
 Restart=on-failure
 RestartSec=2
 StandardOutput=journal
 StandardError=journal
-PassEnvironment=WAYLAND_DISPLAY XDG_RUNTIME_DIR HOME XDG_CONFIG_HOME
 
 [Install]
 WantedBy=default.target

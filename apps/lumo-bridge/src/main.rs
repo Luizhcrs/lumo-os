@@ -134,3 +134,72 @@ async fn main() -> Result<()> {
     axum::serve(listener, app).await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod http_tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::util::ServiceExt;
+
+    fn test_state() -> AppState {
+        AppState {
+            token: Arc::new("test-token-abc".to_string()),
+            started_at: 0,
+            screenshot_cache: Arc::new(tokio::sync::Mutex::new(None)),
+        }
+    }
+
+    #[tokio::test]
+    async fn auth_missing_token_returns_401() {
+        let app = build_router(test_state());
+        let req = Request::builder().uri("/state").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn auth_bad_token_returns_401() {
+        let app = build_router(test_state());
+        let req = Request::builder()
+            .uri("/state")
+            .header("Authorization", "Bearer wrong-token")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn healthz_is_public() {
+        let app = build_router(test_state());
+        let req = Request::builder().uri("/healthz").body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn screenshot_returns_png_or_503() {
+        let app = build_router(test_state());
+        let req = Request::builder()
+            .uri("/screenshot")
+            .header("Authorization", "Bearer test-token-abc")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        // Em ambiente sem WAYLAND_DISPLAY do test runner, grim falha -> 503.
+        // Em ambiente com Wayland ativo, retorna 200 image/png.
+        let status = resp.status();
+        assert!(
+            status == StatusCode::OK || status == StatusCode::SERVICE_UNAVAILABLE,
+            "expected 200 or 503, got {}",
+            status
+        );
+        if status == StatusCode::OK {
+            let ct = resp.headers().get("content-type").and_then(|v| v.to_str().ok());
+            assert_eq!(ct, Some("image/png"));
+        }
+    }
+}
