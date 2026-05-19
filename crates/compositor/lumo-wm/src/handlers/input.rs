@@ -457,6 +457,11 @@ impl LumoState {
                     },
                 );
                 pointer.frame(self);
+                // R1.fix5: force repaint apos PointerButton (Motion ja seta).
+                // Sem isso bar commit de dropdown novo fica preso ate proximo
+                // vblank ou Motion event = dropdown invisivel ate mouse mover.
+                #[cfg(feature = "drm-backend")]
+                { self.drm_force_repaint = true; }
             }
 
             InputEvent::GestureSwipeBegin { event } => {
