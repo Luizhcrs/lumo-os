@@ -175,6 +175,10 @@ pub struct LumoState {
     pub titlebar_menu: Option<(smithay::desktop::Window, smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// B1: gesture state acumulado (swipe + pinch).
     pub gesture: crate::input::TouchpadGestureState,
+    /// W9.A: per-window open/close spring animation registry.
+    pub window_anim: crate::window_anim::WindowAnimRegistry,
+    /// W9.B: active snap zone preview during window drag. None = no preview.
+    pub snap_preview: Option<crate::input::move_grab::SnapZone>,
     /// L5: lid switch handler state.
     pub lid_handler: std::sync::Arc<std::sync::Mutex<crate::handlers::lid::LidHandlerState>>,
 
@@ -305,6 +309,8 @@ impl LumoState {
             ssd_windows: HashSet::new(),
             titlebar_menu: None,
             gesture: Default::default(),
+            window_anim: crate::window_anim::WindowAnimRegistry::new(),
+            snap_preview: None,
             lid_handler: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
             boot_ready: false,
             boot_curtain_alpha: 1.0,

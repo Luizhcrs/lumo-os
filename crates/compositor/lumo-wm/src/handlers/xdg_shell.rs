@@ -23,6 +23,10 @@ impl XdgShellHandler for LumoState {
         let pos = self.next_tile_position();
         self.space.map_element(window.clone(), pos, true);
 
+        // W9.A: init opening animation (a11y guard included in new_opening).
+        let a11y = lumo_foundation::A11yTokens::load_from_disk();
+        self.window_anim.insert_opening(surface.wl_surface(), a11y.reduced_motion);
+
         // Configure inicial: cliente decide tamanho mas anunciamos
         // estado Activated.
         surface.with_pending_state(|state| {
@@ -55,6 +59,10 @@ impl XdgShellHandler for LumoState {
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
+        // W9.A: register closing animation (delayed destroy via close_done check in render tick).
+        let a11y = lumo_foundation::A11yTokens::load_from_disk();
+        self.window_anim.insert_closing(surface.wl_surface(), a11y.reduced_motion);
+
         // M1: limpa SSD entry ao fechar toplevel.
         self.ssd_windows.remove(surface.wl_surface());
         let to_remove = self
