@@ -460,8 +460,18 @@ impl LumoState {
                 // R1.fix5: force repaint apos PointerButton (Motion ja seta).
                 // Sem isso bar commit de dropdown novo fica preso ate proximo
                 // vblank ou Motion event = dropdown invisivel ate mouse mover.
+                // R1.fix7: dedup -- N PointerButton em slider drag = N flips
+                // redundantes. So flipa se ainda nao agendado. VRR Wave 13
+                // economiza quadros quando idle entre clicks.
+                // TODO: skip set se VRR active + repaint <8ms atras (precisa
+                // VrrState em LumoState; surface.vrr_active hoje vive em
+                // backend::drm::DrmBackendData e nao eh acessivel daqui).
                 #[cfg(feature = "drm-backend")]
-                { self.drm_force_repaint = true; }
+                {
+                    if !self.drm_force_repaint {
+                        self.drm_force_repaint = true;
+                    }
+                }
             }
 
             InputEvent::GestureSwipeBegin { event } => {
