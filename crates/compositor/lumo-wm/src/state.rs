@@ -381,7 +381,7 @@ impl LumoState {
         &self,
         pos: Point<f64, Logical>,
     ) -> Option<(WlSurface, Point<i32, Logical>)> {
-        let trace = std::env::var("LUMO_TRACE_POINTER").is_ok();
+        let trace = std::env::var("LUMO_TRACE_POINTER").as_deref() == Ok("1");
         if trace { eprintln!("[trace] surface_under pos=({:.1},{:.1})", pos.x, pos.y); }
         // A20.2: layer-shell PRIMEIRO (bar/dock/notif).
         // Z-order: Overlay > Top > Window > Bottom > Background.
@@ -723,20 +723,23 @@ impl XdgDecorationHandler for LumoState {
     }
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
-        // W19.3: ALWAYS ServerSide. Iced 0.13 pede ClientSide via
-        // xdg-decoration apesar de nao desenhar titlebar -- janela ficava
-        // sem botoes X/min/max. Filosofia Lumo: SSD uniforme. Apps GTK/Chrome
-        // que ja desenham titlebar propria terao double titlebar (aceitavel
-        // ate evolucao do protocolo lumo-decoration custom).
-        let _client_requested = mode;
-        let resolved = Mode::ServerSide;
+        // W20: honor cliente. GTK/Chrome (ClientSide) = CSD nativa, sem SSD.
+        // Iced 0.13 (decorations:true) = ServerSide, compositor desenha SSD.
         toplevel.with_pending_state(|state| {
-            state.decoration_mode = Some(resolved);
+            state.decoration_mode = Some(mode);
         });
         toplevel.send_configure();
         let surf = toplevel.wl_surface().clone();
-        self.ssd_windows.insert(surf);
-        tracing::debug!("xdg_decoration: request_mode -> ServerSide (forced)");
+        match mode {
+            Mode::ServerSide => {
+                self.ssd_windows.insert(surf);
+            }
+            Mode::ClientSide => {
+                self.ssd_windows.remove(&surf);
+            }
+            _ => {}
+        }
+        tracing::debug!("xdg_decoration: request_mode -> {:?}", mode);
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {

@@ -352,12 +352,12 @@ pub fn run() {
             }
         }
 
-    }
         // F1: layout.toml mudou -> redraw.
         if layout_reload_flag.swap(false, AtomOrd::AcqRel) {
             eprintln!("[lumo-bar] F1: layout.toml recarregado -> redraw");
             state.redraw(&qh);
         }
+    }
 
     let _ = active_workspace;
 }

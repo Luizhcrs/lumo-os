@@ -2141,6 +2141,8 @@ mod tests {
             toasts: crate::toast::ToastQueue::new(),
             loading: false,
             disk_cache: None,
+            expanded: std::collections::HashSet::new(),
+            home_subdirs: Vec::new(),
         }
     }
 

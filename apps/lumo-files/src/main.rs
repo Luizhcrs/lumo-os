@@ -33,7 +33,7 @@ fn main() -> iced::Result {
     let mut window_settings = iced::window::Settings {
         size: Size::new(1024.0, 640.0),
         min_size: Some(Size::new(640.0, 400.0)),
-        decorations: false,
+        decorations: true,
         position: iced::window::Position::Centered,
         ..Default::default()
     };

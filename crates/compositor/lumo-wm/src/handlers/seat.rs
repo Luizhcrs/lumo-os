@@ -69,6 +69,10 @@ impl SeatHandler for LumoState {
                     );
                     self.cursor = Some(loaded);
                     self.cursor_buffer = Some(buf);
+                    // W19.4: forca repaint imediato pra cursor icon mudar
+                    // no proximo frame (sem esperar vsync pending_flip).
+                    #[cfg(feature = "drm-backend")]
+                    { self.drm_force_repaint = true; }
                     tracing::debug!(?icon, "W10.C: cursor shape swapped");
                 } else {
                     tracing::debug!(?icon, "W10.C: xcursor not found for shape, keeping current");

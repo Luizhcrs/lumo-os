@@ -22,7 +22,7 @@ cargo build --release --bin lumo-wm --bin lumo-bar 2>&1 | tail -3
 echo "[lumo-dev] subindo lumo-wm winit (janela ~1280x720 dentro Hyprland)..."
 export LUMO_WM_BACKEND=winit
 export RUST_LOG="${RUST_LOG:-lumo_wm=info,smithay=warn}"
-export LUMO_THEME="${LUMO_THEME:-light}"
+export LUMO_THEME="${LUMO_THEME:-dark}"
 
 # Cleanup eventual instancia anterior pra evitar zombie nested.
 pkill -x lumo-wm 2>/dev/null || true

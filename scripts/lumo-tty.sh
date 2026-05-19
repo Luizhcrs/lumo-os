@@ -183,7 +183,7 @@ ENV_FILE="$HOME/.config/lumo/env.conf"
 [ -f "$ENV_FILE" ] || ENV_FILE="$REPO/scripts/install/lumo-env.conf"
 set -a; source "$ENV_FILE"; set +a
 # A13: LUMO_THEME default light; override: LUMO_THEME=dark ./scripts/lumo-tty.sh
-export LUMO_THEME="${LUMO_THEME:-light}"
+export LUMO_THEME="${LUMO_THEME:-dark}"
 
 echo "[2/3] TTY = $current_tty, user = $(id -un)"
 echo "[3/3] Iniciando lumo-wm DRM..."
@@ -214,6 +214,18 @@ post_exit() {
 }
 trap post_exit EXIT
 
-./target/release/lumo-wm 2>&1 | tee /tmp/lumo-wm-tty.log
-LUMO_EC=${PIPESTATUS[0]}
-echo "[final] lumo-wm exit code=$LUMO_EC"
+# Loop hot-restart: pkill lumo-wm relauncha automatico, preserva TTY DRM
+# session. Pra parar permanente: touch /tmp/lumo-no-restart antes de matar.
+rm -f /tmp/lumo-no-restart
+while true; do
+    ./target/release/lumo-wm 2>&1 | tee /tmp/lumo-wm-tty.log
+    LUMO_EC=${PIPESTATUS[0]}
+    echo "[hot-restart] lumo-wm exit code=$LUMO_EC"
+    if [[ -f /tmp/lumo-no-restart ]]; then
+        rm -f /tmp/lumo-no-restart
+        echo "[stop] /tmp/lumo-no-restart presente; encerrando loop"
+        break
+    fi
+    sleep 0.5
+done
+echo "[final] loop encerrado"

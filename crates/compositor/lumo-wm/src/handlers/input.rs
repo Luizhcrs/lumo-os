@@ -106,7 +106,7 @@ impl LumoState {
                         // Esc -> dismiss without switching.
                         if sym == Keysym::Escape {
                             self.stack_picker = None;
-                            tracing::info!("W12.C: picker dismissed via Esc");
+                            tracing::trace!("W12.C: picker dismissed via Esc");
                         }
                     }
                     // SUPER key release -> activate selected and close.
@@ -121,7 +121,7 @@ impl LumoState {
                                     let kb3 = self.keyboard.clone();
                                     self.space.raise_element(win, true);
                                     kb3.set_focus(self, Some(owned), serial);
-                                    tracing::info!("W12.C: picker activated window on SUPER release");
+                                    tracing::trace!("W12.C: picker activated window on SUPER release");
                                 }
                             }
                         }
@@ -136,7 +136,7 @@ impl LumoState {
                     if sym == Keysym::Escape {
                         let a11y = lumo_foundation::A11yTokens::load_from_disk();
                         if let Some(ov) = self.overview.as_mut() { ov.close(a11y.reduced_motion); }
-                        tracing::info!("W12.B: overview dismissed via Esc");
+                        tracing::trace!("W12.B: overview dismissed via Esc");
                     }
                 }
                 // A40: Return sem binding + sem toplevel focado
@@ -144,7 +144,7 @@ impl LumoState {
                 if press && last_sym_for_a40.get() == smithay::input::keyboard::xkb::Keysym::Return {
                     let has_focus = self.keyboard.current_focus().is_some();
                     if !has_focus {
-                        tracing::info!("A40: Return sem toplevel -> DesktopOpenSelected");
+                        tracing::trace!("A40: Return sem toplevel -> DesktopOpenSelected");
                         self.broadcast_desktop_open_selected();
                     }
                 }
@@ -179,7 +179,7 @@ impl LumoState {
                 // INSTR.F4: libinput-real motion post-dispatch.
                 {
                     let cf = pointer.current_focus();
-                    tracing::info!(
+                    tracing::trace!(
                         ploc = ?(self.pointer_location.x as i32, self.pointer_location.y as i32),
                         under_some = under.is_some(),
                         current_focus_some = cf.is_some(),
@@ -238,7 +238,7 @@ impl LumoState {
                 let pointer = self.pointer.clone();
 
                 // C3 debug: log raw button code pra diagnostico BTN_RIGHT.
-                tracing::info!(button, state = ?state, pos = ?(self.pointer_location.x as i32, self.pointer_location.y as i32), "C3 PointerButton");
+                tracing::trace!(button, state = ?state, pos = ?(self.pointer_location.x as i32, self.pointer_location.y as i32), "C3 PointerButton");
 
                 if state == ButtonState::Pressed {
                     // M1: SSD hit-test antes de repassar o click ao cliente.
@@ -279,7 +279,7 @@ impl LumoState {
                                             tl.send_configure();
                                         }
                                     }
-                                    2 => { tracing::info!("T1.1 menu: Minimizar (stub)"); }
+                                    2 => { tracing::trace!("T1.1 menu: Minimizar (stub)"); }
                                     3 => { /* separator */ }
                                     4 => {
                                         let app_id = menu_win.wl_surface()
@@ -292,7 +292,7 @@ impl LumoState {
                                                 })
                                             })
                                             .unwrap_or_default();
-                                        tracing::info!("T1.1 menu: Sobre {app_id}");
+                                        tracing::trace!("T1.1 menu: Sobre {app_id}");
                                     }
                                     _ => {}
                                 }
@@ -322,7 +322,7 @@ impl LumoState {
 
                             // W17.1: minimize button (amarelo) -- stub log ate iconify protocol.
                             if button == 0x110 && min_rect.contains(ptr_pos) {
-                                tracing::info!("W17.1: minimize click (stub, no Wayland iconify protocol)");
+                                tracing::trace!("W17.1: minimize click (stub, no Wayland iconify protocol)");
                                 ssd_handled = true;
                                 break;
                             }
@@ -336,7 +336,7 @@ impl LumoState {
                                         else { st.states.set(XdgState::Fullscreen); }
                                     });
                                     tl.send_configure();
-                                    tracing::info!(was_fs = is_fs, "W17.1: maximize toggle fullscreen");
+                                    tracing::trace!(was_fs = is_fs, "W17.1: maximize toggle fullscreen");
                                 }
                                 ssd_handled = true;
                                 break;
@@ -406,7 +406,7 @@ impl LumoState {
                                     self.focus_manager.click_toplevel(owned.clone());
                                     let kb_ov = self.keyboard.clone();
                                     kb_ov.set_focus(self, Some(owned), serial_ov);
-                                    tracing::info!(idx, "W12.B: overview cell activated");
+                                    tracing::trace!(idx, "W12.B: overview cell activated");
                                 }
                             }
                         }
@@ -536,7 +536,7 @@ impl LumoState {
 
             InputEvent::GesturePinchEnd { event } => {
                 if let Some(scale) = self.gesture.on_pinch_end(event.cancelled()) {
-                    tracing::info!(scale, "gesture pinch end -> forward cliente (futuro)");
+                    tracing::trace!(scale, "gesture pinch end -> forward cliente (futuro)");
                 }
             }
 
@@ -550,7 +550,7 @@ impl LumoState {
             3 => match dir {
                 SwipeDirection::Left => {
                     let next = (self.active_workspace % MAX_WORKSPACES) + 1;
-                    tracing::info!(from = self.active_workspace, to = next, "3-finger left -> workspace next");
+                    tracing::trace!(from = self.active_workspace, to = next, "3-finger left -> workspace next");
                     self.set_workspace(next);
                 }
                 SwipeDirection::Right => {
@@ -559,19 +559,19 @@ impl LumoState {
                     } else {
                         self.active_workspace - 1
                     };
-                    tracing::info!(from = self.active_workspace, to = prev, "3-finger right -> workspace prev");
+                    tracing::trace!(from = self.active_workspace, to = prev, "3-finger right -> workspace prev");
                     self.set_workspace(prev);
                 }
                 SwipeDirection::Up => {
-                    tracing::info!("3-finger up -> mission control W12.B");
+                    tracing::trace!("3-finger up -> mission control W12.B");
                     self.execute_key_action(crate::input::keyboard::KeyAction::MissionControl);
                 }
                 SwipeDirection::Down => {
-                    tracing::info!("3-finger down -> app expose (stub)");
+                    tracing::trace!("3-finger down -> app expose (stub)");
                 }
             },
             4 => {
-                tracing::info!(dir = ?dir, "4-finger swipe -> desktop reveal (stub)");
+                tracing::trace!(dir = ?dir, "4-finger swipe -> desktop reveal (stub)");
             }
             _ => {
                 tracing::debug!(fingers, dir = ?dir, "swipe gesture nao mapeado");
@@ -589,7 +589,7 @@ impl LumoState {
                 self.close_focused_window();
             }
             KeyAction::Refresh => {
-                tracing::info!("F5 refresh compositor (force redraw)");
+                tracing::trace!("F5 refresh compositor (force redraw)");
                 #[cfg(feature = "drm-backend")]
                 {
                     self.drm_force_repaint = true;
@@ -605,10 +605,10 @@ impl LumoState {
                 }
             }
             KeyAction::Lock => {
-                tracing::info!("lock pendente A40");
+                tracing::trace!("lock pendente A40");
             }
             KeyAction::Launcher => {
-                tracing::info!("launcher pendente A38");
+                tracing::trace!("launcher pendente A38");
             }
             KeyAction::Workspace(n) => {
                 self.set_workspace(n);
@@ -630,20 +630,20 @@ impl LumoState {
                     TileDir::Left  => "Left",
                     TileDir::Right => "Right",
                 };
-                tracing::info!(dir = dir_str, "TileMove arrow");
+                tracing::trace!(dir = dir_str, "TileMove arrow");
             }
             KeyAction::TilingCycle => {
                 self.tiling_mode = self.tiling_mode.next();
                 let (out_w, out_h) = self.output_dimensions();
                 crate::tiling::apply_tiling(&mut self.space, self.tiling_mode, out_w, out_h);
-                tracing::info!(mode = self.tiling_mode.name(), "W12.A: tiling cycled");
+                tracing::trace!(mode = self.tiling_mode.name(), "W12.A: tiling cycled");
                 #[cfg(feature = "drm-backend")]
                 { self.drm_force_repaint = true; }
             }
             KeyAction::TilingRebalance => {
                 let (out_w, out_h) = self.output_dimensions();
                 crate::tiling::apply_tiling(&mut self.space, self.tiling_mode, out_w, out_h);
-                tracing::info!(mode = self.tiling_mode.name(), "W12.A: tiling rebalanced");
+                tracing::trace!(mode = self.tiling_mode.name(), "W12.A: tiling rebalanced");
                 #[cfg(feature = "drm-backend")]
                 { self.drm_force_repaint = true; }
             }
@@ -688,7 +688,7 @@ impl LumoState {
                         focused.as_ref(),
                         a11y.reduced_motion,
                     ));
-                    tracing::info!("W12.B: mission control opened");
+                    tracing::trace!("W12.B: mission control opened");
                 }
                 #[cfg(feature = "drm-backend")]
                 { self.drm_force_repaint = true; }
@@ -705,7 +705,7 @@ impl LumoState {
                     );
                     if !picker.is_empty() {
                         self.stack_picker = Some(picker);
-                        tracing::info!("W12.C: stack picker opened");
+                        tracing::trace!("W12.C: stack picker opened");
                     }
                 }
                 #[cfg(feature = "drm-backend")]
@@ -715,10 +715,10 @@ impl LumoState {
                 self.toggle_fullscreen_focused();
             }
             KeyAction::Minimize => {
-                tracing::info!("minimize pendente (sem iconify protocol)");
+                tracing::trace!("minimize pendente (sem iconify protocol)");
             }
             KeyAction::Quit => {
-                tracing::info!("Ctrl+Alt+Backspace -> sair");
+                tracing::trace!("Ctrl+Alt+Backspace -> sair");
                 self.running = false;
             }
             KeyAction::SwitchVt(n) => {
@@ -729,15 +729,15 @@ impl LumoState {
                         if let Err(err) = sess.change_vt(n) {
                             tracing::warn!(vt = n, ?err, "change_vt falhou");
                         } else {
-                            tracing::info!(vt = n, "change_vt ok");
+                            tracing::trace!(vt = n, "change_vt ok");
                         }
                     } else {
-                        tracing::info!(vt = n, "switch_vt request sem session");
+                        tracing::trace!(vt = n, "switch_vt request sem session");
                     }
                 }
                 #[cfg(not(feature = "drm-backend"))]
                 {
-                    tracing::info!(vt = n, "switch_vt request (no-op fora de DRM)");
+                    tracing::trace!(vt = n, "switch_vt request (no-op fora de DRM)");
                 }
             }
         }
@@ -763,7 +763,7 @@ impl LumoState {
             proc.arg("-c").arg(format!("{home}/.config/foot/foot.ini"));
         }
         match proc.spawn() {
-            Ok(child) => tracing::info!(pid = child.id(), cmd, "spawn ok"),
+            Ok(child) => tracing::trace!(pid = child.id(), cmd, "spawn ok"),
             Err(err) => tracing::warn!(?err, cmd, "spawn falhou"),
         }
     }
@@ -908,7 +908,7 @@ impl LumoState {
         // INSTR.F: log pointer.current_focus() apos motion sintetico.
         {
             let cf = pointer.current_focus();
-            tracing::info!(
+            tracing::trace!(
                 x, y,
                 under_some = under.is_some(),
                 current_focus_some = cf.is_some(),
@@ -954,7 +954,7 @@ impl LumoState {
                 let min_rect = ssd_min_btn_rect_logical(loc, geo.size.w);
 
                 if button == 0x110 && min_rect.contains(ptr_pos) {
-                    tracing::info!("SI.2: synthetic minimize click (stub)");
+                    tracing::trace!("SI.2: synthetic minimize click (stub)");
                     ssd_handled = true;
                     break;
                 }
@@ -967,7 +967,7 @@ impl LumoState {
                             else { st.states.set(XdgState::Fullscreen); }
                         });
                         tl.send_configure();
-                        tracing::info!(was_fs = is_fs, "SI.2: synthetic maximize toggle");
+                        tracing::trace!(was_fs = is_fs, "SI.2: synthetic maximize toggle");
                     }
                     ssd_handled = true;
                     break;
@@ -1048,7 +1048,7 @@ impl LumoState {
         {
             let cf = pointer.current_focus();
             let su = self.surface_under(self.pointer_location);
-            tracing::info!(
+            tracing::trace!(
                 button = format!("0x{:x}", button), pressed,
                 ploc = ?(self.pointer_location.x as i32, self.pointer_location.y as i32),
                 current_focus_some = cf.is_some(),
@@ -1069,7 +1069,7 @@ impl LumoState {
         // INSTR.F3: log focus apos button+frame (synthetic).
         {
             let cf = pointer.current_focus();
-            tracing::info!(
+            tracing::trace!(
                 button = format!("0x{:x}", button), pressed,
                 current_focus_some_after = cf.is_some(),
                 "INSTR.F3 synth_button post-frame"
@@ -1137,6 +1137,6 @@ impl LumoState {
         for k in keys.iter().rev() {
             self.handle_synthetic_key(*k, false);
         }
-        tracing::info!(count = keys.len(), "SI.1: SyntheticKeyCombo dispatched");
+        tracing::trace!(count = keys.len(), "SI.1: SyntheticKeyCombo dispatched");
     }
 }

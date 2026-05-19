@@ -181,16 +181,6 @@ impl LumoBar {
             }
         }
 
-        // INSTR.C: log final region rects pra debug.
-        eprintln!(
-            "[INSTR.C] input_region lumo={:?} bat={:?} wifi={:?} dt={:?} br={:?} dropdown={:?}",
-            self.lumo_hit_rect,
-            self.bat_hit_rect,
-            self.wifi_hit_rect,
-            self.datetime_hit_rect,
-            self.brightness_hit_rect,
-            self.dropdown,
-        );
         self.layer
             .wl_surface()
             .set_input_region(Some(region.wl_region()));
