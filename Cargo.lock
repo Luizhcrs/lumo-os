@@ -2199,6 +2199,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fnv"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
+
+[[package]]
 name = "foldhash"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2472,6 +2478,15 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "slab",
+]
+
+[[package]]
+name = "fuzzy-matcher"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54614a3312934d066701a80f20f15fa3b56d67ac7722b39eea5b4c9dd1d66c94"
+dependencies = [
+ "thread_local",
 ]
 
 [[package]]
@@ -4248,6 +4263,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumo-dock"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "lumo-animation",
+ "lumo-foundation",
+ "nix 0.30.1",
+ "serde",
+ "smithay-client-toolkit 0.19.2",
+ "tiny-skia",
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "lumo-files"
 version = "0.1.0"
 dependencies = [
@@ -4332,6 +4361,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumo-launcher"
+version = "0.1.0"
+dependencies = [
+ "cosmic-text 0.12.1",
+ "fontdb 0.18.0",
+ "fuzzy-matcher",
+ "libc",
+ "lumo-animation",
+ "lumo-foundation",
+ "meval",
+ "nix 0.30.1",
+ "serde",
+ "smithay-client-toolkit 0.19.2",
+ "tiny-skia",
+ "toml 0.8.23",
+]
+
+[[package]]
+name = "lumo-notif"
+version = "0.1.0"
+dependencies = [
+ "lumo-animation",
+ "lumo-foundation",
+ "nix 0.30.1",
+ "serde",
+ "serde_json",
+ "smithay-client-toolkit 0.19.2",
+ "tiny-skia",
+ "tokio",
+ "zbus 5.15.0",
+]
+
+[[package]]
 name = "lumo-sensors"
 version = "0.1.0"
 dependencies = [
@@ -4360,6 +4422,10 @@ dependencies = [
  "toml 0.8.23",
  "zbus 5.15.0",
 ]
+
+[[package]]
+name = "lumo-term"
+version = "0.1.0"
 
 [[package]]
 name = "lumo-text"
@@ -4601,6 +4667,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "meval"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f79496a5651c8d57cd033c5add8ca7ee4e3d5f7587a4777484640d9cb60392d9"
+dependencies = [
+ "fnv",
+ "nom 1.2.4",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4836,6 +4912,12 @@ checksum = "418abd1b6d34fbf6cae440dc874771b0525a604428704c76e48b29a5e67b8003"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "nom"
+version = "1.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5b8c256fd9471521bcb84c3cdba98921497f1a331cbc15b8030fc63b82050ce"
 
 [[package]]
 name = "nom"
@@ -7594,8 +7676,20 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
+ "tokio-macros",
  "tracing",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]

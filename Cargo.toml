@@ -15,6 +15,10 @@ members = [
     "crates/system/lumo-sensors",
     "crates/cli/lumoctl",
     "apps/lumo-files",
+    "apps/lumo-term",
+    "apps/lumo-dock",
+    "apps/lumo-launcher",
+    "apps/lumo-notif",
 ]
 
 [profile.release]
