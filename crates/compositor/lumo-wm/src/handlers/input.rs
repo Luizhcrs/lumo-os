@@ -24,6 +24,12 @@ impl LumoState {
     pub fn handle_input<I: InputBackend>(&mut self, event: InputEvent<I>) {
         match event {
             InputEvent::Keyboard { event } => {
+                // W10.B: reset idle timer on any key event.
+                {
+                    let seat_ref = self.seat.clone();
+                    self.idle_manager.reset();
+                    self.idle_notifier_state.notify_activity(&seat_ref);
+                }
                 let serial = SERIAL_COUNTER.next_serial();
                 let time = event.time_msec();
                 let keycode = event.key_code();
@@ -93,6 +99,12 @@ impl LumoState {
             }
 
             InputEvent::PointerMotion { event } => {
+                // W10.B: reset idle timer on any pointer movement.
+                self.idle_manager.reset();
+                {
+                    let seat_ref = self.seat.clone();
+                    self.idle_notifier_state.notify_activity(&seat_ref);
+                }
                 let dx = event.delta_x();
                 let dy = event.delta_y();
                 let new_x = (self.pointer_location.x + dx).clamp(0.0, 1919.0);

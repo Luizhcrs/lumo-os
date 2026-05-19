@@ -14,3 +14,4 @@ pub mod xdg_shell;
 pub mod dmabuf;
 pub mod lid;
 pub mod screencopy;
+pub mod idle;

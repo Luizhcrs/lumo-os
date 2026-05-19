@@ -39,11 +39,14 @@ use smithay::wayland::shm::ShmState;
 use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xdg_activation::XdgActivationState;
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufState};
+use smithay::wayland::idle_notify::IdleNotifierState;
+use smithay::input::pointer::CursorIcon;
 use smithay::wayland::xdg_toplevel_icon::XdgToplevelIconManager;
 
 use lumo_ipc::{LumoCommand, LumoEvent, MAX_WORKSPACES};
 
 use crate::ipc::IpcServer;
+use crate::handlers::idle::LumoIdleManager;
 use crate::input::keyboard::KeyboardConfig;
 use crate::handlers::screencopy::ScreencopyState;
 use crate::workspace::{WorkspaceVault, WorkspaceTransition};
@@ -182,6 +185,14 @@ pub struct LumoState {
     /// L5: lid switch handler state.
     pub lid_handler: std::sync::Arc<std::sync::Mutex<crate::handlers::lid::LidHandlerState>>,
 
+    // W10.B: idle management state.
+    pub idle_manager: LumoIdleManager,
+    pub idle_notifier_state: IdleNotifierState<Self>,
+
+    // W10.C: active cursor icon requested via wp-cursor-shape-v1.
+    // Default is CursorIcon::Default (arrow). Swapped when client requests shape.
+    pub active_cursor_icon: CursorIcon,
+
     // A39: boot curtain. Tela preta inicial ate lumo-bar estar mapeada.
     // boot_ready: lumo-bar detectada pelo menos 1x via layer_map.
     // boot_curtain_alpha: 1.0 inicial; decrementa com delta real (4.0/s) apos ready.
@@ -253,6 +264,8 @@ impl LumoState {
             .add_keyboard(Default::default(), 200, 25)
             .expect("falha ao adicionar keyboard");
         let pointer = seat.add_pointer();
+        // W10.B: must create before display_handle moves into Self.
+        let idle_notifier_state = IdleNotifierState::new(&display_handle, loop_handle.clone());
 
         Self {
             start_time: Instant::now(),
@@ -312,6 +325,9 @@ impl LumoState {
             window_anim: crate::window_anim::WindowAnimRegistry::new(),
             snap_preview: None,
             lid_handler: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
+            idle_manager: LumoIdleManager::new(),
+            idle_notifier_state,
+            active_cursor_icon: CursorIcon::Default,
             boot_ready: false,
             boot_curtain_alpha: 1.0,
             boot_last_tick: std::time::Instant::now(),
