@@ -161,6 +161,9 @@ pub struct LumoState {
     pub focus_manager: crate::focus::FocusManager,
     /// M1: surfaces que aceitaram SSD via xdg-decoration protocol.
     pub ssd_windows: HashSet<WlSurface>,
+    /// T1.1: menu popup de titlebar SSD ativo.
+    /// None = sem menu. Some((window, cursor_pos, hover_idx)).
+    pub titlebar_menu: Option<(smithay::desktop::Window, smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// B1: gesture state acumulado (swipe + pinch).
     pub gesture: crate::input::TouchpadGestureState,
     /// L5: lid switch handler state.
@@ -279,6 +282,7 @@ impl LumoState {
             corner_shader: None,
             focus_manager: Default::default(),
             ssd_windows: HashSet::new(),
+            titlebar_menu: None,
             gesture: Default::default(),
             lid_handler: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
             boot_ready: false,
@@ -357,21 +361,23 @@ impl LumoState {
     /// Calcula posicao pra nova janela. Estrategia: cursor center se nao
     /// colide com bar/desktop, fallback centro tela. Mac/Windows-like.
     pub fn next_tile_position(&self) -> Point<i32, Logical> {
-        // Assume 1920x1080 output (Galaxy Book 4 nativo).
-        // Bar topo = 32px. Janela default ~800x600. Centro logico (560, 240).
-        const OUT_W: i32 = 1920;
-        const OUT_H: i32 = 1080;
+        // T1.7: ler dimensoes do output real em vez de hardcoded 1920x1080.
+        // Fallback pra 1920x1080 se sem output registrado.
         const DEFAULT_W: i32 = 800;
         const DEFAULT_H: i32 = 600;
         const BAR_H: i32 = 40;
+        let (out_w, out_h) = self.space.outputs().next()
+            .and_then(|o| {
+                let mode = o.current_mode()?;
+                Some((mode.size.w, mode.size.h))
+            })
+            .unwrap_or((1920, 1080));
         let cx = self.pointer_location.x as i32;
         let cy = self.pointer_location.y as i32;
-        // Posiciona window CENTRADA no cursor.
         let mut x = cx - DEFAULT_W / 2;
         let mut y = cy - DEFAULT_H / 2;
-        // Clamp dentro output, respeita bar topo.
-        x = x.clamp(8, OUT_W - DEFAULT_W - 8);
-        y = y.clamp(BAR_H + 8, OUT_H - DEFAULT_H - 8);
+        x = x.clamp(8, out_w - DEFAULT_W - 8);
+        y = y.clamp(BAR_H + 8, out_h - DEFAULT_H - 8);
         (x, y).into()
     }
 
@@ -405,6 +411,22 @@ impl LumoState {
                 };
                 tracing::info!(?mode, "L6: ThemeReloaded broadcast");
                 self.ipc.broadcast(&LumoEvent::ThemeReloaded { mode });
+            }
+            LumoCommand::CloseFocusedToplevel => {
+                // T1.2: bar pediu fechar o toplevel com foco atual.
+                use smithay::wayland::seat::WaylandFocus;
+                let kb = self.keyboard.clone();
+                if let Some(focused) = kb.current_focus() {
+                    let win = self.space.elements()
+                        .find(|w| w.wl_surface().map(|s| *s == focused).unwrap_or(false))
+                        .cloned();
+                    if let Some(w) = win {
+                        if let Some(tl) = w.toplevel() {
+                            tl.send_close();
+                            tracing::info!("T1.2: CloseFocusedToplevel -> send_close");
+                        }
+                    }
+                }
             }
         }
     }

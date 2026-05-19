@@ -159,13 +159,68 @@ impl LumoState {
                 if state == ButtonState::Pressed {
                     // M1: SSD hit-test antes de repassar o click ao cliente.
                     // Verifica close button e titlebar para janelas com SSD ativo.
-                    if button == 0x110 {
+                    // T1.1: hit-test SSD titlebar -- BTN_LEFT e BTN_RIGHT.
+                    {
                         use crate::backend::render_common::{
                             ssd_close_btn_rect_logical, ssd_titlebar_rect_logical,
                         };
                         use smithay::input::pointer::Focus;
                         let ptr_pos = self.pointer_location.to_i32_round();
                         let mut ssd_handled = false;
+
+                        // T1.1: se menu popup SSD esta aberto, testa clique dentro/fora.
+                        if let Some((menu_win, menu_pos, _hover)) = self.titlebar_menu.clone() {
+                            let menu_w = 180i32;
+                            let item_h = 22i32;
+                            let mx = menu_pos.x;
+                            let my = menu_pos.y;
+                            let in_menu = ptr_pos.x >= mx && ptr_pos.x <= mx + menu_w
+                                && ptr_pos.y >= my && ptr_pos.y <= my + item_h * 5;
+                            if in_menu && button == 0x110 {
+                                let idx = ((ptr_pos.y - my) / item_h) as usize;
+                                self.titlebar_menu = None;
+                                match idx {
+                                    0 => {
+                                        if let Some(tl) = menu_win.toplevel() { tl.send_close(); }
+                                    }
+                                    1 => {
+                                        if let Some(tl) = menu_win.toplevel() {
+                                            use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
+                                            let is_fs = tl.current_state().states.contains(XdgState::Fullscreen);
+                                            tl.with_pending_state(|st| {
+                                                if is_fs { st.states.unset(XdgState::Fullscreen); }
+                                                else { st.states.set(XdgState::Fullscreen); }
+                                            });
+                                            tl.send_configure();
+                                        }
+                                    }
+                                    2 => { tracing::info!("T1.1 menu: Minimizar (stub)"); }
+                                    3 => { /* separator */ }
+                                    4 => {
+                                        let app_id = menu_win.wl_surface()
+                                            .map(|surf| {
+                                                use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
+                                                smithay::wayland::compositor::with_states(&surf, |states| {
+                                                    states.data_map.get::<XdgToplevelSurfaceData>()
+                                                        .map(|d| d.lock().unwrap().app_id.clone().unwrap_or_default())
+                                                        .unwrap_or_default()
+                                                })
+                                            })
+                                            .unwrap_or_default();
+                                        tracing::info!("T1.1 menu: Sobre {app_id}");
+                                    }
+                                    _ => {}
+                                }
+                                ssd_handled = true;
+                            } else if !in_menu {
+                                self.titlebar_menu = None;
+                            }
+                            if ssd_handled {
+                                pointer.frame(self);
+                                return;
+                            }
+                        }
+
                         let windows: Vec<_> = self.space.elements().cloned().collect();
                         for window in &windows {
                             let surf_opt = window.toplevel().map(|t| t.wl_surface().clone());
@@ -174,24 +229,19 @@ impl LumoState {
                             let loc = self.space.element_location(window).unwrap_or_default();
                             let geo = window.geometry();
                             let close_rect = ssd_close_btn_rect_logical(loc, geo.size.w);
-                            if close_rect.contains(ptr_pos) {
-                                if let Some(toplevel) = window.toplevel() {
-                                    toplevel.send_close();
-                                }
+                            if button == 0x110 && close_rect.contains(ptr_pos) {
+                                if let Some(toplevel) = window.toplevel() { toplevel.send_close(); }
                                 ssd_handled = true;
                                 break;
                             }
                             let title_rect = ssd_titlebar_rect_logical(loc, geo.size.w);
-                            // S1 BTN_RIGHT: titlebar right-click = close window (menu completo futuro).
+                            // T1.1: BTN_RIGHT em titlebar = abre menu popup (nao fecha direto).
                             if button == 0x111 && title_rect.contains(ptr_pos) {
-                                if let Some(tl) = window.toplevel() {
-                                    tl.send_close();
-                                }
+                                self.titlebar_menu = Some((window.clone(), ptr_pos, usize::MAX));
                                 ssd_handled = true;
                                 break;
                             }
-                            if title_rect.contains(ptr_pos) {
-                                // Q1: raise + focus antes do move grab.
+                            if button == 0x110 && title_rect.contains(ptr_pos) {
                                 self.space.raise_element(window, true);
                                 if let Some(tl) = window.toplevel() {
                                     let surf_raise = tl.wl_surface().clone();
@@ -352,9 +402,15 @@ impl LumoState {
                 {
                     self.drm_force_repaint = true;
                 }
-                // Broadcast pra clients fazerem reload do theme.toml.
-                use lumo_ipc::{LumoEvent, ThemeMode};
-                self.ipc.broadcast(&LumoEvent::ThemeReloaded { mode: ThemeMode::Light });
+                // T1.6: broadcast ThemeReloaded com tema atual (nao hardcoded Light).
+                {
+                    let tokens = lumo_foundation::LumoTokens::load_from_disk();
+                    let mode = match tokens.mode {
+                        lumo_foundation::LumoTheme::Light => lumo_ipc::ThemeMode::Light,
+                        lumo_foundation::LumoTheme::Dark => lumo_ipc::ThemeMode::Dark,
+                    };
+                    self.ipc.broadcast(&lumo_ipc::LumoEvent::ThemeReloaded { mode });
+                }
             }
             KeyAction::Lock => {
                 tracing::info!("lock pendente A40");

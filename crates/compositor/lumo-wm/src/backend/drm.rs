@@ -867,11 +867,13 @@ fn render_drm(state: &mut LumoState) {
     // layer-shell) em uma lista unica. collect_drm_elements ja respeita
     // ordem de stack -- cursor primeiro (front), cantos, sombras, depois
     // SpaceRenderElements vindos do smithay com z-order interno correto.
+    let titlebar_menu_opt = state.titlebar_menu.as_ref().map(|(_, pos, hover)| (*pos, *hover));
     let collect_inputs = DrmCollectInputs {
         boot_curtain_alpha,
         wallpaper: wallpaper.as_ref(),
         corner_shader: corner_shader.as_ref(),
         ssd_windows,
+        titlebar_menu: titlebar_menu_opt,
         space,
         output: &surface.output,
         pointer_location,

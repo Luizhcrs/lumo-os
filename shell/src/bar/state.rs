@@ -292,7 +292,48 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     // desde o topo (ancora topo-centro da pill, crescimento pra baixo).
     // ============================================================
     match snap.dropdown {
-        DropdownActive::AppFallback => {}
+        DropdownActive::AppFallback => {
+            if let Some((rx, ry, rw, rh)) = result.appmenu_fallback_rect {
+                let dropdown_w = 200.0f32;
+                let item_h = 28.0f32;
+                let num_items = 5usize;
+                let labels = ["Sobre", "Versao", "Ajuda", "---", "Fechar"];
+                let dropdown_h = item_h * num_items as f32 + 8.0;
+                let want_x = rx;
+                let max_x = snap.width as f32 - pill_margin - dropdown_w;
+                let dropdown_x = want_x.max(pill_margin).min(max_x.max(pill_margin));
+                let dropdown_y = ry + rh + DROPDOWN_GAP;
+                if let Some(mut sub) = Pixmap::new(dropdown_w as u32, dropdown_h as u32) {
+                    let mut fb_rects: Vec<(usize, (f32, f32, f32, f32))> = Vec::new();
+                    {
+                        let mut canvas = sub.as_mut();
+                        // Fundo.
+                        crate::bar::icons::fill_rrect(&mut canvas, 0.0, 0.0, dropdown_w, dropdown_h, 10.0, rgba_hex(palette.pill_bg, 0xF0));
+                        for (i, label) in labels.iter().enumerate() {
+                            let iy = 4.0 + item_h * i as f32;
+                            if *label == "---" {
+                                // Separator line
+                                let mid_y = iy + item_h / 2.0;
+                                crate::bar::icons::fill_rrect(&mut canvas, 8.0, mid_y, dropdown_w - 16.0, 1.0, 0.0, rgba_hex(palette.pill_sep, 0x60));
+                                continue;
+                            }
+                            let is_hover = snap.appmenu_fallback_hover_idx == Some(i);
+                            if is_hover {
+                                crate::bar::icons::fill_rrect(&mut canvas, 4.0, iy + 1.0, dropdown_w - 8.0, item_h - 2.0, 6.0, rgba_hex(palette.pill_fg, 0x15));
+                            }
+                            let text_color = if i == 4 { rgba_hex(0xC0392B, 0xFF) } else { opaque(palette.pill_fg) };
+                            draw_text(&mut canvas, 12.0, iy + (item_h - FONT_PILL * 1.2) / 2.0, label, FONT_PILL, text_color, false);
+                            fb_rects.push((i, (0.0, iy, dropdown_w, item_h)));
+                        }
+                    }
+                    result.appmenu_fallback_dropdown_rects = fb_rects
+                        .into_iter()
+                        .map(|(idx, (bx, by, bw, bh))| (idx, (bx + dropdown_x, by + dropdown_y, bw, bh)))
+                        .collect();
+                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                }
+            }
+        }
             DropdownActive::Battery => {
             if let Some((rx, ry, rw, rh)) = result.bat_hit_rect {
                 let want_x = rx + rw / 2.0 - DROPDOWN_W / 2.0;

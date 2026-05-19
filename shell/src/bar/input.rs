@@ -370,6 +370,46 @@ impl PointerHandler for LumoBar {
                             handled = true;
                         }
                     }
+                    // T1.2: click em pill appmenu fallback (S2 -- apps sem dbusmenu).
+                    if !handled {
+                        if let Some((rx, ry, rw, rh)) = self.appmenu_fallback_rect {
+                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                if self.dropdown == DropdownActive::AppFallback {
+                                    self.dropdown = DropdownActive::None;
+                                } else {
+                                    self.dropdown = DropdownActive::AppFallback;
+                                    self.appmenu_fallback_hover_idx = None;
+                                }
+                                self.update_size_and_redraw(qh);
+                                handled = true;
+                            }
+                        }
+                    }
+                    // T1.2: click em item do dropdown AppFallback.
+                    if !handled && self.dropdown == DropdownActive::AppFallback {
+                        let hit = self.appmenu_fallback_dropdown_rects.iter().find_map(|(idx, (rx, ry, rw, rh))| {
+                            if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
+                                Some(*idx)
+                            } else {
+                                None
+                            }
+                        });
+                        if let Some(idx) = hit {
+                            match idx {
+                                4 => {
+                                    // Fechar app
+                                    self.send_ipc_close_focused_toplevel();
+                                }
+                                _ => {
+                                    eprintln!("[lumo-bar] T1.2 AppFallback item {} (stub)", idx);
+                                }
+                            }
+                            self.dropdown = DropdownActive::None;
+                            self.appmenu_fallback_hover_idx = None;
+                            self.update_size_and_redraw(qh);
+                            handled = true;
+                        }
+                    }
                     // C5: click em pill appmenu top-level -> abre submenu.
                     if !handled {
                         let hit = self.appmenu_pill_rects.iter().find_map(|(idx, (rx, ry, rw, rh))| {

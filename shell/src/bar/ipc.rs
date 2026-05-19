@@ -117,6 +117,22 @@ impl LumoBar {
         }
     }
 
+    /// T1.2: envia LumoCommand::CloseFocusedToplevel ao compositor.
+    pub fn send_ipc_close_focused_toplevel(&mut self) {
+        let Some(s) = self.ipc_stream.as_mut() else { return };
+        let mut payload = match serde_json::to_string(&LumoCommand::CloseFocusedToplevel) {
+            Ok(p) => p,
+            Err(e) => { eprintln!("[lumo-bar] serialize CloseFocusedToplevel falhou: {e}"); return; }
+        };
+        payload.push('\n');
+        if let Err(e) = s.write_all(payload.as_bytes()) {
+            if e.kind() != ErrorKind::WouldBlock {
+                eprintln!("[lumo-bar] IPC write CloseFocusedToplevel erro: {}; dropando socket", e);
+                self.ipc_stream = None;
+            }
+        }
+    }
+
     /// A26: envia LumoCommand::CloseDropdowns (broadcast a todos os clients).
     /// Usado pelo right-click na bar.
     pub fn send_ipc_close_dropdowns(&mut self) {

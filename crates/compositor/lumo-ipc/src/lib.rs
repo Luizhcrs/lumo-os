@@ -94,6 +94,9 @@ pub enum LumoCommand {
     /// L6: pede pro compositor recarregar theme.toml e broadcast ThemeReloaded.
     /// Enviado por lumoctl apos escrever novo theme.toml.
     ReloadTheme,
+    /// T1.2: fecha o toplevel com foco de teclado atual.
+    /// Enviado por lumo-bar quando usuario clica "Fechar" no pill dropdown S2.
+    CloseFocusedToplevel,
 }
 
 /// Path padrao do socket. Falha se `XDG_RUNTIME_DIR` ausente.

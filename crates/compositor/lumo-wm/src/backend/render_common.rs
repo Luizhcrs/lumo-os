@@ -156,6 +156,48 @@ pub fn titlebar_elements(
     out
 }
 
+
+/// T1.1: gera elementos SolidColor para o menu popup de titlebar SSD.
+/// menu_pos = canto top-left do menu em coordenadas logicas.
+/// hover_idx = item em hover (usize::MAX = nenhum).
+pub fn titlebar_menu_elements(
+    menu_pos: smithay::utils::Point<i32, smithay::utils::Logical>,
+    hover_idx: usize,
+) -> Vec<SolidColorRenderElement> {
+    let mut out = Vec::new();
+    let menu_w = 180i32;
+    let item_h = 22i32;
+    let num_items = 5i32;
+    let bg_rect: Rectangle<i32, Physical> = Rectangle::new(
+        smithay::utils::Point::from((menu_pos.x, menu_pos.y)).to_physical_precise_round(1.0),
+        (menu_w, item_h * num_items).into(),
+    );
+    out.push(SolidColorRenderElement::new(
+        Id::new(), bg_rect, 0,
+        Color32F::new(0.10, 0.10, 0.11, 0.95), Kind::Unspecified,
+    ));
+    let sep_y = menu_pos.y + item_h * 3 + item_h / 2 - 1;
+    let sep_rect: Rectangle<i32, Physical> = Rectangle::new(
+        smithay::utils::Point::from((menu_pos.x + 8, sep_y)).to_physical_precise_round(1.0),
+        (menu_w - 16, 1).into(),
+    );
+    out.push(SolidColorRenderElement::new(
+        Id::new(), sep_rect, 0,
+        Color32F::new(0.3, 0.3, 0.3, 0.5), Kind::Unspecified,
+    ));
+    if hover_idx < 5 && hover_idx != 3 {
+        let hl_rect: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((menu_pos.x + 2, menu_pos.y + item_h * hover_idx as i32 + 1)).to_physical_precise_round(1.0),
+            (menu_w - 4, item_h - 2).into(),
+        );
+        out.push(SolidColorRenderElement::new(
+            Id::new(), hl_rect, 0,
+            Color32F::new(0.24, 0.24, 0.28, 0.90), Kind::Unspecified,
+        ));
+    }
+    out
+}
+
 // Cursor solid fallback (10x14 cinza claro). Usado quando xcursor falha.
 pub const CURSOR_COLOR: [f32; 4] = [0.6588, 0.6588, 0.6745, 1.0];
 pub const CURSOR_W: i32 = 10;
@@ -435,6 +477,8 @@ pub struct OverlayInputs<'a> {
     pub boot_curtain_alpha: f32,
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    /// T1.1: menu popup titlebar ativo. None = sem menu.
+    pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
 }
 
 /// Constroi overlay completo (cursor + corner mask + shadows).
@@ -496,6 +540,12 @@ pub fn build_overlay(
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         overlay.push(LumoCustomElement::Solid(elem));
     }
+    // T1.1: menu popup SSD.
+    if let Some((menu_pos, hover)) = inputs.titlebar_menu {
+        for elem in titlebar_menu_elements(menu_pos, hover) {
+            overlay.push(LumoCustomElement::Solid(elem));
+        }
+    }
 
     overlay
 }
@@ -519,6 +569,8 @@ pub struct DrmCollectInputs<'a> {
     pub boot_curtain_alpha: f32,
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    /// T1.1: menu popup titlebar ativo. None = sem menu.
+    pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
 }
 
 /// Coleta TODOS elementos pra render direto no DrmCompositor: chrome
@@ -593,6 +645,12 @@ pub fn collect_drm_elements(
     // M1: SSD titlebars.
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
+    }
+    // T1.1: menu popup SSD.
+    if let Some((menu_pos, hover)) = inputs.titlebar_menu {
+        for elem in titlebar_menu_elements(menu_pos, hover) {
+            out.push(LumoCustomElement::Solid(elem));
+        }
     }
 
     // 4. Toplevels + layer-shell via space_render_elements.
@@ -701,6 +759,12 @@ pub fn build_winit_elements(
     // M1: SSD titlebars.
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
+    }
+    // T1.1: menu popup SSD.
+    if let Some((menu_pos, hover)) = inputs.titlebar_menu {
+        for elem in titlebar_menu_elements(menu_pos, hover) {
+            out.push(LumoCustomElement::Solid(elem));
+        }
     }
 
     // 4. Space (toplevels + layer-shell).
