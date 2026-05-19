@@ -176,6 +176,15 @@ pub struct LumoState {
     pub boot_ready: bool,
     pub boot_curtain_alpha: f32,
     pub boot_last_tick: std::time::Instant,
+    // W6.D: perf tracker.
+    pub perf: crate::perf::PerfTracker,
+    // W6.C: splash boot logo.
+    // splash_alpha: 1.0 (fade-in) -> 1.0 (hold) -> 0.0 (fade-out).
+    // splash_phase: 0=fade-in, 1=hold, 2=fade-out, 3=done.
+    pub splash_alpha: f32,
+    pub splash_phase: u8,
+    pub splash_timer: f32,
+    pub splash_buffer: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
     /// R1: posicao do cursor no ultimo frame renderizado. Bypass pending_flip
     /// quando cursor se moveu pra eliminar delay visual.
     #[cfg(feature = "drm-backend")]
@@ -288,6 +297,11 @@ impl LumoState {
             boot_ready: false,
             boot_curtain_alpha: 1.0,
             boot_last_tick: std::time::Instant::now(),
+            perf: crate::perf::PerfTracker::new(),
+            splash_alpha: 0.0,
+            splash_phase: 0,
+            splash_timer: 0.0,
+            splash_buffer: crate::backend::wallpaper::load_splash_buffer(),
             #[cfg(feature = "drm-backend")]
             last_rendered_cursor_pos: (0.0, 0.0).into(),
         }
@@ -570,4 +584,52 @@ pub fn init_socket(
         .map_err(|e| anyhow::anyhow!("falha ao registrar socket: {e}"))?;
 
     Ok(socket_name)
+}
+
+
+// ============================================================
+// W6.C: splash boot animation
+// ============================================================
+
+/// Ticka a maquina de estados do splash logo.
+///
+/// Sequencia (total ~1.25s):
+///   phase 0 (fade-in):  0 -> 1.0 em 200ms (rate 5.0/s)
+///   phase 1 (hold):     1.0 por 800ms
+///   phase 2 (fade-out): junto com boot_curtain (boot_curtain_alpha ja faz isso)
+///                       -- splash_alpha vai de 1.0 -> 0.0 em 250ms (rate 4.0/s)
+///   phase 3 (done):     splash_alpha = 0.0, sem render
+///
+/// Chamado a cada frame do backend (winit/drm) com dt em segundos.
+pub fn tick_splash(state: &mut LumoState, dt: f32) {
+    match state.splash_phase {
+        0 => {
+            // Fade-in: 200ms
+            state.splash_alpha = (state.splash_alpha + dt * 5.0).min(1.0);
+            state.splash_timer += dt;
+            if state.splash_alpha >= 1.0 {
+                state.splash_phase = 1;
+                state.splash_timer = 0.0;
+            }
+        }
+        1 => {
+            // Hold: 800ms
+            state.splash_timer += dt;
+            if state.splash_timer >= 0.8 {
+                state.splash_phase = 2;
+                state.splash_timer = 0.0;
+            }
+        }
+        2 => {
+            // Fade-out: em paralelo com boot_curtain (rate 4.0/s = 250ms).
+            state.splash_alpha = (state.splash_alpha - dt * 4.0).max(0.0);
+            if state.splash_alpha <= 0.001 {
+                state.splash_alpha = 0.0;
+                state.splash_phase = 3;
+            }
+        }
+        _ => {
+            // done: nada a fazer.
+        }
+    }
 }

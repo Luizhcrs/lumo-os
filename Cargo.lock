@@ -4263,6 +4263,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumo-calc"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "iced",
+ "lumo-foundation",
+ "meval",
+ "tokio",
+ "zbus 5.15.0",
+]
+
+[[package]]
 name = "lumo-dock"
 version = "0.1.0"
 dependencies = [
@@ -4274,6 +4286,18 @@ dependencies = [
  "smithay-client-toolkit 0.19.2",
  "tiny-skia",
  "toml 0.8.23",
+]
+
+[[package]]
+name = "lumo-editor"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "iced",
+ "lumo-foundation",
+ "tempfile",
+ "tokio",
+ "zbus 5.15.0",
 ]
 
 [[package]]
@@ -4379,6 +4403,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumo-monitor"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "iced",
+ "libc",
+ "lumo-foundation",
+ "tokio",
+ "zbus 5.15.0",
+]
+
+[[package]]
+name = "lumo-notes"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "futures",
+ "iced",
+ "lumo-foundation",
+ "tempfile",
+ "tokio",
+ "zbus 5.15.0",
+]
+
+[[package]]
 name = "lumo-notif"
 version = "0.1.0"
 dependencies = [
@@ -4398,6 +4447,21 @@ name = "lumo-sensors"
 version = "0.1.0"
 dependencies = [
  "tempfile",
+]
+
+[[package]]
+name = "lumo-settings"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "iced",
+ "lumo-foundation",
+ "lumo-sensors",
+ "serde",
+ "tempfile",
+ "tokio",
+ "toml 0.8.23",
+ "zbus 5.15.0",
 ]
 
 [[package]]

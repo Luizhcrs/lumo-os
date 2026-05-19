@@ -237,10 +237,14 @@ fn redraw(
             // Fade 1.0 -> 0.0 em 250ms = rate 4.0/s.
             state.boot_curtain_alpha = (state.boot_curtain_alpha - dt * 4.0).max(0.0);
         }
+        // W6.C: tick splash logo animation.
+        crate::state::tick_splash(state, dt);
     }
 
     let inputs = OverlayInputs {
         boot_curtain_alpha: state.boot_curtain_alpha,
+        splash_alpha: state.splash_alpha,
+        splash_buffer: state.splash_buffer.as_ref(),
         wallpaper: state.wallpaper.as_ref(),
         pointer_location: state.pointer_location,
         frame_counter: state.frame_counter,

@@ -475,6 +475,10 @@ pub struct OverlayInputs<'a> {
     pub wallpaper: Option<&'a crate::backend::wallpaper::LumoWallpaper>,
     /// A39: boot curtain alpha. 0.0 = sem cortina; 1.0 = tela preta total.
     pub boot_curtain_alpha: f32,
+    /// W6.C: splash logo alpha (0.0 = invisivel, 1.0 = opaco). 0.0 = skip render.
+    pub splash_alpha: f32,
+    /// W6.C: splash buffer pre-carregado. None = sem splash.
+    pub splash_buffer: Option<&'a MemoryRenderBuffer>,
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
@@ -503,6 +507,20 @@ pub fn build_overlay(
             Color32F::new(0.0, 0.0, 0.0, alpha),
             Kind::Unspecified,
         )));
+        // W6.C: splash logo sobre boot curtain.
+        if inputs.splash_alpha > 0.001 {
+            if let Some(buf) = inputs.splash_buffer {
+                if let Some(elem) = crate::backend::wallpaper::splash_element(
+                    renderer,
+                    buf,
+                    inputs.output_w,
+                    inputs.output_h,
+                    inputs.splash_alpha.clamp(0.0, 1.0),
+                ) {
+                    overlay.push(LumoCustomElement::Memory(elem));
+                }
+            }
+        }
         return overlay;
     }
 
@@ -562,6 +580,10 @@ pub struct DrmCollectInputs<'a> {
     pub wallpaper: Option<&'a crate::backend::wallpaper::LumoWallpaper>,
     /// A39: boot curtain alpha.
     pub boot_curtain_alpha: f32,
+    /// W6.C: splash logo alpha.
+    pub splash_alpha: f32,
+    /// W6.C: splash buffer. None = sem splash.
+    pub splash_buffer: Option<&'a MemoryRenderBuffer>,
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
@@ -591,7 +613,6 @@ pub fn collect_drm_elements(
 
     // A39: boot curtain. Se alpha > 0.001, injeta quad preto full-screen
     // na FRENTE de tudo (lista front-first = primeiro elemento).
-    // Early return depois: nao precisa renderizar o resto durante fade.
     if inputs.boot_curtain_alpha > 0.001 {
         let alpha = inputs.boot_curtain_alpha.clamp(0.0, 1.0);
         let geo: Rectangle<i32, Physical> =
@@ -603,6 +624,21 @@ pub fn collect_drm_elements(
             Color32F::new(0.0, 0.0, 0.0, alpha),
             Kind::Unspecified,
         )));
+        // W6.C: splash logo sobre boot curtain (lista front-first: splash fica na frente do quad preto).
+        if inputs.splash_alpha > 0.001 {
+            if let Some(buf) = inputs.splash_buffer {
+                if let Some(elem) = crate::backend::wallpaper::splash_element(
+                    renderer,
+                    buf,
+                    inputs.output_w,
+                    inputs.output_h,
+                    inputs.splash_alpha.clamp(0.0, 1.0),
+                ) {
+                    // Insere antes do quad preto (index 0 = mais na frente).
+                    out.insert(0, LumoCustomElement::Memory(elem));
+                }
+            }
+        }
         return out;
     }
 

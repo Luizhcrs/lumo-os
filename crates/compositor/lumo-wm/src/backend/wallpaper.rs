@@ -210,3 +210,61 @@ impl LumoWallpaper {
         )
     }
 }
+
+// ============================================================
+// W6.C: splash boot logo
+// ============================================================
+
+/// Carrega assets/splash.png como MemoryRenderBuffer RGBA8.
+/// Embutido em compile-time via include_bytes!.
+/// Retorna None se decode falhar (graceful degradation).
+pub fn load_splash_buffer() -> Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer> {
+    use smithay::backend::allocator::Fourcc;
+    use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
+    use smithay::utils::Transform;
+
+    let bytes = include_bytes!("../../../../../assets/splash.png");
+    let img = image::load_from_memory(bytes).ok()?.into_rgba8();
+    let (w, h) = img.dimensions();
+    let pixels = img.into_raw();
+    Some(MemoryRenderBuffer::from_slice(
+        &pixels,
+        Fourcc::Abgr8888,
+        (w as i32, h as i32),
+        1,
+        Transform::Normal,
+        None,
+    ))
+}
+
+/// Constroi MemoryRenderBufferRenderElement do splash centrado no output.
+/// Requer renderer pra importar textura (padrao smithay 0.7).
+pub fn splash_element(
+    renderer: &mut smithay::backend::renderer::gles::GlesRenderer,
+    buffer: &smithay::backend::renderer::element::memory::MemoryRenderBuffer,
+    output_w: i32,
+    output_h: i32,
+    alpha: f32,
+) -> Option<smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement<
+    smithay::backend::renderer::gles::GlesRenderer
+>> {
+    use smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement;
+    use smithay::backend::renderer::element::Kind;
+    use smithay::utils::{Physical, Point};
+
+    let buf_w = 320_i32;
+    let buf_h = 320_i32;
+    let cx = (output_w - buf_w) / 2;
+    let cy = (output_h - buf_h) / 2;
+
+    MemoryRenderBufferRenderElement::from_buffer(
+        renderer,
+        Point::<f64, Physical>::from((cx as f64, cy as f64)),
+        buffer,
+        Some(alpha),
+        None,
+        None,
+        Kind::Unspecified,
+    )
+    .ok()
+}

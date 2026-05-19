@@ -893,6 +893,8 @@ fn render_drm(state: &mut LumoState) {
             // Fade 1.0 -> 0.0 em 250ms = rate 4.0/s.
             state.boot_curtain_alpha = (state.boot_curtain_alpha - dt * 4.0).max(0.0);
         }
+        // W6.C: tick splash logo animation.
+        crate::state::tick_splash(state, dt);
     }
     let boot_curtain_alpha = state.boot_curtain_alpha;
 
@@ -918,9 +920,13 @@ fn render_drm(state: &mut LumoState) {
         ref wallpaper,
         ref corner_shader,
         ref ssd_windows,
+        ref splash_buffer,
+        splash_alpha,
         frame_counter,
         ..
     } = *state;
+    let splash_alpha_val = splash_alpha;
+    let splash_buf_ref = splash_buffer.as_ref();
 
     let Some(backend) = drm_backend.as_mut() else {
         return;
@@ -954,6 +960,8 @@ fn render_drm(state: &mut LumoState) {
     let titlebar_menu_opt = state.titlebar_menu.as_ref().map(|(_, pos, hover)| (*pos, *hover));
     let collect_inputs = DrmCollectInputs {
         boot_curtain_alpha,
+        splash_alpha: splash_alpha_val,
+        splash_buffer: splash_buf_ref,
         wallpaper: wallpaper.as_ref(),
         corner_shader: corner_shader.as_ref(),
         ssd_windows,
@@ -1032,6 +1040,8 @@ fn render_drm(state: &mut LumoState) {
                         surface.last_frame_time = now;
                         surface.pending_flip = true;
                         surface.frame_durations.push(frame_dur);
+                        // W6.D: perf tracker (histograma separado com us precision).
+                        state.perf.record_frame(frame_dur);
                         if trace {
                             tracing::debug!(
                                 frame = frame_counter,
@@ -1058,6 +1068,11 @@ fn render_drm(state: &mut LumoState) {
                             );
                             surface.frame_durations.clear();
                             surface.last_timing_log = Instant::now();
+                        }
+                        // W6.D: perf log separado com us precision.
+                        if surface.last_timing_log.elapsed() < Duration::from_secs(1) {
+                            // Acabou de logar L2; aproveita pra logar W6.D tambem.
+                            state.perf.log_and_reset();
                         }
                     }
                     Err(err) => {
