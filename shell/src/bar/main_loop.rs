@@ -104,6 +104,7 @@ pub fn run() {
         shm,
         seat_state: SeatState::new(&globals, &qh),
         compositor_state: compositor, // A29: pra set_input_region
+        current_input_region: None, // W18.fix
         layer,
         pool,
         width: 1920, // A19.18 default = output Galaxy nativo

@@ -21,7 +21,7 @@ impl LumoBar {
     /// quando aberto. Areas transparentes da surface passam input pro layer
     /// abaixo (desktop), liberando o right-click do menu desktop em qualquer
     /// posicao Y da tela.
-    pub fn update_input_region(&self) {
+    pub fn update_input_region(&mut self) {
         let Ok(region) = Region::new(&self.compositor_state) else {
             // Se nao conseguir criar region, ficamos com default (surface toda
             // captura input). Pior caso = comportamento atual.
@@ -144,6 +144,9 @@ impl LumoBar {
         self.layer
             .wl_surface()
             .set_input_region(Some(region.wl_region()));
-        // region Drop -> wl_region.destroy() automatico.
+        // W18.fix: GUARDA region em self -- drop apos proxima update.
+        // Drop antes do commit destruia wl_region; server lia input_region=None
+        // e bar layer pegava clicks Y=32..342 (bloqueava apps xdg-shell embaixo).
+        self.current_input_region = Some(region);
     }
 }

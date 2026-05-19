@@ -621,6 +621,9 @@ pub(crate) struct LumoBar {
     pub seat_state: SeatState,
     /// A29: precisa pra criar wl_regions (set_input_region).
     pub compositor_state: CompositorState,
+    /// W18.fix: mantem Region viva ate proximo update -- drop antes do commit
+    /// destruia wl_region e server lia input_region=None (bar capturava tudo).
+    pub current_input_region: Option<smithay_client_toolkit::compositor::Region>,
     pub layer: LayerSurface,
     pub pool: SlotPool,
     pub width: u32,
