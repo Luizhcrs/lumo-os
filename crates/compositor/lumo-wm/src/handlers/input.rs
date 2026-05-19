@@ -41,6 +41,10 @@ impl LumoState {
                 let last_sym_for_a40 = std::cell::Cell::new(
                     smithay::input::keyboard::xkb::Keysym::NoSymbol
                 );
+                // W12.C: capture sym on key release too (for picker SUPER detection).
+                let last_sym_release = std::cell::Cell::new(
+                    smithay::input::keyboard::xkb::Keysym::NoSymbol
+                );
                 let action_opt = keyboard.input::<KeyAction, _>(
                     self,
                     keycode,
@@ -48,10 +52,11 @@ impl LumoState {
                     serial,
                     time,
                     |state, mods, kh| {
+                        let sym = kh.modified_sym();
                         if !press {
+                            last_sym_release.set(sym);
                             return FilterResult::Forward;
                         }
-                        let sym = kh.modified_sym();
                         last_sym_for_a40.set(sym);
                         // Bug Luiz 2026-05-18 v3: caps/num lock LED sync direto
                         // via sysfs — SeatHandler::led_state_changed nao disparou.
@@ -86,6 +91,53 @@ impl LumoState {
 
                 if let Some(action) = action_opt {
                     self.execute_key_action(action);
+                }
+                // W12.C: stack picker key handling.
+                if self.stack_picker.is_some() {
+                    use smithay::input::keyboard::xkb::Keysym;
+                    let sym = last_sym_for_a40.get();
+                    // Shift+Tab while picker open -> cycle prev.
+                    if press {
+                        let kb2 = self.keyboard.clone();
+                        let mods_state = kb2.modifier_state();
+                        if sym == Keysym::Tab && mods_state.shift && mods_state.logo {
+                            if let Some(p) = self.stack_picker.as_mut() { p.cycle_prev(); }
+                        }
+                        // Esc -> dismiss without switching.
+                        if sym == Keysym::Escape {
+                            self.stack_picker = None;
+                            tracing::info!("W12.C: picker dismissed via Esc");
+                        }
+                    }
+                    // SUPER key release -> activate selected and close.
+                    let release_sym = last_sym_release.get();
+                    if !press && (release_sym == Keysym::Super_L || release_sym == Keysym::Super_R) {
+                        if let Some(picker) = self.stack_picker.take() {
+                            if let Some(win) = picker.selected_window() {
+                                if let Some(surf) = win.wl_surface() {
+                                    let owned = surf.into_owned();
+                                    let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+                                    self.focus_manager.click_toplevel(owned.clone());
+                                    let kb3 = self.keyboard.clone();
+                                    self.space.raise_element(win, true);
+                                    kb3.set_focus(self, Some(owned), serial);
+                                    tracing::info!("W12.C: picker activated window on SUPER release");
+                                }
+                            }
+                        }
+                        #[cfg(feature = "drm-backend")]
+                        { self.drm_force_repaint = true; }
+                    }
+                }
+                // W12.B: overview key handling.
+                if self.overview.is_some() && press {
+                    use smithay::input::keyboard::xkb::Keysym;
+                    let sym = last_sym_for_a40.get();
+                    if sym == Keysym::Escape {
+                        let a11y = lumo_foundation::A11yTokens::load_from_disk();
+                        if let Some(ov) = self.overview.as_mut() { ov.close(a11y.reduced_motion); }
+                        tracing::info!("W12.B: overview dismissed via Esc");
+                    }
                 }
                 // A40: Return sem binding + sem toplevel focado
                 // -> roteia pra desktop abrir icone selecionado.
@@ -125,6 +177,16 @@ impl LumoState {
                 );
                 pointer.frame(self);
 
+                // W12.B: update overview hover.
+                if self.overview.is_some() {
+                    let pos_l = self.pointer_location.to_i32_round();
+                    let (ow, oh) = self.output_dimensions();
+                    let hit = self.overview.as_ref()
+                        .and_then(|ov| ov.hit_test(pos_l, ow, oh));
+                    if let Some(ov) = self.overview.as_mut() {
+                        ov.hovered = hit;
+                    }
+                }
                 #[cfg(feature = "drm-backend")]
                 {
                     self.drm_force_repaint = true;
@@ -292,6 +354,34 @@ impl LumoState {
                         }
                     }
 
+                    // W12.B: overview click: activate cell or dismiss.
+                    if self.overview.is_some() {
+                        let pos_l = self.pointer_location.to_i32_round();
+                        let (ow, oh) = self.output_dimensions();
+                        let hit = self.overview.as_ref()
+                            .and_then(|ov| ov.hit_test(pos_l, ow, oh));
+                        if let Some(idx) = hit {
+                            let win_opt = self.overview.as_ref()
+                                .and_then(|ov| ov.windows.get(idx).cloned());
+                            if let Some(win) = win_opt {
+                                if let Some(surf) = win.wl_surface() {
+                                    let owned = surf.into_owned();
+                                    let serial_ov = smithay::utils::SERIAL_COUNTER.next_serial();
+                                    self.space.raise_element(&win, true);
+                                    self.focus_manager.click_toplevel(owned.clone());
+                                    let kb_ov = self.keyboard.clone();
+                                    kb_ov.set_focus(self, Some(owned), serial_ov);
+                                    tracing::info!(idx, "W12.B: overview cell activated");
+                                }
+                            }
+                        }
+                        let a11y_ov = lumo_foundation::A11yTokens::load_from_disk();
+                        if let Some(ov) = self.overview.as_mut() { ov.close(a11y_ov.reduced_motion); }
+                        #[cfg(feature = "drm-backend")]
+                        { self.drm_force_repaint = true; }
+                        pointer.frame(self);
+                        return;
+                    }
                     // D2: broadcast CloseDropdowns quando click fora da bar.
                     // Bar fecha dropdown se ativo; desktop fecha menu/ctx_menu.
                     // Nao broadcast se click esta dentro da bar (evita fechar o proprio dropdown).
@@ -423,7 +513,8 @@ impl LumoState {
                     self.set_workspace(prev);
                 }
                 SwipeDirection::Up => {
-                    tracing::info!("3-finger up -> mission control (stub)");
+                    tracing::info!("3-finger up -> mission control W12.B");
+                    self.execute_key_action(crate::input::keyboard::KeyAction::MissionControl);
                 }
                 SwipeDirection::Down => {
                     tracing::info!("3-finger down -> app expose (stub)");
@@ -489,7 +580,86 @@ impl LumoState {
                     TileDir::Left  => "Left",
                     TileDir::Right => "Right",
                 };
-                tracing::info!(dir = dir_str, "TileMove pendente (tiling nao implementado)");
+                tracing::info!(dir = dir_str, "TileMove arrow");
+            }
+            KeyAction::TilingCycle => {
+                self.tiling_mode = self.tiling_mode.next();
+                let (out_w, out_h) = self.output_dimensions();
+                crate::tiling::apply_tiling(&mut self.space, self.tiling_mode, out_w, out_h);
+                tracing::info!(mode = self.tiling_mode.name(), "W12.A: tiling cycled");
+                #[cfg(feature = "drm-backend")]
+                { self.drm_force_repaint = true; }
+            }
+            KeyAction::TilingRebalance => {
+                let (out_w, out_h) = self.output_dimensions();
+                crate::tiling::apply_tiling(&mut self.space, self.tiling_mode, out_w, out_h);
+                tracing::info!(mode = self.tiling_mode.name(), "W12.A: tiling rebalanced");
+                #[cfg(feature = "drm-backend")]
+                { self.drm_force_repaint = true; }
+            }
+            KeyAction::TilingFocusPrev => {
+                let windows: Vec<_> = self.space.elements().cloned().collect();
+                let kb = self.keyboard.clone();
+                let cur = kb.current_focus();
+                if let Some(win) = crate::tiling::focus_prev(&windows, cur.as_ref()) {
+                    if let Some(surf) = win.wl_surface() {
+                        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+                        let owned = surf.into_owned();
+                        self.focus_manager.click_toplevel(owned.clone());
+                        kb.set_focus(self, Some(owned), serial);
+                    }
+                }
+            }
+            KeyAction::TilingFocusNext => {
+                let windows: Vec<_> = self.space.elements().cloned().collect();
+                let kb = self.keyboard.clone();
+                let cur = kb.current_focus();
+                if let Some(win) = crate::tiling::focus_next(&windows, cur.as_ref()) {
+                    if let Some(surf) = win.wl_surface() {
+                        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+                        let owned = surf.into_owned();
+                        self.focus_manager.click_toplevel(owned.clone());
+                        kb.set_focus(self, Some(owned), serial);
+                    }
+                }
+            }
+            KeyAction::MissionControl => {
+                if self.overview.is_some() {
+                    let a11y = lumo_foundation::A11yTokens::load_from_disk();
+                    if let Some(ov) = self.overview.as_mut() {
+                        ov.close(a11y.reduced_motion);
+                    }
+                } else {
+                    let a11y = lumo_foundation::A11yTokens::load_from_disk();
+                    let kb = self.keyboard.clone();
+                    let focused = kb.current_focus();
+                    self.overview = Some(crate::overview::OverviewState::new(
+                        &self.space,
+                        focused.as_ref(),
+                        a11y.reduced_motion,
+                    ));
+                    tracing::info!("W12.B: mission control opened");
+                }
+                #[cfg(feature = "drm-backend")]
+                { self.drm_force_repaint = true; }
+            }
+            KeyAction::StackPicker => {
+                if let Some(picker) = self.stack_picker.as_mut() {
+                    picker.cycle_next();
+                } else {
+                    let kb = self.keyboard.clone();
+                    let focused = kb.current_focus();
+                    let picker = crate::stack_picker::StackPickerState::new(
+                        &self.space,
+                        focused.as_ref(),
+                    );
+                    if !picker.is_empty() {
+                        self.stack_picker = Some(picker);
+                        tracing::info!("W12.C: stack picker opened");
+                    }
+                }
+                #[cfg(feature = "drm-backend")]
+                { self.drm_force_repaint = true; }
             }
             KeyAction::FullscreenToggle => {
                 self.toggle_fullscreen_focused();

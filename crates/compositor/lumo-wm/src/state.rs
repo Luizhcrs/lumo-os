@@ -182,6 +182,12 @@ pub struct LumoState {
     pub window_anim: crate::window_anim::WindowAnimRegistry,
     /// W9.B: active snap zone preview during window drag. None = no preview.
     pub snap_preview: Option<crate::input::move_grab::SnapZone>,
+    // W12.A: tiling layout mode. Default = Floating.
+    pub tiling_mode: crate::tiling::TilingMode,
+    // W12.B: mission control overview. None = inactive.
+    pub overview: Option<crate::overview::OverviewState>,
+    // W12.C: window stack picker (SUPER+TAB visual). None = inactive.
+    pub stack_picker: Option<crate::stack_picker::StackPickerState>,
     /// L5: lid switch handler state.
     pub lid_handler: std::sync::Arc<std::sync::Mutex<crate::handlers::lid::LidHandlerState>>,
 
@@ -324,6 +330,9 @@ impl LumoState {
             gesture: Default::default(),
             window_anim: crate::window_anim::WindowAnimRegistry::new(),
             snap_preview: None,
+            tiling_mode: crate::tiling::TilingMode::Floating,
+            overview: None,
+            stack_picker: None,
             lid_handler: std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
             idle_manager: LumoIdleManager::new(),
             idle_notifier_state,
@@ -565,6 +574,17 @@ impl LumoState {
 
         let ev = IpcServer::workspaces_event(self.active_workspace, MAX_WORKSPACES);
         self.ipc.broadcast(&ev);
+    }
+
+    /// W12.A: returns output dimensions (w, h) in logical pixels.
+    /// Falls back to 1920x1080 if no output is registered.
+    pub fn output_dimensions(&self) -> (i32, i32) {
+        self.space.outputs().next()
+            .and_then(|o| {
+                let mode = o.current_mode()?;
+                Some((mode.size.w, mode.size.h))
+            })
+            .unwrap_or((1920, 1080))
     }
 
     /// W8.B: move toplevel focado para workspace `to`.

@@ -23,6 +23,12 @@ impl XdgShellHandler for LumoState {
         let pos = self.next_tile_position();
         self.space.map_element(window.clone(), pos, true);
 
+        // W12.A: auto-tile on new toplevel if tiling mode is active.
+        {
+            let (ow, oh) = self.output_dimensions();
+            crate::tiling::apply_tiling(&mut self.space, self.tiling_mode, ow, oh);
+        }
+
         // W9.A: init opening animation (a11y guard included in new_opening).
         let a11y = lumo_foundation::A11yTokens::load_from_disk();
         self.window_anim.insert_opening(surface.wl_surface(), a11y.reduced_motion);

@@ -42,6 +42,18 @@ pub enum TileDir {
 pub enum KeyAction {
     /// F5: refresh compositor (re-render + re-init clients).
     Refresh,
+    /// W12.A: cycle tiling mode (Floating->MasterStack->Spiral->Columns->Floating).
+    TilingCycle,
+    /// W12.A: rebalance/repaint tiling (SUPER+R).
+    TilingRebalance,
+    /// W12.A: cycle focus to previous master/tile (SUPER+H).
+    TilingFocusPrev,
+    /// W12.A: cycle focus to next master/tile (SUPER+L).
+    TilingFocusNext,
+    /// W12.B: toggle mission control overview (SUPER+UP).
+    MissionControl,
+    /// W12.C: open/cycle window stack picker (SUPER+TAB with visual).
+    StackPicker,
     Spawn(String),
     CloseWindow,
     Lock,
@@ -169,14 +181,24 @@ pub fn default_bindings() -> Vec<KeyBinding> {
         KeyBinding::new(s(), Keysym::Q,          KeyAction::CloseWindow),
         KeyBinding::new(s(), Keysym::space,      KeyAction::Launcher),
         KeyBinding::new(s(), Keysym::Return,     KeyAction::Spawn("foot".to_string())),
-        KeyBinding::new(s(), Keysym::Tab,        KeyAction::CycleWindow(1)),
+        KeyBinding::new(s(), Keysym::Tab,        KeyAction::StackPicker),
+        // W12.A: tiling
+        KeyBinding::new(s(), Keysym::t,          KeyAction::TilingCycle),
+        KeyBinding::new(s(), Keysym::T,          KeyAction::TilingCycle),
+        KeyBinding::new(s(), Keysym::r,          KeyAction::TilingRebalance),
+        KeyBinding::new(s(), Keysym::R,          KeyAction::TilingRebalance),
+        KeyBinding::new(s(), Keysym::h,          KeyAction::TilingFocusPrev),
+        KeyBinding::new(s(), Keysym::H,          KeyAction::TilingFocusPrev),
+        KeyBinding::new(s(), Keysym::semicolon,  KeyAction::TilingFocusNext),
+        // W12.B: mission control
+        KeyBinding::new(s(), Keysym::Up,         KeyAction::MissionControl),
         KeyBinding::new(ModifiersMask::default(), Keysym::F5, KeyAction::Refresh),
         KeyBinding::new(s(), Keysym::f,          KeyAction::FullscreenToggle),
         KeyBinding::new(s(), Keysym::F,          KeyAction::FullscreenToggle),
         KeyBinding::new(s(), Keysym::m,          KeyAction::Minimize),
         KeyBinding::new(s(), Keysym::M,          KeyAction::Minimize),
         // SUPER+Arrow -> TileMove
-        KeyBinding::new(s(), Keysym::Up,         KeyAction::TileMove(TileDir::Up)),
+        // W12.B: SUPER+Up -> MissionControl (replaces TileMove::Up stub).
         KeyBinding::new(s(), Keysym::Down,       KeyAction::TileMove(TileDir::Down)),
         KeyBinding::new(s(), Keysym::Left,       KeyAction::TileMove(TileDir::Left)),
         KeyBinding::new(s(), Keysym::Right,      KeyAction::TileMove(TileDir::Right)),
