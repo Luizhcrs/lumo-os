@@ -177,6 +177,9 @@ pub enum Message {
 
     // W21: sidebar arvore
     ToggleSidebarExpand(PathBuf),
+
+    // [debug] raw event listener para diagnosricar hit-test
+    RawEvent(iced::Event),
 }
 
 // ---------------------------------------------------------------------------
@@ -866,6 +869,12 @@ impl App {
                     },
                 )
             }
+
+            // [debug] log todos eventos brutos para diagnostico hit-test
+            Message::RawEvent(event) => {
+                eprintln!("[lumo-files debug] raw_event: {:?}", event);
+                Task::none()
+            }
         }
     }
 
@@ -881,6 +890,8 @@ impl App {
             appmenu::appmenu_subscription(),
             iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick),
             iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::ToastTick),
+            // [debug] captura todos eventos brutos para diagnostico hit-test
+            iced::event::listen().map(Message::RawEvent),
         ])
     }
 
@@ -960,7 +971,7 @@ impl App {
 
         // -- Tab bar (polish v2) -------------------------------------------
         let tab_bar: iced::Element<Message> = if self.tabs.len() > 1 || self.tabs.len() == 1 {
-            tabs_view::view(th, &self.tabs, self.active_tab)
+            tabs_view::view(th, &self.tabs[..], self.active_tab)
         } else {
             container(iced::widget::horizontal_space())
                 .height(Length::Fixed(0.0))
@@ -1991,7 +2002,7 @@ impl App {
 // Async helpers
 // ---------------------------------------------------------------------------
 
-async fn load_dir(path: PathBuf, show_hidden: bool) -> Result<Vec<PathBuf>, String> {
+pub(crate) async fn load_dir(path: PathBuf, show_hidden: bool) -> Result<Vec<PathBuf>, String> {
     tokio::task::spawn_blocking(move || {
         let mut entries = ops::list_dir(&path).map_err(|e| e.to_string())?;
         if !show_hidden {

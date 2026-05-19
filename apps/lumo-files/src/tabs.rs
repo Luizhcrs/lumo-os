@@ -1,19 +1,93 @@
-//! Tab bar abaixo da toolbar.
+//! Tab state + tab bar view + tab message handlers.
 //!
-//! Polish v2:
-//!   - Tab pill com padding [8, 14], radius topo 8.
-//!   - Inactive: fg_subtle text, transparent bg.
-//!   - Active: fg text + bg = th.bg + 2 px accent underline.
-//!   - Close button sempre visivel a 60% opacity.
-//!   - + button no fim.
+//! Tab struct is the canonical source; re-exported via `crate::app::Tab`.
+//! View: tab bar below the toolbar (Polish v2 pill style).
+//! Handlers: NewTab, CloseTab, SwitchTab, TabNavigate, TabDirLoaded.
+
+use std::path::PathBuf;
 
 use iced::widget::svg::Handle;
 use iced::widget::{button, container, row, text, Svg};
-use iced::{Alignment, Border, Color, Element, Length};
+use iced::{Alignment, Border, Color, Element, Length, Task};
 
-use crate::app::{Message, Tab};
+use crate::app::{App, Message};
 use crate::icons;
 use crate::theme::ThemeSnapshot;
+
+// ---------------------------------------------------------------------------
+// Tab struct
+// Tab struct is canonical in app.rs
+use crate::app::Tab;
+
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
+
+pub fn handle_new_tab(app: &mut App) -> Task<Message> {
+    let dir = app.current_tab().current_dir.clone();
+    let tab = Tab::new(dir.clone());
+    app.tabs.push(tab);
+    app.active_tab = app.tabs.len() - 1;
+    let idx = app.active_tab;
+    let show_hidden = app.show_hidden;
+    Task::perform(crate::app::load_dir(dir.clone(), show_hidden), move |r| match r {
+        Ok(entries) => Message::TabDirLoaded(idx, dir.clone(), entries),
+        Err(e) => Message::OpError(e),
+    })
+}
+
+pub fn handle_close_tab(app: &mut App, idx: usize) -> Task<Message> {
+    if app.tabs.len() > 1 {
+        app.tabs.remove(idx);
+        app.active_tab = app.active_tab.min(app.tabs.len() - 1);
+    }
+    Task::none()
+}
+
+pub fn handle_switch_tab(app: &mut App, idx: usize) -> Task<Message> {
+    if idx < app.tabs.len() {
+        app.active_tab = idx;
+        if let Some(tab) = app.tabs.get(idx) {
+            let dir = tab.current_dir.clone();
+            let dir2 = dir.clone();
+            let show_hidden = app.show_hidden;
+            return Task::perform(crate::app::load_dir(dir, show_hidden), move |r| match r {
+                Ok(entries) => Message::DirLoaded(dir2.clone(), entries),
+                Err(e) => Message::OpError(e),
+            });
+        }
+    }
+    Task::none()
+}
+
+pub fn handle_tab_navigate(app: &mut App, idx: usize, path: PathBuf) -> Task<Message> {
+    if idx < app.tabs.len() {
+        app.tabs[idx].current_dir = path.clone();
+        let p2 = path.clone();
+        let show_hidden2 = app.show_hidden;
+        return Task::perform(crate::app::load_dir(path, show_hidden2), move |r| match r {
+            Ok(entries) => Message::TabDirLoaded(idx, p2.clone(), entries),
+            Err(e) => Message::OpError(e),
+        });
+    }
+    Task::none()
+}
+
+pub fn handle_tab_dir_loaded(app: &mut App, idx: usize, path: PathBuf, entries: Vec<PathBuf>) -> Task<Message> {
+    if let Some(tab) = app.tabs.get_mut(idx) {
+        tab.label = path.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "/".to_string());
+        tab.current_dir = path;
+        tab.file_list.set_entries(entries);
+        tab.file_list.sort(app.sort_by, app.sort_ascending);
+    }
+    Task::none()
+}
+
+// ---------------------------------------------------------------------------
+// View: tab bar
+// ---------------------------------------------------------------------------
 
 pub fn view<'a>(th: &ThemeSnapshot, tabs: &'a [Tab], active: usize) -> Element<'a, Message> {
     let mut row_el = row![].spacing(2).align_y(Alignment::Center);
@@ -23,7 +97,6 @@ pub fn view<'a>(th: &ThemeSnapshot, tabs: &'a [Tab], active: usize) -> Element<'
         row_el = row_el.push(tab_pill(th, i, &tab.label, is_active));
     }
 
-    // + new tab
     row_el = row_el.push(new_tab_btn(th));
 
     container(row_el)
@@ -49,7 +122,6 @@ fn tab_pill<'a>(th: &ThemeSnapshot, idx: usize, label: &'a str, active: bool) ->
     let label_color = if active { th.fg } else { th.fg_subtle };
     let bg = if active { th.bg } else { Color::TRANSPARENT };
 
-    // Close x — sempre visivel a 60% opacidade.
     let mut close_color = th.fg_subtle;
     close_color.a = 0.6;
     let close_btn = button(text("x").size(11).color(close_color))
@@ -72,7 +144,6 @@ fn tab_pill<'a>(th: &ThemeSnapshot, idx: usize, label: &'a str, active: bool) ->
     .spacing(6)
     .align_y(Alignment::Center);
 
-    // Outer column: button (tab body) + underline strip below.
     let body = button(container(content).padding([6, 10]))
         .on_press(Message::SwitchTab(idx))
         .padding(0)
