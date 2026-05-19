@@ -144,12 +144,16 @@ pub fn draw_battery_dropdown(
     cy += FONT_DROPDOWN_TITLE * 1.4;
 
     let charging = info.status == "Charging";
-    let icon_y = cy + FONT_DROPDOWN_BODY * 0.5 - BAT_BODY_H / 2.0;
+    // pct 18px bold + status 11px muted abaixo: bloco total ~33px, icone centralizado.
+    let block_h = 18.0 + 4.0 + 11.0;
+    let icon_y = cy + block_h / 2.0 - BAT_BODY_H / 2.0;
     draw_battery(canvas, cx, icon_y, info.pct, charging, fg, accent);
     let summary_x = cx + BAT_BODY_W + 4.0 + 8.0;
-    let summary = format!("{}%  \u{2022}  {}", info.pct, status_pt(&info.status));
-    draw_text(canvas, summary_x, cy, &summary, FONT_DROPDOWN_BODY, fg_subtle, false);
-    cy += FONT_DROPDOWN_BODY * 1.6;
+    let pct_str = format!("{}%", info.pct);
+    draw_text(canvas, summary_x, cy, &pct_str, 18.0, fg, true);
+    let status_str = status_pt(&info.status);
+    draw_text(canvas, summary_x, cy + 22.0, &status_str, 11.0, fg_subtle, false);
+    cy += block_h + 6.0;
 
     draw_separator(canvas, x, cy, w, sep_color);
     cy += 8.0;
