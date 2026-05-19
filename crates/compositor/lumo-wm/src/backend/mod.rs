@@ -4,8 +4,10 @@
 //! - libinput: input direto (so gated drm-backend, usa session libseat)
 //! - render_common: helpers de cursor/corner/shadow compartilhados
 //! - wallpaper: textura de fundo (A19), carregada uma vez por backend
+//! - damage: heuristica de merge de rects (W3.P4)
 
 pub mod corner_shader;
+pub mod damage;
 pub mod render_common;
 pub mod wallpaper;
 pub mod winit;
