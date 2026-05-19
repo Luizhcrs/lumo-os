@@ -39,7 +39,7 @@ impl XdgShellHandler for LumoState {
         // renderer pinta titlebar sobre -- aceitar double titlebar em troca
         // de visual uniforme Lumo. Iced, Qt5, terminais: SSD automatico.
         self.ssd_windows.insert(surface.wl_surface().clone());
-        tracing::debug!("new_toplevel: SSD default inserido");
+        tracing::info!("new_toplevel: SSD default inserido (M1)");
 
         // Configure inicial: cliente decide tamanho mas anunciamos
         // estado Activated.

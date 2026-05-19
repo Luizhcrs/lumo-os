@@ -228,7 +228,7 @@ impl LumoState {
                 let pointer = self.pointer.clone();
 
                 // C3 debug: log raw button code pra diagnostico BTN_RIGHT.
-                tracing::debug!(button, state = ?state, pos = ?(self.pointer_location.x as i32, self.pointer_location.y as i32), "C3 PointerButton");
+                tracing::info!(button, state = ?state, pos = ?(self.pointer_location.x as i32, self.pointer_location.y as i32), "C3 PointerButton");
 
                 if state == ButtonState::Pressed {
                     // M1: SSD hit-test antes de repassar o click ao cliente.

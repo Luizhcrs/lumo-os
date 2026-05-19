@@ -43,7 +43,17 @@ pub fn init(
         .insert_source(backend, move |event, _, state| {
             if let InputEvent::DeviceAdded { ref device } = event {
                 let mut d: smithay::reexports::input::Device = device.clone();
+                tracing::info!(
+                    name = %d.name(),
+                    sysname = %d.sysname(),
+                    has_pointer = d.has_capability(smithay::reexports::input::DeviceCapability::Pointer),
+                    has_kbd = d.has_capability(smithay::reexports::input::DeviceCapability::Keyboard),
+                    "libinput DeviceAdded"
+                );
                 touchpad_cfg.apply_to_device(&mut d);
+            }
+            if let InputEvent::DeviceRemoved { ref device } = event {
+                tracing::warn!(name = %device.name(), "libinput DeviceRemoved");
             }
             if let InputEvent::Keyboard { ref event } = event {
                 let now_ms = state.clock.now().as_millis() as u64;
