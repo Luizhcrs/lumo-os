@@ -19,6 +19,11 @@ members = [
     "apps/lumo-dock",
     "apps/lumo-launcher",
     "apps/lumo-notif",
+    "apps/lumo-settings",
+    "apps/lumo-editor",
+    "apps/lumo-calc",
+    "apps/lumo-notes",
+    "apps/lumo-monitor",
 ]
 
 [profile.release]
