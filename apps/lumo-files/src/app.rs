@@ -22,6 +22,32 @@ use crate::sidebar::{build_sidebar, SidebarItem, SidebarKind};
 use crate::theme::LumoTheme;
 
 // ---------------------------------------------------------------------------
+// Thumbnail cache (inline)
+// ---------------------------------------------------------------------------
+
+pub struct ThumbCache {
+    cache: std::collections::HashMap<String, Vec<u8>>,
+    order: std::collections::VecDeque<String>,
+    max: usize,
+}
+
+impl ThumbCache {
+    pub fn new() -> Self {
+        Self { cache: std::collections::HashMap::new(), order: std::collections::VecDeque::new(), max: 500 }
+    }
+    pub fn get(&self, key: &str) -> Option<&Vec<u8>> { self.cache.get(key) }
+    pub fn insert(&mut self, key: String, data: Vec<u8>) {
+        if self.cache.len() >= self.max {
+            if let Some(oldest) = self.order.pop_front() { self.cache.remove(&oldest); }
+        }
+        self.cache.insert(key.clone(), data);
+        self.order.push_back(key);
+    }
+}
+
+impl Default for ThumbCache { fn default() -> Self { Self::new() } }
+
+// ---------------------------------------------------------------------------
 // Clipboard state (path ops)
 // ---------------------------------------------------------------------------
 
@@ -95,6 +121,16 @@ pub enum Message {
     SetSortBy(SortBy),
     ToggleSortOrder,
 
+    // Preview pane
+    TogglePreview,
+    // Drives
+    DrivesRefreshed(Vec<crate::sidebar::SidebarItem>),
+    DriveUnmount(PathBuf),
+    EmptyTrash,
+    // Tick para refresh periódico
+    Tick,
+    ThumbLoaded { path: PathBuf, key: String, data: Vec<u8> },
+
     // Teclado
     KeyPressed(Key, Modifiers),
 
@@ -130,6 +166,8 @@ pub struct App {
     pub sort_by: SortBy,
     /// Ordem crescente (true) ou decrescente (false).
     pub sort_ascending: bool,
+    pub preview_visible: bool,
+    pub thumb_cache: ThumbCache,
 }
 
 impl App {
@@ -152,6 +190,8 @@ impl App {
             view_mode: crate::toolbar::ViewMode::Grid,
             sort_by: SortBy::Name,
             sort_ascending: true,
+            preview_visible: false,
+            thumb_cache: ThumbCache::new(),
         };
         let task = Task::perform(load_dir(home.clone(), false), move |r| match r {
             Ok(entries) => Message::DirLoaded(home.clone(), entries),
@@ -509,6 +549,65 @@ impl App {
                 self.file_list.sort(self.sort_by, self.sort_ascending);
                 Task::none()
             }
+
+            Message::TogglePreview => {
+                self.preview_visible = !self.preview_visible;
+                Task::none()
+            }
+
+            Message::ThumbLoaded { path: _, key, data } => {
+                self.thumb_cache.insert(key, data);
+                Task::none()
+            }
+
+            Message::DrivesRefreshed(items) => {
+                // Atualiza drives na sidebar mantendo itens fixos
+                self.sidebar.retain(|it| it.kind != crate::sidebar::SidebarKind::Drive);
+                self.sidebar.extend(items);
+                Task::none()
+            }
+
+            Message::DriveUnmount(path) => {
+                let path_str = path.to_string_lossy().to_string();
+                Task::perform(
+                    async move {
+                        tokio::process::Command::new("udisksctl")
+                            .args(["unmount", "-b", &path_str])
+                            .output()
+                            .await
+                            .ok();
+                    },
+                    |_| Message::Refresh,
+                )
+            }
+
+            Message::EmptyTrash => {
+                let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+                let trash_files = std::path::PathBuf::from(&home).join(".local/share/Trash/files");
+                let trash_info = std::path::PathBuf::from(&home).join(".local/share/Trash/info");
+                Task::perform(
+                    async move {
+                        let _ = tokio::fs::remove_dir_all(&trash_files).await;
+                        let _ = tokio::fs::create_dir_all(&trash_files).await;
+                        let _ = tokio::fs::remove_dir_all(&trash_info).await;
+                        let _ = tokio::fs::create_dir_all(&trash_info).await;
+                    },
+                    |_| Message::Refresh,
+                )
+            }
+
+            Message::Tick => {
+                let username = crate::app::username();
+                Task::perform(
+                    async move { crate::sidebar::build_sidebar(&username) },
+                    |items| {
+                        let drives: Vec<_> = items.into_iter()
+                            .filter(|it| it.kind == crate::sidebar::SidebarKind::Drive)
+                            .collect();
+                        Message::DrivesRefreshed(drives)
+                    },
+                )
+            }
         }
     }
 
@@ -522,6 +621,7 @@ impl App {
                 Some(Message::KeyPressed(key, modifiers))
             }),
             appmenu::appmenu_subscription(),
+            iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick),
         ])
     }
 
@@ -582,52 +682,83 @@ impl App {
         };
 
         // -- Sidebar -------------------------------------------------------
-        let mut sidebar_col = column![].spacing(2).padding([8, 6]);
+        let mut locais_col: Vec<iced::Element<Message>> = Vec::new();
+        let mut drives_col: Vec<iced::Element<Message>> = Vec::new();
+
         for item in &self.sidebar {
             let is_active = item.path == self.current_dir;
             let label_color = if is_active { accent } else { fg };
-            let pill = LumoTheme::pill_bg();
+            let selected_bg = if is_active { LumoTheme::accent_alpha40() } else { Color::TRANSPARENT };
             let path = item.path.clone();
             let kind = item.kind.clone();
-            let icon_str = match kind {
-                SidebarKind::Home => "[home]",
-                SidebarKind::Trash => "[trash]",
+
+            let icon_str = match &kind {
+                SidebarKind::Home => "[H]",
+                SidebarKind::Documents => "[D]",
+                SidebarKind::Downloads => "[v]",
+                SidebarKind::Pictures => "[I]",
+                SidebarKind::Videos => "[V]",
+                SidebarKind::Music => "[A]",
+                SidebarKind::Desktop => "[M]",
+                SidebarKind::Trash => "[T]",
                 SidebarKind::Drive => "[drv]",
-                _ => "[dir]",
             };
-            let sep_kind = matches!(kind, SidebarKind::Trash | SidebarKind::Drive);
-            if sep_kind && matches!(item.kind, SidebarKind::Trash) {
-                sidebar_col = sidebar_col.push(
-                    container(horizontal_rule(1))
-                        .padding([4, 0])
-                        .width(Length::Fill),
-                );
-            }
+
             let btn = button(
                 row![
-                    text(icon_str).size(11).color(muted),
+                    text(icon_str).size(11).color(if is_active { accent } else { muted }),
                     text(&item.label).size(13).color(label_color),
                 ]
                 .spacing(6)
                 .align_y(Alignment::Center),
             )
             .on_press(Message::Navigate(path))
-            .style(move |_, _| {
-                if is_active {
-                    button_style(pill)
-                } else {
-                    button_style(Color::TRANSPARENT)
-                }
+            .style(move |_, _| iced::widget::button::Style {
+                background: Some(iced::Background::Color(selected_bg)),
+                border: iced::Border {
+                    color: if is_active { LumoTheme::accent() } else { Color::TRANSPARENT },
+                    width: if is_active { 2.0 } else { 0.0 },
+                    radius: 4.0.into(),
+                },
+                text_color: LumoTheme::fg(),
+                ..Default::default()
             })
             .padding([5, 8])
             .width(Length::Fill);
+
+            if kind == SidebarKind::Drive {
+                drives_col.push(btn.into());
+            } else {
+                locais_col.push(btn.into());
+            }
+        }
+
+        let group_header = |label: &'static str| -> iced::Element<Message> {
+            container(text(label).size(10).color(muted))
+                .padding([2u16, 8])
+                .into()
+        };
+
+        let mut sidebar_col = column![].spacing(0).padding([8, 4]);
+        sidebar_col = sidebar_col.push(group_header("LOCAIS"));
+        for btn in locais_col {
             sidebar_col = sidebar_col.push(btn);
+        }
+        if !drives_col.is_empty() {
+            sidebar_col = sidebar_col.push(
+                container(horizontal_rule(1)).padding([4, 0]).width(Length::Fill),
+            );
+            sidebar_col = sidebar_col.push(group_header("DRIVES"));
+            for btn in drives_col {
+                sidebar_col = sidebar_col.push(btn);
+            }
         }
 
         let sidebar = container(scrollable(sidebar_col).height(Length::Fill))
             .width(180)
             .height(Length::Fill)
             .style(move |_| container_style(panel));
+
 
         // -- File grid -----------------------------------------------------
         let grid = self.view_grid(fg, muted, accent, panel_hi, sep);
@@ -669,7 +800,25 @@ impl App {
         };
 
         // -- Layout final --------------------------------------------------
-        let body = row![sidebar, content_area].height(Length::Fill);
+        let body = if self.preview_visible {
+            let selected_paths = self.file_list.selected_paths();
+            let preview: iced::Element<Message> = if let Some(path) = selected_paths.first() {
+                self.view_preview(path, fg, muted, accent)
+            } else {
+                container(text("Selecione um item").size(13).color(muted))
+                    .padding([20, 12])
+                    .width(Length::Fixed(300.0))
+                    .height(Length::Fill)
+                    .style(move |_| iced::widget::container::Style {
+                        background: Some(iced::Background::Color(LumoTheme::panel())),
+                        ..Default::default()
+                    })
+                    .into()
+            };
+            row![sidebar, content_area, preview].height(Length::Fill)
+        } else {
+            row![sidebar, content_area].height(Length::Fill)
+        };
 
         let root = container(column![toolbar, body, status_bar].spacing(0))
             .width(Length::Fill)
@@ -991,6 +1140,69 @@ impl App {
         ]
         .height(Length::Fill)
         .into()
+    }
+
+    fn view_preview(
+        &self,
+        path: &PathBuf,
+        fg: Color,
+        muted: Color,
+        _accent: Color,
+    ) -> iced::Element<Message> {
+        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let size_str = if path.is_dir() { "--".to_string() } else { crate::filelist::FileList::human_size(path) };
+        let mod_str = crate::filelist::FileList::human_modified(path);
+        let kind = crate::icons::icon_for_path(path);
+        let icon_str = icon_svg_label(&kind);
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("--").to_string();
+
+        let text_preview: Option<String> = if matches!(ext.as_str(), "txt" | "md" | "json") {
+            std::fs::read_to_string(path).ok().map(|s| {
+                s.chars().take(200).collect()
+            })
+        } else {
+            None
+        };
+
+        let mut info_col = column![
+            text(icon_str).size(36).color(muted),
+            text(name).size(13).color(fg),
+            text("Tamanho:").size(11).color(muted),
+            text(size_str).size(12).color(fg),
+            text("Modificado:").size(11).color(muted),
+            text(mod_str).size(12).color(fg),
+            text("Tipo:").size(11).color(muted),
+            text(ext).size(12).color(fg),
+        ]
+        .spacing(4)
+        .padding([12, 12]);
+
+        if let Some(preview_text) = text_preview {
+            info_col = info_col.push(text("Conteudo:").size(11).color(muted));
+            info_col = info_col.push(
+                container(text(preview_text).size(11).color(fg))
+                    .padding([6, 8])
+                    .style(move |_| iced::widget::container::Style {
+                        background: Some(iced::Background::Color(LumoTheme::panel_hi())),
+                        border: iced::Border { radius: 4.0.into(), ..Default::default() },
+                        ..Default::default()
+                    })
+            );
+        }
+
+        container(scrollable(info_col).height(Length::Fill))
+            .width(Length::Fixed(300.0))
+            .height(Length::Fill)
+            .style(move |_| iced::widget::container::Style {
+                background: Some(iced::Background::Color(LumoTheme::panel())),
+                border: iced::Border {
+                    color: LumoTheme::sep(),
+                    width: 1.0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .into()
     }
 
     fn view_context_menu<'a>(
