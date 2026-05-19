@@ -281,7 +281,7 @@ pub const CORNER_RADIUS: i32 = 10;
 /// Radius dos cantos de cada toplevel (A37). Quads pintados com cor
 /// do background cobrem os cantos da janela, simulando borda arredondada.
 /// Valor 12px.
-pub const CORNER_RADIUS_WINDOW: i32 = 12;
+pub const CORNER_RADIUS_WINDOW: i32 = 0;
 
 /// Cor da mascara de cantos. Runtime (le tema corrente) — necessario
 /// porque const eval nao consegue chamar `current_colors()`. Custo
@@ -762,7 +762,39 @@ pub fn collect_drm_elements(
         out.push(LumoCustomElement::Solid(elem));
     }
 
-    // M1: SSD titlebars.
+    // 4. Toplevels + layer-shell via space_render_elements.
+    //    BUG1 FIX: split em upper layers (Layer::Top/Overlay, Surface variants
+    //    no inicio da lista front-first) e rest (toplevels Element + lower Surface).
+    //    Ordem correta: cursor -> Layer::Top -> SSD titlebars -> toplevels -> lower.
+    let (upper_layers, space_rest): (Vec<_>, Vec<_>) = match space_render_elements::<_, Window, _>(
+        renderer,
+        std::iter::once(inputs.space),
+        inputs.output,
+        1.0,
+    ) {
+        Ok(elements) => {
+            let first_elem = elements.iter().position(|e| {
+                matches!(e, smithay::desktop::space::SpaceRenderElements::Element(_))
+            }).unwrap_or(elements.len());
+            let mut upper = Vec::with_capacity(first_elem);
+            let mut rest = Vec::with_capacity(elements.len().saturating_sub(first_elem));
+            for (i, el) in elements.into_iter().enumerate() {
+                if i < first_elem { upper.push(el); } else { rest.push(el); }
+            }
+            (upper, rest)
+        }
+        Err(err) => {
+            tracing::warn!(?err, "space_render_elements falhou no DRM path");
+            (Vec::new(), Vec::new())
+        }
+    };
+
+    // 4a. Upper layers (Layer::Top/Overlay) na frente de titlebars.
+    for el in upper_layers {
+        out.push(LumoCustomElement::Space(el));
+    }
+
+    // M1: SSD titlebars -- atras de Layer::Top, na frente de toplevels.
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }
@@ -786,28 +818,15 @@ pub fn collect_drm_elements(
         out.push(LumoCustomElement::Solid(elem.clone()));
     }
 
-    // 4. Toplevels + layer-shell via space_render_elements.
-    //    A38: toplevels (Element variant) recebem SDF corner radius.
-    //    Layer-shell (Surface variant) passa direto.
-    match space_render_elements::<_, Window, _>(
-        renderer,
-        std::iter::once(inputs.space),
-        inputs.output,
-        1.0,
-    ) {
-        Ok(elements) => {
-            if let Some(cs) = inputs.corner_shader {
-                for el in wrap_space_elements_rounded(elements, cs) {
-                    out.push(el);
-                }
-            } else {
-                for el in elements {
-                    out.push(LumoCustomElement::Space(el));
-                }
-            }
+    // 4b. Toplevels + lower layer-shell (rest of space_render_elements).
+    //     A38: toplevels (Element variant) recebem SDF corner radius.
+    if let Some(cs) = inputs.corner_shader {
+        for el in wrap_space_elements_rounded(space_rest, cs) {
+            out.push(el);
         }
-        Err(err) => {
-            tracing::warn!(?err, "space_render_elements falhou no DRM path");
+    } else {
+        for el in space_rest {
+            out.push(LumoCustomElement::Space(el));
         }
     }
 
@@ -890,7 +909,38 @@ pub fn build_winit_elements(
         out.push(LumoCustomElement::Solid(elem));
     }
 
-    // M1: SSD titlebars.
+    // 4. Space (toplevels + layer-shell + popups).
+    //    BUG1 FIX: mesmo split que collect_drm_elements.
+    //    upper layers (Layer::Top/Overlay) -> titlebars -> toplevels + lower.
+    let (upper_layers_w, space_rest_w): (Vec<_>, Vec<_>) = match space_render_elements::<_, Window, _>(
+        renderer,
+        std::iter::once(inputs.space),
+        output,
+        1.0,
+    ) {
+        Ok(elements) => {
+            let first_elem = elements.iter().position(|e| {
+                matches!(e, smithay::desktop::space::SpaceRenderElements::Element(_))
+            }).unwrap_or(elements.len());
+            let mut upper = Vec::with_capacity(first_elem);
+            let mut rest = Vec::with_capacity(elements.len().saturating_sub(first_elem));
+            for (i, el) in elements.into_iter().enumerate() {
+                if i < first_elem { upper.push(el); } else { rest.push(el); }
+            }
+            (upper, rest)
+        }
+        Err(err) => {
+            tracing::warn!(?err, "space_render_elements falhou no winit path");
+            (Vec::new(), Vec::new())
+        }
+    };
+
+    // 4a. Upper layers (Layer::Top/Overlay) na frente.
+    for el in upper_layers_w {
+        out.push(LumoCustomElement::Space(el));
+    }
+
+    // M1: SSD titlebars -- atras de Layer::Top, na frente de toplevels.
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }
@@ -914,27 +964,15 @@ pub fn build_winit_elements(
         out.push(LumoCustomElement::Solid(elem.clone()));
     }
 
-    // 4. Space (toplevels + layer-shell + popups).
-    //    A38: toplevels (Element variant) recebem SDF corner radius.
-    match space_render_elements::<_, Window, _>(
-        renderer,
-        std::iter::once(inputs.space),
-        output,
-        1.0,
-    ) {
-        Ok(elements) => {
-            if let Some(cs) = inputs.corner_shader {
-                for el in wrap_space_elements_rounded(elements, cs) {
-                    out.push(el);
-                }
-            } else {
-                for el in elements {
-                    out.push(LumoCustomElement::Space(el));
-                }
-            }
+    // 4b. Toplevels + lower layer-shell.
+    //     A38: toplevels (Element variant) recebem SDF corner radius.
+    if let Some(cs) = inputs.corner_shader {
+        for el in wrap_space_elements_rounded(space_rest_w, cs) {
+            out.push(el);
         }
-        Err(err) => {
-            tracing::warn!(?err, "space_render_elements falhou no winit path");
+    } else {
+        for el in space_rest_w {
+            out.push(LumoCustomElement::Space(el));
         }
     }
 
