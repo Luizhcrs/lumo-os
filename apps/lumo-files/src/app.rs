@@ -174,6 +174,9 @@ pub enum Message {
     // Polish v2 — toasts e disk usage
     ToastTick,
     DiskUsageLoaded(PathBuf, u64, u64),
+
+    // W21: sidebar arvore
+    ToggleSidebarExpand(PathBuf),
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +218,10 @@ pub struct App {
     pub loading: bool,
     /// Polish v2: cache de disk usage (free, total) por mountpoint, refresh 5 s.
     pub disk_cache: Option<(PathBuf, u64, u64, Instant)>,
+    /// W21: paths expandidos na sidebar tree.
+    pub expanded: std::collections::HashSet<PathBuf>,
+    /// W21: cache de subdirs de $HOME pra render tree sem hit FS por frame.
+    pub home_subdirs: Vec<PathBuf>,
 }
 
 impl App {
@@ -243,6 +250,8 @@ impl App {
             toasts: ToastQueue::new(),
             loading: true,
             disk_cache: None,
+            expanded: std::collections::HashSet::new(),
+            home_subdirs: load_immediate_subdirs(&home),
         };
         let task = Task::perform(load_dir(home.clone(), false), move |r| match r {
             Ok(entries) => Message::DirLoaded(home.clone(), entries),
@@ -644,6 +653,15 @@ impl App {
                 Task::none()
             }
 
+            Message::ToggleSidebarExpand(p) => {
+                if self.expanded.contains(&p) {
+                    self.expanded.remove(&p);
+                } else {
+                    self.expanded.insert(p);
+                }
+                Task::none()
+            }
+
             // -- AppMenu actions (dispatchados por appmenu_subscription) --
             Message::AppMenuNewWindow => {
                 let exe = std::env::current_exe().unwrap_or_default();
@@ -962,21 +980,21 @@ impl App {
         let mut locais_col: Vec<iced::Element<Message>> = Vec::new();
         let mut drives_col: Vec<iced::Element<Message>> = Vec::new();
 
-        for item in &self.sidebar {
-            let is_active = item.path == self.current_tab().current_dir;
+        let render_row = |label: String,
+                          path: PathBuf,
+                          svg_bytes: &'static [u8],
+                          is_active: bool,
+                          indent: u16,
+                          chevron: Option<(bool, PathBuf)>|
+         -> iced::Element<Message> {
             let icon_color = if is_active { accent } else { muted };
-            let label_color = if is_active { fg } else { fg };
             let selected_bg = if is_active { th.accent_subtle } else { Color::TRANSPARENT };
-            let path = item.path.clone();
-            let kind = item.kind.clone();
 
-            let svg_bytes = kind.svg_bytes();
             let icon = Svg::new(SvgHandle::from_memory(svg_bytes))
                 .width(Length::Fixed(16.0))
                 .height(Length::Fixed(16.0))
                 .style(move |_, _| iced::widget::svg::Style { color: Some(icon_color) });
 
-            // 3 px accent bar on the left when active.
             let active_bar = container(iced::widget::horizontal_space())
                 .width(Length::Fixed(3.0))
                 .height(Length::Fixed(18.0))
@@ -988,13 +1006,33 @@ impl App {
                     ..Default::default()
                 });
 
+            let chevron_elem: iced::Element<Message> = if let Some((expanded, toggle_path)) = chevron {
+                let glyph = if expanded { "v" } else { ">" };
+                button(text(glyph.to_string()).size(11).color(muted))
+                    .on_press(Message::ToggleSidebarExpand(toggle_path))
+                    .style(move |_, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(Color::TRANSPARENT)),
+                        border: Border { radius: 4.0.into(), ..Default::default() },
+                        text_color: muted,
+                        ..Default::default()
+                    })
+                    .padding([0u16, 4u16])
+                    .width(Length::Fixed(16.0))
+                    .into()
+            } else {
+                container(iced::widget::horizontal_space())
+                    .width(Length::Fixed(16.0))
+                    .into()
+            };
+
             let btn = button(
                 row![
                     active_bar,
+                    chevron_elem,
                     container(icon).width(Length::Fixed(16.0)).height(Length::Fixed(16.0)),
-                    text(&item.label).size(13).color(label_color),
+                    text(label).size(13).color(fg),
                 ]
-                .spacing(10)
+                .spacing(8)
                 .align_y(Alignment::Center),
             )
             .on_press(Message::Navigate(path))
@@ -1016,18 +1054,56 @@ impl App {
             .padding([6, 10])
             .width(Length::Fill);
 
-            // W19 BUG-FIX: wrap button em container com margem horizontal pra
-            // recuar hitbox e nao vazar fora do pill visual (especialmente
-            // nos cantos arredondados de 8 px).
-            let btn_wrapped: iced::Element<Message> = container(btn)
-                .padding([0u16, 4u16])
+            container(btn)
+                .padding([0u16, 4u16 + indent])
                 .width(Length::Fill)
-                .into();
+                .into()
+        };
+
+        for item in &self.sidebar {
+            let is_active = item.path == self.current_tab().current_dir;
+            let path = item.path.clone();
+            let kind = item.kind.clone();
+            let expandable = matches!(kind, SidebarKind::Home | SidebarKind::Drive);
+            let is_expanded = self.expanded.contains(&path);
+            let chevron = if expandable {
+                Some((is_expanded, path.clone()))
+            } else {
+                None
+            };
+            let btn_wrapped = render_row(
+                item.label.clone(),
+                path.clone(),
+                kind.svg_bytes(),
+                is_active,
+                0,
+                chevron,
+            );
 
             if kind == SidebarKind::Drive {
                 drives_col.push(btn_wrapped);
             } else {
                 locais_col.push(btn_wrapped);
+            }
+
+            // W21: subdirs nivel 1 quando Inicio expandido.
+            if matches!(kind, SidebarKind::Home) && is_expanded {
+                for sub in &self.home_subdirs {
+                    let sub_active = *sub == self.current_tab().current_dir;
+                    let sub_label = sub.file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let sub_row = render_row(
+                        sub_label,
+                        sub.clone(),
+                        crate::icons::FOLDER,
+                        sub_active,
+                        20,
+                        None,
+                    );
+                    locais_col.push(sub_row);
+                }
             }
         }
 
@@ -1654,15 +1730,15 @@ impl App {
     fn view_empty_state(&self) -> Element<Message> {
         let th = &self.theme;
         let icon = Svg::new(SvgHandle::from_memory(icons::FOLDER_OPEN))
-            .width(Length::Fixed(72.0))
-            .height(Length::Fixed(72.0))
+            .width(Length::Fixed(64.0))
+            .height(Length::Fixed(64.0))
             .style({
                 let c = th.fg_subtle;
                 move |_, _| iced::widget::svg::Style { color: Some(c) }
             });
         let body = column![
             container(icon).padding([0, 0]),
-            text("Esta pasta esta vazia").size(14).color(th.fg),
+            text("Esta pasta esta vazia").size(14).color(th.fg_subtle),
             text("Arraste arquivos aqui ou use Ctrl+N para criar pasta")
                 .size(11)
                 .color(th.fg_subtle),
@@ -1686,16 +1762,26 @@ impl App {
 
     fn view_empty_state_inline(&self) -> Element<Message> {
         let th = &self.theme;
+        let icon = Svg::new(SvgHandle::from_memory(icons::FOLDER_OPEN))
+            .width(Length::Fixed(64.0))
+            .height(Length::Fixed(64.0))
+            .style({
+                let c = th.fg_subtle;
+                move |_, _| iced::widget::svg::Style { color: Some(c) }
+            });
         container(
             column![
-                text("Esta pasta esta vazia").size(13).color(th.fg),
+                container(icon).padding([0, 0]),
+                text("Esta pasta esta vazia").size(13).color(th.fg_subtle),
                 text("Use Ctrl+N para criar uma pasta").size(11).color(th.fg_subtle),
             ]
-            .spacing(8)
+            .spacing(12)
             .align_x(Alignment::Center),
         )
-        .padding([40, 12])
         .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .width(Length::Fill)
+        .height(Length::Fill)
         .into()
     }
 
@@ -2003,6 +2089,26 @@ fn username() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("LOGNAME"))
         .unwrap_or_else(|_| "user".to_string())
+}
+
+/// W21: lista subdirs imediatos pra tree sidebar. Sync, blocking (~1ms).
+fn load_immediate_subdirs(root: &PathBuf) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(root) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                if let Some(name) = p.file_name().and_then(|s| s.to_str()) {
+                    if name.starts_with('.') {
+                        continue;
+                    }
+                }
+                out.push(p);
+            }
+        }
+    }
+    out.sort();
+    out
 }
 
 #[cfg(test)]
