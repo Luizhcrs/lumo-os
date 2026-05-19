@@ -53,21 +53,15 @@ impl LumoBar {
             0.85f32, 1.0f32,
             AnimCurve::Bezier { curve: LACurve::ease_in_out(), duration: 0.28 },
         );
-        // Alpha: fade-in mais curto ~220ms.
+        // Alpha: fade-in mais curto ~220ms. from=0.05 em vez de 0.0
+        // garante dropdown visivel no PRIMEIRO frame apos open (review HIGH
+        // R1.fix5): pre-tick 16ms hardcoded em 60Hz era off-by-2-frames em
+        // painel 120Hz Galaxy Book 4. start em 5% opaco eh imperceptivel
+        // visualmente mas elimina race com main_loop.anim_block.
         self.dropdown_alpha_anim = LAAnimator::new(
-            0.0f32, 1.0f32,
+            0.05f32, 1.0f32,
             AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.22 },
         );
-        // B4.fix: avanca animadores em 1 frame (~16ms) antes do primeiro redraw
-        // pra evitar paint inicial com alpha=0 (dropdown invisivel ate o
-        // proximo anim_tick do main_loop). Sem isso, redraw chamado por
-        // update_size_and_redraw renderiza alpha=0 e scale~0.85 -> dropdown
-        // imperceptivel ate main_loop.anim_block disparar (pode levar ate
-        // 50ms, igual ao poll timeout). Avancar 16ms garante alpha > 0 desde
-        // o primeiro frame.
-        let _ = self.dropdown_scale_anim.tick(1.0 / 60.0);
-        let _ = self.dropdown_alpha_anim.tick(1.0 / 60.0);
-        eprintln!("[lumo-bar] B4 start_open_anim: pre-tick 16ms aplicado");
     }
 
     /// B4: inicia animacao de fechamento (scale 1.0->0.85, alpha 1->0).
