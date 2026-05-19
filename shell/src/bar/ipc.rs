@@ -92,6 +92,8 @@ pub fn drain_ipc(
                     LumoEvent::ShowOsd { .. } => {
                         // C2: OSD evento destinado ao lumo-osd, bar ignora.
                     }
+                    // W9.C: output events destined for lumo-desktop/osd; bar ignores.
+                    LumoEvent::OutputAdded { .. } | LumoEvent::OutputRemoved { .. } => {}
                 }
             }
         }

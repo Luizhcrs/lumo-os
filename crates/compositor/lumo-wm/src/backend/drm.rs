@@ -131,6 +131,8 @@ pub struct DrmBackendData {
     pub output_manager: LumoDrmOutputManager,
     pub renderer: GlesRenderer,
     pub surface: Option<DrmSurfaceData>,
+    /// W9.C: additional surfaces for secondary outputs (monitors 2+).
+    pub extra_surfaces: Vec<DrmSurfaceData>,
     pub gpu_node: DrmNode,
 }
 
@@ -603,6 +605,7 @@ pub fn run(
     state.drm_backend = Some(DrmBackendData {
         output_manager,
         renderer,
+        extra_surfaces: Vec::new(),
         surface: Some(DrmSurfaceData {
             crtc: crtc_handle,
             output: output.clone(),
@@ -968,6 +971,7 @@ fn render_drm(state: &mut LumoState) {
         corner_shader: corner_shader.as_ref(),
         ssd_windows,
         titlebar_menu: titlebar_menu_opt,
+        snap_preview: state.snap_preview,
         space,
         output: &surface.output,
         pointer_location,

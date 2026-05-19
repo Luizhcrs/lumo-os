@@ -15,11 +15,8 @@ use serde::{Deserialize, Serialize};
 
 pub const SOCKET_BASENAME: &str = "lumo-wm.sock";
 
-/// Numero maximo de workspaces na MVP. Fixo em 5 por enquanto
-/// (alinhado com lumo-bar que ja desenha 5 pills).
 pub const MAX_WORKSPACES: u8 = 5;
 
-/// Modo do tema: light ou dark.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ThemeMode {
@@ -27,7 +24,6 @@ pub enum ThemeMode {
     Dark,
 }
 
-/// Icone exibido no OSD overlay (C2: Caps Lock, futuro: Volume/Brightness).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum OsdIcon {
@@ -37,69 +33,34 @@ pub enum OsdIcon {
     None,
 }
 
-/// Eventos emitidos pelo compositor (server) pros clientes.
-/// Tag `type` em snake_case pra parse trivial via jq/grep.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LumoEvent {
-    /// Estado completo de workspaces. Emitido no connect + a cada
-    /// mudanca. Idempotente (vale o ultimo).
     Workspaces { active: u8, total: u8 },
-    /// Pedido pra fechar dropdowns ativos em clients (ex: lumo-bar
-    /// fecha dropdown de bateria). Emitido pelo compositor quando
-    /// click esquerdo no desktop (lumo-desktop) em area vazia.
-    /// A21: clientes que nao tem dropdown ignoram silenciosamente.
     CloseDropdowns,
-    /// A26: pedido pra fechar menu contextual do lumo-desktop. Emitido
-    /// pelo compositor quando bar abre dropdown (mutex: so um popup
-    /// aberto na tela por vez). Clients sem menu ativo ignoram.
     CloseDesktopMenu,
-    /// A40: pedido pra abrir o item selecionado no desktop (equivalente
-    /// a duplo-click). Emitido pelo compositor quando Return e pressionado
-    /// sem toplevel ativo. lumo-desktop chama xdg-open no icone selecionado.
     DesktopOpenSelected,
-    /// C5: app em foco mudou. Emitido pelo compositor a cada troca de foco
-    /// de teclado em toplevel xdg. lumo-bar usa pra buscar appmenu via DBus.
-    /// app_id = xdg-toplevel app_id (ex: "thunar", "firefox").
-    /// title = titulo da janela no momento do foco.
-    /// pid = PID do processo dono da surface (via wl_client::pid()).
-    /// Quando nenhuma janela tem foco (focus = None), emite ActiveApp com
-    /// campos vazios e pid = 0 pra bar limpar menubar.
     ActiveApp { app_id: String, title: String, pid: u32 },
-    /// C2: exibe OSD overlay visual (Caps Lock, Volume, Brightness).
-    /// Broadcast a todos os clients; lumo-osd exibe o popup, outros ignoram.
     ShowOsd { text: String, icon: OsdIcon, duration_ms: u32 },
-    /// L6: tema foi recarregado. Compositor detectou mudanca em theme.toml
-    /// e broadcast pra todos os clients. Clients recarregam palette e redesenham.
     ThemeReloaded { mode: ThemeMode },
+    /// W9.C: novo output conectado ou adicionado em hot-plug.
+    /// name = connector name (ex: "eDP-1", "HDMI-A-1").
+    /// index = indice do output no compositor (0-based).
+    OutputAdded { name: String, index: u32, width: u32, height: u32 },
+    /// W9.C: output removido (hot-unplug ou shutdown).
+    OutputRemoved { name: String, index: u32 },
 }
 
-/// Comandos enviados pelos clientes (lumo-bar, lumoctl, etc) ao
-/// compositor.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LumoCommand {
-    /// Troca workspace ativo. `to` em 1..=MAX_WORKSPACES.
-    /// Compositor valida e ignora fora do range.
     Switch { to: u8 },
-    /// Pede pro compositor avisar todos clients pra fecharem seus
-    /// dropdowns ativos. A21: enviado por lumo-desktop quando ha
-    /// click esquerdo em area vazia da area de trabalho.
-    /// Compositor traduz em broadcast LumoEvent::CloseDropdowns.
     CloseDropdowns,
-    /// A26: pede pro compositor avisar lumo-desktop pra fechar seu menu
-    /// contextual. Enviado por lumo-bar quando abre dropdown (mutex).
-    /// Compositor traduz em broadcast LumoEvent::CloseDesktopMenu.
     CloseDesktopMenu,
-    /// L6: pede pro compositor recarregar theme.toml e broadcast ThemeReloaded.
-    /// Enviado por lumoctl apos escrever novo theme.toml.
     ReloadTheme,
-    /// T1.2: fecha o toplevel com foco de teclado atual.
-    /// Enviado por lumo-bar quando usuario clica "Fechar" no pill dropdown S2.
     CloseFocusedToplevel,
 }
 
-/// Path padrao do socket. Falha se `XDG_RUNTIME_DIR` ausente.
 pub fn default_socket_path() -> Option<std::path::PathBuf> {
     let dir = std::env::var_os("XDG_RUNTIME_DIR")?;
     let mut p = std::path::PathBuf::from(dir);
@@ -107,16 +68,12 @@ pub fn default_socket_path() -> Option<std::path::PathBuf> {
     Some(p)
 }
 
-/// Serializa um evento em uma linha JSON pronta pra enviar
-/// (inclui '\n' final).
 pub fn encode_event(ev: &LumoEvent) -> String {
     let mut s = serde_json::to_string(ev).expect("LumoEvent sempre serializa");
     s.push('\n');
     s
 }
 
-/// Tenta parsear uma linha em LumoCommand. Linhas em branco
-/// retornam None (sem erro).
 pub fn parse_command(line: &str) -> Option<Result<LumoCommand, serde_json::Error>> {
     let trimmed = line.trim();
     if trimmed.is_empty() {
@@ -165,5 +122,43 @@ mod tests {
         let json = serde_json::to_string(&cmd).unwrap();
         let parsed: LumoCommand = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, cmd);
+    }
+
+    /// W9.C: OutputAdded serializa e desserializa corretamente.
+    #[test]
+    fn output_added_roundtrip() {
+        let ev = LumoEvent::OutputAdded {
+            name: "HDMI-A-1".to_string(),
+            index: 1,
+            width: 1920,
+            height: 1080,
+        };
+        let line = encode_event(&ev);
+        let parsed: LumoEvent = serde_json::from_str(line.trim()).unwrap();
+        assert_eq!(parsed, ev);
+    }
+
+    /// W9.C: OutputRemoved serializa e desserializa corretamente.
+    #[test]
+    fn output_removed_roundtrip() {
+        let ev = LumoEvent::OutputRemoved {
+            name: "HDMI-A-1".to_string(),
+            index: 1,
+        };
+        let line = encode_event(&ev);
+        let parsed: LumoEvent = serde_json::from_str(line.trim()).unwrap();
+        assert_eq!(parsed, ev);
+    }
+
+    #[test]
+    fn output_added_type_field() {
+        let ev = LumoEvent::OutputAdded {
+            name: "eDP-1".to_string(),
+            index: 0,
+            width: 2560,
+            height: 1600,
+        };
+        let json = serde_json::to_string(&ev).unwrap();
+        assert!(json.contains("output_added"), "json={json}");
     }
 }
