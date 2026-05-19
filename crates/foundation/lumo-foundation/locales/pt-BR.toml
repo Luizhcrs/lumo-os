@@ -1,0 +1,44 @@
+# Lumo OS -- locale PT-BR
+# Chaves: minusculas, underscores. Sem acentos nas chaves.
+
+[app]
+name = "Lumo"
+
+[battery]
+title = "Bateria"
+charging = "Carregando"
+full = "Completa"
+level = "Nivel"
+
+[wifi]
+title = "Wi-Fi"
+connect = "Conectar"
+connected = "Conectado"
+disconnected = "Desconectado"
+password = "Senha"
+enter_password = "Digite a senha"
+saved = "Salvo"
+open = "Aberta"
+toggle_on = "Ligar Wi-Fi"
+toggle_off = "Desligar Wi-Fi"
+
+[brightness]
+title = "Brilho"
+
+[menu]
+about = "Sobre este Galaxy Book..."
+software_update = "Software Update..."
+store = "Lumo Store"
+preferences = "Preferencias do Sistema..."
+lock_screen = "Bloquear tela"
+suspend = "Suspender"
+restart = "Reiniciar..."
+shutdown = "Desligar..."
+
+[notif]
+clear_all = "Limpar tudo"
+no_notifications = "Sem notificacoes"
+
+[perf]
+cpu = "CPU"
+ram = "RAM"

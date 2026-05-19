@@ -1,0 +1,43 @@
+# Lumo OS -- locale EN-US
+
+[app]
+name = "Lumo"
+
+[battery]
+title = "Battery"
+charging = "Charging"
+full = "Full"
+level = "Level"
+
+[wifi]
+title = "Wi-Fi"
+connect = "Connect"
+connected = "Connected"
+disconnected = "Disconnected"
+password = "Password"
+enter_password = "Enter password"
+saved = "Saved"
+open = "Open"
+toggle_on = "Enable Wi-Fi"
+toggle_off = "Disable Wi-Fi"
+
+[brightness]
+title = "Brightness"
+
+[menu]
+about = "About this device..."
+software_update = "Software Update..."
+store = "Lumo Store"
+preferences = "System Preferences..."
+lock_screen = "Lock Screen"
+suspend = "Suspend"
+restart = "Restart..."
+shutdown = "Shut Down..."
+
+[notif]
+clear_all = "Clear all"
+no_notifications = "No notifications"
+
+[perf]
+cpu = "CPU"
+ram = "RAM"

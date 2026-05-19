@@ -23,7 +23,7 @@
 //! vertical = aria de click confortavel sem inflar dropdown. Max 6 redes
 //! visiveis (truncate apos sort por signal desc).
 
-use lumo_foundation::LumoColors;
+use lumo_foundation::{LumoColors, i18n::I18n};
 use tiny_skia::{Paint, PixmapMut, Rect, Transform};
 
 use crate::bar::fonts::{draw_text, draw_text_mono, measure_text, measure_text_mono, opaque, rgba_hex};
@@ -132,7 +132,7 @@ pub fn draw_wifi_dropdown(
     // Header: "Wi-Fi" + toggle pill direita (A31 - MVP visual so).
     // ============================================================
     let mut cy = y + pad;
-    draw_text(canvas, cx, cy, "Wi-Fi", FONT_DROPDOWN_TITLE, fg, true);
+    draw_text(canvas, cx, cy, &I18n::get("wifi.title"), FONT_DROPDOWN_TITLE, fg, true);
 
     // Toggle pill: 36x18 (Apple-like switch), arredondamento total = capsule.
     // Estado: on = wifi up, off = down. Visual only (TODO A31 hookup nmcli radio).
@@ -201,7 +201,7 @@ pub fn draw_wifi_dropdown(
         draw_text_mono(canvas, value_x - vw, cy, &pct_str, FONT_DROPDOWN_BODY, fg, false);
         cy += DROPDOWN_WIFI_ROW_H;
     } else {
-        draw_text(canvas, cx, cy, "Desconectado", FONT_DROPDOWN_BODY, fg_subtle, false);
+        draw_text(canvas, cx, cy, &I18n::get("wifi.disconnected"), FONT_DROPDOWN_BODY, fg_subtle, false);
         cy += DROPDOWN_WIFI_ROW_H;
     }
 

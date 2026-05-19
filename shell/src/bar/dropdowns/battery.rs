@@ -13,7 +13,7 @@
 //!   sep
 //!   y7  Temp CPU: 52C (visivel so se > 70, cor por threshold)
 
-use lumo_foundation::LumoColors;
+use lumo_foundation::{LumoColors, i18n::I18n};
 use tiny_skia::{Paint, PixmapMut, Rect, Transform};
 
 use crate::bar::fonts::{draw_text, draw_text_mono, measure_text_mono, opaque, rgba_hex};
@@ -41,14 +41,11 @@ pub struct BatteryInfo {
     pub cpu_temp_c: Option<f32>,
 }
 
-pub fn status_pt(s: &str) -> &str {
+pub fn status_pt(s: &str) -> String {
     match s {
-        "Charging" => "Carregando",
-        "Discharging" => "Descarregando",
-        "Full" => "Cheia",
-        "Not charging" => "Pausada",
-        "Unknown" => "Desconhecido",
-        other => other,
+        "Charging" => I18n::get("battery.charging"),
+        "Full" => I18n::get("battery.full"),
+        other => other.to_string(),
     }
 }
 
@@ -140,7 +137,7 @@ pub fn draw_battery_dropdown(
     let value_x = x + w - DROPDOWN_PAD;
     let mut cy = y + DROPDOWN_PAD;
 
-    draw_text(canvas, cx, cy, "Bateria", FONT_DROPDOWN_TITLE, fg, true);
+    draw_text(canvas, cx, cy, &I18n::get("battery.title"), FONT_DROPDOWN_TITLE, fg, true);
     cy += FONT_DROPDOWN_TITLE * 1.4;
 
     let charging = info.status == "Charging";

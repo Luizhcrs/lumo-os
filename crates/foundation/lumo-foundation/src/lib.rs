@@ -1201,3 +1201,7 @@ mod bar_layout_tests {
 // W8.C
 pub mod accessibility;
 pub use accessibility::{A11yTokens, watch_accessibility};
+
+// W11.A
+pub mod i18n;
+pub use i18n::I18n;
