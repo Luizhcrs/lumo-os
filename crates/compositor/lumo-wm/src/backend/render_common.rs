@@ -68,6 +68,13 @@ pub const CLOSE_BTN_SIZE: i32 = 12;
 /// Margem direita do botao close.
 pub const CLOSE_BTN_MARGIN: i32 = 9;
 
+/// W17.1: cor botao minimize (amarelo #F39C12).
+pub const BTN_MIN_COLOR: [f32; 4] = [0.953, 0.612, 0.071, 1.0];
+/// W17.1: cor botao maximize (verde #2ECC71).
+pub const BTN_MAX_COLOR: [f32; 4] = [0.180, 0.800, 0.443, 1.0];
+/// W17.1: gap horizontal entre botoes (margem visual).
+pub const BTN_GAP: i32 = 4;
+
 /// Retorna rect do close button dado o geometry da window no space.
 /// Coordenadas em Physical (scale 1.0).
 pub fn close_btn_rect(win_loc: smithay::utils::Point<i32, smithay::utils::Logical>, win_w: i32) -> smithay::utils::Rectangle<i32, Physical> {
@@ -85,6 +92,32 @@ pub fn ssd_close_btn_rect_logical(
     win_w: i32,
 ) -> smithay::utils::Rectangle<i32, smithay::utils::Logical> {
     let x = win_loc.x + win_w - CLOSE_BTN_SIZE - CLOSE_BTN_MARGIN;
+    let y = win_loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+    smithay::utils::Rectangle::new(
+        smithay::utils::Point::from((x, y)),
+        (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
+    )
+}
+
+/// W17.1: rect do botao maximize (esquerda do close) em coordenadas Logicas.
+pub fn ssd_max_btn_rect_logical(
+    win_loc: smithay::utils::Point<i32, smithay::utils::Logical>,
+    win_w: i32,
+) -> smithay::utils::Rectangle<i32, smithay::utils::Logical> {
+    let x = win_loc.x + win_w - CLOSE_BTN_SIZE * 2 - CLOSE_BTN_MARGIN - BTN_GAP;
+    let y = win_loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+    smithay::utils::Rectangle::new(
+        smithay::utils::Point::from((x, y)),
+        (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
+    )
+}
+
+/// W17.1: rect do botao minimize (esquerda do maximize) em coordenadas Logicas.
+pub fn ssd_min_btn_rect_logical(
+    win_loc: smithay::utils::Point<i32, smithay::utils::Logical>,
+    win_w: i32,
+) -> smithay::utils::Rectangle<i32, smithay::utils::Logical> {
+    let x = win_loc.x + win_w - CLOSE_BTN_SIZE * 3 - CLOSE_BTN_MARGIN - BTN_GAP * 2;
     let y = win_loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
     smithay::utils::Rectangle::new(
         smithay::utils::Point::from((x, y)),
@@ -140,7 +173,7 @@ pub fn titlebar_elements(
             Kind::Unspecified,
         ));
 
-        // Close button.
+        // Close button (vermelho, direita).
         let btn_rect = close_btn_rect(
             smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H)),
             win_w,
@@ -150,6 +183,38 @@ pub fn titlebar_elements(
             btn_rect,
             0,
             btn_color,
+            Kind::Unspecified,
+        ));
+
+        // W17.1: Maximize button (verde, esquerda do close).
+        let max_color = Color32F::new(BTN_MAX_COLOR[0], BTN_MAX_COLOR[1], BTN_MAX_COLOR[2], BTN_MAX_COLOR[3]);
+        let max_x = loc.x + win_w - CLOSE_BTN_SIZE * 2 - CLOSE_BTN_MARGIN - BTN_GAP;
+        let max_y = loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+        let max_rect: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((max_x, max_y)).to_physical_precise_round(1.0),
+            (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
+        );
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            max_rect,
+            0,
+            max_color,
+            Kind::Unspecified,
+        ));
+
+        // W17.1: Minimize button (amarelo, esquerda do maximize).
+        let min_color = Color32F::new(BTN_MIN_COLOR[0], BTN_MIN_COLOR[1], BTN_MIN_COLOR[2], BTN_MIN_COLOR[3]);
+        let min_x = loc.x + win_w - CLOSE_BTN_SIZE * 3 - CLOSE_BTN_MARGIN - BTN_GAP * 2;
+        let min_y = loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+        let min_rect: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((min_x, min_y)).to_physical_precise_round(1.0),
+            (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
+        );
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            min_rect,
+            0,
+            min_color,
             Kind::Unspecified,
         ));
     }
@@ -932,3 +997,39 @@ pub fn snap_preview_element(
     SolidColorRenderElement::new(Id::new(), geo, 0, color, Kind::Unspecified)
 }
 
+
+
+#[cfg(test)]
+mod ssd_btn_tests {
+    use super::*;
+    use smithay::utils::Point;
+
+    /// W17.1: SSD titlebar deve ter 3 rects nao-sobrepostos (min, max, close).
+    #[test]
+    fn titlebar_has_three_buttons_per_ssd_window() {
+        let loc: Point<i32, smithay::utils::Logical> = Point::from((100, 200));
+        let win_w = 400;
+        let close = ssd_close_btn_rect_logical(loc, win_w);
+        let max = ssd_max_btn_rect_logical(loc, win_w);
+        let min = ssd_min_btn_rect_logical(loc, win_w);
+
+        // Cada rect tem o tamanho correto.
+        assert_eq!(close.size.w, CLOSE_BTN_SIZE);
+        assert_eq!(max.size.w, CLOSE_BTN_SIZE);
+        assert_eq!(min.size.w, CLOSE_BTN_SIZE);
+
+        // Order esquerda->direita: min < max < close (no eixo x).
+        assert!(min.loc.x < max.loc.x, "minimize deve ficar a esquerda de maximize");
+        assert!(max.loc.x < close.loc.x, "maximize deve ficar a esquerda de close");
+
+        // Nao sobrepoem (gap entre eles).
+        assert!(min.loc.x + min.size.w <= max.loc.x, "min e max nao podem sobrepor");
+        assert!(max.loc.x + max.size.w <= close.loc.x, "max e close nao podem sobrepor");
+
+        // Todos dentro da titlebar (y entre [loc.y - TITLEBAR_H, loc.y]).
+        for r in [close, max, min] {
+            assert!(r.loc.y >= loc.y - TITLEBAR_H);
+            assert!(r.loc.y + r.size.h <= loc.y);
+        }
+    }
+}

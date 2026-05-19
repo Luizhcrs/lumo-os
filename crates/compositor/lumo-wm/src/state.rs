@@ -516,6 +516,32 @@ impl LumoState {
             LumoCommand::SyntheticKeyCombo { keys } => {
                 self.handle_synthetic_key_combo(&keys);
             }
+            LumoCommand::ToggleMaximize => {
+                // W17.1: toggle fullscreen no toplevel focado.
+                use smithay::wayland::seat::WaylandFocus;
+                use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
+                let kb = self.keyboard.clone();
+                if let Some(focused) = kb.current_focus() {
+                    let win = self.space.elements()
+                        .find(|w| w.wl_surface().map(|s| *s == focused).unwrap_or(false))
+                        .cloned();
+                    if let Some(w) = win {
+                        if let Some(tl) = w.toplevel() {
+                            let is_fs = tl.current_state().states.contains(XdgState::Fullscreen);
+                            tl.with_pending_state(|st| {
+                                if is_fs { st.states.unset(XdgState::Fullscreen); }
+                                else { st.states.set(XdgState::Fullscreen); }
+                            });
+                            tl.send_configure();
+                            tracing::info!(was_fs = is_fs, "W17.1: ToggleMaximize IPC");
+                        }
+                    }
+                }
+            }
+            LumoCommand::MinimizeFocused => {
+                // W17.1: stub. Sem iconify protocol Wayland estavel; loga apenas.
+                tracing::info!("W17.1: MinimizeFocused IPC (stub, no protocol)");
+            }
         }
     }
 

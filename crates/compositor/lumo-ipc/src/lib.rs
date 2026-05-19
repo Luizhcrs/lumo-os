@@ -76,6 +76,13 @@ pub enum LumoCommand {
     /// SI.1: input sintetico -- atalho. Pressiona `keys` em ordem,
     /// pequena pausa, libera em ordem reversa. Codigos evdev KEY_*.
     SyntheticKeyCombo { keys: Vec<u32> },
+    /// W17.1: toggle maximize/fullscreen no toplevel com foco.
+    /// Sem identifier de surface: usa focused toplevel (mesma logica de
+    /// `CloseFocusedToplevel`). Bridge HTTP usa pra remotar a acao.
+    ToggleMaximize,
+    /// W17.1: minimize/iconify (stub) no toplevel com foco. Sem Wayland
+    /// iconify protocol estavel; loga info e nao altera estado.
+    MinimizeFocused,
 }
 
 pub fn default_socket_path() -> Option<std::path::PathBuf> {

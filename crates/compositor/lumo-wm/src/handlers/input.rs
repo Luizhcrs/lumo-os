@@ -236,7 +236,8 @@ impl LumoState {
                     // T1.1: hit-test SSD titlebar -- BTN_LEFT e BTN_RIGHT.
                     {
                         use crate::backend::render_common::{
-                            ssd_close_btn_rect_logical, ssd_titlebar_rect_logical,
+                            ssd_close_btn_rect_logical, ssd_max_btn_rect_logical,
+                            ssd_min_btn_rect_logical, ssd_titlebar_rect_logical,
                         };
                         use smithay::input::pointer::Focus;
                         let ptr_pos = self.pointer_location.to_i32_round();
@@ -306,6 +307,30 @@ impl LumoState {
                             let loc = self.space.element_location(window).unwrap_or_default();
                             let geo = window.geometry();
                             let close_rect = ssd_close_btn_rect_logical(loc, geo.size.w);
+                            let max_rect = ssd_max_btn_rect_logical(loc, geo.size.w);
+                            let min_rect = ssd_min_btn_rect_logical(loc, geo.size.w);
+
+                            // W17.1: minimize button (amarelo) -- stub log ate iconify protocol.
+                            if button == 0x110 && min_rect.contains(ptr_pos) {
+                                tracing::info!("W17.1: minimize click (stub, no Wayland iconify protocol)");
+                                ssd_handled = true;
+                                break;
+                            }
+                            // W17.1: maximize button (verde) -- toggle fullscreen via xdg_toplevel state.
+                            if button == 0x110 && max_rect.contains(ptr_pos) {
+                                if let Some(tl) = window.toplevel() {
+                                    use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
+                                    let is_fs = tl.current_state().states.contains(XdgState::Fullscreen);
+                                    tl.with_pending_state(|st| {
+                                        if is_fs { st.states.unset(XdgState::Fullscreen); }
+                                        else { st.states.set(XdgState::Fullscreen); }
+                                    });
+                                    tl.send_configure();
+                                    tracing::info!(was_fs = is_fs, "W17.1: maximize toggle fullscreen");
+                                }
+                                ssd_handled = true;
+                                break;
+                            }
                             if button == 0x110 && close_rect.contains(ptr_pos) {
                                 if let Some(toplevel) = window.toplevel() { toplevel.send_close(); }
                                 ssd_handled = true;
@@ -882,6 +907,31 @@ impl LumoState {
         let serial = SERIAL_COUNTER.next_serial();
         let time = self.clock.now().as_millis();
         let state = if pressed { ButtonState::Pressed } else { ButtonState::Released };
+
+        // SI.1.fix: ao PRESSIONAR sobre toplevel xdg-shell, raise + focus
+        // (mesmo flow do PointerButton real). Sem isso clients nao recebem
+        // o evento + focus de teclado nao acompanha o clique.
+        if pressed {
+            if let Some((surface, _)) = self.surface_under(self.pointer_location) {
+                use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
+                let is_toplevel = smithay::wayland::compositor::with_states(
+                    &surface,
+                    |states| states.data_map.get::<XdgToplevelSurfaceData>().is_some(),
+                );
+                if is_toplevel {
+                    let win_to_raise = self.space.elements()
+                        .find(|w| w.wl_surface().map(|s| *s == surface).unwrap_or(false))
+                        .cloned();
+                    if let Some(win) = win_to_raise {
+                        self.space.raise_element(&win, true);
+                    }
+                    let new_focus = self.focus_manager.click_toplevel(surface);
+                    let kb = self.keyboard.clone();
+                    kb.set_focus(self, new_focus, serial);
+                }
+            }
+        }
+
         let pointer = self.pointer.clone();
         pointer.button(
             self,
