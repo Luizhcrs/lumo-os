@@ -908,6 +908,97 @@ impl LumoState {
         let time = self.clock.now().as_millis();
         let state = if pressed { ButtonState::Pressed } else { ButtonState::Released };
 
+        // SI.2: replica do PointerButton real -- SSD btn hit-test +
+        // titlebar drag grab. Sem isso clicks via IPC sintetico nao
+        // acionam close/max/min nem MoveSurfaceGrab.
+        // Escopo minimo (sem titlebar_menu popup, sem overview, sem
+        // dismiss popups -- esses ficam para evolucao incremental).
+        if pressed {
+            use crate::backend::render_common::{
+                ssd_close_btn_rect_logical, ssd_max_btn_rect_logical,
+                ssd_min_btn_rect_logical, ssd_titlebar_rect_logical,
+            };
+            use smithay::input::pointer::Focus;
+            let ptr_pos = self.pointer_location.to_i32_round();
+            let mut ssd_handled = false;
+
+            let windows: Vec<_> = self.space.elements().cloned().collect();
+            for window in &windows {
+                let surf_opt = window.toplevel().map(|t| t.wl_surface().clone());
+                let surf = match surf_opt { Some(s) => s, None => continue };
+                if !self.ssd_windows.contains(&surf) { continue; }
+                let loc = self.space.element_location(window).unwrap_or_default();
+                let geo = window.geometry();
+                let close_rect = ssd_close_btn_rect_logical(loc, geo.size.w);
+                let max_rect = ssd_max_btn_rect_logical(loc, geo.size.w);
+                let min_rect = ssd_min_btn_rect_logical(loc, geo.size.w);
+
+                if button == 0x110 && min_rect.contains(ptr_pos) {
+                    tracing::info!("SI.2: synthetic minimize click (stub)");
+                    ssd_handled = true;
+                    break;
+                }
+                if button == 0x110 && max_rect.contains(ptr_pos) {
+                    if let Some(tl) = window.toplevel() {
+                        use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
+                        let is_fs = tl.current_state().states.contains(XdgState::Fullscreen);
+                        tl.with_pending_state(|st| {
+                            if is_fs { st.states.unset(XdgState::Fullscreen); }
+                            else { st.states.set(XdgState::Fullscreen); }
+                        });
+                        tl.send_configure();
+                        tracing::info!(was_fs = is_fs, "SI.2: synthetic maximize toggle");
+                    }
+                    ssd_handled = true;
+                    break;
+                }
+                if button == 0x110 && close_rect.contains(ptr_pos) {
+                    if let Some(toplevel) = window.toplevel() { toplevel.send_close(); }
+                    ssd_handled = true;
+                    break;
+                }
+                let title_rect = ssd_titlebar_rect_logical(loc, geo.size.w);
+                if button == 0x110 && title_rect.contains(ptr_pos) {
+                    self.space.raise_element(window, true);
+                    if let Some(tl) = window.toplevel() {
+                        let surf_raise = tl.wl_surface().clone();
+                        let kb_raise = self.keyboard.clone();
+                        kb_raise.set_focus(self, Some(surf_raise), serial);
+                    }
+                    let pointer = self.pointer.clone();
+                    let start_data = smithay::input::pointer::GrabStartData {
+                        focus: pointer.current_focus().map(|s| {
+                            let fl = self
+                                .surface_under(self.pointer_location)
+                                .map(|(_, l)| l.to_f64())
+                                .unwrap_or_default();
+                            (s, fl)
+                        }),
+                        button: 0x110,
+                        location: self.pointer_location,
+                    };
+                    let initial_window_location = loc;
+                    let grab = crate::input::move_grab::MoveSurfaceGrab {
+                        start_data,
+                        window: window.clone(),
+                        initial_window_location,
+                    };
+                    pointer.set_grab(self, grab, serial, Focus::Clear);
+                    ssd_handled = true;
+                    break;
+                }
+            }
+
+            if ssd_handled {
+                let pointer = self.pointer.clone();
+                pointer.frame(self);
+                #[cfg(feature = "drm-backend")]
+                { self.drm_force_repaint = true; }
+                tracing::debug!(button = format!("0x{:x}", button), "SI.2: synthetic consumed by SSD/grab");
+                return;
+            }
+        }
+
         // SI.1.fix: ao PRESSIONAR sobre toplevel xdg-shell, raise + focus
         // (mesmo flow do PointerButton real). Sem isso clients nao recebem
         // o evento + focus de teclado nao acompanha o clique.
