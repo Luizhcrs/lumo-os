@@ -1,0 +1,168 @@
+/* Lumo GTK-4.0 theme -- dark variant
+ * libadwaita-compatible subset.
+ * Palette: ink_deep #0a0a0c, secondary #1a1a1c, pearl #f5f5f7, accent #3b82f6
+ */
+
+/* === Base === */
+window,
+.background {
+  background-color: #0a0a0c;
+  color: #f5f5f7;
+}
+
+/* === Headerbar === */
+headerbar {
+  background-color: #1a1a1c;
+  color: #f5f5f7;
+  border-bottom: 1px solid #3a3a3c;
+}
+
+/* === Button === */
+button {
+  background-color: #1a1a1c;
+  color: #f5f5f7;
+  border: 1px solid #3a3a3c;
+  border-radius: 8px;
+  padding: 8px 16px;
+}
+
+button:hover {
+  background-color: #2a2a2e;
+}
+
+button:active {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+button.suggested-action {
+  background-color: #3b82f6;
+  color: #ffffff;
+  border-color: transparent;
+}
+
+button.suggested-action:hover {
+  background-color: #2563eb;
+}
+
+button.destructive-action {
+  background-color: #c0392b;
+  color: #ffffff;
+  border-color: transparent;
+}
+
+button:disabled {
+  opacity: 0.4;
+}
+
+/* === Entry === */
+entry {
+  background-color: #1a1a1c;
+  color: #f5f5f7;
+  border: 1px solid #3a3a3c;
+  border-radius: 6px;
+  padding: 8px 12px;
+  caret-color: #3b82f6;
+}
+
+entry:focus {
+  border-color: #3b82f6;
+}
+
+entry selection {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+/* === Label === */
+label {
+  color: #f5f5f7;
+}
+
+label:disabled {
+  color: rgba(245, 245, 247, 0.5);
+}
+
+/* === List === */
+listview,
+list {
+  background-color: #0a0a0c;
+  color: #f5f5f7;
+}
+
+row {
+  padding: 6px 12px;
+}
+
+row:hover {
+  background-color: #1a1a1c;
+}
+
+row:selected {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+/* === Popover / Menu === */
+popover {
+  background-color: rgba(26, 26, 28, 0.93);
+  color: #f5f5f7;
+  border-radius: 8px;
+  border: 1px solid #3a3a3c;
+}
+
+/* === Scrollbar === */
+scrollbar slider {
+  background-color: #3a3a3c;
+  border-radius: 4px;
+}
+
+scrollbar slider:hover {
+  background-color: #4a4a4e;
+}
+
+/* === Switch === */
+switch {
+  background-color: #3a3a3c;
+  border-radius: 12px;
+}
+
+switch:checked {
+  background-color: #3b82f6;
+}
+
+/* === Scale === */
+scale trough {
+  background-color: #1a1a1c;
+}
+
+scale highlight {
+  background-color: #3b82f6;
+}
+
+/* === Misc === */
+separator {
+  background-color: #3a3a3c;
+}
+
+tooltip {
+  background-color: #1a1a1c;
+  color: #f5f5f7;
+  border: 1px solid #3a3a3c;
+  border-radius: 6px;
+}
+
+.dim-label {
+  color: rgba(245, 245, 247, 0.55);
+}
+
+.card {
+  background-color: #1a1a1c;
+  border-radius: 8px;
+  border: 1px solid #3a3a3c;
+}
+
+/* libadwaita accent color override */
+@define-color accent_color #3b82f6;
+@define-color accent_bg_color #3b82f6;
+@define-color accent_fg_color #ffffff;
