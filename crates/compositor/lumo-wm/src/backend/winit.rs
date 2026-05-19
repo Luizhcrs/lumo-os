@@ -256,6 +256,7 @@ fn redraw(
         corner_shader: state.corner_shader.as_ref(),
         ssd_windows: &state.ssd_windows,
         titlebar_menu: state.titlebar_menu.as_ref().map(|(_, pos, hover)| (*pos, *hover)),
+        snap_preview: state.snap_preview,
     };
     // A19: lista combinada (chrome + space + wallpaper). Passamos space iter
     // vazio pra render_output, todos elementos vao via custom_elements --

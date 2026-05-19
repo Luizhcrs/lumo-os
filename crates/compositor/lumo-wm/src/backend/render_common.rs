@@ -483,6 +483,8 @@ pub struct OverlayInputs<'a> {
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
+    /// W9.B: snap zone preview during window drag.
+    pub snap_preview: Option<crate::input::move_grab::SnapZone>,
 }
 
 /// Constroi overlay completo (cursor + corner mask + shadows).
@@ -559,6 +561,12 @@ pub fn build_overlay(
             overlay.push(LumoCustomElement::Solid(elem));
         }
     }
+    // W9.B: snap zone preview overlay.
+    if let Some(zone) = inputs.snap_preview {
+        overlay.push(LumoCustomElement::Solid(
+            snap_preview_element(zone, inputs.output_w, inputs.output_h)
+        ));
+    }
 
     overlay
 }
@@ -588,6 +596,8 @@ pub struct DrmCollectInputs<'a> {
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
+    /// W9.B: snap zone preview during window drag.
+    pub snap_preview: Option<crate::input::move_grab::SnapZone>,
 }
 
 /// Coleta TODOS elementos pra render direto no DrmCompositor: chrome
@@ -677,6 +687,12 @@ pub fn collect_drm_elements(
         for elem in titlebar_menu_elements(menu_pos, hover) {
             out.push(LumoCustomElement::Solid(elem));
         }
+    }
+    // W9.B: snap zone preview overlay.
+    if let Some(zone) = inputs.snap_preview {
+        out.push(LumoCustomElement::Solid(
+            snap_preview_element(zone, inputs.output_w, inputs.output_h)
+        ));
     }
 
     // 4. Toplevels + layer-shell via space_render_elements.
@@ -793,6 +809,12 @@ pub fn build_winit_elements(
             out.push(LumoCustomElement::Solid(elem));
         }
     }
+    // W9.B: snap zone preview overlay.
+    if let Some(zone) = inputs.snap_preview {
+        out.push(LumoCustomElement::Solid(
+            snap_preview_element(zone, inputs.output_w, inputs.output_h)
+        ));
+    }
 
     // 4. Space (toplevels + layer-shell + popups).
     //    A38: toplevels (Element variant) recebem SDF corner radius.
@@ -864,3 +886,20 @@ pub fn collect_cursor_only_elements(
 
     out
 }
+
+/// W9.B: render snap zone preview overlay quad (accent color alpha 0.3).
+pub fn snap_preview_element(
+    zone: crate::input::move_grab::SnapZone,
+    out_w: i32,
+    out_h: i32,
+) -> SolidColorRenderElement {
+    let accent = lumo_foundation::LFTokens::EMERALD_500;
+    let color = Color32F::new(accent[0], accent[1], accent[2], 0.30);
+    let (x, y, w, h) = zone.layout(out_w, out_h);
+    let geo: Rectangle<i32, Physical> = Rectangle::new(
+        Point::from((x, y)).to_physical_precise_round(1.0),
+        (w, h).into(),
+    );
+    SolidColorRenderElement::new(Id::new(), geo, 0, color, Kind::Unspecified)
+}
+

@@ -1,9 +1,8 @@
-//! MoveSurfaceGrab — pointer grab que move toplevel seguindo cursor.
+//! MoveSurfaceGrab: pointer grab that moves a toplevel following the cursor.
 //!
-//! Ativado quando cliente emite xdg_toplevel.move (CSD header drag).
-//! Implementa PointerGrab: em cada MotionEvent, calcula delta desde
-//! o inicio do grab e reposiciona o Window no Space.
-//! Libera o grab quando o botao que iniciou eh solto.
+//! W9.B: snap edges (Aero Snap).
+//! During drag, pointer near output edges triggers snap preview stored in
+//! LumoState.snap_preview. On button release at edge -> apply layout.
 
 use smithay::desktop::Window;
 use smithay::input::pointer::{
@@ -14,17 +13,63 @@ use smithay::input::pointer::{
 };
 use smithay::input::pointer::Focus;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
-use smithay::utils::{Logical, Point};
+use smithay::utils::{Logical, Point, Size};
 
 use crate::state::LumoState;
 
-/// Grab ativo enquanto usuario arrasta janela pelo CSD header.
+/// Snap zone detected during drag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapZone {
+    Left,
+    Right,
+    Maximize,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+impl SnapZone {
+    pub fn detect(pos: Point<f64, Logical>, out_w: i32, out_h: i32) -> Option<Self> {
+        const EDGE_PX: f64 = 8.0;
+        let x = pos.x;
+        let y = pos.y;
+        let near_left   = x < EDGE_PX;
+        let near_right  = x > (out_w as f64 - EDGE_PX);
+        let near_top    = y < EDGE_PX;
+        let near_bottom = y > (out_h as f64 - EDGE_PX);
+        match (near_left, near_right, near_top, near_bottom) {
+            (true,  false, true,  false) => Some(SnapZone::TopLeft),
+            (false, true,  true,  false) => Some(SnapZone::TopRight),
+            (true,  false, false, true)  => Some(SnapZone::BottomLeft),
+            (false, true,  false, true)  => Some(SnapZone::BottomRight),
+            (true,  false, false, false) => Some(SnapZone::Left),
+            (false, true,  false, false) => Some(SnapZone::Right),
+            (false, false, true,  false) => Some(SnapZone::Maximize),
+            _ => None,
+        }
+    }
+
+    /// Returns (x, y, w, h) layout in logical pixels.
+    pub fn layout(self, out_w: i32, out_h: i32) -> (i32, i32, i32, i32) {
+        let hw = out_w / 2;
+        let hh = out_h / 2;
+        match self {
+            SnapZone::Left        => (0,  0,  hw,          out_h),
+            SnapZone::Right       => (hw, 0,  out_w - hw,  out_h),
+            SnapZone::Maximize    => (0,  0,  out_w,       out_h),
+            SnapZone::TopLeft     => (0,  0,  hw,          hh),
+            SnapZone::TopRight    => (hw, 0,  out_w - hw,  hh),
+            SnapZone::BottomLeft  => (0,  hh, hw,          out_h - hh),
+            SnapZone::BottomRight => (hw, hh, out_w - hw,  out_h - hh),
+        }
+    }
+}
+
+/// Grab active while user drags a window via CSD/SSD header.
 pub struct MoveSurfaceGrab {
-    /// Dados do click que iniciou o grab.
     pub start_data: GrabStartData<LumoState>,
-    /// Janela que esta sendo movida.
     pub window: Window,
-    /// Posicao inicial da janela no espaco (no inicio do grab).
     pub initial_window_location: Point<i32, Logical>,
 }
 
@@ -36,13 +81,18 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
         _focus: Option<(WlSurface, Point<f64, Logical>)>,
         event: &MotionEvent,
     ) {
-        // Sem foco durante drag (cursor navega livre).
         handle.motion(data, None, event);
 
         let delta = event.location - self.start_data.location;
         let new_loc = self.initial_window_location + delta.to_i32_round();
-
         data.space.map_element(self.window.clone(), new_loc, true);
+
+        // W9.B: update snap preview.
+        let (out_w, out_h) = data.space.outputs().next()
+            .and_then(|o| o.current_mode())
+            .map(|m| (m.size.w, m.size.h))
+            .unwrap_or((1920, 1080));
+        data.snap_preview = SnapZone::detect(event.location, out_w, out_h);
 
         #[cfg(feature = "drm-backend")]
         {
@@ -68,10 +118,26 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
     ) {
         handle.button(data, event);
 
-        // Soltar grab quando o botao que iniciou for liberado.
         if event.button == self.start_data.button
             && event.state == smithay::backend::input::ButtonState::Released
         {
+            if let Some(zone) = data.snap_preview.take() {
+                let (out_w, out_h) = data.space.outputs().next()
+                    .and_then(|o| o.current_mode())
+                    .map(|m| (m.size.w, m.size.h))
+                    .unwrap_or((1920, 1080));
+                let (sx, sy, sw, sh) = zone.layout(out_w, out_h);
+                if let Some(tl) = self.window.toplevel() {
+                    tl.with_pending_state(|state| {
+                        state.size = Some(Size::from((sw, sh)));
+                    });
+                    let _ = tl.send_configure();
+                }
+                data.space.map_element(self.window.clone(), smithay::utils::Point::<i32, smithay::utils::Logical>::from((sx, sy)), true);
+                tracing::info!(?zone, sx, sy, sw, sh, "W9.B: snap applied");
+            } else {
+                data.snap_preview = None;
+            }
             handle.unset_grab(self, data, event.serial, event.time, true);
         }
     }
@@ -169,8 +235,86 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
         &self.start_data
     }
 
-    fn unset(&mut self, _data: &mut LumoState) {
-        // No-op: nada precisa reverter quando grab termina (Space mantem
-        // ultima posicao mapeada pelo motion).
+    fn unset(&mut self, data: &mut LumoState) {
+        data.snap_preview = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use smithay::utils::Point;
+
+    fn pt(x: f64, y: f64) -> Point<f64, Logical> { Point::from((x, y)) }
+
+    #[test]
+    fn snap_left_edge() {
+        assert_eq!(SnapZone::detect(pt(4.0, 540.0), 1920, 1080), Some(SnapZone::Left));
+    }
+
+    #[test]
+    fn snap_right_edge() {
+        assert_eq!(SnapZone::detect(pt(1916.0, 540.0), 1920, 1080), Some(SnapZone::Right));
+    }
+
+    #[test]
+    fn snap_top_maximize() {
+        assert_eq!(SnapZone::detect(pt(960.0, 4.0), 1920, 1080), Some(SnapZone::Maximize));
+    }
+
+    #[test]
+    fn snap_top_left_corner() {
+        assert_eq!(SnapZone::detect(pt(4.0, 4.0), 1920, 1080), Some(SnapZone::TopLeft));
+    }
+
+    #[test]
+    fn snap_top_right_corner() {
+        assert_eq!(SnapZone::detect(pt(1916.0, 4.0), 1920, 1080), Some(SnapZone::TopRight));
+    }
+
+    #[test]
+    fn snap_bottom_left_corner() {
+        assert_eq!(SnapZone::detect(pt(4.0, 1076.0), 1920, 1080), Some(SnapZone::BottomLeft));
+    }
+
+    #[test]
+    fn snap_bottom_right_corner() {
+        assert_eq!(SnapZone::detect(pt(1916.0, 1076.0), 1920, 1080), Some(SnapZone::BottomRight));
+    }
+
+    #[test]
+    fn snap_none_center() {
+        assert_eq!(SnapZone::detect(pt(960.0, 540.0), 1920, 1080), None);
+    }
+
+    #[test]
+    fn snap_left_layout() {
+        assert_eq!(SnapZone::Left.layout(1920, 1080), (0, 0, 960, 1080));
+    }
+
+    #[test]
+    fn snap_maximize_layout() {
+        assert_eq!(SnapZone::Maximize.layout(1920, 1080), (0, 0, 1920, 1080));
+    }
+
+    #[test]
+    fn snap_right_x_and_width() {
+        let (x, _, w, _) = SnapZone::Right.layout(1920, 1080);
+        assert_eq!(x, 960);
+        assert_eq!(w, 960);
+    }
+
+    #[test]
+    fn snap_top_left_quarter() {
+        assert_eq!(SnapZone::TopLeft.layout(1920, 1080), (0, 0, 960, 540));
+    }
+
+    #[test]
+    fn quarter_areas_fill_screen() {
+        let (_, _, w1, h1) = SnapZone::TopLeft.layout(1920, 1080);
+        let (_, _, w2, _)  = SnapZone::TopRight.layout(1920, 1080);
+        let (_, _, _,  h3) = SnapZone::BottomLeft.layout(1920, 1080);
+        assert_eq!(w1 + w2, 1920);
+        assert_eq!(h1 + h3, 1080);
     }
 }
