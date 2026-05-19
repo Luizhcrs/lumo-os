@@ -14,6 +14,7 @@
 
 pub mod backend;
 pub mod focus;
+pub mod perf;
 pub mod hardware;
 pub mod cursor;
 pub mod handlers;
