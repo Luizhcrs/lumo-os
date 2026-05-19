@@ -108,3 +108,32 @@ pub fn try_load_first_available(preferred_size: u32) -> Option<LoadedCursor> {
     tracing::warn!("nenhum tema xcursor encontrado - fallback SolidColor stub");
     None
 }
+
+/// Loads a cursor by a specific xcursor name (not the default arrow).
+/// Falls back to first available theme if specific name not in theme.
+pub fn try_load_named(name: &str, preferred_size: u32) -> Option<LoadedCursor> {
+    let themes = ["default", "Adwaita", "Bibata-Modern-Classic", "Qogir"];
+    for t in themes.iter() {
+        let theme = xcursor::CursorTheme::load(t);
+        if let Some(path) = theme.load_icon(name) {
+            let bytes = std::fs::read(&path).ok()?;
+            let images = xcursor::parser::parse_xcursor(&bytes)?;
+            if images.is_empty() { continue; }
+            let img = images.iter()
+                .min_by_key(|i| (i.size as i32 - preferred_size as i32).abs())
+                .unwrap_or(&images[0]);
+            let mut pixels = img.pixels_rgba.clone();
+            premultiply_rgba_inplace(&mut pixels);
+            return Some(LoadedCursor {
+                pixels,
+                width: img.width,
+                height: img.height,
+                hotspot_x: img.xhot as i32,
+                hotspot_y: img.yhot as i32,
+                theme_name: t.to_string(),
+            });
+        }
+    }
+    None
+}
+

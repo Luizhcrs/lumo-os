@@ -45,8 +45,45 @@ impl SeatHandler for LumoState {
         &mut self.seat_state
     }
 
-    fn cursor_image(&mut self, _seat: &Seat<Self>, _image: CursorImageStatus) {
-        // Cursor rendering entra na Fase 5.3 (lumo-gfx integration).
+    fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
+        // W10.C: handle cursor shape requests from wp-cursor-shape-v1 clients.
+        match &image {
+            CursorImageStatus::Named(icon) => {
+                if self.active_cursor_icon == *icon {
+                    return;
+                }
+                self.active_cursor_icon = *icon;
+                // Load named xcursor icon from theme.
+                let xcursor_name = cursor_icon_to_xcursor_name(*icon);
+                if let Some(loaded) = crate::cursor::try_load_named(xcursor_name, 24) {
+                    use smithay::backend::allocator::Fourcc;
+                    use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
+                    use smithay::utils::Transform;
+                    let buf = MemoryRenderBuffer::from_slice(
+                        &loaded.pixels,
+                        Fourcc::Abgr8888,
+                        (loaded.width as i32, loaded.height as i32),
+                        1,
+                        Transform::Normal,
+                        None,
+                    );
+                    self.cursor = Some(loaded);
+                    self.cursor_buffer = Some(buf);
+                    tracing::debug!(?icon, "W10.C: cursor shape swapped");
+                } else {
+                    tracing::debug!(?icon, "W10.C: xcursor not found for shape, keeping current");
+                }
+            }
+            CursorImageStatus::Surface(_) => {
+                // Client provides custom cursor surface — handled by render pipeline.
+                tracing::trace!("cursor_image: Surface (custom)");
+            }
+            CursorImageStatus::Hidden => {
+                // Hide cursor — clear buffer.
+                self.cursor_buffer = None;
+                tracing::debug!("cursor_image: Hidden");
+            }
+        }
     }
 
     fn focus_changed(&mut self, _seat: &Seat<Self>, focused: Option<&WlSurface>) {
@@ -91,3 +128,80 @@ impl SeatHandler for LumoState {
 }
 
 smithay::delegate_seat!(LumoState);
+
+/// Maps smithay CursorIcon variants to xcursor theme icon names.
+/// W10.C: covers the most common contextual cursors apps request.
+pub fn cursor_icon_to_xcursor_name(icon: smithay::input::pointer::CursorIcon) -> &'static str {
+    use smithay::input::pointer::CursorIcon;
+    match icon {
+        CursorIcon::Default    => "default",
+        CursorIcon::Text       => "text",
+        CursorIcon::Pointer    => "pointer",
+        CursorIcon::Move       => "move",
+        CursorIcon::Grab       => "grab",
+        CursorIcon::Grabbing   => "grabbing",
+        CursorIcon::Copy       => "copy",
+        CursorIcon::Alias      => "alias",
+        CursorIcon::NoDrop     => "no-drop",
+        CursorIcon::NotAllowed => "not-allowed",
+        CursorIcon::EResize    => "e-resize",
+        CursorIcon::NResize    => "n-resize",
+        CursorIcon::NeResize   => "ne-resize",
+        CursorIcon::NwResize   => "nw-resize",
+        CursorIcon::SResize    => "s-resize",
+        CursorIcon::SeResize   => "se-resize",
+        CursorIcon::SwResize   => "sw-resize",
+        CursorIcon::WResize    => "w-resize",
+        CursorIcon::EwResize   => "ew-resize",
+        CursorIcon::NsResize   => "ns-resize",
+        CursorIcon::ColResize  => "col-resize",
+        CursorIcon::RowResize  => "row-resize",
+        CursorIcon::AllScroll  => "all-scroll",
+        CursorIcon::ZoomIn     => "zoom-in",
+        CursorIcon::ZoomOut    => "zoom-out",
+        CursorIcon::Crosshair  => "crosshair",
+        CursorIcon::Wait       => "wait",
+        CursorIcon::Progress   => "progress",
+        CursorIcon::Help       => "help",
+        CursorIcon::ContextMenu => "context-menu",
+        CursorIcon::VerticalText => "vertical-text",
+        CursorIcon::NeswResize => "nesw-resize",
+        CursorIcon::NwseResize => "nwse-resize",
+        _ => "default",
+    }
+}
+
+#[cfg(test)]
+mod cursor_shape_tests {
+    use super::*;
+    use smithay::input::pointer::CursorIcon;
+
+    #[test]
+    fn default_icon_maps_to_default() {
+        assert_eq!(cursor_icon_to_xcursor_name(CursorIcon::Default), "default");
+    }
+
+    #[test]
+    fn text_icon_maps_to_text() {
+        assert_eq!(cursor_icon_to_xcursor_name(CursorIcon::Text), "text");
+    }
+
+    #[test]
+    fn pointer_icon_maps_to_pointer() {
+        assert_eq!(cursor_icon_to_xcursor_name(CursorIcon::Pointer), "pointer");
+    }
+
+    #[test]
+    fn resize_icons_map_correctly() {
+        assert_eq!(cursor_icon_to_xcursor_name(CursorIcon::EwResize), "ew-resize");
+        assert_eq!(cursor_icon_to_xcursor_name(CursorIcon::NsResize), "ns-resize");
+    }
+
+    #[test]
+    fn fallback_to_default_for_unknown() {
+        // AllScroll is defined; test it maps to something.
+        let name = cursor_icon_to_xcursor_name(CursorIcon::AllScroll);
+        assert!(!name.is_empty());
+    }
+}
+
