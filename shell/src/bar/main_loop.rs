@@ -11,8 +11,8 @@ use std::time::{Duration, Instant};
 use chrono::{Datelike, Local};
 use smithay_client_toolkit::{
     compositor::CompositorState,
-    delegate_compositor, delegate_layer, delegate_output, delegate_pointer, delegate_registry,
-    delegate_seat, delegate_shm,
+    delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
+    delegate_registry, delegate_seat, delegate_shm,
     output::OutputState,
     registry::RegistryState,
     seat::SeatState,
@@ -41,6 +41,7 @@ delegate_output!(LumoBar);
 delegate_shm!(LumoBar);
 delegate_layer!(LumoBar);
 delegate_seat!(LumoBar);
+delegate_keyboard!(LumoBar);
 delegate_pointer!(LumoBar);
 delegate_registry!(LumoBar);
 
@@ -116,6 +117,7 @@ pub fn run() {
         running: true,
         first_configured: false,
         pointer: None,
+        keyboard: None,
         pointer_x: 0.0,
         pointer_pos: None,
         bat_hit_rect: None,
@@ -190,6 +192,11 @@ pub fn run() {
         appmenu_fallback_rect: None,
         appmenu_fallback_dropdown_rects: Vec::new(),
         appmenu_fallback_hover_idx: None,
+        // A31.3: modal de senha wifi.
+        password_modal: crate::bar::password_modal::PasswordModalState::default(),
+        pwd_confirm_rect: None,
+        pwd_cancel_rect: None,
+        nm_connect_rx: None,
     };
 
     let mut last_tick = Instant::now();
@@ -242,6 +249,28 @@ pub fn run() {
                 state.wifi_refresh_due = None;
             }
         }
+        // A31.3: poll nm_connect receiver -> se NeedPassword, abre modal de senha.
+        if let Some(ref rx) = state.nm_connect_rx {
+            match rx.try_recv() {
+                Ok(crate::bar::system_info::NmConnectResult::NeedPassword { ssid }) => {
+                    eprintln!("[lumo-bar] A31.3 NeedPassword ssid={:?} -> abrindo modal", ssid);
+                    state.password_modal.open(ssid);
+                    state.nm_connect_rx = None;
+                    // Solicita foco de teclado exclusivo enquanto modal ativo.
+                    state.layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+                    state.layer.wl_surface().commit();
+                    state.redraw(&qh);
+                }
+                Ok(_) => {
+                    state.nm_connect_rx = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    state.nm_connect_rx = None;
+                }
+            }
+        }
+
         if last_tick.elapsed() >= Duration::from_secs(30) {
             state.refresh();
             state.redraw(&qh);

@@ -351,7 +351,9 @@ impl PointerHandler for LumoBar {
                             });
                             if let Some(ssid) = hit_ssid {
                                 eprintln!("[lumo-bar] A31.2 connect ssid={}", ssid);
-                                crate::bar::system_info::nm_connect(ssid);
+                                // A31.3: guarda receiver pra checar NeedPassword no main loop.
+                                let rx_chan = crate::bar::system_info::nm_connect(ssid);
+                                self.nm_connect_rx = Some(rx_chan);
                                 self.wifi_refresh_due = Some(Instant::now() + Duration::from_millis(2500));
                                 handled = true;
                             }

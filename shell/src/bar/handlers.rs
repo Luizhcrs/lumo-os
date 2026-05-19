@@ -13,6 +13,7 @@ use smithay_client_toolkit::{
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
+        keyboard::KeyboardData,
         pointer::ThemeSpec,
         Capability, SeatHandler, SeatState,
     },
@@ -170,6 +171,8 @@ impl LumoBar {
                     1.0
                 }
             },
+            // A31.3: modal de senha wifi.
+            password_modal: self.password_modal.clone(),
         };
 
         let stride = self.width as i32 * 4;
@@ -215,6 +218,9 @@ impl LumoBar {
             // S2: fallback pill hit-rects.
             self.appmenu_fallback_rect = paint_result.appmenu_fallback_rect;
             self.appmenu_fallback_dropdown_rects = paint_result.appmenu_fallback_dropdown_rects;
+            // A31.3: modal senha hit-rects.
+            self.pwd_confirm_rect = paint_result.pwd_confirm_rect;
+            self.pwd_cancel_rect = paint_result.pwd_cancel_rect;
             let src = px.data();
             let dst = canvas;
             let n = (self.width * self.height) as usize;
@@ -367,14 +373,27 @@ impl SeatHandler for LumoBar {
                 eprintln!("[lumo-bar] pointer adquirido ThemedPointer");
             }
         }
+        // A31.3: adquire teclado pra capturar senha no modal.
+        if capability == Capability::Keyboard && self.keyboard.is_none() {
+            match self.seat_state.get_keyboard::<_, LumoBar>(qh, &seat, None) {
+                Ok(kb) => {
+                    self.keyboard = Some(kb);
+                    eprintln!("[lumo-bar] A31.3 keyboard adquirido");
+                }
+                Err(e) => eprintln!("[lumo-bar] A31.3 keyboard get falhou: {:?}", e),
+            }
+        }
     }
     fn remove_capability(
         &mut self,
         _: &Connection,
         _: &QueueHandle<Self>,
         _: wl_seat::WlSeat,
-        _: Capability,
+        cap: Capability,
     ) {
+        if cap == Capability::Keyboard {
+            self.keyboard = None;
+        }
     }
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }

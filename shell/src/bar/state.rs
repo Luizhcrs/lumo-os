@@ -25,6 +25,7 @@ use lumo_foundation::{current_bar_layout, LumoColors, LumoTheme};
 use lumo_animation::{AnimCurve, LAAnimator, LACurve};
 
 use crate::bar::dropdowns::battery::{draw_battery_dropdown, BatteryInfo};
+use crate::bar::password_modal::{draw_password_modal, PasswordModalHits, PasswordModalState};
 use crate::bar::dropdowns::brightness::{draw_brightness_dropdown, BrightnessInfo};
 use crate::bar::dropdowns::datetime::{draw_datetime_dropdown, DateTimeInfo};
 use crate::bar::dropdowns::lumo_menu::draw_lumo_menu;
@@ -74,6 +75,8 @@ pub(crate) struct BarSnapshot {
     pub dropdown_alpha: f32,
     // M2: alpha global da bar (1.0 = normal, pisca em 0.7->1.0 no F5).
     pub bar_alpha: f32,
+    // A31.3: estado do modal de senha wifi.
+    pub password_modal: PasswordModalState,
 }
 
 /// Resultado de paint_frame: posicoes calculadas pra hit-test no proximo frame.
@@ -105,6 +108,9 @@ pub(crate) struct PaintResult {
     pub wifi_disconnect_rect: Option<(f32, f32, f32, f32)>,
     pub wifi_connect_rects: Vec<(String, (f32, f32, f32, f32))>,
     pub last_click_at: Option<Instant>,
+    // A31.3: hit-rects do modal de senha wifi.
+    pub pwd_confirm_rect: Option<(f32, f32, f32, f32)>,
+    pub pwd_cancel_rect: Option<(f32, f32, f32, f32)>,
     // C5: hit-rects pills appmenu top-level (idx, rect).
     pub appmenu_pill_rects: Vec<(usize, (f32, f32, f32, f32))>,
     // C5: hit-rects subitens submenu aberto (sidx, rect).
@@ -516,6 +522,20 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
         }
     }
 
+    // A31.3: overlay modal de senha (renderizado por cima de tudo).
+    if snap.password_modal.active {
+        let mut canvas = pixmap.as_mut();
+        let modal_hits = draw_password_modal(
+            &mut canvas,
+            snap.width as f32,
+            snap.height as f32,
+            palette,
+            &snap.password_modal,
+        );
+        result.pwd_confirm_rect = modal_hits.confirm_rect;
+        result.pwd_cancel_rect = modal_hits.cancel_rect;
+    }
+
     // Suppress unused warns nos campos do snapshot (theme so usado pra debug log).
     let _ = (snap.theme, h, pill_radius_);
     result
@@ -616,6 +636,8 @@ pub(crate) struct LumoBar {
     pub running: bool,
     pub first_configured: bool,
     pub pointer: Option<ThemedPointer>,
+    // A31.3: handle de teclado (adquirido quando seat reporta Capability::Keyboard).
+    pub keyboard: Option<smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard>,
     pub pointer_x: f32,
     pub pointer_pos: Option<(f64, f64)>,
     pub bat_hit_rect: Option<(f32, f32, f32, f32)>,
@@ -677,4 +699,11 @@ pub(crate) struct LumoBar {
     // M2: animacao de fade no F5 (bar_alpha 0.7->1.0 em 250ms).
     pub refresh_anim: LAAnimator<f32>,
     pub refresh_animating: bool,
+    // A31.3: modal de senha wifi.
+    pub password_modal: PasswordModalState,
+    // A31.3: hit-rects do modal (atualizados pelo paint_frame).
+    pub pwd_confirm_rect: Option<(f32, f32, f32, f32)>,
+    pub pwd_cancel_rect: Option<(f32, f32, f32, f32)>,
+    // A31.3: receiver do thread nm_connect (None = sem conexao pendente).
+    pub nm_connect_rx: Option<std::sync::mpsc::Receiver<crate::bar::system_info::NmConnectResult>>,
 }

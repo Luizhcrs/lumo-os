@@ -406,40 +406,45 @@ pub fn nm_set_radio(on: bool) {
     });
 }
 
-/// Conecta a uma rede salva ou nova (sem senha = funciona so se salva).
-/// Async. Log saida.
-pub fn nm_connect(ssid: String) {
-    std::thread::spawn(move || {
-        // R2: log SSID exato (debug truncamento / encoding).
-        eprintln!("[lumo-bar] R2 nm_connect ssid={:?} (len={})", ssid, ssid.len());
+/// Resultado assincrono de nm_connect.
+pub enum NmConnectResult {
+    Ok,
+    NeedPassword { ssid: String },
+    Failed(String),
+}
 
-        // Tenta primeiro `nmcli con up <ssid>` (rede saved com keyring secret).
-        // Mais robusto: nao derruba conexao atual se falhar.
+/// Conecta a uma rede salva ou nova.
+/// Async. Retorna receiver que entrega NmConnectResult.
+/// A31.3: quando rede pede senha, envia NeedPassword -> main loop abre modal.
+pub fn nm_connect(ssid: String) -> std::sync::mpsc::Receiver<NmConnectResult> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        eprintln!("[lumo-bar] R2 nm_connect ssid={:?} (len={})", ssid, ssid.len());
         let up = std::process::Command::new("nmcli")
             .args(["con", "up", &ssid])
             .output();
         match up {
             Ok(o) if o.status.success() => {
                 eprintln!("[lumo-bar] nmcli con up {:?} OK", ssid);
+                let _ = tx.send(NmConnectResult::Ok);
                 return;
             }
             Ok(o) => {
                 let stderr = String::from_utf8_lossy(&o.stderr);
                 let stdout = String::from_utf8_lossy(&o.stdout);
-                // R2: checar "Secrets were required" em stderr e stdout.
                 if stderr.contains("Secrets were required") || stdout.contains("Secrets were required") {
-                    eprintln!("[lumo-bar] nm_connect {:?}: senha necessaria (A31.3 modal pendente)", ssid);
+                    eprintln!("[lumo-bar] nm_connect {:?}: senha necessaria -> modal A31.3", ssid);
+                    let _ = tx.send(NmConnectResult::NeedPassword { ssid });
                     return;
                 }
-                eprintln!("[lumo-bar] nm_connect {:?} con up falhou stderr={:?}; tenta dev wifi connect", ssid, stderr.trim());
+                eprintln!("[lumo-bar] nm_connect {:?} con up falhou; tenta dev wifi connect", ssid);
             }
             Err(e) => {
                 eprintln!("[lumo-bar] nmcli spawn falha: {}", e);
+                let _ = tx.send(NmConnectResult::Failed(e.to_string()));
                 return;
             }
         }
-        // Fallback: rede nao saved -> dev wifi connect.
-        // R2: passar ifname explicita pra evitar nmcli escolher iface errada.
         let iface_opt = find_wifi_iface();
         let res = if let Some(ref iface) = iface_opt {
             std::process::Command::new("nmcli")
@@ -453,17 +458,50 @@ pub fn nm_connect(ssid: String) {
         match res {
             Ok(o) if o.status.success() => {
                 eprintln!("[lumo-bar] nmcli dev wifi connect {:?} OK", ssid);
+                let _ = tx.send(NmConnectResult::Ok);
             }
             Ok(o) => {
                 let e = String::from_utf8_lossy(&o.stderr);
                 let stdout = String::from_utf8_lossy(&o.stdout);
                 if e.contains("Secrets were required") || stdout.contains("Secrets were required") {
-                    eprintln!("[lumo-bar] nm_connect {:?}: senha necessaria no fallback (A31.3 pendente)", ssid);
+                    eprintln!("[lumo-bar] nm_connect {:?}: senha necessaria fallback -> modal", ssid);
+                    let _ = tx.send(NmConnectResult::NeedPassword { ssid });
                 } else {
-                    eprintln!("[lumo-bar] nmcli dev wifi connect {:?} falha stderr={:?} stdout={:?}", ssid, e.trim(), stdout.trim());
+                    eprintln!("[lumo-bar] nmcli dev wifi connect {:?} falha: {}", ssid, e.trim());
+                    let _ = tx.send(NmConnectResult::Failed(format!("{}", e.trim())));
                 }
             }
-            Err(e) => eprintln!("[lumo-bar] nmcli spawn falha: {}", e),
+            Err(e) => {
+                let _ = tx.send(NmConnectResult::Failed(e.to_string()));
+            }
+        }
+    });
+    rx
+}
+
+/// Conecta com senha explicita (A31.3: pos modal de senha).
+pub fn nm_connect_with_password(ssid: String, password: String) {
+    std::thread::spawn(move || {
+        eprintln!("[lumo-bar] A31.3 nm_connect_with_password ssid={:?}", ssid);
+        let iface_opt = find_wifi_iface();
+        let res = if let Some(ref iface) = iface_opt {
+            std::process::Command::new("nmcli")
+                .args(["dev", "wifi", "connect", &ssid, "password", &password, "ifname", iface])
+                .output()
+        } else {
+            std::process::Command::new("nmcli")
+                .args(["dev", "wifi", "connect", &ssid, "password", &password])
+                .output()
+        };
+        match res {
+            Ok(o) if o.status.success() => {
+                eprintln!("[lumo-bar] A31.3 nm_connect_with_password {:?} OK", ssid);
+            }
+            Ok(o) => {
+                let e = String::from_utf8_lossy(&o.stderr);
+                eprintln!("[lumo-bar] A31.3 nm_connect_with_password {:?} falha: {}", ssid, e.trim());
+            }
+            Err(e) => eprintln!("[lumo-bar] A31.3 nm_connect_with_password spawn falha: {}", e),
         }
     });
 }
