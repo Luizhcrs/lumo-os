@@ -215,6 +215,9 @@ pub fn run() {
         visible: false, last_frame: Instant::now(),
     };
     let mut last_ipc = Instant::now();
+    // T1.10: timeout de inatividade 60s para evitar processo zombie.
+    let mut idle_since = Instant::now();
+    const INACTIVITY_TIMEOUT: Duration = Duration::from_secs(60);
     while state.running {
         let now = Instant::now();
         let dt = now.duration_since(state.last_frame).as_secs_f32().min(0.05);
@@ -235,6 +238,14 @@ pub fn run() {
             }
         }
         if conn.flush().is_err() { break; }
+        // T1.10: rastreia ultima atividade; exit apos 60s idle.
+        if state.current.is_some() || state.ipc_stream.is_some() {
+            idle_since = Instant::now();
+        }
+        if idle_since.elapsed() >= INACTIVITY_TIMEOUT {
+            eprintln!("[lumo-osd] inatividade 60s, saindo");
+            break;
+        }
         if last_ipc.elapsed() >= Duration::from_millis(16) {
             last_ipc = Instant::now();
             if let Some(mut s) = state.ipc_stream.take() {

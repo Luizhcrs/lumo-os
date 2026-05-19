@@ -79,10 +79,21 @@ fn run_snapshot(mode_name: &str, palette: LumoColors) {
 
     let rendered = render_bar(&palette);
 
+    // T1.9: baseline ausente sem UPDATE_SNAPSHOTS = erro explicito.
+    // Para regenerar: UPDATE_SNAPSHOTS=1 cargo test -p lumo-shell --test snapshot_bar
     if !path.exists() {
-        // First run: save baseline.
+        if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
+            rendered.save_png(&path).expect("save baseline PNG");
+            eprintln!("[snapshot] baseline saved: {}", path.display());
+            return;
+        } else {
+            panic!("baseline ausente: {}. Rode com UPDATE_SNAPSHOTS=1 para gerar.", path.display());
+        }
+    }
+    // Regenera baseline se UPDATE_SNAPSHOTS definido (mesmo se ja existe).
+    if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
         rendered.save_png(&path).expect("save baseline PNG");
-        eprintln!("[snapshot] baseline saved: {}", path.display());
+        eprintln!("[snapshot] baseline atualizado: {}", path.display());
         return;
     }
 
