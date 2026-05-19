@@ -24,6 +24,7 @@ members = [
     "apps/lumo-calc",
     "apps/lumo-notes",
     "apps/lumo-monitor",
+    "apps/lumo-lock",
 ]
 
 [profile.release]
