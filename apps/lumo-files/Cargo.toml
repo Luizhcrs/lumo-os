@@ -1,0 +1,21 @@
+[package]
+name = "lumo-files"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Files — file manager Iced nativo para Lumo OS."
+
+[[bin]]
+name = "lumo-files"
+path = "src/main.rs"
+
+[dependencies]
+iced = { version = "0.13", features = ["tokio", "image"] }
+lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
+trash = "5"
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+mime_guess = "2"
+xdg = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "process", "fs"] }
+
+[dev-dependencies]
+tempfile = "3"
