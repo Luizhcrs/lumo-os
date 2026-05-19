@@ -38,8 +38,9 @@ impl LumoBar {
             );
         }
 
-        // Pill direita (bat + wifi + data + clock). Union dos 3 hit-rects.
-        let right_rects = [self.bat_hit_rect, self.wifi_hit_rect, self.datetime_hit_rect];
+        // Pill direita (bat + wifi + brightness + data + clock). Union dos 4 hit-rects.
+        // Bug fix: brightness_hit_rect estava de fora -> clicks no sol caiam pro desktop.
+        let right_rects = [self.bat_hit_rect, self.wifi_hit_rect, self.brightness_hit_rect, self.datetime_hit_rect];
         let mut union: Option<(f32, f32, f32, f32)> = None;
         for r in right_rects.iter().flatten() {
             union = Some(match union {

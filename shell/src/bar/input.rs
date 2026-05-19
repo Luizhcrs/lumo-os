@@ -27,8 +27,12 @@ impl PointerHandler for LumoBar {
         _: &wl_pointer::WlPointer,
         events: &[PointerEvent],
     ) {
-        eprintln!("[lumo-bar] pointer_frame {} events", events.len());
         for ev in events {
+            // DBG B4: log press/release kinds explicitly. Mantido pra investigar
+            // missing dropdowns reportado pelo Luiz. Remover se virar ruido.
+            if matches!(ev.kind, PointerEventKind::Press { .. } | PointerEventKind::Release { .. }) {
+                eprintln!("[lumo-bar] pointer evt {:?} pos={:?}", ev.kind, ev.position);
+            }
             match ev.kind {
                 PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
                     self.pointer_x = ev.position.0 as f32;
