@@ -96,13 +96,13 @@ fn id_to_action(id: i32) -> Option<MenuAction> {
 
 struct LumoFilesMenu {
     items: Vec<MenuItem>,
-    revision: u32,
+    revision: std::sync::atomic::AtomicU32,
     tx: std::sync::mpsc::Sender<MenuAction>,
 }
 
 impl LumoFilesMenu {
     fn new(tx: std::sync::mpsc::Sender<MenuAction>) -> Self {
-        Self { items: build_menu(), revision: 1, tx }
+        Self { items: build_menu(), revision: std::sync::atomic::AtomicU32::new(1), tx }
     }
 
     /// Build layout node for `id` up to `depth` levels deep.
@@ -207,7 +207,7 @@ impl LumoFilesMenu {
         _property_names: Vec<String>,
     ) -> zbus::fdo::Result<(u32, (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>))> {
         let node = self.layout_node(parent_id, recursion_depth);
-        Ok((self.revision, node))
+        Ok((self.revision.load(std::sync::atomic::Ordering::Relaxed), node))
     }
 
     fn get_group_properties(
@@ -247,8 +247,10 @@ impl LumoFilesMenu {
         Ok(Vec::new())
     }
 
-    fn about_to_show(&self, _id: i32) -> zbus::fdo::Result<bool> {
-        Ok(false)
+    fn about_to_show(&self, id: i32) -> zbus::fdo::Result<bool> {
+        // Return true for submenus so clients refetch when menu becomes dynamic.
+        let is_submenu = self.items.iter().any(|it| it.id == id && matches!(it.kind, ItemKind::Submenu));
+        Ok(is_submenu)
     }
 
     fn about_to_show_group(
@@ -309,30 +311,45 @@ fn serve_inner(tx: std::sync::mpsc::Sender<MenuAction>) -> Result<(), Box<dyn st
 // Channel init + iced Subscription bridge
 // ---------------------------------------------------------------------------
 
-static MENU_RX: OnceLock<std::sync::Mutex<std::sync::mpsc::Receiver<MenuAction>>> =
+static MENU_RX: OnceLock<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<MenuAction>>> =
     OnceLock::new();
 
-/// Init mpsc channel. Returns Sender to pass to `serve`. Call once at startup.
+static MENU_TOK_TX: OnceLock<tokio::sync::mpsc::UnboundedSender<MenuAction>> =
+    OnceLock::new();
+
+/// Init channel. Returns std Sender for the zbus blocking thread.
+/// Bridges to tokio UnboundedSender for zero-polling iced subscription.
 pub fn init_channel() -> std::sync::mpsc::Sender<MenuAction> {
-    let (tx, rx) = std::sync::mpsc::channel::<MenuAction>();
-    MENU_RX
-        .set(std::sync::Mutex::new(rx))
-        .expect("init_channel called twice");
-    tx
+    let (std_tx, std_rx) = std::sync::mpsc::channel::<MenuAction>();
+    let (tok_tx, tok_rx) = tokio::sync::mpsc::unbounded_channel::<MenuAction>();
+    MENU_RX.set(tokio::sync::Mutex::new(tok_rx)).expect("init_channel called twice");
+    MENU_TOK_TX.set(tok_tx).expect("init_channel tx called twice");
+    // Bridge: forward std mpsc -> tokio unbounded
+    std::thread::Builder::new()
+        .name("appmenu-bridge".into())
+        .spawn(move || {
+            for action in std_rx {
+                if let Some(tx) = MENU_TOK_TX.get() {
+                    let _ = tx.send(action);
+                }
+            }
+        })
+        .expect("spawn appmenu-bridge");
+    std_tx
 }
 
-/// Iced Subscription that bridges MenuAction -> Message.
+/// Iced Subscription: event-driven, zero 50ms polling.
 pub fn appmenu_subscription() -> iced::Subscription<Message> {
     use futures::stream::StreamExt as _;
 
     iced::Subscription::run_with_id(
         "appmenu-dbus",
         futures::stream::unfold((), |()| async {
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            let action = MENU_RX
-                .get()
-                .and_then(|m| m.lock().ok())
-                .and_then(|rx| rx.try_recv().ok());
+            let action = if let Some(rx) = MENU_RX.get() {
+                rx.lock().await.recv().await
+            } else {
+                None
+            };
             Some((action, ()))
         })
         .filter_map(|opt| async move { opt })

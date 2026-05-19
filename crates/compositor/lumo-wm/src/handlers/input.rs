@@ -283,6 +283,7 @@ impl LumoState {
                     // D2: broadcast CloseDropdowns quando click fora da bar.
                     // Bar fecha dropdown se ativo; desktop fecha menu/ctx_menu.
                     // Nao broadcast se click esta dentro da bar (evita fechar o proprio dropdown).
+                    // TODO D3: CloseDropdowns deve carregar coordenada do click; cada client decide se fecha.
                     if !self.pos_is_on_bar(self.pointer_location) {
                         self.ipc.broadcast(&lumo_ipc::LumoEvent::CloseDropdowns);
                     }
@@ -333,6 +334,9 @@ impl LumoState {
                                     geo.size,
                                 );
                                 if !rect.contains(ptr) {
+                                    // TODO P1.4: Check popup grab before dismiss.
+                                    // Wayland spec: grabbed popup should only be dismissed by client.
+                                    // Impact low while only Lumo apps run. Add grab tracking in D3.
                                     let _ = PopupManager::dismiss_popup(&root_surf, &popup);
                                     tracing::debug!("D2: popup dismissed outside click");
                                 }

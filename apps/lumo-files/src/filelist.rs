@@ -201,26 +201,72 @@ impl FileList {
         }
     }
 
-    /// Retorna data modificada formatada (YYYY-MM-DD HH:MM).
+    /// Retorna data modificada formatada (YYYY-MM-DD HH:MM) usando chrono.
     pub fn human_modified(path: &PathBuf) -> String {
-        use std::time::{UNIX_EPOCH};
-        let t = path.metadata()
+        use std::time::UNIX_EPOCH;
+        let unix_secs = path.metadata()
             .and_then(|m| m.modified())
             .ok()
             .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        // Simple YYYY-MM-DD HH:MM from unix timestamp
-        let secs = t % 60;
-        let _ = secs;
-        let mins = (t / 60) % 60;
-        let hours = (t / 3600) % 24;
-        let days = t / 86400;
-        // approx date from epoch
-        let years = 1970 + days / 365;
-        let day_of_year = days % 365;
-        let month = day_of_year / 30 + 1;
-        let day = day_of_year % 30 + 1;
-        format!("{years:04}-{month:02}-{day:02} {hours:02}:{mins:02}")
+
+        let dt = chrono::DateTime::from_timestamp(unix_secs as i64, 0)
+            .unwrap_or_else(|| chrono::DateTime::UNIX_EPOCH);
+        dt.format("%Y-%m-%d %H:%M").to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn make_list(n: usize) -> FileList {
+        let entries: Vec<PathBuf> = (0..n).map(|i| PathBuf::from(format!("/tmp/file{}.txt", i))).collect();
+        let mut fl = FileList::default();
+        fl.entries = entries.clone();
+        fl.all_entries = entries;
+        fl
+    }
+
+    #[test]
+    fn test_ctrl_click_add() {
+        let mut fl = make_list(5);
+        fl.click(0);
+        fl.ctrl_click(2);
+        assert!(fl.selected.contains(&0));
+        assert!(fl.selected.contains(&2));
+        assert_eq!(fl.selected.len(), 2);
+    }
+
+    #[test]
+    fn test_ctrl_click_remove() {
+        let mut fl = make_list(5);
+        fl.click(1);
+        fl.ctrl_click(1);
+        assert!(!fl.selected.contains(&1));
+        assert!(fl.selected.is_empty());
+    }
+
+    #[test]
+    fn test_shift_click_range() {
+        let mut fl = make_list(10);
+        fl.click(2);
+        fl.shift_click(6);
+        for i in 2..=6 {
+            assert!(fl.selected.contains(&i), "idx {} missing", i);
+        }
+        assert_eq!(fl.selected.len(), 5);
+    }
+
+    #[test]
+    fn test_shift_click_reverse_range() {
+        let mut fl = make_list(10);
+        fl.click(7);
+        fl.shift_click(3);
+        for i in 3..=7 {
+            assert!(fl.selected.contains(&i), "idx {} missing", i);
+        }
     }
 }
