@@ -183,7 +183,7 @@ Evolucao:
 
 ### L7 Visual/UX
 - Tokens emerald + ink_deep + Geist/Inter (R4)
-- Curvas Material M3 (renamed Apple)
+- Curvas Material M3 (curvas proprias)
 - Spring physics LASpring real
 - Sombras drop classicas
 - Animations: dropdown spring, window scale-fade, workspace slide

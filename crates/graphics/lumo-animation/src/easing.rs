@@ -1,4 +1,4 @@
-//! easing.rs - Curvas de easing cubic-bezier + presets Material/iOS.
+//! easing.rs - Curvas de easing cubic-bezier + presets Material/industry-standard.
 //!
 //! `LACurve` representa qualquer curva definida por 4 parametros
 //! cubic-bezier. `eval(t)` avalia pelo metodo Newton-Raphson: dado t (0..1
@@ -50,7 +50,7 @@ impl LACurve {
     }
 
     /// Material spring default cubic approx. Arranca rapido, desacelera
-    /// suavemente. Usado em dropdowns + sheets iOS.
+    /// suavemente. Usado em dropdowns + sheets modais.
     pub const fn material_deceleration() -> Self {
         Self::new(0.32, 0.72, 0.0, 1.0)
     }
