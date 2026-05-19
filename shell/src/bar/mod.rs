@@ -35,3 +35,4 @@ pub mod system_info;
 pub mod tokens;
 
 pub use main_loop::run;
+pub mod tray;
