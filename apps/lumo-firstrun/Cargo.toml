@@ -1,0 +1,19 @@
+[package]
+name = "lumo-firstrun"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo OS first-run wizard -- idioma, conta, wi-fi, inicializacao."
+
+[[bin]]
+name = "lumo-firstrun"
+path = "src/main.rs"
+
+[dependencies]
+iced = { version = "0.13", features = ["tokio"] }
+lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
+tokio = { version = "1", features = ["rt-multi-thread", "process", "fs"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"

@@ -4371,6 +4371,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumo-firstrun"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "lumo-foundation",
+ "serde",
+ "tempfile",
+ "tokio",
+ "toml 0.8.23",
+]
+
+[[package]]
 name = "lumo-foundation"
 version = "0.1.0"
 dependencies = [
@@ -4551,6 +4563,18 @@ dependencies = [
  "tiny-skia",
  "toml 0.8.23",
  "zbus 5.15.0",
+]
+
+[[package]]
+name = "lumo-store"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "lumo-foundation",
+ "serde",
+ "tempfile",
+ "tokio",
+ "toml 0.8.23",
 ]
 
 [[package]]

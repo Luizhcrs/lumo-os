@@ -26,6 +26,8 @@ members = [
     "apps/lumo-notes",
     "apps/lumo-monitor",
     "apps/lumo-lock",
+    "apps/lumo-firstrun",
+    "apps/lumo-store",
 ]
 
 [profile.release]
