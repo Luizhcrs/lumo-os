@@ -1,0 +1,23 @@
+[package]
+name = "lumo-launcher"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Launcher -- overlay fuzzy XDG app launcher."
+
+[[bin]]
+name = "lumo-launcher"
+path = "src/main.rs"
+
+[dependencies]
+smithay-client-toolkit = "0.19"
+tiny-skia = "0.11"
+cosmic-text = "0.12"
+fontdb = "0.18"
+serde = { version = "1", features = ["derive"] }
+toml = { version = "0.8", features = ["parse"] }
+nix = { version = "0.30", features = ["poll"] }
+libc = "0.2"
+fuzzy-matcher = "0.3"
+meval = "0.2"
+lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
+lumo-animation = { path = "../../crates/graphics/lumo-animation" }
