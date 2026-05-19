@@ -19,6 +19,7 @@ members = [
     "apps/lumo-dock",
     "apps/lumo-launcher",
     "apps/lumo-notif",
+    "apps/lumo-clip",
     "apps/lumo-settings",
     "apps/lumo-editor",
     "apps/lumo-calc",

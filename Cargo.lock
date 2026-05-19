@@ -4310,6 +4310,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumo-clip"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "lumo-animation",
+ "lumo-foundation",
+ "nix 0.30.1",
+ "serde",
+ "serde_json",
+ "smithay-client-toolkit 0.19.2",
+ "tiny-skia",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "lumo-dock"
 version = "0.1.0"
 dependencies = [
@@ -4559,6 +4576,7 @@ dependencies = [
  "calloop 0.14.4",
  "image 0.25.10",
  "input",
+ "libc",
  "libseat",
  "lumo-foundation",
  "lumo-ipc",
