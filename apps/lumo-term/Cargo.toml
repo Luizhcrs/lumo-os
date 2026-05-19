@@ -1,0 +1,9 @@
+[package]
+name = "lumo-term"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Terminal — thin wrapper que lanca alacritty com tema Lumo."
+
+[[bin]]
+name = "lumo-term"
+path = "src/main.rs"
