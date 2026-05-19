@@ -282,6 +282,9 @@ pub fn drain_ipc_events(stream: &mut UnixStream, rx_buf: &mut Vec<u8>) -> (bool,
             if let Ok(ev) = serde_json::from_str::<LumoEvent>(s.trim()) {
                 match ev {
                     LumoEvent::CloseDesktopMenu => close_menu = true,
+                    // D2: CloseDropdowns broadcast pelo compositor em todo click.
+                    // Desktop fecha menu contextual e ctx_menu de icone se ativos.
+                    LumoEvent::CloseDropdowns => close_menu = true,
                     LumoEvent::DesktopOpenSelected => open_selected = true,
                     LumoEvent::ThemeReloaded { mode } => theme_reloaded = Some(mode),
                     _ => {}

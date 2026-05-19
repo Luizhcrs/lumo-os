@@ -213,7 +213,10 @@ impl LumoState {
                                 }
                                 ssd_handled = true;
                             } else if !in_menu {
+                                // D2: dismiss-on-outside-click titlebar_menu.
                                 self.titlebar_menu = None;
+                                #[cfg(feature = "drm-backend")]
+                                { self.drm_force_repaint = true; }
                             }
                             if ssd_handled {
                                 pointer.frame(self);
@@ -277,6 +280,13 @@ impl LumoState {
                         }
                     }
 
+                    // D2: broadcast CloseDropdowns quando click fora da bar.
+                    // Bar fecha dropdown se ativo; desktop fecha menu/ctx_menu.
+                    // Nao broadcast se click esta dentro da bar (evita fechar o proprio dropdown).
+                    if !self.pos_is_on_bar(self.pointer_location) {
+                        self.ipc.broadcast(&lumo_ipc::LumoEvent::CloseDropdowns);
+                    }
+
                     let kb = self.keyboard.clone();
                     let new_focus = if let Some((surface, _)) = self.surface_under(self.pointer_location) {
                         // L1: FocusManager centraliza policy de foco.
@@ -304,6 +314,31 @@ impl LumoState {
                         self.focus_manager.click_layer_shell()
                     };
                     kb.set_focus(self, new_focus, serial);
+                }
+
+                // D2: dismiss xdg popups sem grab quando click fora.
+                if state == ButtonState::Pressed {
+                    use smithay::desktop::PopupManager;
+                    let ptr = self.pointer_location.to_i32_round();
+                    let windows: Vec<_> = self.space.elements().cloned().collect();
+                    for win in &windows {
+                        if let Some(root_surf) = win.wl_surface() {
+                            let win_loc = self.space.element_location(win).unwrap_or_default();
+                            let popups: Vec<_> = PopupManager::popups_for_surface(&root_surf).collect();
+                            for (popup, popup_offset) in popups {
+                                let geo = popup.geometry();
+                                let popup_loc = win_loc + popup_offset;
+                                let rect = smithay::utils::Rectangle::from_loc_and_size(
+                                    popup_loc + geo.loc,
+                                    geo.size,
+                                );
+                                if !rect.contains(ptr) {
+                                    let _ = PopupManager::dismiss_popup(&root_surf, &popup);
+                                    tracing::debug!("D2: popup dismissed outside click");
+                                }
+                            }
+                        }
+                    }
                 }
 
                 pointer.button(

@@ -127,11 +127,20 @@ pub fn run() {
                 } else {
                     eprintln!("[lumo-desktop] IPC peer fechou; desktop continua passivo");
                 }
-                if close_menu && state.menu.visible {
-                    state.menu.visible = false;
-                    state.menu.hover_idx = usize::MAX;
-                    state.need_redraw = true;
-                    eprintln!("[lumo-desktop] CloseDesktopMenu IPC -> menu fechado");
+                if close_menu {
+                    // D2: fecha menu contextual de area vazia e ctx_menu de icone.
+                    if state.menu.visible {
+                        state.menu.visible = false;
+                        state.menu.hover_idx = usize::MAX;
+                        state.need_redraw = true;
+                        eprintln!("[lumo-desktop] D2: menu overlay fechado por IPC");
+                    }
+                    if state.icons.ctx_menu.is_some() {
+                        state.icons.ctx_menu = None;
+                        state.icons.ctx_hover = usize::MAX;
+                        state.need_redraw = true;
+                        eprintln!("[lumo-desktop] D2: ctx_menu icone fechado por IPC");
+                    }
                 }
                 if open_selected {
                     state.icons.open_selected();

@@ -445,6 +445,23 @@ impl LumoState {
         false
     }
 
+    /// D2: retorna true se a posicao esta sobre a surface da bar (namespace lumo-bar).
+    /// Usado para evitar broadcast CloseDropdowns quando click e dentro da bar.
+    pub fn pos_is_on_bar(&self, pos: smithay::utils::Point<f64, smithay::utils::Logical>) -> bool {
+        for output in self.space.outputs() {
+            let map = layer_map_for_output(output);
+            for layer in map.layers() {
+                if layer.namespace() == "lumo-bar" {
+                    let geo = map.layer_geometry(layer).unwrap_or_default();
+                    if geo.to_f64().contains(pos) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// A39: broadcast DesktopOpenSelected pra lumo-desktop abrir
     /// o icone selecionado via xdg-open.
     pub fn broadcast_desktop_open_selected(&mut self) {

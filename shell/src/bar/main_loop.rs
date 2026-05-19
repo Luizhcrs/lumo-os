@@ -283,12 +283,24 @@ pub fn run() {
                 } else {
                     eprintln!("[lumo-bar] IPC peer fechou; bar continua standalone");
                 }
-                // A25: CloseDropdowns IPC (lumo-desktop click esquerdo desktop).
-                if close_dropdowns && state.dropdown != DropdownActive::None {
-                    state.dropdown = DropdownActive::None;
-                    state.lumo_menu_hover_idx = usize::MAX; // A27
-                    state.update_size_and_redraw(&qh);
-                    eprintln!("[lumo-bar] CloseDropdowns recebido -> dropdown fechado");
+                // A25/D2: CloseDropdowns IPC -> fecha dropdown ativo e appmenu submenu.
+                if close_dropdowns {
+                    let mut changed = false;
+                    if state.dropdown != DropdownActive::None {
+                        state.dropdown = DropdownActive::None;
+                        state.lumo_menu_hover_idx = usize::MAX;
+                        changed = true;
+                        eprintln!("[lumo-bar] D2: dropdown fechado por CloseDropdowns IPC");
+                    }
+                    if state.appmenu_open_idx.is_some() {
+                        state.appmenu_open_idx = None;
+                        state.appmenu_submenu.clear();
+                        changed = true;
+                        eprintln!("[lumo-bar] D2: appmenu submenu fechado por CloseDropdowns IPC");
+                    }
+                    if changed {
+                        state.update_size_and_redraw(&qh);
+                    }
                 }
                 // C5.1: ActiveApp -> fetch appmenu via Registrar.
                 if let Some((app_id, title, pid)) = res.active_app {
