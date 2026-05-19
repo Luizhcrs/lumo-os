@@ -796,3 +796,35 @@ pub fn build_winit_elements(
 
     out
 }
+/// W3.P2: coleta apenas o elemento cursor pra fast-path de cursor HW plane.
+///
+/// Quando so o cursor se moveu (sem window damage), passa apenas o elemento
+/// cursor para render_frame. DrmCompositor usa o buffer do primary plane
+/// existente (skip=true) e faz atomic commit apenas do cursor plane,
+/// desacoplando movimento de cursor da taxa de render das aplicacoes.
+///
+/// Retorna Vec vazio se cursor nao pode ser renderizado (fallback pra full render).
+pub fn collect_cursor_only_elements(
+    renderer: &mut GlesRenderer,
+    inputs: &DrmCollectInputs<'_>,
+) -> Vec<LumoCustomElement> {
+    let mut out = Vec::with_capacity(2);
+
+    if let Some(elem) = cursor_xcursor_element(
+        renderer,
+        inputs.pointer_location,
+        inputs.cursor,
+        inputs.cursor_buffer,
+        1.0,
+    ) {
+        out.push(LumoCustomElement::Memory(elem));
+    } else {
+        out.push(LumoCustomElement::Solid(cursor_solid_fallback(
+            inputs.pointer_location,
+            inputs.frame_counter,
+            1.0,
+        )));
+    }
+
+    out
+}
