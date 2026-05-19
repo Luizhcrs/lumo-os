@@ -22,6 +22,44 @@ use crate::sidebar::{build_sidebar, SidebarItem, SidebarKind};
 use crate::theme::LumoTheme;
 
 // ---------------------------------------------------------------------------
+// Tab state
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct Tab {
+    pub current_dir: std::path::PathBuf,
+    pub file_list: crate::filelist::FileList,
+    pub back_stack: std::collections::VecDeque<std::path::PathBuf>,
+    pub forward_stack: std::collections::VecDeque<std::path::PathBuf>,
+    pub label: String,
+}
+
+impl Tab {
+    pub fn new(dir: std::path::PathBuf) -> Self {
+        let label = dir.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "/".to_string());
+        Self {
+            current_dir: dir,
+            file_list: crate::filelist::FileList::default(),
+            back_stack: std::collections::VecDeque::new(),
+            forward_stack: std::collections::VecDeque::new(),
+            label,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Properties dialog state
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct PropertiesState {
+    pub path: std::path::PathBuf,
+    pub name_edit: String,
+}
+
+// ---------------------------------------------------------------------------
 // Thumbnail cache (inline)
 // ---------------------------------------------------------------------------
 
@@ -125,6 +163,17 @@ pub enum Message {
     TogglePreview,
     // Drives
     DrivesRefreshed(Vec<crate::sidebar::SidebarItem>),
+    // Properties dialog
+    OpenProperties,
+    CloseProperties,
+    PropertiesNameChanged(String),
+    PropertiesApply,
+    // Tabs
+    NewTab,
+    CloseTab(usize),
+    SwitchTab(usize),
+    TabNavigate(usize, PathBuf),
+    TabDirLoaded(usize, PathBuf, Vec<PathBuf>),
     DriveUnmount(PathBuf),
     EmptyTrash,
     // Tick para refresh periódico
@@ -168,6 +217,12 @@ pub struct App {
     pub sort_ascending: bool,
     pub preview_visible: bool,
     pub thumb_cache: ThumbCache,
+    /// Properties dialog state.
+    pub properties: Option<PropertiesState>,
+    /// Tabs: lista de tabs abertas.
+    pub tabs: Vec<Tab>,
+    /// Indice da tab ativa.
+    pub active_tab: usize,
 }
 
 impl App {
@@ -192,6 +247,9 @@ impl App {
             sort_ascending: true,
             preview_visible: false,
             thumb_cache: ThumbCache::new(),
+            properties: None,
+            tabs: vec![],
+            active_tab: 0,
         };
         let task = Task::perform(load_dir(home.clone(), false), move |r| match r {
             Ok(entries) => Message::DirLoaded(home.clone(), entries),
@@ -477,6 +535,16 @@ impl App {
                         "x" => return self.update(Message::CutSelected),
                         "v" => return self.update(Message::Paste),
                         "n" => return self.update(Message::NewFolder),
+                        "f" => return self.update(Message::ToggleSearch),
+                        "p" => return self.update(Message::TogglePreview),
+                        "i" => return self.update(Message::OpenProperties),
+                        "t" => return self.update(Message::NewTab),
+                        "w" => {
+                            if !self.tabs.is_empty() {
+                                let idx = self.active_tab;
+                                return self.update(Message::CloseTab(idx));
+                            }
+                        }
                         _ => {}
                     },
                     _ => {}
@@ -596,6 +664,97 @@ impl App {
                 )
             }
 
+            Message::OpenProperties => {
+                let paths = self.file_list.selected_paths();
+                if let Some(path) = paths.into_iter().next() {
+                    let name = path.file_name()
+                        .unwrap_or_default().to_string_lossy().to_string();
+                    self.properties = Some(PropertiesState { path, name_edit: name });
+                }
+                Task::none()
+            }
+
+            Message::CloseProperties => {
+                self.properties = None;
+                Task::none()
+            }
+
+            Message::PropertiesNameChanged(s) => {
+                if let Some(ref mut p) = self.properties {
+                    p.name_edit = s;
+                }
+                Task::none()
+            }
+
+            Message::PropertiesApply => {
+                if let Some(props) = self.properties.take() {
+                    let _ = ops::rename(&props.path, &props.name_edit);
+                    return self.update(Message::Refresh);
+                }
+                Task::none()
+            }
+
+            Message::NewTab => {
+                let dir = self.current_dir.clone();
+                let tab = Tab::new(dir.clone());
+                self.tabs.push(tab);
+                self.active_tab = self.tabs.len() - 1;
+                let idx = self.active_tab;
+                let show_hidden = self.show_hidden;
+                Task::perform(load_dir(dir.clone(), show_hidden), move |r| match r {
+                    Ok(entries) => Message::TabDirLoaded(idx, dir.clone(), entries),
+                    Err(e) => Message::OpError(e),
+                })
+            }
+
+            Message::CloseTab(idx) => {
+                if self.tabs.len() > 1 {
+                    self.tabs.remove(idx);
+                    self.active_tab = self.active_tab.min(self.tabs.len() - 1);
+                }
+                Task::none()
+            }
+
+            Message::SwitchTab(idx) => {
+                if idx < self.tabs.len() {
+                    self.active_tab = idx;
+                    if let Some(tab) = self.tabs.get(idx) {
+                        let dir = tab.current_dir.clone();
+                        let dir2 = dir.clone();
+                        let show_hidden = self.show_hidden;
+                        return Task::perform(load_dir(dir, show_hidden), move |r| match r {
+                            Ok(entries) => Message::DirLoaded(dir2.clone(), entries),
+                            Err(e) => Message::OpError(e),
+                        });
+                    }
+                }
+                Task::none()
+            }
+
+            Message::TabNavigate(idx, path) => {
+                if idx < self.tabs.len() {
+                    self.tabs[idx].current_dir = path.clone();
+                    let p2 = path.clone();
+                    let show_hidden2 = self.show_hidden;
+                    return Task::perform(load_dir(path, show_hidden2), move |r| match r {
+                        Ok(entries) => Message::TabDirLoaded(idx, p2.clone(), entries),
+                        Err(e) => Message::OpError(e),
+                    });
+                }
+                Task::none()
+            }
+
+            Message::TabDirLoaded(idx, path, entries) => {
+                if let Some(tab) = self.tabs.get_mut(idx) {
+                    tab.current_dir = path.clone();
+                    tab.label = path.file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "/".to_string());
+                    tab.file_list.set_entries(entries);
+                }
+                Task::none()
+            }
+
             Message::Tick => {
                 let username = crate::app::username();
                 Task::perform(
@@ -667,6 +826,56 @@ impl App {
             self.view_mode,
             breadcrumb_row.into(),
         );
+
+        // -- Tab bar -------------------------------------------------------
+        let tab_bar: iced::Element<Message> = if !self.tabs.is_empty() {
+            let mut tab_btns: Vec<iced::Element<Message>> = Vec::new();
+            for (i, tab) in self.tabs.iter().enumerate() {
+                let is_active = i == self.active_tab;
+                let tab_bg = if is_active { LumoTheme::panel_hi() } else { LumoTheme::panel() };
+                let tab_label = format!("  {}  ", &tab.label);
+                let close_btn = button(text("x").size(10).color(muted))
+                    .on_press(Message::CloseTab(i))
+                    .style(|_, _| iced::widget::button::Style {
+                        background: Some(iced::Background::Color(Color::TRANSPARENT)),
+                        text_color: LumoTheme::muted(),
+                        ..Default::default()
+                    })
+                    .padding([0, 4]);
+                let tab_btn = button(
+                    row![
+                        text(tab_label).size(12).color(if is_active { fg } else { muted }),
+                        close_btn,
+                    ]
+                    .align_y(Alignment::Center),
+                )
+                .on_press(Message::SwitchTab(i))
+                .style(move |_, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(tab_bg)),
+                    border: iced::Border { radius: 4.0.into(), ..Default::default() },
+                    text_color: LumoTheme::fg(),
+                    ..Default::default()
+                })
+                .padding([4, 8]);
+                tab_btns.push(tab_btn.into());
+            }
+            container(
+                row(tab_btns).spacing(2).align_y(Alignment::Center)
+            )
+            .width(Length::Fill)
+            .padding([4, 12])
+            .style(move |_| iced::widget::container::Style {
+                background: Some(iced::Background::Color(LumoTheme::panel())),
+                ..Default::default()
+            })
+            .into()
+        } else {
+            container(iced::widget::horizontal_space())
+                .height(Length::Fixed(0.0))
+                .into()
+        };
+
+
 
         // -- Status bar ----------------------------------------------------
         let status_bar = if !self.status.is_empty() {
@@ -820,16 +1029,89 @@ impl App {
             row![sidebar, content_area].height(Length::Fill)
         };
 
-        let root = container(column![toolbar, body, status_bar].spacing(0))
+        let root = container(column![toolbar, tab_bar, body, status_bar].spacing(0))
             .width(Length::Fill)
             .height(Length::Fill)
             .style(move |_| container_style(bg));
 
-        // -- Context menu overlay ------------------------------------------
-        if let Some(ref ctx) = self.context_menu {
-            self.view_context_menu(ctx, root.into(), fg, panel_hi, muted, accent)
+        // -- Properties dialog overlay ------------------------------------
+        let root: iced::Element<Message> = if let Some(ref props) = self.properties {
+            let name_input = text_input("Nome", &props.name_edit)
+                .on_input(Message::PropertiesNameChanged)
+                .on_submit(Message::PropertiesApply)
+                .size(13)
+                .padding([6, 10]);
+
+            let path = &props.path;
+            let size_str = crate::filelist::FileList::human_size(path);
+            let mod_str = crate::filelist::FileList::human_modified(path);
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("--").to_string();
+            let perms = {
+                use std::os::unix::fs::PermissionsExt;
+                path.metadata().map(|m| format!("{:o}", m.permissions().mode() & 0o777)).unwrap_or_else(|_| "--".to_string())
+            };
+
+            let btn_apply = button(text("Aplicar").size(13).color(fg))
+                .on_press(Message::PropertiesApply)
+                .style(move |_, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(LumoTheme::accent())),
+                    border: iced::Border { radius: 4.0.into(), ..Default::default() },
+                    text_color: LumoTheme::bg(),
+                    ..Default::default()
+                })
+                .padding([6, 12]);
+
+            let btn_cancel = button(text("Cancelar").size(13).color(muted))
+                .on_press(Message::CloseProperties)
+                .style(move |_, _| iced::widget::button::Style {
+                    background: Some(iced::Background::Color(Color::TRANSPARENT)),
+                    border: iced::Border { radius: 4.0.into(), ..Default::default() },
+                    text_color: LumoTheme::muted(),
+                    ..Default::default()
+                })
+                .padding([6, 12]);
+
+            let dialog = container(
+                column![
+                    text("Propriedades").size(16).color(fg),
+                    container(horizontal_rule(1)).padding([4, 0]).width(Length::Fill),
+                    text("Nome:").size(12).color(muted),
+                    name_input,
+                    text("Tamanho:").size(12).color(muted),
+                    text(size_str.clone()).size(13).color(fg),
+                    text("Modificado:").size(12).color(muted),
+                    text(mod_str.clone()).size(13).color(fg),
+                    text("Tipo:").size(12).color(muted),
+                    text(ext.clone()).size(13).color(fg),
+                    text("Permissoes:").size(12).color(muted),
+                    text(perms.clone()).size(13).color(fg),
+                    container(horizontal_rule(1)).padding([4, 0]).width(Length::Fill),
+                    row![btn_apply, btn_cancel].spacing(8),
+                ]
+                .spacing(6)
+                .padding([20, 24]),
+            )
+            .width(Length::Fixed(400.0))
+            .style(move |_| iced::widget::container::Style {
+                background: Some(iced::Background::Color(LumoTheme::panel_hi())),
+                border: iced::Border {
+                    color: LumoTheme::sep(),
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
+                ..Default::default()
+            });
+
+            column![root, dialog].into()
         } else {
             root.into()
+        };
+
+        // -- Context menu overlay ------------------------------------------
+        if let Some(ref ctx) = self.context_menu {
+            self.view_context_menu(ctx, root, fg, panel_hi, muted, accent)
+        } else {
+            root
         }
     }
 
@@ -1221,6 +1503,7 @@ impl App {
         let items: Vec<Element<Message>> = match ctx {
             ContextMenu::Item { .. } => vec![
                 ctx_btn("Abrir", Message::OpenSelected, fg, panel_hi),
+                ctx_btn("Propriedades (Ctrl+I)", Message::OpenProperties, fg, panel_hi),
                 ctx_btn(
                     "Renomear (F2)",
                     if let Some(&idx) = self.file_list.selected.iter().next() {
