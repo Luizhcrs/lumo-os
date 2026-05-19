@@ -45,6 +45,8 @@ use lumo_ipc::{LumoCommand, LumoEvent, MAX_WORKSPACES};
 
 use crate::ipc::IpcServer;
 use crate::input::keyboard::KeyboardConfig;
+use crate::handlers::screencopy::ScreencopyState;
+use crate::workspace::{WorkspaceVault, WorkspaceTransition};
 
 /// Estado raiz do Lumo WM.
 pub struct LumoState {
@@ -150,6 +152,13 @@ pub struct LumoState {
 
     /// Exit code do processo. 0 = normal, 2 = watchdog DRM stall.
     pub exit_code: i32,
+
+    // W8.A: screencopy global state.
+    pub screencopy: Option<ScreencopyState>,
+    // W8.B: workspace vault (windows ocultas por workspace).
+    pub workspace_vault: WorkspaceVault,
+    // W8.B: animacao ativa de troca de workspace (None quando idle).
+    pub workspace_transition: Option<WorkspaceTransition>,
 
     /// A19: wallpaper opcional carregado pelo backend (winit OU drm)
     /// apos o GlesRenderer estar pronto. None = clear color de fundo.
@@ -275,6 +284,9 @@ impl LumoState {
             cursor_buffer,
             ipc: IpcServer::default(),
             active_workspace: 1,
+            screencopy: None,
+            workspace_vault: WorkspaceVault::new(),
+            workspace_transition: None,
             keyboard_config: KeyboardConfig::load(),
             caps_lock_on: false,
             num_lock_on: false,
@@ -495,10 +507,72 @@ impl LumoState {
             return;
         }
         let prev = self.active_workspace;
+
+        // W8.B: oculta toplevels do workspace atual movendo pro vault.
+        // reduced_motion: duracao 0 (instant); normal: 250ms slide.
+        // W8.C: reduced_motion=true -> duracao 0 (instant).
+        let a11y = lumo_foundation::A11yTokens::load_from_disk();
+        let duration = if a11y.reduced_motion { 0.0f32 } else { 0.25f32 };
+        use crate::workspace::WindowEntry;
+        let current_windows: Vec<WindowEntry> = self
+            .space
+            .elements()
+            .map(|w| {
+                let pos = self.space.element_location(w).unwrap_or_default();
+                WindowEntry { window: w.clone(), cached_pos: pos }
+            })
+            .collect();
+        for entry in &current_windows {
+            self.space.unmap_elem(&entry.window);
+        }
+        self.workspace_vault.hide_workspace(prev, current_windows);
+
+        // Restaura toplevels do workspace destino.
+        let to_restore = self.workspace_vault.show_workspace(to);
+        for entry in to_restore {
+            self.space.map_element(entry.window, entry.cached_pos, false);
+        }
+
         self.active_workspace = to;
-        tracing::info!(prev, current = to, "switch workspace");
+        tracing::info!(prev, current = to, "switch workspace W8.B");
+
+        // Inicia animacao de slide (W8.B).
+        self.workspace_transition = Some(
+            crate::workspace::WorkspaceTransition::new(prev, to, duration)
+        );
+
         let ev = IpcServer::workspaces_event(self.active_workspace, MAX_WORKSPACES);
         self.ipc.broadcast(&ev);
+    }
+
+    /// W8.B: move toplevel focado para workspace `to`.
+    pub fn move_focused_to_workspace(&mut self, to: u8) {
+        use smithay::wayland::seat::WaylandFocus;
+        if !(1..=MAX_WORKSPACES).contains(&to) {
+            return;
+        }
+        let kb = self.keyboard.clone();
+        let focused_surf = kb.current_focus();
+        let window = focused_surf.and_then(|s| {
+            self.space
+                .elements()
+                .find(|w| w.wl_surface().map(|ws| *ws == s).unwrap_or(false))
+                .cloned()
+        });
+        let window = match window {
+            Some(w) => w,
+            None => return,
+        };
+        let pos = self.space.element_location(&window).unwrap_or_default();
+        self.space.unmap_elem(&window);
+        use crate::workspace::WindowEntry;
+        let entry = WindowEntry { window, cached_pos: pos };
+        self.workspace_vault
+            .vault
+            .entry(to)
+            .or_default()
+            .push(entry);
+        tracing::info!(to, "W8.B: toplevel movido para workspace");
     }
 }
 

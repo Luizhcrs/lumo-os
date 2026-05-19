@@ -13,3 +13,4 @@ pub mod shm;
 pub mod xdg_shell;
 pub mod dmabuf;
 pub mod lid;
+pub mod screencopy;

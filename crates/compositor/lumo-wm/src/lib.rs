@@ -20,6 +20,7 @@ pub mod cursor;
 pub mod handlers;
 pub mod input;
 pub mod ipc;
+pub mod workspace;
 pub mod state;
 
 pub use state::{init_socket, ClientState, LumoState};

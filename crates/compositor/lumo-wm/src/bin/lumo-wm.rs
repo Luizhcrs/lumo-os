@@ -221,6 +221,10 @@ fn main() -> Result<()> {
 
     lumo_wm::state::init_xdg_decoration(&mut state);
 
+    // W8.A: screencopy global.
+    state.screencopy = Some(lumo_wm::handlers::screencopy::ScreencopyState::new(&state.display_handle.clone()));
+    tracing::info!("W8.A: zwlr-screencopy-v1 global registrado");
+
     // L5: lid watcher (Galaxy Book 4) - best-effort, no-op on other HW.
     lumo_wm::handlers::lid::register_lid_watcher(&event_loop.handle());
 
