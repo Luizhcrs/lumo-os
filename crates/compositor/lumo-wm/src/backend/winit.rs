@@ -239,6 +239,13 @@ fn redraw(
         }
         // W6.C: tick splash logo animation.
         crate::state::tick_splash(state, dt);
+        // W12.B: tick overview animation; clear if closed.
+        if let Some(ov) = state.overview.as_mut() {
+            ov.tick(dt);
+        }
+        if state.overview.as_ref().map(|o| o.is_closed()).unwrap_or(false) {
+            state.overview = None;
+        }
     }
 
     let inputs = OverlayInputs {
@@ -257,6 +264,12 @@ fn redraw(
         ssd_windows: &state.ssd_windows,
         titlebar_menu: state.titlebar_menu.as_ref().map(|(_, pos, hover)| (*pos, *hover)),
         snap_preview: state.snap_preview,
+        overview_elements: state.overview.as_ref()
+            .map(|ov| crate::overview::overview_elements(ov, ow, oh))
+            .unwrap_or_default(),
+        picker_elements: state.stack_picker.as_ref()
+            .map(|p| crate::stack_picker::picker_elements(p, ow, oh))
+            .unwrap_or_default(),
     };
     // A19: lista combinada (chrome + space + wallpaper). Passamos space iter
     // vazio pra render_output, todos elementos vao via custom_elements --

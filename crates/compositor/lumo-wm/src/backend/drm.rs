@@ -898,6 +898,11 @@ fn render_drm(state: &mut LumoState) {
         }
         // W6.C: tick splash logo animation.
         crate::state::tick_splash(state, dt);
+        // W12.B: tick overview.
+        if let Some(ov) = state.overview.as_mut() { ov.tick(dt); }
+        if state.overview.as_ref().map(|o| o.is_closed()).unwrap_or(false) {
+            state.overview = None;
+        }
     }
     let boot_curtain_alpha = state.boot_curtain_alpha;
 
@@ -972,6 +977,12 @@ fn render_drm(state: &mut LumoState) {
         ssd_windows,
         titlebar_menu: titlebar_menu_opt,
         snap_preview: state.snap_preview,
+        overview_elements: state.overview.as_ref()
+            .map(|ov| crate::overview::overview_elements(ov, ow, oh))
+            .unwrap_or_default(),
+        picker_elements: state.stack_picker.as_ref()
+            .map(|p| crate::stack_picker::picker_elements(p, ow, oh))
+            .unwrap_or_default(),
         space,
         output: &surface.output,
         pointer_location,

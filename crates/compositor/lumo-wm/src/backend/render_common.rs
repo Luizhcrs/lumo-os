@@ -485,6 +485,10 @@ pub struct OverlayInputs<'a> {
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// W9.B: snap zone preview during window drag.
     pub snap_preview: Option<crate::input::move_grab::SnapZone>,
+    /// W12.B: mission control overview elements. None = not active.
+    pub overview_elements: Vec<smithay::backend::renderer::element::solid::SolidColorRenderElement>,
+    /// W12.C: stack picker elements. None = not active.
+    pub picker_elements: Vec<smithay::backend::renderer::element::solid::SolidColorRenderElement>,
 }
 
 /// Constroi overlay completo (cursor + corner mask + shadows).
@@ -567,6 +571,13 @@ pub fn build_overlay(
             snap_preview_element(zone, inputs.output_w, inputs.output_h)
         ));
     }
+    // W12.B/C: overview + picker overlays (front of stack).
+    for elem in &inputs.overview_elements {
+        overlay.push(LumoCustomElement::Solid(elem.clone()));
+    }
+    for elem in &inputs.picker_elements {
+        overlay.push(LumoCustomElement::Solid(elem.clone()));
+    }
 
     overlay
 }
@@ -598,6 +609,10 @@ pub struct DrmCollectInputs<'a> {
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// W9.B: snap zone preview during window drag.
     pub snap_preview: Option<crate::input::move_grab::SnapZone>,
+    /// W12.B: mission control overview elements.
+    pub overview_elements: Vec<smithay::backend::renderer::element::solid::SolidColorRenderElement>,
+    /// W12.C: stack picker elements.
+    pub picker_elements: Vec<smithay::backend::renderer::element::solid::SolidColorRenderElement>,
 }
 
 /// Coleta TODOS elementos pra render direto no DrmCompositor: chrome
@@ -693,6 +708,13 @@ pub fn collect_drm_elements(
         out.push(LumoCustomElement::Solid(
             snap_preview_element(zone, inputs.output_w, inputs.output_h)
         ));
+    }
+    // W12.B/C: overview + picker overlays.
+    for elem in &inputs.overview_elements {
+        out.push(LumoCustomElement::Solid(elem.clone()));
+    }
+    for elem in &inputs.picker_elements {
+        out.push(LumoCustomElement::Solid(elem.clone()));
     }
 
     // 4. Toplevels + layer-shell via space_render_elements.
@@ -814,6 +836,13 @@ pub fn build_winit_elements(
         out.push(LumoCustomElement::Solid(
             snap_preview_element(zone, inputs.output_w, inputs.output_h)
         ));
+    }
+    // W12.B/C: overview + picker overlays.
+    for elem in &inputs.overview_elements {
+        out.push(LumoCustomElement::Solid(elem.clone()));
+    }
+    for elem in &inputs.picker_elements {
+        out.push(LumoCustomElement::Solid(elem.clone()));
     }
 
     // 4. Space (toplevels + layer-shell + popups).
