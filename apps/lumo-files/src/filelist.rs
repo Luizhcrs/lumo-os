@@ -215,6 +215,55 @@ impl FileList {
             .unwrap_or_else(|| chrono::DateTime::UNIX_EPOCH);
         dt.format("%Y-%m-%d %H:%M").to_string()
     }
+
+    /// Retorna data modificada em formato relativo curto se < 7 dias.
+    /// Caso contrario delega para `human_modified` (formato absoluto).
+    pub fn human_modified_relative(path: &PathBuf) -> String {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let modified = match path.metadata().and_then(|m| m.modified()) {
+            Ok(t) => t,
+            Err(_) => return "--".to_string(),
+        };
+        let now = SystemTime::now();
+        let delta = now
+            .duration_since(modified)
+            .unwrap_or_else(|_| std::time::Duration::from_secs(0));
+        let secs = delta.as_secs();
+        if secs < 60 {
+            return "agora".to_string();
+        }
+        if secs < 3600 {
+            let m = secs / 60;
+            return format!("{m} min atras");
+        }
+        if secs < 86_400 {
+            let h = secs / 3600;
+            return if h == 1 { "1 hora atras".into() } else { format!("{h} horas atras") };
+        }
+        if secs < 86_400 * 7 {
+            let d = secs / 86_400;
+            return if d == 1 { "ontem".into() } else { format!("{d} dias atras") };
+        }
+        let unix_secs = modified
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let dt = chrono::DateTime::from_timestamp(unix_secs as i64, 0)
+            .unwrap_or_else(|| chrono::DateTime::UNIX_EPOCH);
+        dt.format("%Y-%m-%d").to_string()
+    }
+
+    /// Retorna tipo "Pasta" para diretorios ou extensao uppercase, ou "Arquivo".
+    pub fn human_type(path: &PathBuf) -> String {
+        if path.is_dir() {
+            return "Pasta".to_string();
+        }
+        match path.extension().and_then(|e| e.to_str()) {
+            Some(ext) if !ext.is_empty() => ext.to_ascii_uppercase(),
+            _ => "Arquivo".to_string(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -268,5 +317,45 @@ mod tests {
         for i in 3..=7 {
             assert!(fl.selected.contains(&i), "idx {} missing", i);
         }
+    }
+
+    #[test]
+    fn human_type_pasta_para_diretorio() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(FileList::human_type(&dir.path().to_path_buf()), "Pasta");
+    }
+
+    #[test]
+    fn human_type_extensao_uppercase() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("relatorio.pdf");
+        std::fs::write(&f, b"x").unwrap();
+        assert_eq!(FileList::human_type(&f), "PDF");
+    }
+
+    #[test]
+    fn human_type_arquivo_sem_extensao() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("README");
+        std::fs::write(&f, b"x").unwrap();
+        assert_eq!(FileList::human_type(&f), "Arquivo");
+    }
+
+    #[test]
+    fn human_modified_relative_arquivo_inexistente_retorna_traco() {
+        let p = PathBuf::from("/nao/existe/qualquer/lugar/12345");
+        assert_eq!(FileList::human_modified_relative(&p), "--");
+    }
+
+    #[test]
+    fn human_modified_relative_recente_e_agora_ou_min() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("agora.txt");
+        std::fs::write(&f, b"x").unwrap();
+        let s = FileList::human_modified_relative(&f);
+        assert!(
+            s == "agora" || s.contains("min") || s.contains("hora"),
+            "esperava agora/min/hora, veio {s:?}"
+        );
     }
 }

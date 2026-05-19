@@ -5,13 +5,17 @@
 mod app;
 mod appmenu;
 mod breadcrumb;
+mod ctxmenu;
 mod filelist;
 mod icons;
 mod ops;
 mod sidebar;
+mod statusbar;
+mod tabs;
 mod theme;
-mod toolbar;
 mod thumbs;
+mod toast;
+mod toolbar;
 
 use app::App;
 use iced::{Settings, Size};

@@ -1,9 +1,11 @@
 //! Sidebar com atalhos de navegacao rapida.
 //!
-//! Lista Home/Documentos/Downloads/Imagens/Videos/Musicas/Desktop/Lixeira
-//! e drives montados em /run/media/.
+//! Lista Home / Documentos / Downloads / Imagens / Videos / Musicas /
+//! Desktop / Lixeira + drives montados em /run/media/<user>/.
 
 use std::path::PathBuf;
+
+use crate::icons;
 
 /// Item da sidebar.
 #[derive(Debug, Clone)]
@@ -26,8 +28,24 @@ pub enum SidebarKind {
     Drive,
 }
 
+impl SidebarKind {
+    /// Retorna bytes SVG do icone associado.
+    pub fn svg_bytes(&self) -> &'static [u8] {
+        match self {
+            SidebarKind::Home => icons::HOME,
+            SidebarKind::Documents => icons::DOCS,
+            SidebarKind::Downloads => icons::DOWNLOADS,
+            SidebarKind::Pictures => icons::PICS,
+            SidebarKind::Videos => icons::VIDEOS,
+            SidebarKind::Music => icons::MUSIC,
+            SidebarKind::Desktop => icons::DESKTOP,
+            SidebarKind::Trash => icons::TRASH,
+            SidebarKind::Drive => icons::FOLDER,
+        }
+    }
+}
+
 /// Retorna lista de itens da sidebar.
-/// Detecta home via env HOME. Drives via /run/media/<user>/*.
 pub fn build_sidebar(username: &str) -> Vec<SidebarItem> {
     let home = PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| format!("/home/{username}")));
 
@@ -91,4 +109,21 @@ pub fn build_sidebar(username: &str) -> Vec<SidebarItem> {
     }
 
     items
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sidebar_kind_svg_bytes_nao_vazios() {
+        for kind in [
+            SidebarKind::Home, SidebarKind::Documents, SidebarKind::Downloads,
+            SidebarKind::Pictures, SidebarKind::Videos, SidebarKind::Music,
+            SidebarKind::Desktop, SidebarKind::Trash, SidebarKind::Drive,
+        ] {
+            let bytes = kind.svg_bytes();
+            assert!(bytes.len() > 16, "SVG vazio para {:?}", kind);
+        }
+    }
 }
