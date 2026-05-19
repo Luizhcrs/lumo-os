@@ -15,3 +15,5 @@ pub mod dmabuf;
 pub mod lid;
 pub mod screencopy;
 pub mod idle;
+pub mod color_management;
+pub mod wayland_modern;

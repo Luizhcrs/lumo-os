@@ -50,6 +50,9 @@ use crate::handlers::idle::LumoIdleManager;
 use crate::input::keyboard::KeyboardConfig;
 use crate::handlers::screencopy::ScreencopyState;
 use crate::workspace::{WorkspaceVault, WorkspaceTransition};
+use smithay::wayland::fifo::FifoManagerState;
+use smithay::wayland::commit_timing::CommitTimingManagerState;
+use crate::handlers::color_management::ColorManagerState;
 
 /// Estado raiz do Lumo WM.
 pub struct LumoState {
@@ -158,6 +161,11 @@ pub struct LumoState {
 
     // W8.A: screencopy global state.
     pub screencopy: Option<ScreencopyState>,
+    // W13.A: color management global.
+    pub color_manager: Option<ColorManagerState>,
+    // W13.C: wp-fifo-v1 + wp-commit-timing-v1.
+    pub fifo_manager_state: FifoManagerState,
+    pub commit_timing_manager_state: CommitTimingManagerState,
     // W8.B: workspace vault (windows ocultas por workspace).
     pub workspace_vault: WorkspaceVault,
     // W8.B: animacao ativa de troca de workspace (None quando idle).
@@ -272,6 +280,11 @@ impl LumoState {
         let pointer = seat.add_pointer();
         // W10.B: must create before display_handle moves into Self.
         let idle_notifier_state = IdleNotifierState::new(&display_handle, loop_handle.clone());
+        // W13.A: color management global.
+        let color_manager = ColorManagerState::new(&display_handle);
+        // W13.C: fifo + commit-timing.
+        let fifo_manager_state = FifoManagerState::new::<Self>(&display_handle);
+        let commit_timing_manager_state = CommitTimingManagerState::new::<Self>(&display_handle);
 
         Self {
             start_time: Instant::now(),
@@ -308,6 +321,9 @@ impl LumoState {
             ipc: IpcServer::default(),
             active_workspace: 1,
             screencopy: None,
+            color_manager: Some(color_manager),
+            fifo_manager_state,
+            commit_timing_manager_state,
             workspace_vault: WorkspaceVault::new(),
             workspace_transition: None,
             keyboard_config: KeyboardConfig::load(),
@@ -654,6 +670,9 @@ impl XdgDecorationHandler for LumoState {
 
 
 smithay::delegate_xdg_decoration!(LumoState);
+// W13.C: delegate fifo + commit_timing
+smithay::delegate_fifo!(LumoState);
+smithay::delegate_commit_timing!(LumoState);
 
 /// Inicializa o global xdg-decoration-unstable-v1 no compositor.
 /// Deve ser chamado apos LumoState::new() pra que as delegate impls
