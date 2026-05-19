@@ -18,6 +18,8 @@ xdg = "2"
 zbus = { version = "5", default-features = false, features = ["blocking-api", "tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread", "process", "fs", "time"] }
 futures = "0.3.32"
+image = { version = "0.24", default-features = false, features = ["jpeg", "png", "webp"] }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 tempfile = "3"

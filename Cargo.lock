@@ -4252,8 +4252,10 @@ name = "lumo-files"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "chrono",
  "futures",
  "iced",
+ "image 0.24.9",
  "lumo-foundation",
  "mime_guess",
  "tempfile",

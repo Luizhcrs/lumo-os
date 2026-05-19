@@ -59,31 +59,8 @@ pub struct PropertiesState {
     pub name_edit: String,
 }
 
-// ---------------------------------------------------------------------------
-// Thumbnail cache (inline)
-// ---------------------------------------------------------------------------
-
-pub struct ThumbCache {
-    cache: std::collections::HashMap<String, Vec<u8>>,
-    order: std::collections::VecDeque<String>,
-    max: usize,
-}
-
-impl ThumbCache {
-    pub fn new() -> Self {
-        Self { cache: std::collections::HashMap::new(), order: std::collections::VecDeque::new(), max: 500 }
-    }
-    pub fn get(&self, key: &str) -> Option<&Vec<u8>> { self.cache.get(key) }
-    pub fn insert(&mut self, key: String, data: Vec<u8>) {
-        if self.cache.len() >= self.max {
-            if let Some(oldest) = self.order.pop_front() { self.cache.remove(&oldest); }
-        }
-        self.cache.insert(key.clone(), data);
-        self.order.push_back(key);
-    }
-}
-
-impl Default for ThumbCache { fn default() -> Self { Self::new() } }
+// ThumbCache: use crate::thumbs::ThumbCache (canonical source)
+use crate::thumbs::ThumbCache;
 
 // ---------------------------------------------------------------------------
 // Clipboard state (path ops)
@@ -193,11 +170,11 @@ pub enum Message {
 // ---------------------------------------------------------------------------
 
 pub struct App {
-    pub current_dir: PathBuf,
-    pub file_list: FileList,
+    /// Tabs: lista de tabs abertas. Estado canonico de navegacao.
+    pub tabs: Vec<Tab>,
+    /// Indice da tab ativa.
+    pub active_tab: usize,
     pub sidebar: Vec<SidebarItem>,
-    pub back_stack: VecDeque<PathBuf>,
-    pub forward_stack: VecDeque<PathBuf>,
     pub clipboard: Option<ClipboardOp>,
     pub context_menu: Option<ContextMenu>,
     pub status: String,
@@ -219,22 +196,17 @@ pub struct App {
     pub thumb_cache: ThumbCache,
     /// Properties dialog state.
     pub properties: Option<PropertiesState>,
-    /// Tabs: lista de tabs abertas.
-    pub tabs: Vec<Tab>,
-    /// Indice da tab ativa.
-    pub active_tab: usize,
 }
 
 impl App {
     pub fn new() -> (Self, Task<Message>) {
         let home = dirs_home();
         let sidebar = build_sidebar(&username());
+        let initial_tab = Tab::new(home.clone());
         let app = Self {
-            current_dir: home.clone(),
-            file_list: FileList::default(),
+            tabs: vec![initial_tab],
+            active_tab: 0,
             sidebar,
-            back_stack: VecDeque::new(),
-            forward_stack: VecDeque::new(),
             clipboard: None,
             context_menu: None,
             status: String::new(),
@@ -248,14 +220,22 @@ impl App {
             preview_visible: false,
             thumb_cache: ThumbCache::new(),
             properties: None,
-            tabs: vec![],
-            active_tab: 0,
         };
         let task = Task::perform(load_dir(home.clone(), false), move |r| match r {
             Ok(entries) => Message::DirLoaded(home.clone(), entries),
             Err(e) => Message::OpError(e),
         });
         (app, task)
+    }
+
+    /// Referencia imutavel para a tab ativa.
+    pub fn current_tab(&self) -> &Tab {
+        &self.tabs[self.active_tab]
+    }
+
+    /// Referencia mutavel para a tab ativa.
+    pub fn current_tab_mut(&mut self) -> &mut Tab {
+        &mut self.tabs[self.active_tab]
     }
 
     // -----------------------------------------------------------------------
@@ -266,8 +246,12 @@ impl App {
         match msg {
             // -- Navegacao --------------------------------------------------
             Message::Navigate(path) => {
-                self.push_back();
-                self.forward_stack.clear();
+                {
+                    let cur = self.current_tab().current_dir.clone();
+                    self.current_tab_mut().back_stack.push_back(cur);
+                    if self.current_tab().back_stack.len() > 50 { self.current_tab_mut().back_stack.pop_front(); }
+                }
+                self.current_tab_mut().forward_stack.clear();
                 let p2 = path.clone();
                 Task::perform(load_dir(path, self.show_hidden), move |r| match r {
                     Ok(entries) => Message::DirLoaded(p2.clone(), entries),
@@ -276,8 +260,9 @@ impl App {
             }
 
             Message::NavigateBack => {
-                if let Some(prev) = self.back_stack.pop_back() {
-                    self.forward_stack.push_back(self.current_dir.clone());
+                if let Some(prev) = self.current_tab_mut().back_stack.pop_back() {
+                    let cur = self.current_tab().current_dir.clone();
+                    self.current_tab_mut().forward_stack.push_back(cur);
                     let p2 = prev.clone();
                     Task::perform(load_dir(prev, self.show_hidden), move |r| match r {
                         Ok(entries) => Message::DirLoaded(p2.clone(), entries),
@@ -289,8 +274,10 @@ impl App {
             }
 
             Message::NavigateForward => {
-                if let Some(next) = self.forward_stack.pop_back() {
-                    self.push_back();
+                if let Some(next) = self.current_tab_mut().forward_stack.pop_back() {
+                    let cur = self.current_tab().current_dir.clone();
+                    self.current_tab_mut().back_stack.push_back(cur);
+                    if self.current_tab().back_stack.len() > 50 { self.current_tab_mut().back_stack.pop_front(); }
                     let p2 = next.clone();
                     Task::perform(load_dir(next, self.show_hidden), move |r| match r {
                         Ok(entries) => Message::DirLoaded(p2.clone(), entries),
@@ -302,7 +289,7 @@ impl App {
             }
 
             Message::NavigateUp => {
-                if let Some(parent) = self.current_dir.parent().map(|p| p.to_path_buf()) {
+                if let Some(parent) = self.current_tab().current_dir.parent().map(|p| p.to_path_buf()) {
                     self.update(Message::Navigate(parent))
                 } else {
                     Task::none()
@@ -312,17 +299,17 @@ impl App {
             // -- Grid ----------------------------------------------------------
             Message::ItemClicked { idx, ctrl, shift } => {
                 if shift {
-                    self.file_list.shift_click(idx);
+                    self.current_tab_mut().file_list.shift_click(idx);
                 } else if ctrl {
-                    self.file_list.ctrl_click(idx);
+                    self.current_tab_mut().file_list.ctrl_click(idx);
                 } else {
-                    self.file_list.click(idx);
+                    self.current_tab_mut().file_list.click(idx);
                 }
                 Task::none()
             }
 
             Message::ItemDoubleClicked(idx) => {
-                if let Some(path) = self.file_list.entries.get(idx).cloned() {
+                if let Some(path) = self.current_tab().file_list.entries.get(idx).cloned() {
                     if path.is_dir() {
                         self.update(Message::Navigate(path))
                     } else {
@@ -341,7 +328,7 @@ impl App {
             }
 
             Message::ClearSelection => {
-                self.file_list.clear_selection();
+                self.current_tab_mut().file_list.clear_selection();
                 Task::none()
             }
 
@@ -357,7 +344,7 @@ impl App {
 
             // -- Operacoes --------------------------------------------------
             Message::OpenSelected => {
-                let paths = self.file_list.selected_paths();
+                let paths = self.current_tab().file_list.selected_paths();
                 if let Some(path) = paths.into_iter().next() {
                     if path.is_dir() {
                         self.update(Message::Navigate(path))
@@ -377,53 +364,53 @@ impl App {
             }
 
             Message::DeleteSelected => {
-                let paths = self.file_list.selected_paths();
+                let paths = self.current_tab().file_list.selected_paths();
                 for path in &paths {
                     if let Err(e) = ops::move_to_trash(path) {
                         self.status = format!("Erro lixeira: {e}");
                         return Task::none();
                     }
                 }
-                self.file_list.clear_selection();
+                self.current_tab_mut().file_list.clear_selection();
                 self.context_menu = None;
                 self.update(Message::Refresh)
             }
 
             Message::RenameStart(idx) => {
-                self.file_list.start_rename(idx);
+                self.current_tab_mut().file_list.start_rename(idx);
                 self.context_menu = None;
                 Task::none()
             }
 
             Message::RenameInputChanged(s) => {
-                self.file_list.rename_input = s;
+                self.current_tab_mut().file_list.rename_input = s;
                 Task::none()
             }
 
             Message::RenameConfirm => {
-                if let Some(idx) = self.file_list.renaming {
-                    let new_name = self.file_list.rename_input.clone();
-                    if let Some(path) = self.file_list.entries.get(idx).cloned() {
+                if let Some(idx) = self.current_tab().file_list.renaming {
+                    let new_name = self.current_tab().file_list.rename_input.clone();
+                    if let Some(path) = self.current_tab().file_list.entries.get(idx).cloned() {
                         match ops::rename(&path, &new_name) {
                             Ok(_) => {
-                                self.file_list.cancel_rename();
+                                self.current_tab_mut().file_list.cancel_rename();
                                 return self.update(Message::Refresh);
                             }
                             Err(e) => self.status = format!("Renomear falhou: {e}"),
                         }
                     }
                 }
-                self.file_list.cancel_rename();
+                self.current_tab_mut().file_list.cancel_rename();
                 Task::none()
             }
 
             Message::RenameCancel => {
-                self.file_list.cancel_rename();
+                self.current_tab_mut().file_list.cancel_rename();
                 Task::none()
             }
 
             Message::CopySelected => {
-                let paths = self.file_list.selected_paths();
+                let paths = self.current_tab().file_list.selected_paths();
                 if !paths.is_empty() {
                     self.clipboard = Some(ClipboardOp::Copy(paths));
                     self.status = "Copiado".to_string();
@@ -433,7 +420,7 @@ impl App {
             }
 
             Message::CutSelected => {
-                let paths = self.file_list.selected_paths();
+                let paths = self.current_tab().file_list.selected_paths();
                 if !paths.is_empty() {
                     self.clipboard = Some(ClipboardOp::Cut(paths));
                     self.status = "Recortado".to_string();
@@ -443,7 +430,7 @@ impl App {
             }
 
             Message::Paste => {
-                let dest = self.current_dir.clone();
+                let dest = self.current_tab().current_dir.clone();
                 match self.clipboard.clone() {
                     Some(ClipboardOp::Copy(paths)) => {
                         for p in &paths {
@@ -481,7 +468,7 @@ impl App {
 
             Message::NewFolderConfirm => {
                 if let Some(name) = self.new_folder_input.take() {
-                    match ops::mkdir(&self.current_dir, &name) {
+                    match ops::mkdir(&self.current_tab().current_dir.clone(), &name) {
                         Ok(_) => return self.update(Message::Refresh),
                         Err(e) => self.status = format!("Criar pasta falhou: {e}"),
                     }
@@ -495,7 +482,7 @@ impl App {
             }
 
             Message::Refresh => {
-                let dir = self.current_dir.clone();
+                let dir = self.current_tab().current_dir.clone();
                 let dir2 = dir.clone();
                 Task::perform(load_dir(dir, self.show_hidden), move |r| match r {
                     Ok(entries) => Message::DirLoaded(dir2.clone(), entries),
@@ -511,7 +498,7 @@ impl App {
                         return self.update(Message::DeleteSelected);
                     }
                     Key::Named(keyboard::key::Named::F2) => {
-                        if let Some(&idx) = self.file_list.selected.iter().next() {
+                        if let Some(&idx) = self.current_tab().file_list.selected.iter().next() {
                             return self.update(Message::RenameStart(idx));
                         }
                     }
@@ -519,9 +506,10 @@ impl App {
                         return self.update(Message::OpenSelected);
                     }
                     Key::Named(keyboard::key::Named::Escape) => {
-                        self.file_list.clear_selection();
-                        self.file_list.cancel_rename();
+                        self.current_tab_mut().file_list.clear_selection();
+                        self.current_tab_mut().file_list.cancel_rename();
                         self.new_folder_input = None;
+                        self.properties = None;
                         if self.search_visible {
                             self.search_visible = false;
                             self.search_query.clear();
@@ -540,7 +528,7 @@ impl App {
                         "i" => return self.update(Message::OpenProperties),
                         "t" => return self.update(Message::NewTab),
                         "w" => {
-                            if !self.tabs.is_empty() {
+                            if self.tabs.len() > 1 {
                                 let idx = self.active_tab;
                                 return self.update(Message::CloseTab(idx));
                             }
@@ -554,10 +542,40 @@ impl App {
 
             // -- Async results ---------------------------------------------
             Message::DirLoaded(path, entries) => {
-                self.current_dir = path;
-                self.file_list.set_entries(entries);
-                self.file_list.sort(self.sort_by, self.sort_ascending);
+                let label = path.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "/".to_string());
+                self.current_tab_mut().current_dir = path;
+                self.current_tab_mut().label = label;
+                let sb = self.sort_by; let sa = self.sort_ascending;
+                self.current_tab_mut().file_list.set_entries(entries);
+                self.current_tab_mut().file_list.sort(sb, sa);
                 self.status.clear();
+                // P0.1: pre-render thumbs for image files in background (non-blocking)
+                if self.view_mode == crate::toolbar::ViewMode::Grid {
+                    let image_paths: Vec<_> = self.tabs[self.active_tab].file_list.entries
+                        .iter()
+                        .filter(|p| crate::thumbs::is_image(p))
+                        .cloned()
+                        .collect();
+                    if !image_paths.is_empty() {
+                        return Task::batch(image_paths.into_iter().map(|path| {
+                            let key = crate::thumbs::cache_key(&path);
+                            Task::perform(
+                                tokio::task::spawn_blocking(move || {
+                                    crate::thumbs::generate_thumb(&path, &key)
+                                        .map(|data| (path, key, data))
+                                }),
+                                |r| match r {
+                                    Ok(Some((path, key, data))) => {
+                                        Message::ThumbLoaded { path, key, data }
+                                    }
+                                    _ => Message::Refresh,
+                                },
+                            )
+                        }));
+                    }
+                }
                 Task::none()
             }
 
@@ -578,8 +596,8 @@ impl App {
             }
             Message::AppMenuQuit => iced::exit(),
             Message::AppMenuSelectAll => {
-                let n = self.file_list.entries.len();
-                for i in 0..n { self.file_list.selected.insert(i); }
+                let n = self.current_tab().file_list.entries.len();
+                for i in 0..n { self.current_tab_mut().file_list.selected.insert(i); }
                 Task::none()
             }
             Message::AppMenuToggleHidden => {
@@ -609,12 +627,14 @@ impl App {
                     self.sort_by = s;
                     self.sort_ascending = true;
                 }
-                self.file_list.sort(self.sort_by, self.sort_ascending);
+                let sb = self.sort_by; let sa = self.sort_ascending;
+                self.current_tab_mut().file_list.sort(sb, sa);
                 Task::none()
             }
             Message::ToggleSortOrder => {
                 self.sort_ascending = !self.sort_ascending;
-                self.file_list.sort(self.sort_by, self.sort_ascending);
+                let sb = self.sort_by; let sa = self.sort_ascending;
+                self.current_tab_mut().file_list.sort(sb, sa);
                 Task::none()
             }
 
@@ -665,7 +685,7 @@ impl App {
             }
 
             Message::OpenProperties => {
-                let paths = self.file_list.selected_paths();
+                let paths = self.current_tab().file_list.selected_paths();
                 if let Some(path) = paths.into_iter().next() {
                     let name = path.file_name()
                         .unwrap_or_default().to_string_lossy().to_string();
@@ -695,7 +715,7 @@ impl App {
             }
 
             Message::NewTab => {
-                let dir = self.current_dir.clone();
+                let dir = self.current_tab().current_dir.clone();
                 let tab = Tab::new(dir.clone());
                 self.tabs.push(tab);
                 self.active_tab = self.tabs.len() - 1;
@@ -746,11 +766,12 @@ impl App {
 
             Message::TabDirLoaded(idx, path, entries) => {
                 if let Some(tab) = self.tabs.get_mut(idx) {
-                    tab.current_dir = path.clone();
                     tab.label = path.file_name()
                         .map(|n| n.to_string_lossy().to_string())
                         .unwrap_or_else(|| "/".to_string());
+                    tab.current_dir = path;
                     tab.file_list.set_entries(entries);
+                    tab.file_list.sort(self.sort_by, self.sort_ascending);
                 }
                 Task::none()
             }
@@ -798,7 +819,7 @@ impl App {
         let sep = LumoTheme::sep();
 
         // -- Toolbar -----------------------
-        let segs = breadcrumb::segments(&self.current_dir);
+        let segs = breadcrumb::segments(&self.current_tab().current_dir);
         let mut breadcrumb_row = row![].spacing(2);
         for (i, (label, path)) in segs.iter().enumerate() {
             let trunc = breadcrumb::truncate_label(label, 20);
@@ -819,8 +840,8 @@ impl App {
         }
 
         let toolbar = crate::toolbar::view(
-            !self.back_stack.is_empty(),
-            !self.forward_stack.is_empty(),
+            !self.current_tab().back_stack.is_empty(),
+            !self.current_tab().forward_stack.is_empty(),
             self.search_visible,
             &self.search_query,
             self.view_mode,
@@ -895,7 +916,7 @@ impl App {
         let mut drives_col: Vec<iced::Element<Message>> = Vec::new();
 
         for item in &self.sidebar {
-            let is_active = item.path == self.current_dir;
+            let is_active = item.path == self.current_tab().current_dir;
             let label_color = if is_active { accent } else { fg };
             let selected_bg = if is_active { LumoTheme::accent_alpha40() } else { Color::TRANSPARENT };
             let path = item.path.clone();
@@ -1010,7 +1031,7 @@ impl App {
 
         // -- Layout final --------------------------------------------------
         let body = if self.preview_visible {
-            let selected_paths = self.file_list.selected_paths();
+            let selected_paths = self.current_tab().file_list.selected_paths();
             let preview: iced::Element<Message> = if let Some(path) = selected_paths.first() {
                 self.view_preview(path, fg, muted, accent)
             } else {
@@ -1102,7 +1123,21 @@ impl App {
                 ..Default::default()
             });
 
-            column![root, dialog].into()
+            // P1.5: Dialog substituye root inteiro para ser overlay real.
+            // Iced 0.13 nao tem Stack nativo; substituir body e a solucao correta.
+            let _ = root; // root nao renderizado quando dialog ativo
+            container(
+                container(dialog)
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill),
+            )
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(move |_| iced::widget::container::Style {
+                background: Some(iced::Background::Color(Color { a: 0.6, ..LumoTheme::bg() })),
+                ..Default::default()
+            })
+            .into()
         } else {
             root.into()
         };
@@ -1124,10 +1159,10 @@ impl App {
         _sep: Color,
     ) -> Element<Message> {
         let entries: Vec<(usize, &PathBuf)> = if self.search_query.is_empty() {
-            self.file_list.entries.iter().enumerate().collect()
+            self.current_tab().file_list.entries.iter().enumerate().collect()
         } else {
             let q = self.search_query.to_ascii_lowercase();
-            self.file_list.entries.iter().enumerate()
+            self.current_tab().file_list.entries.iter().enumerate()
                 .filter(|(_, p)| {
                     p.file_name().unwrap_or_default()
                         .to_string_lossy().to_ascii_lowercase().contains(&q)
@@ -1159,17 +1194,17 @@ impl App {
             let mut r = row![].spacing(8);
             for (idx, path) in chunk.iter() {
                 let idx = *idx;
-                let is_selected = self.file_list.selected.contains(&idx);
+                let is_selected = self.current_tab().file_list.selected.contains(&idx);
                 let name = FileList::display_name(path);
                 let kind = icon_for_path(path);
                 let icon_str = icon_svg_label(&kind);
                 let cell_bg = if is_selected { LumoTheme::accent_alpha30() } else { Color::TRANSPARENT };
                 let border_color = if is_selected { LumoTheme::accent() } else { Color::TRANSPARENT };
 
-                let cell_content: Element<Message> = if self.file_list.renaming == Some(idx) {
+                let cell_content: Element<Message> = if self.current_tab().file_list.renaming == Some(idx) {
                     column![
                         text(icon_str).size(36).color(if matches!(kind, IconKind::Folder) { accent } else { muted }),
-                        text_input("nome", &self.file_list.rename_input)
+                        text_input("nome", &self.current_tab().file_list.rename_input)
                             .on_input(Message::RenameInputChanged)
                             .on_submit(Message::RenameConfirm)
                             .size(11)
@@ -1179,13 +1214,36 @@ impl App {
                     .align_x(Alignment::Center)
                     .into()
                 } else {
-                    column![
-                        text(icon_str).size(36).color(if matches!(kind, IconKind::Folder) { accent } else { muted }),
-                        text(name).size(12).color(fg),
-                    ]
-                    .spacing(6)
-                    .align_x(Alignment::Center)
-                    .into()
+                    if matches!(kind, IconKind::Image) {
+                        let thumb_key = crate::thumbs::cache_key(path);
+                        if let Some(bytes) = self.thumb_cache.get(&thumb_key) {
+                            column![
+                                iced::widget::image::Image::new(iced::widget::image::Handle::from_bytes(bytes.clone()))
+                                    .width(Length::Fixed(80.0))
+                                    .height(Length::Fixed(80.0)),
+                                text(name).size(12).color(fg),
+                            ]
+                            .spacing(6)
+                            .align_x(Alignment::Center)
+                            .into()
+                        } else {
+                            column![
+                                text(icon_str).size(36).color(muted),
+                                text(name).size(12).color(fg),
+                            ]
+                            .spacing(6)
+                            .align_x(Alignment::Center)
+                            .into()
+                        }
+                    } else {
+                        column![
+                            text(icon_str).size(36).color(if matches!(kind, IconKind::Folder) { accent } else { muted }),
+                            text(name).size(12).color(fg),
+                        ]
+                        .spacing(6)
+                        .align_x(Alignment::Center)
+                        .into()
+                    }
                 };
 
                 let cell = button(
@@ -1273,7 +1331,7 @@ impl App {
 
         for (idx, path) in entries {
             let idx = *idx;
-            let is_selected = self.file_list.selected.contains(&idx);
+            let is_selected = self.current_tab().file_list.selected.contains(&idx);
             let row_bg = if is_selected { LumoTheme::accent_alpha30() } else { Color::TRANSPARENT };
             let kind = icon_for_path(path);
             let icon_str = icon_svg_label(&kind);
@@ -1346,7 +1404,7 @@ impl App {
             let mut items: Vec<Element<crate::app::Message>> = Vec::new();
             for (idx, path) in col_entries {
                 let idx = *idx;
-                let is_selected = slf.file_list.selected.contains(&idx);
+                let is_selected = slf.current_tab().file_list.selected.contains(&idx);
                 let row_bg = if is_selected { LumoTheme::accent_alpha30() } else { Color::TRANSPARENT };
                 let kind = icon_for_path(path);
                 let icon_str = icon_svg_label(&kind);
@@ -1506,7 +1564,7 @@ impl App {
                 ctx_btn("Propriedades (Ctrl+I)", Message::OpenProperties, fg, panel_hi),
                 ctx_btn(
                     "Renomear (F2)",
-                    if let Some(&idx) = self.file_list.selected.iter().next() {
+                    if let Some(&idx) = self.current_tab().file_list.selected.iter().next() {
                         Message::RenameStart(idx)
                     } else {
                         Message::ContextMenuClose
@@ -1547,10 +1605,6 @@ impl App {
     // -----------------------------------------------------------------------
 
     fn push_back(&mut self) {
-        self.back_stack.push_back(self.current_dir.clone());
-        if self.back_stack.len() > 50 {
-            self.back_stack.pop_front();
-        }
     }
 }
 
@@ -1655,4 +1709,95 @@ fn username() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("LOGNAME"))
         .unwrap_or_else(|_| "user".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn make_app() -> App {
+        let home = PathBuf::from("/tmp");
+        let initial_tab = Tab::new(home.clone());
+        App {
+            tabs: vec![initial_tab],
+            active_tab: 0,
+            sidebar: vec![],
+            clipboard: None,
+            context_menu: None,
+            status: String::new(),
+            new_folder_input: None,
+            show_hidden: false,
+            search_visible: false,
+            search_query: String::new(),
+            view_mode: crate::toolbar::ViewMode::Grid,
+            sort_by: crate::filelist::SortBy::Name,
+            sort_ascending: true,
+            preview_visible: false,
+            thumb_cache: ThumbCache::new(),
+            properties: None,
+        }
+    }
+
+    fn set_entries(app: &mut App, paths: Vec<PathBuf>) {
+        app.current_tab_mut().file_list.set_entries(paths);
+    }
+
+    #[test]
+    fn test_open_dir_sets_tab_current_dir() {
+        let mut app = make_app();
+        let dir = PathBuf::from("/tmp");
+        // Simulate DirLoaded
+        app.current_tab_mut().current_dir = dir.clone();
+        assert_eq!(app.current_tab().current_dir, dir);
+    }
+
+    #[test]
+    fn test_change_view_mode() {
+        let mut app = make_app();
+        app.view_mode = crate::toolbar::ViewMode::List;
+        assert_eq!(app.view_mode, crate::toolbar::ViewMode::List);
+        app.view_mode = crate::toolbar::ViewMode::Grid;
+        assert_eq!(app.view_mode, crate::toolbar::ViewMode::Grid);
+    }
+
+    #[test]
+    fn test_search_filter_empty_returns_all() {
+        let mut app = make_app();
+        let paths: Vec<PathBuf> = vec![
+            PathBuf::from("/tmp/foo.txt"),
+            PathBuf::from("/tmp/bar.txt"),
+        ];
+        set_entries(&mut app, paths.clone());
+        app.search_query = String::new();
+        let tab = app.current_tab();
+        assert_eq!(tab.file_list.entries.len(), 2);
+    }
+
+    #[test]
+    fn test_tab_cycle_next() {
+        let mut app = make_app();
+        // Add a second tab
+        let tab2 = Tab::new(PathBuf::from("/home"));
+        app.tabs.push(tab2);
+        assert_eq!(app.tabs.len(), 2);
+        app.active_tab = 0;
+        // Cycle to next
+        app.active_tab = (app.active_tab + 1) % app.tabs.len();
+        assert_eq!(app.active_tab, 1);
+        // Cycle wraps
+        app.active_tab = (app.active_tab + 1) % app.tabs.len();
+        assert_eq!(app.active_tab, 0);
+    }
+
+    #[test]
+    fn test_close_tab_reduces_count() {
+        let mut app = make_app();
+        app.tabs.push(Tab::new(PathBuf::from("/home")));
+        assert_eq!(app.tabs.len(), 2);
+        app.tabs.remove(1);
+        app.active_tab = app.active_tab.min(app.tabs.len() - 1);
+        assert_eq!(app.tabs.len(), 1);
+        assert_eq!(app.active_tab, 0);
+    }
 }

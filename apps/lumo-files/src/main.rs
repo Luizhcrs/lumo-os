@@ -11,6 +11,7 @@ mod ops;
 mod sidebar;
 mod theme;
 mod toolbar;
+mod thumbs;
 
 use app::App;
 use iced::{Settings, Size};
