@@ -4,6 +4,7 @@ mod dbus;
 mod history;
 mod paint;
 mod state;
+mod center;
 
 use tokio::sync::mpsc;
 
