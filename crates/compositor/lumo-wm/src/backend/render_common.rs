@@ -229,14 +229,14 @@ pub const SHADOW_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 0.15];
 pub const SHADOW_OFFSET_Y: i32 = 3;
 pub const SHADOW_BLEED: i32 = 2;
 
-/// Cor de clear do framebuffer. Le LUMO_THEME do env e devolve linear
-/// pronto pra surface sRGB. A13: substitui constante `CLEAR_INK_DEEP`
-/// pra suportar light/dark dinamico.
-///
-/// Memory feedback_design_lapidado: nao cachear (chamada acontece a cada
-/// frame mas custo eh 1 lookup env + 4 multiplicacoes — desprezivel).
+/// Cor de clear do framebuffer. SEMPRE preto opaco linear, independente
+/// de tema. R1.fix4: clear branco em tema light causava flash branco
+/// visivel em mouse-move quando wallpaper buffer ainda nao tinha
+/// renderizado o frame completo (race scanout vs blit). Como wallpaper
+/// cobre toda a tela em qualquer tema, scanout-floor preto neutro = zero
+/// flash. Tema light continua afetando LumoColors.bg para UI.
 pub fn clear_color_linear() -> [f32; 4] {
-    lumo_foundation::clear_color_linear()
+    [0.0, 0.0, 0.0, 1.0]
 }
 
 /// Legacy compat: aponta pra `clear_color_linear()` em runtime. Mantido

@@ -1052,25 +1052,12 @@ fn render_drm(state: &mut LumoState) {
         output_w: ow,
         output_h: oh,
     };
-    // W3.P2: cursor HW plane async fast-path.
-    // Quando so o cursor se moveu (sem window damage), passa apenas o elemento
-    // cursor para render_frame. DrmCompositor reutiliza primary plane buffer
-    // (skip=true) e faz atomic commit apenas do cursor plane (Kind::Cursor).
-    // Desacopla movimento de cursor da taxa de render das aplicacoes.
-    // W8.fix.P1: nao usar cursor-only path quando animacoes ativas (boot curtain
-    // ou splash) -- cursor move durante anim causava congelamento do frame animado.
-    let animations_active = boot_curtain_alpha > 0.001 || splash_alpha_val > 0.001;
-    let all_elements = if cursor_moved && surface.pending_flip == false && !animations_active {
-        // Coleta apenas cursor (sem full element rebuild).
-        let cursor_only = collect_cursor_only_elements(&mut backend.renderer, &collect_inputs);
-        if !cursor_only.is_empty() {
-            cursor_only
-        } else {
-            collect_drm_elements(&mut backend.renderer, &collect_inputs)
-        }
-    } else {
-        collect_drm_elements(&mut backend.renderer, &collect_inputs)
-    };
+    // R1.fix3 flicker: cursor_only path REMOVIDO. queue_frame com lista
+    // contendo SO cursor limpa primary plane = flicker visivel quando mouse
+    // move. DrmCompositor 0.7 ja detecta Kind::Cursor em lista completa +
+    // faz cursor HW plane atomic-async sem re-render primary plane.
+    let _ = (cursor_moved, boot_curtain_alpha, splash_alpha_val);
+    let all_elements = collect_drm_elements(&mut backend.renderer, &collect_inputs);
 
     // W3.P4: damage merge heuristica antes de queue_frame.
     // Computa damage rects dos elementos e merge se lista complexa.
