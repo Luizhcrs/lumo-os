@@ -647,15 +647,30 @@ impl XdgDecorationHandler for LumoState {
         tracing::debug!("xdg_decoration: new_decoration -> ServerSide");
     }
 
-    fn request_mode(&mut self, toplevel: ToplevelSurface, _mode: Mode) {
-        // P0: forca ServerSide sempre. Apps que ignoram (GTK4) continuam CSD client-side.
+    fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
+        // R1.fix6: respeita pedido do cliente. GTK4/Chrome/Firefox/Electron
+        // pedem ClientSide e ja desenham titlebar propria -- forcar SSD
+        // resultava em double titlebar. Iced 0.13 nao chama xdg-decoration
+        // entao continua coberto pelo default SSD em new_toplevel.
+        let resolved = match mode {
+            Mode::ClientSide => Mode::ClientSide,
+            _ => Mode::ServerSide,
+        };
         toplevel.with_pending_state(|state| {
-            state.decoration_mode = Some(Mode::ServerSide);
+            state.decoration_mode = Some(resolved);
         });
         toplevel.send_configure();
         let surf = toplevel.wl_surface().clone();
-        self.ssd_windows.insert(surf);
-        tracing::debug!("xdg_decoration: request_mode -> forced ServerSide");
+        match resolved {
+            Mode::ClientSide => {
+                self.ssd_windows.remove(&surf);
+                tracing::debug!("xdg_decoration: request_mode -> ClientSide (CSD)");
+            }
+            _ => {
+                self.ssd_windows.insert(surf);
+                tracing::debug!("xdg_decoration: request_mode -> ServerSide");
+            }
+        }
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {

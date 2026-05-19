@@ -11,6 +11,7 @@ pub mod output;
 pub mod seat;
 pub mod shm;
 pub mod xdg_shell;
+pub mod xdg_decoration;
 pub mod dmabuf;
 pub mod lid;
 pub mod screencopy;
