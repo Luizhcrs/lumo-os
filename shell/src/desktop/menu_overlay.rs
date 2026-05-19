@@ -12,7 +12,7 @@ use crate::menu;
 /// Largura do menu desktop (vem do modulo compartilhado).
 pub const MENU_W: f32 = menu::MENU_W_DESKTOP;
 
-/// Items do menu desktop estilo macOS Finder.
+/// Items do menu desktop Lumo.
 ///
 /// A27: items MVP (futuro: despachar comandos reais wallpaper picker / About
 /// dialog / lumo-store launch via IPC).

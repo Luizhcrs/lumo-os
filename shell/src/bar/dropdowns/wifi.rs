@@ -134,7 +134,7 @@ pub fn draw_wifi_dropdown(
     let mut cy = y + pad;
     draw_text(canvas, cx, cy, &I18n::get("wifi.title"), FONT_DROPDOWN_TITLE, fg, true);
 
-    // Toggle pill: 36x18 (Apple-like switch), arredondamento total = capsule.
+    // Toggle pill: 36x18 (capsule switch), arredondamento total = capsule.
     // Estado: on = wifi up, off = down. Visual only (TODO A31 hookup nmcli radio).
     let toggle_w = 36.0;
     let toggle_h = 18.0;

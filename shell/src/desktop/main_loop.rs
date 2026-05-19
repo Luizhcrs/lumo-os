@@ -89,7 +89,7 @@ pub fn run() {
         rubber_band: crate::desktop::rubber_band::RubberBand::new(),
     };
 
-    eprintln!("[lumo-desktop] A27: menu Apple-style + CloseDropdowns IPC");
+    eprintln!("[lumo-desktop] A27: menu desktop + CloseDropdowns IPC");
 
     let mut last_ipc_tick = Instant::now();
     while state.running {

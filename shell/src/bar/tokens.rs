@@ -17,7 +17,7 @@ use crate::menu;
 /// 40px = 28px pill + 6px margin topo + 6px margem inferior (sombra cabe).
 pub const BAR_HEIGHT: u32 = 40;
 
-/// Altura de cada pill. 28px = padrao Apple Dynamic Island compact.
+/// Altura de cada pill. 28px = compact responsivo touch.
 pub const PILL_H: f32 = 28.0;
 
 /// Margem topo: distancia entre topo da bar e topo da pill.
@@ -33,7 +33,7 @@ pub const PILL_MARGIN_X: f32 = 14.0;
 pub const PILL_RADIUS: f32 = 14.0;
 
 /// Padding horizontal interno da pill (entre borda da pill e conteudo).
-/// 14px = Apple-grade respiracao.
+/// 14px = respiracao premium.
 pub const PILL_PAD_X: f32 = 14.0;
 
 /// Gap entre items dentro da pill (icone/texto adjacentes).

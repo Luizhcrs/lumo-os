@@ -1,8 +1,8 @@
 //! desktop/ - layer-shell Background pra capturar pointer events na area
-//! de trabalho (estilo macOS Finder / Windows desktop).
+//! de trabalho (desktop classico).
 //!
 //! A21: novo binario.
-//! A27: menu Apple-style + items MVP wallpaper/sobre/atualizar/store.
+//! A27: menu desktop + items MVP wallpaper/sobre/atualizar/store.
 //! A33: desktop icons grid + drag + context menu por icon + criar pasta.
 //! A34: rubber-band selection.
 //!

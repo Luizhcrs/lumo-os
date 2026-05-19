@@ -1,4 +1,4 @@
-//! bar/dropdowns/lumo_menu.rs - Menu Apple-style aberto pelo click no brand
+//! bar/dropdowns/lumo_menu.rs - Menu Lumo aberto pelo click no brand
 //! "Lumo" da pill esquerda. Items definidos em tokens::MENU_LUMO_ITEMS.
 //!
 //! Render via crate::menu::draw_menu (modulo compartilhado com lumo-desktop)

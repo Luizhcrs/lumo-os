@@ -249,7 +249,7 @@ pub fn draw_text_ex(
     let family = family_for(mono).to_string();
     let mut attrs = Attrs::new().family(Family::Name(&family));
     if bold {
-        // A29: bold UI = 600 (SemiBold) pra match macOS spec; mono usa BOLD natural.
+        // A29: bold UI = 600 (SemiBold) padrao tipografia premium; mono usa BOLD natural.
         attrs = attrs.weight(if mono {
             cosmic_text::Weight::BOLD
         } else {

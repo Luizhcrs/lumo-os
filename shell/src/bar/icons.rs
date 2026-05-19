@@ -176,7 +176,7 @@ pub fn draw_battery(canvas: &mut PixmapMut, x: f32, y: f32, pct: u8, charging: b
 }
 
 /// A30: raio (bolt) charging. Centralizado em (cx, cy), tamanho w x h.
-/// Path 7-vertex zigzag classico Apple/Material flash_on.
+/// Path 7-vertex zigzag Material flash_on.
 pub fn draw_bolt(canvas: &mut PixmapMut, cx: f32, cy: f32, w: f32, h: f32, color: Color) {
     let x0 = cx - w / 2.0;
     let y0 = cy - h / 2.0;

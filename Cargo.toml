@@ -28,6 +28,7 @@ members = [
     "apps/lumo-lock",
     "apps/lumo-firstrun",
     "apps/lumo-store",
+    "apps/lumo-bridge",
 ]
 
 [profile.release]

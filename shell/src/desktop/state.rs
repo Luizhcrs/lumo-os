@@ -26,7 +26,7 @@ use lumo_foundation::LumoColors;
 use lumo_ipc::{default_socket_path, LumoCommand, LumoEvent};
 
 // ============================================================
-// Layout constants A27 (menu redesign Apple-style).
+// Layout constants A27 (menu redesign Lumo).
 // ============================================================
 
 /// Output Galaxy nativo (DEPS.md A19.18 mesmo padrao bar).
