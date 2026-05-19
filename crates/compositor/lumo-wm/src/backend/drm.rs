@@ -75,6 +75,7 @@ use smithay::reexports::wayland_server::Display;
 use smithay::utils::DeviceFd;
 
 use crate::state::LumoState;
+use crate::backend::vrr::{DisplayConfig, VrrSetupResult};
 
 use super::render_common::{clear_color_linear, collect_cursor_only_elements, collect_drm_elements, DrmCollectInputs, LumoCustomElement};
 
@@ -97,6 +98,54 @@ const FRAME_INTERVAL_US: u64 = 16_667;
 /// = lista mais conservadora compativel com i915. 10-bit skipado
 /// na Etapa 2B pra reduzir matriz de bugs (memory feedback_design_lapidado).
 const SUPPORTED_FORMATS: &[Fourcc] = &[Fourcc::Argb8888, Fourcc::Xrgb8888];
+
+/// W13.B: Tenta habilitar VRR no DrmSurfaceData se config e connector suportarem.
+/// Chamado apos initialize_output. Atualiza surface.vrr_active.
+#[cfg(feature = "drm-backend")]
+pub fn try_enable_vrr_drm(
+    surface: &mut DrmSurfaceData,
+    conn: connector::Handle,
+) {
+    let cfg = DisplayConfig::load();
+    if !cfg.vrr_enabled {
+        tracing::debug!("W13.B: VRR desabilitado por config (vrr_enabled=false)");
+        return;
+    }
+
+    use smithay::backend::drm::VrrSupport;
+    let support = surface.drm_output.with_compositor(|compositor| {
+        compositor.vrr_supported(conn)
+    });
+
+    match support {
+        Err(err) => {
+            tracing::warn!(?err, "W13.B: vrr_supported() falhou");
+        }
+        Ok(VrrSupport::NotSupported) => {
+            tracing::info!("W13.B: VRR nao suportado neste connector (Galaxy eDP-1 esperado)");
+        }
+        Ok(VrrSupport::RequiresModeset) => {
+            tracing::info!("W13.B: VRR capable mas requer modeset (HDMI). Skip.");
+        }
+        Ok(VrrSupport::Supported) => {
+            let result = surface.drm_output.with_compositor(|compositor| {
+                compositor.use_vrr(true)
+            });
+            match result {
+                Ok(()) => {
+                    surface.vrr_active = true;
+                    tracing::info!("W13.B: VRR habilitado no connector");
+                }
+                Err(err) => {
+                    tracing::warn!(?err, "W13.B: use_vrr(true) falhou");
+                }
+            }
+        }
+        Ok(_) => {
+            tracing::debug!("W13.B: VrrSupport variante desconhecida, skip");
+        }
+    }
+}
 
 /// Tipo concreto do DrmOutputManager que usamos. Single-GPU, sem
 /// user_data (= ()), file descriptor sob DrmDeviceFd.
@@ -123,6 +172,8 @@ pub struct DrmSurfaceData {
     // W3.P2: cursor HW plane tracking.
     // true quando ultimo frame colocou cursor no HW plane (Kind::Cursor atomic).
     pub cursor_hw_plane_active: bool,
+    // W13.B: VRR estado atual do output (cacheado apos try_enable_vrr_drm).
+    pub vrr_active: bool,
 }
 
 /// Estado completo do backend DRM. Mantido em UserDataMap do state
@@ -620,9 +671,18 @@ pub fn run(
             max_render_time_ms: MAX_RENDER_TIME_MS,
             // W3.P2: cursor HW plane tracking.
             cursor_hw_plane_active: false,
+            // W13.B: VRR init false; updated by try_enable_vrr_drm.
+            vrr_active: false,
         }),
         gpu_node: primary,
     });
+
+    // W13.B: tenta VRR se config habilitado.
+    if let Some(backend) = state.drm_backend.as_mut() {
+        if let Some(surf) = backend.surface.as_mut() {
+            try_enable_vrr_drm(surf, picked_info.handle());
+        }
+    }
 
     // ============================================================
     // 9. Page-flip event source (DrmEvent::VBlank).

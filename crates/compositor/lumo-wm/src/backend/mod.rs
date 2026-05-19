@@ -17,3 +17,6 @@ pub mod drm;
 
 #[cfg(feature = "drm-backend")]
 pub mod libinput;
+
+#[cfg(feature = "drm-backend")]
+pub mod vrr;
