@@ -1,0 +1,15 @@
+[Unit]
+Description=Lumo power daemon (charge limit + cell balance)
+After=basic.target
+
+[Service]
+Type=simple
+ExecStart=%h/Projects/lumo-shell/target/release/lumo-power
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+PassEnvironment=HOME XDG_CONFIG_HOME XDG_RUNTIME_DIR
+
+[Install]
+WantedBy=default.target

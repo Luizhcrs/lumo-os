@@ -30,7 +30,7 @@ impl XdgShellHandler for LumoState {
                 smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State::Activated,
             );
         });
-        surface.send_configure();
+        let _ = surface.send_configure();
 
         // L1: FocusManager gerencia foco na nova janela.
         if let Some(wl) = window.wl_surface() {
@@ -46,6 +46,9 @@ impl XdgShellHandler for LumoState {
         surface.with_pending_state(|state| {
             state.geometry = positioner.get_geometry();
         });
+        // D1.3: send_configure obrigatorio. Sem isso o cliente aguarda configure
+        // antes de commitar buffers -- popup registrado mas nunca renderizado.
+        let _ = surface.send_configure();
         if let Err(err) = self.popups.track_popup(PopupKind::from(surface)) {
             tracing::warn!(?err, "Falha ao registrar popup xdg");
         }

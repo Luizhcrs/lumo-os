@@ -59,6 +59,15 @@ fn pick_backend() -> BackendChoice {
 ///
 /// Falha de spawn = warn no log + segue. lumo-wm nao para de funcionar
 /// porque a bar nao subiu (Luiz ainda consegue SUPER+Q -> foot manual).
+/// D1.1: retorna true se systemd user service esta ativo (pre-spawn instalado).
+fn systemd_service_active(name: &str) -> bool {
+    std::process::Command::new("systemctl")
+        .args(["--user", "is-active", "--quiet", name])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 fn spawn_autostart(socket_name: &str) {
     let exe_dir = std::env::current_exe()
         .ok()
@@ -76,7 +85,10 @@ fn spawn_autostart(socket_name: &str) {
     // Background layer eh atras de tudo = primeiro a desenhar; subir
     // antes garante que o compositor ja tem a surface registrada quando
     // bar/toplevels chegarem por cima. Falha de spawn = warn + continua.
-    if desktop_path.exists() {
+    // D1.1: skip spawn manual se systemd ja gerencia lumo-desktop.
+    if systemd_service_active("lumo-desktop") {
+        tracing::info!("autostart lumo-desktop: systemd ativo, skip spawn manual");
+    } else if desktop_path.exists() {
         let mut cmd = std::process::Command::new(&desktop_path);
         cmd.env("WAYLAND_DISPLAY", socket_name);
         cmd.env("HOME", &home);
@@ -99,7 +111,10 @@ fn spawn_autostart(socket_name: &str) {
     }
 
     // lumo-bar
-    if bar_path.exists() {
+    // D1.1: skip spawn manual se systemd ja gerencia lumo-bar.
+    if systemd_service_active("lumo-bar") {
+        tracing::info!("autostart lumo-bar: systemd ativo, skip spawn manual");
+    } else if bar_path.exists() {
         let mut cmd = std::process::Command::new(&bar_path);
         cmd.env("WAYLAND_DISPLAY", socket_name);
         cmd.env("HOME", &home);
@@ -122,8 +137,11 @@ fn spawn_autostart(socket_name: &str) {
     }
 
     // C2: lumo-osd (OSD overlay - Caps Lock, Volume, Brightness)
+    // D1.1: skip spawn manual se systemd ja gerencia lumo-osd.
     let osd_path = exe_dir.join("lumo-osd");
-    if osd_path.exists() {
+    if systemd_service_active("lumo-osd") {
+        tracing::info!("autostart lumo-osd: systemd ativo, skip spawn manual");
+    } else if osd_path.exists() {
         let mut cmd = std::process::Command::new(&osd_path);
         cmd.env("WAYLAND_DISPLAY", socket_name);
         cmd.env("HOME", &home);
@@ -138,8 +156,11 @@ fn spawn_autostart(socket_name: &str) {
     }
 
     // P5: lumo-power (charge limit + weekly cell balance daemon).
+    // D1.1: skip spawn manual se systemd ja gerencia lumo-power.
     let power_path = exe_dir.join("lumo-power");
-    if power_path.exists() {
+    if systemd_service_active("lumo-power") {
+        tracing::info!("autostart lumo-power: systemd ativo, skip spawn manual");
+    } else if power_path.exists() {
         let mut cmd = std::process::Command::new(&power_path);
         cmd.env("HOME", &home);
         cmd.env("XDG_CONFIG_HOME", &xdg);
