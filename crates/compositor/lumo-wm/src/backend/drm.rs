@@ -936,7 +936,9 @@ fn render_drm(state: &mut LumoState) {
         return;
     };
 
-    if surface.pending_flip && !force_repaint && !cursor_moved {
+    // R1 fix2 flicker: cursor move durante pending_flip = espera. Cursor HW plane
+    // (W3.P2) atualiza via atomic async em paralelo. Render novo durante pending = flicker.
+    if surface.pending_flip && !force_repaint {
         return;
     }
 
