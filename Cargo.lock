@@ -2836,7 +2836,7 @@ dependencies = [
  "raw-window-handle",
  "refineable",
  "regex",
- "resvg",
+ "resvg 0.45.1",
  "scheduler",
  "schemars",
  "seahash",
@@ -2852,7 +2852,7 @@ dependencies = [
  "thiserror 2.0.18",
  "ttf-parser 0.25.1",
  "url",
- "usvg",
+ "usvg 0.45.1",
  "util_macros",
  "uuid",
  "waker-fn",
@@ -3448,6 +3448,7 @@ dependencies = [
  "iced_graphics",
  "kurbo 0.10.4",
  "log",
+ "resvg 0.42.0",
  "rustc-hash 2.1.2",
  "softbuffer",
  "tiny-skia",
@@ -3468,6 +3469,7 @@ dependencies = [
  "iced_graphics",
  "log",
  "once_cell",
+ "resvg 0.42.0",
  "rustc-hash 2.1.2",
  "thiserror 1.0.69",
  "wgpu 0.19.4",
@@ -3668,6 +3670,12 @@ dependencies = [
  "byteorder-lite",
  "quick-error",
 ]
+
+[[package]]
+name = "imagesize"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "029d73f573d8e8d63e6d5020011d3255b28c3ba85d6cf870a07184ed23de9284"
 
 [[package]]
 name = "imagesize"
@@ -4244,6 +4252,7 @@ name = "lumo-files"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "futures",
  "iced",
  "lumo-foundation",
  "mime_guess",
@@ -4251,6 +4260,7 @@ dependencies = [
  "tokio",
  "trash",
  "xdg",
+ "zbus 5.15.0",
 ]
 
 [[package]]
@@ -6291,6 +6301,22 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "resvg"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "944d052815156ac8fa77eaac055220e95ba0b01fa8887108ca710c03805d9051"
+dependencies = [
+ "gif 0.13.3",
+ "jpeg-decoder",
+ "log",
+ "pico-args",
+ "rgb",
+ "svgtypes",
+ "tiny-skia",
+ "usvg 0.42.0",
+]
+
+[[package]]
+name = "resvg"
 version = "0.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8928798c0a55e03c9ca6c4c6846f76377427d2c1e1f7e6de3c06ae57942df43"
@@ -6302,7 +6328,7 @@ dependencies = [
  "rgb",
  "svgtypes",
  "tiny-skia",
- "usvg",
+ "usvg 0.45.1",
  "zune-jpeg 0.4.21",
 ]
 
@@ -7001,6 +7027,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "socket2"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "softbuffer"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7555,6 +7591,8 @@ dependencies = [
  "mio 1.2.0",
  "pin-project-lite",
  "signal-hook-registry",
+ "socket2",
+ "tracing",
  "windows-sys 0.61.2",
 ]
 
@@ -7907,6 +7945,33 @@ checksum = "daf8dba3b7eb870caf1ddeed7bc9d2a049f3cfdfae7cb521b087cc33ae4c49da"
 
 [[package]]
 name = "usvg"
+version = "0.42.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b84ea542ae85c715f07b082438a4231c3760539d902e11d093847a0b22963032"
+dependencies = [
+ "base64",
+ "data-url",
+ "flate2",
+ "fontdb 0.18.0",
+ "imagesize 0.12.0",
+ "kurbo 0.11.3",
+ "log",
+ "pico-args",
+ "roxmltree",
+ "rustybuzz 0.14.1",
+ "simplecss",
+ "siphasher",
+ "strict-num",
+ "svgtypes",
+ "tiny-skia-path",
+ "unicode-bidi",
+ "unicode-script",
+ "unicode-vo",
+ "xmlwriter",
+]
+
+[[package]]
+name = "usvg"
 version = "0.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80be9b06fbae3b8b303400ab20778c80bbaf338f563afe567cf3c9eea17b47ef"
@@ -7915,7 +7980,7 @@ dependencies = [
  "data-url",
  "flate2",
  "fontdb 0.23.0",
- "imagesize",
+ "imagesize 0.13.0",
  "kurbo 0.11.3",
  "log",
  "pico-args",
@@ -9935,6 +10000,7 @@ dependencies = [
  "rustix 1.1.4",
  "serde",
  "serde_repr",
+ "tokio",
  "tracing",
  "uds_windows",
  "uuid",

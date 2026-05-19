@@ -1,19 +1,27 @@
-//! lumo-files — file manager Iced nativo para Lumo OS.
+//! lumo-files -- file manager Iced nativo para Lumo OS.
 //!
 //! Entry point: instancia App e chama iced::application.
 
 mod app;
+mod appmenu;
 mod breadcrumb;
 mod filelist;
 mod icons;
 mod ops;
 mod sidebar;
 mod theme;
+mod toolbar;
 
 use app::App;
 use iced::{Settings, Size};
 
 fn main() -> iced::Result {
+    let tx = appmenu::init_channel();
+    std::thread::Builder::new()
+        .name("lumo-appmenu".into())
+        .spawn(move || appmenu::serve(tx))
+        .expect("spawn appmenu thread");
+
     iced::application("Lumo Files", App::update, App::view)
         .subscription(App::subscription)
         .settings(Settings {
