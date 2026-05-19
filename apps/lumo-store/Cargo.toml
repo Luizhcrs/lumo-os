@@ -1,0 +1,19 @@
+[package]
+name = "lumo-store"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Store -- loja de aplicativos Iced para Lumo OS."
+
+[[bin]]
+name = "lumo-store"
+path = "src/main.rs"
+
+[dependencies]
+iced = { version = "0.13", features = ["tokio"] }
+lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
+tokio = { version = "1", features = ["rt-multi-thread", "process"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"

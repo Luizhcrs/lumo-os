@@ -1,0 +1,72 @@
+# catalog.toml -- catalogo inicial do Lumo Store.
+# Formato: array de [[app]] com campos obrigatorios name, pkg, icon, category, description.
+
+[[app]]
+name        = "Firefox"
+pkg         = "firefox"
+icon        = "firefox.svg"
+category    = "Internet"
+description = "Navegador web Mozilla Firefox."
+
+[[app]]
+name        = "LibreOffice"
+pkg         = "libreoffice-fresh"
+icon        = "libreoffice.svg"
+category    = "Escritorio"
+description = "Suite de escritorio completa: Writer, Calc, Impress."
+
+[[app]]
+name        = "VS Code"
+pkg         = "code"
+icon        = "vscode.svg"
+category    = "Desenvolvimento"
+description = "Editor de codigo Visual Studio Code da Microsoft."
+
+[[app]]
+name        = "Krita"
+pkg         = "krita"
+icon        = "krita.svg"
+category    = "Arte"
+description = "Pintura digital profissional, open source."
+
+[[app]]
+name        = "Inkscape"
+pkg         = "inkscape"
+icon        = "inkscape.svg"
+category    = "Arte"
+description = "Editor de graficos vetoriais SVG."
+
+[[app]]
+name        = "VLC"
+pkg         = "vlc"
+icon        = "vlc.svg"
+category    = "Multimidia"
+description = "Reprodutor de midia universal."
+
+[[app]]
+name        = "GIMP"
+pkg         = "gimp"
+icon        = "gimp.svg"
+category    = "Arte"
+description = "Editor de imagens avancado."
+
+[[app]]
+name        = "Thunderbird"
+pkg         = "thunderbird"
+icon        = "thunderbird.svg"
+category    = "Internet"
+description = "Cliente de e-mail Mozilla Thunderbird."
+
+[[app]]
+name        = "Blender"
+pkg         = "blender"
+icon        = "blender.svg"
+category    = "Arte"
+description = "Suite 3D completa: modelagem, animacao, render."
+
+[[app]]
+name        = "OBS Studio"
+pkg         = "obs-studio"
+icon        = "obs.svg"
+category    = "Multimidia"
+description = "Gravacao e streaming de tela."
