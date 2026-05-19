@@ -51,7 +51,7 @@ pub enum LumoEvent {
     OutputRemoved { name: String, index: u32 },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LumoCommand {
     Switch { to: u8 },
@@ -59,6 +59,23 @@ pub enum LumoCommand {
     CloseDesktopMenu,
     ReloadTheme,
     CloseFocusedToplevel,
+    /// SI.1: input sintetico -- ponteiro absoluto em pixels logicos.
+    /// Bridge HTTP usa pra remotar input sem libinput/ydotool.
+    SyntheticPointerMove { x: f64, y: f64 },
+    /// SI.1: input sintetico -- botao do ponteiro.
+    /// `button` = codigo linux/input-event-codes (BTN_LEFT=0x110, BTN_RIGHT=0x111, BTN_MIDDLE=0x112).
+    SyntheticPointerButton { button: u32, pressed: bool },
+    /// SI.1: input sintetico -- scroll/axis.
+    /// `dx` = eixo horizontal, `dy` = eixo vertical (positivo = down/right).
+    SyntheticPointerScroll { dx: f64, dy: f64 },
+    /// SI.1: input sintetico -- tecla individual.
+    /// `keycode` = evdev KEY_* (mesma tabela do bridge/ydotool).
+    /// O compositor traduz pra xkb Keycode internamente (evdev + 8).
+    /// Conhecido: nao usa keysym; layout atual aplicado pelo xkb state do compositor.
+    SyntheticKey { keycode: u32, pressed: bool },
+    /// SI.1: input sintetico -- atalho. Pressiona `keys` em ordem,
+    /// pequena pausa, libera em ordem reversa. Codigos evdev KEY_*.
+    SyntheticKeyCombo { keys: Vec<u32> },
 }
 
 pub fn default_socket_path() -> Option<std::path::PathBuf> {
@@ -148,6 +165,48 @@ mod tests {
         let line = encode_event(&ev);
         let parsed: LumoEvent = serde_json::from_str(line.trim()).unwrap();
         assert_eq!(parsed, ev);
+    }
+
+    /// SI.1: SyntheticPointerMove serializa/desserializa e o campo `type`
+    /// vai em snake_case (`synthetic_pointer_move`).
+    #[test]
+    fn synthetic_pointer_move_roundtrip() {
+        let cmd = LumoCommand::SyntheticPointerMove { x: 960.5, y: 540.25 };
+        let json = serde_json::to_string(&cmd).unwrap();
+        assert!(json.contains("synthetic_pointer_move"), "json={json}");
+        let parsed: LumoCommand = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, cmd);
+    }
+
+    /// SI.1: SyntheticPointerButton, SyntheticKey, SyntheticKeyCombo
+    /// fazem roundtrip JSON line-delimited.
+    #[test]
+    fn synthetic_input_variants_roundtrip() {
+        // button
+        let raw = r#"{"type":"synthetic_pointer_button","button":272,"pressed":true}"#;
+        let cmd = parse_command(raw).unwrap().unwrap();
+        assert_eq!(
+            cmd,
+            LumoCommand::SyntheticPointerButton { button: 272, pressed: true }
+        );
+
+        // scroll
+        let scroll = LumoCommand::SyntheticPointerScroll { dx: 0.0, dy: 15.0 };
+        let s = serde_json::to_string(&scroll).unwrap();
+        let back: LumoCommand = serde_json::from_str(&s).unwrap();
+        assert_eq!(back, scroll);
+
+        // single key
+        let key = LumoCommand::SyntheticKey { keycode: 28, pressed: false };
+        let back: LumoCommand =
+            serde_json::from_str(&serde_json::to_string(&key).unwrap()).unwrap();
+        assert_eq!(back, key);
+
+        // combo
+        let combo = LumoCommand::SyntheticKeyCombo { keys: vec![29, 56, 20] };
+        let back: LumoCommand =
+            serde_json::from_str(&serde_json::to_string(&combo).unwrap()).unwrap();
+        assert_eq!(back, combo);
     }
 
     #[test]

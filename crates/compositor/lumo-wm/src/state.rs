@@ -501,6 +501,21 @@ impl LumoState {
                     }
                 }
             }
+            LumoCommand::SyntheticPointerMove { x, y } => {
+                self.handle_synthetic_pointer_move(x, y);
+            }
+            LumoCommand::SyntheticPointerButton { button, pressed } => {
+                self.handle_synthetic_pointer_button(button, pressed);
+            }
+            LumoCommand::SyntheticPointerScroll { dx, dy } => {
+                self.handle_synthetic_pointer_scroll(dx, dy);
+            }
+            LumoCommand::SyntheticKey { keycode, pressed } => {
+                self.handle_synthetic_key(keycode, pressed);
+            }
+            LumoCommand::SyntheticKeyCombo { keys } => {
+                self.handle_synthetic_key_combo(&keys);
+            }
         }
     }
 

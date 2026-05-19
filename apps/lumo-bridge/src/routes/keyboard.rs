@@ -1,15 +1,19 @@
 //! Keyboard routes:
-//!  POST /keyboard/type {text}        -- wtype <text>, fallback ydotool type --
+//!  POST /keyboard/type {text}        -- texto literal, typewriter via SyntheticKeyCombo char-a-char
+//!                                        com fallback wtype/ydotool quando IPC indisponivel.
 //!  POST /keyboard/key  {sequence}    -- ex: "ctrl+alt+t", "super", "return", "f5"
+//!                                        -> SyntheticKeyCombo (compositor faz press-all/release-reverse).
 //!
-//! Mapeamento de keysym -> linux/input-event-codes.h (KEY_*) feito em memoria.
-//! ydotool key usa raw keycodes (28:1 28:0).
+//! SI.1: pivot ydotool -> IPC sintetico. Codigos evdev KEY_* sao consumidos
+//! pelo compositor que converte internamente para xkb Keycode (+8).
 
 use axum::{http::StatusCode, response::Json};
+use lumo_ipc::LumoCommand;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::exec;
+use crate::lumo_ipc::{send_command_async, ydotool_fallback_enabled};
 
 #[derive(Deserialize)]
 pub struct TypeText {
@@ -22,7 +26,7 @@ pub struct KeySeq {
 }
 
 /// Mapeia nome de tecla (lowercase) -> KEY_* code de linux/input-event-codes.h.
-fn keysym(name: &str) -> Option<u16> {
+pub fn keysym(name: &str) -> Option<u16> {
     let n = name.to_ascii_lowercase();
     Some(match n.as_str() {
         // Modifiers
@@ -104,7 +108,7 @@ pub fn parse_sequence(seq: &str) -> Result<Vec<u16>, String> {
     Ok(out)
 }
 
-/// Constroi args ydotool key: down todos, depois up reverso.
+/// SI.1: roundtrip via ydotool key (fallback). Args: down todos, up reverso.
 pub fn build_ydotool_key_args(codes: &[u16]) -> Vec<String> {
     let mut args: Vec<String> = Vec::with_capacity(codes.len() * 2);
     for c in codes {
@@ -116,49 +120,108 @@ pub fn build_ydotool_key_args(codes: &[u16]) -> Vec<String> {
     args
 }
 
+/// Converte um char ASCII em (evdev_codes em ordem). Modifiers + key.
+/// Suporta minusculas direto e MAIUSCULAS via Shift. Outros pulam.
+fn char_to_codes(c: char) -> Option<Vec<u32>> {
+    if c.is_ascii_lowercase() {
+        keysym(&c.to_string()).map(|k| vec![k as u32])
+    } else if c.is_ascii_uppercase() {
+        let lo = c.to_ascii_lowercase().to_string();
+        keysym(&lo).map(|k| vec![42u32, k as u32]) // shift + key
+    } else if c == ' ' {
+        Some(vec![57])
+    } else if c == '\n' {
+        Some(vec![28])
+    } else if c == '\t' {
+        Some(vec![15])
+    } else if c.is_ascii_digit() {
+        keysym(&c.to_string()).map(|k| vec![k as u32])
+    } else {
+        // Pontuacao simples sem shift.
+        let s = c.to_string();
+        keysym(&s).map(|k| vec![k as u32])
+    }
+}
+
 pub async fn type_text(Json(p): Json<TypeText>) -> Result<Json<Value>, (StatusCode, String)> {
-    // wtype passa texto literal -- arg slice, sem shell.
-    let out = exec::run("/usr/bin/wtype", &[p.text.as_str()])
-        .await
-        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
+    // SI.1: tenta IPC char-a-char. Erro -> fallback ydotool/wtype quando habilitado.
+    let mut emitted = 0usize;
+    for ch in p.text.chars() {
+        let Some(codes) = char_to_codes(ch) else {
+            tracing::debug!(ch = ?ch, "SI.1: char nao mapeado, pulado");
+            continue;
+        };
+        let codes_u32: Vec<u32> = codes.iter().copied().collect();
+        match send_command_async(LumoCommand::SyntheticKeyCombo { keys: codes_u32 }).await {
+            Ok(()) => emitted += 1,
+            Err(ipc_err) => {
+                if ydotool_fallback_enabled() {
+                    // Tenta wtype direto pra resto do texto + abandona loop.
+                    let _ = wtype_fallback(&p.text).await;
+                    return Ok(Json(
+                        json!({"ok": true, "len": p.text.chars().count(), "via": "wtype"}),
+                    ));
+                }
+                return Err((StatusCode::SERVICE_UNAVAILABLE, ipc_err.to_string()));
+            }
+        }
+    }
+    Ok(Json(json!({"ok": true, "len": emitted, "via": "ipc"})))
+}
+
+async fn wtype_fallback(text: &str) -> Result<(), String> {
+    let out = exec::run("/usr/bin/wtype", &[text]).await.map_err(|e| e.to_string())?;
     if out.status != 0 {
-        // Fallback: ydotool type -- <text>
-        let out2 = exec::run("/usr/bin/ydotool", &["type", "--", p.text.as_str()])
+        let out2 = exec::run("/usr/bin/ydotool", &["type", "--", text])
             .await
-            .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
+            .map_err(|e| e.to_string())?;
         if out2.status != 0 {
-            return Err((
-                StatusCode::SERVICE_UNAVAILABLE,
-                format!(
-                    "wtype exit {}, ydotool exit {}: {}",
-                    out.status,
-                    out2.status,
-                    String::from_utf8_lossy(&out2.stderr)
-                ),
+            return Err(format!(
+                "wtype exit {}, ydotool exit {}",
+                out.status, out2.status
             ));
         }
     }
-    Ok(Json(json!({"ok": true, "len": p.text.chars().count()})))
+    Ok(())
 }
 
 pub async fn key_sequence(Json(p): Json<KeySeq>) -> Result<Json<Value>, (StatusCode, String)> {
     let codes = parse_sequence(&p.sequence).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
-    let arg_strings = build_ydotool_key_args(&codes);
-    let mut args: Vec<&str> = Vec::with_capacity(arg_strings.len() + 1);
-    args.push("key");
-    for a in &arg_strings {
-        args.push(a.as_str());
+    let codes_u32: Vec<u32> = codes.iter().map(|c| *c as u32).collect();
+    match send_command_async(LumoCommand::SyntheticKeyCombo { keys: codes_u32.clone() }).await {
+        Ok(()) => Ok(Json(json!({
+            "ok": true, "sequence": p.sequence, "codes": codes, "via": "ipc"
+        }))),
+        Err(ipc_err) => {
+            if ydotool_fallback_enabled() {
+                tracing::warn!(err = %ipc_err, "SI.1: IPC falhou, fallback ydotool key");
+                let arg_strings = build_ydotool_key_args(&codes);
+                let mut args: Vec<&str> = Vec::with_capacity(arg_strings.len() + 1);
+                args.push("key");
+                for a in &arg_strings {
+                    args.push(a.as_str());
+                }
+                let out = exec::run("/usr/bin/ydotool", &args)
+                    .await
+                    .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
+                if out.status != 0 {
+                    return Err((
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        format!(
+                            "ydotool key exit {}: {}",
+                            out.status,
+                            String::from_utf8_lossy(&out.stderr)
+                        ),
+                    ));
+                }
+                Ok(Json(json!({
+                    "ok": true, "sequence": p.sequence, "codes": codes, "via": "ydotool"
+                })))
+            } else {
+                Err((StatusCode::SERVICE_UNAVAILABLE, ipc_err.to_string()))
+            }
+        }
     }
-    let out = exec::run("/usr/bin/ydotool", &args)
-        .await
-        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
-    if out.status != 0 {
-        return Err((
-            StatusCode::SERVICE_UNAVAILABLE,
-            format!("ydotool key exit {}: {}", out.status, String::from_utf8_lossy(&out.stderr)),
-        ));
-    }
-    Ok(Json(json!({"ok": true, "sequence": p.sequence, "codes": codes})))
 }
 
 #[cfg(test)]
@@ -188,5 +251,15 @@ mod tests {
     fn ydotool_args_down_then_up_reversed() {
         let args = build_ydotool_key_args(&[29, 56, 20]);
         assert_eq!(args, vec!["29:1", "56:1", "20:1", "20:0", "56:0", "29:0"]);
+    }
+
+    /// SI.1: char_to_codes mapeia lowercase, uppercase (com shift) e space.
+    #[test]
+    fn char_to_codes_basic() {
+        assert_eq!(char_to_codes('a'), Some(vec![30]));
+        assert_eq!(char_to_codes('A'), Some(vec![42, 30]));
+        assert_eq!(char_to_codes(' '), Some(vec![57]));
+        assert_eq!(char_to_codes('\n'), Some(vec![28]));
+        assert_eq!(char_to_codes('5'), Some(vec![6]));
     }
 }

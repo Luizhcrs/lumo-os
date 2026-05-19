@@ -831,3 +831,130 @@ fn write_sys_led(name: &str, on: bool) {
         }
     }
 }
+
+// =============================================================================
+// SI.1: synthetic input primitives.
+//
+// Injetam eventos no PointerHandle/KeyboardHandle do compositor sem passar por
+// libinput/uinput. Usado pelo lumo-bridge (HTTP) e agentes LLM para remotar
+// input quando ydotool nao funciona (uinput hot-plug nao detectado pelo wm).
+//
+// Notas:
+// - Tempo monotonico vem de `self.clock.now().as_millis()`, mesmo padrao do
+//   resto do compositor.
+// - PointerMove faz hit-test (`surface_under`) pra entregar enter/leave
+//   corretamente ao surface alvo.
+// - SyntheticKey recebe **evdev keycode** (KEY_*), nao keysym xkb. O compositor
+//   converte pra xkb internamente (evdev + 8). Layout/mods sao do estado atual
+//   do KbdInternal -- ou seja, segue o teclado real.
+// - Combo usa std::thread::sleep curto entre press all / release reversed. OK
+//   porque o calloop tick que dispara handle_ipc_command nao bloqueia clientes
+//   wayland por menos de 20ms (release acontece no mesmo tick).
+// =============================================================================
+
+impl LumoState {
+    /// SI.1: Injeta motion absoluto. Coords em pixels logicos.
+    pub fn handle_synthetic_pointer_move(&mut self, x: f64, y: f64) {
+        let serial = SERIAL_COUNTER.next_serial();
+        let time = self.clock.now().as_millis();
+        self.pointer_location = (x, y).into();
+        let under = self.surface_under(self.pointer_location);
+        let pointer = self.pointer.clone();
+        pointer.motion(
+            self,
+            under.clone().map(|(s, loc)| (s, loc.to_f64())),
+            &MotionEvent {
+                location: self.pointer_location,
+                serial,
+                time,
+            },
+        );
+        pointer.frame(self);
+        #[cfg(feature = "drm-backend")]
+        { self.drm_force_repaint = true; }
+        tracing::debug!(x, y, "SI.1: SyntheticPointerMove");
+    }
+
+    /// SI.1: Injeta press/release de botao do ponteiro.
+    /// `button` = codigo linux/input-event-codes (BTN_LEFT=0x110 etc).
+    pub fn handle_synthetic_pointer_button(&mut self, button: u32, pressed: bool) {
+        use smithay::backend::input::ButtonState;
+        let serial = SERIAL_COUNTER.next_serial();
+        let time = self.clock.now().as_millis();
+        let state = if pressed { ButtonState::Pressed } else { ButtonState::Released };
+        let pointer = self.pointer.clone();
+        pointer.button(
+            self,
+            &smithay::input::pointer::ButtonEvent {
+                button,
+                state,
+                serial,
+                time,
+            },
+        );
+        pointer.frame(self);
+        #[cfg(feature = "drm-backend")]
+        { self.drm_force_repaint = true; }
+        tracing::debug!(button = format!("0x{:x}", button), pressed, "SI.1: SyntheticPointerButton");
+    }
+
+    /// SI.1: Injeta scroll. dx horizontal, dy vertical.
+    /// Conhecido: emitido como Continuous source -- nao gera passos discretos.
+    pub fn handle_synthetic_pointer_scroll(&mut self, dx: f64, dy: f64) {
+        use smithay::input::pointer::AxisFrame;
+        use smithay::backend::input::{Axis, AxisSource};
+        let time = self.clock.now().as_millis();
+        let mut frame = AxisFrame::new(time).source(AxisSource::Continuous);
+        if dy != 0.0 {
+            frame = frame.value(Axis::Vertical, dy);
+        }
+        if dx != 0.0 {
+            frame = frame.value(Axis::Horizontal, dx);
+        }
+        let pointer = self.pointer.clone();
+        pointer.axis(self, frame);
+        pointer.frame(self);
+        #[cfg(feature = "drm-backend")]
+        { self.drm_force_repaint = true; }
+        tracing::debug!(dx, dy, "SI.1: SyntheticPointerScroll");
+    }
+
+    /// SI.1: Injeta press/release de tecla individual.
+    /// `keycode` = evdev KEY_* (1..=255 tipicamente).
+    pub fn handle_synthetic_key(&mut self, keycode: u32, pressed: bool) {
+        use smithay::backend::input::KeyState;
+        use smithay::input::keyboard::{FilterResult, Keycode};
+        let serial = SERIAL_COUNTER.next_serial();
+        let time = self.clock.now().as_millis();
+        let state = if pressed { KeyState::Pressed } else { KeyState::Released };
+        // Smithay/xkbcommon usa keycode = evdev + 8.
+        let xkb_code = Keycode::new(keycode.saturating_add(8));
+        let keyboard = self.keyboard.clone();
+        keyboard.input::<(), _>(
+            self,
+            xkb_code,
+            state,
+            serial,
+            time,
+            |_, _, _| FilterResult::Forward,
+        );
+        tracing::debug!(keycode, pressed, "SI.1: SyntheticKey");
+    }
+
+    /// SI.1: Atalho. Press todas em ordem -> pausa curta -> release reverse.
+    pub fn handle_synthetic_key_combo(&mut self, keys: &[u32]) {
+        if keys.is_empty() {
+            return;
+        }
+        for k in keys {
+            self.handle_synthetic_key(*k, true);
+        }
+        // 10ms entre press-all e release-all. Mesmo tick do calloop;
+        // clientes wayland recebem todos os press antes de qualquer release.
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        for k in keys.iter().rev() {
+            self.handle_synthetic_key(*k, false);
+        }
+        tracing::info!(count = keys.len(), "SI.1: SyntheticKeyCombo dispatched");
+    }
+}

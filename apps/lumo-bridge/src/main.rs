@@ -24,6 +24,7 @@ use tracing_subscriber::EnvFilter;
 
 mod auth;
 mod exec;
+mod lumo_ipc;
 mod routes;
 
 #[derive(Clone)]
