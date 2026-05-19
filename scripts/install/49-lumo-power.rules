@@ -1,0 +1,8 @@
+// Lumo OS: user luizhcrds pode escrever charge_control_end_threshold via UPower/upower OR direto sysfs
+polkit.addRule(function(action, subject) {
+    if ((action.id.indexOf("org.freedesktop.UPower.") == 0 ||
+         action.id.indexOf("org.freedesktop.policykit.exec") == 0) &&
+        subject.user == "luizhcrds") {
+        return polkit.Result.YES;
+    }
+});

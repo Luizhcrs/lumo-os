@@ -66,8 +66,8 @@ void main() {
     if (u_corner_radius > 0.0 && u_surf_size.x > 0.5 && u_surf_size.y > 0.5) {
         vec2 px = v_coords * u_surf_size;
         vec2 center = u_surf_size * 0.5;
-        vec2 half = u_surf_size * 0.5;
-        float d = sdf_rounded_rect(px - center, half, u_corner_radius);
+        vec2 half_size = u_surf_size * 0.5;
+        float d = sdf_rounded_rect(px - center, half_size, u_corner_radius);
         float aa = 1.0;
         float mask = 1.0 - smoothstep(-aa, aa, d);
         color.a *= mask;
