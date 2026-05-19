@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Lumo Files
+Comment=Gerenciador de arquivos Lumo
+Exec=/home/luizhcrds/Projects/lumo-shell/target/release/lumo-files %F
+Icon=folder
+Terminal=false
+Categories=System;FileManager;
+MimeType=inode/directory;
