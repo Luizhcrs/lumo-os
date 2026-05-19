@@ -159,19 +159,9 @@ pub fn titlebar_elements(
         let geo = window.geometry();
         let win_w = geo.size.w;
 
-        // Fundo da titlebar.
-        let bar_rect: Rectangle<i32, Physical> = Rectangle::new(
-            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H))
-                .to_physical_precise_round(1.0),
-            (win_w, TITLEBAR_H).into(),
-        );
-        out.push(SolidColorRenderElement::new(
-            Id::new(),
-            bar_rect,
-            0,
-            bg_color,
-            Kind::Unspecified,
-        ));
+        // W19.3 FIX: smithay convention list eh FRONT-FIRST (idx 0 = topo
+        // da pilha). Antes bg ia em primeiro = COBRIA os botoes. Agora
+        // buttons primeiro (frente), bg por ultimo (fundo).
 
         // Close button (vermelho, direita).
         let btn_rect = close_btn_rect(
@@ -215,6 +205,20 @@ pub fn titlebar_elements(
             min_rect,
             0,
             min_color,
+            Kind::Unspecified,
+        ));
+
+        // Fundo da titlebar -- POR ULTIMO pra ficar atras dos botoes.
+        let bar_rect: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H))
+                .to_physical_precise_round(1.0),
+            (win_w, TITLEBAR_H).into(),
+        );
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            bar_rect,
+            0,
+            bg_color,
             Kind::Unspecified,
         ));
     }

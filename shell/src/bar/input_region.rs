@@ -63,6 +63,46 @@ impl LumoBar {
             );
         }
 
+        // W19.2: appmenu top-level pills (Arquivo / Editar / Exibir / Ajuda).
+        // Antes ficavam fora do input_region -> clicks caiam pro desktop e
+        // submenu nunca abria. Cobre cada pill individualmente.
+        for (_idx, (rx, ry, rw, rh)) in self.appmenu_pill_rects.iter() {
+            region.add(
+                rx.floor() as i32,
+                ry.floor() as i32,
+                rw.ceil() as i32,
+                rh.ceil() as i32,
+            );
+        }
+        // Quando um submenu appmenu esta aberto, cobre tambem a area do submenu.
+        if self.appmenu_open_idx.is_some() {
+            for (_sidx, (rx, ry, rw, rh)) in self.appmenu_submenu_rects.iter() {
+                region.add(
+                    rx.floor() as i32 - 4,
+                    ry.floor() as i32 - 2,
+                    rw.ceil() as i32 + 8,
+                    rh.ceil() as i32 + 4,
+                );
+            }
+        }
+        // S2 fallback: pill que aparece quando app nao expoe dbusmenu.
+        if let Some((rx, ry, rw, rh)) = self.appmenu_fallback_rect {
+            region.add(
+                rx.floor() as i32,
+                ry.floor() as i32,
+                rw.ceil() as i32,
+                rh.ceil() as i32,
+            );
+        }
+        for (_idx, (rx, ry, rw, rh)) in self.appmenu_fallback_dropdown_rects.iter() {
+            region.add(
+                rx.floor() as i32 - 4,
+                ry.floor() as i32 - 2,
+                rw.ceil() as i32 + 8,
+                rh.ceil() as i32 + 4,
+            );
+        }
+
         // Dropdown ativo: cobre area do painel pra capturar click dentro.
         match self.dropdown {
             DropdownActive::None => {}
@@ -141,6 +181,16 @@ impl LumoBar {
             }
         }
 
+        // INSTR.C: log final region rects pra debug.
+        eprintln!(
+            "[INSTR.C] input_region lumo={:?} bat={:?} wifi={:?} dt={:?} br={:?} dropdown={:?}",
+            self.lumo_hit_rect,
+            self.bat_hit_rect,
+            self.wifi_hit_rect,
+            self.datetime_hit_rect,
+            self.brightness_hit_rect,
+            self.dropdown,
+        );
         self.layer
             .wl_surface()
             .set_input_region(Some(region.wl_region()));
