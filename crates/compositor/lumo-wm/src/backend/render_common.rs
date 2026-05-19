@@ -526,12 +526,7 @@ pub fn build_overlay(
     // 2. Mascara de cantos do output.
     // A19.6: corner_mask removido (quadrados brancos no canto sobrepondo wallpaper)
 
-    // 3. Sombras das toplevels.
-    for elem in shadow_elements(inputs.space) {
-        overlay.push(LumoCustomElement::Solid(elem));
-    }
-
-    // 4. Corner radius: quads sobre cantos de cada toplevel.
+    // 3. Corner radius: quads sobre cantos de cada toplevel.
     for elem in window_corner_elements(inputs.space) {
         overlay.push(LumoCustomElement::Solid(elem));
     }
@@ -632,12 +627,7 @@ pub fn collect_drm_elements(
     //    que vier do space, antes do clear preto preencher fora).
     // A19.6: corner_mask removido (quadrados brancos no canto sobrepondo wallpaper)
 
-    // 3. Sombras pretas atras das toplevels.
-    for elem in shadow_elements(inputs.space) {
-        out.push(LumoCustomElement::Solid(elem));
-    }
-
-    // 3b. Corner radius sobre cantos dos toplevels.
+    // 3a. Corner radius sobre cantos dos toplevels.
     for elem in window_corner_elements(inputs.space) {
         out.push(LumoCustomElement::Solid(elem));
     }
@@ -676,6 +666,12 @@ pub fn collect_drm_elements(
         Err(err) => {
             tracing::warn!(?err, "space_render_elements falhou no DRM path");
         }
+    }
+
+    // shadow pos space: sombras renderem ABAIXO de popups/toplevels.
+    // Lista smithay eh front-first; shadow apos space = atras.
+    for elem in shadow_elements(inputs.space) {
+        out.push(LumoCustomElement::Solid(elem));
     }
 
     // 5. A19: wallpaper por ULTIMO (backmost). Convention smithay: lista
@@ -746,12 +742,7 @@ pub fn build_winit_elements(
     // 2. Mascara de cantos.
     // A19.6: corner_mask removido (quadrados brancos no canto sobrepondo wallpaper)
 
-    // 3. Sombras pretas.
-    for elem in shadow_elements(inputs.space) {
-        out.push(LumoCustomElement::Solid(elem));
-    }
-
-    // 3b. Corner radius sobre cantos dos toplevels.
+    // 3a. Corner radius sobre cantos dos toplevels.
     for elem in window_corner_elements(inputs.space) {
         out.push(LumoCustomElement::Solid(elem));
     }
@@ -767,7 +758,7 @@ pub fn build_winit_elements(
         }
     }
 
-    // 4. Space (toplevels + layer-shell).
+    // 4. Space (toplevels + layer-shell + popups).
     //    A38: toplevels (Element variant) recebem SDF corner radius.
     match space_render_elements::<_, Window, _>(
         renderer,
@@ -789,6 +780,11 @@ pub fn build_winit_elements(
         Err(err) => {
             tracing::warn!(?err, "space_render_elements falhou no winit path");
         }
+    }
+
+    // shadow pos space (winit): sombras ABAIXO de popups/toplevels.
+    for elem in shadow_elements(inputs.space) {
+        out.push(LumoCustomElement::Solid(elem));
     }
 
     // 5. Wallpaper no fundo.
