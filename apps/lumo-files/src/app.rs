@@ -231,7 +231,30 @@ impl App {
     pub fn new() -> (Self, Task<Message>) {
         let home = dirs_home();
         let sidebar = build_sidebar(&username());
-        let initial_tab = Tab::new(home.clone());
+
+        // Carrega diretorio inicial de forma sincrona para eliminar race
+        // entre Task::perform e o primeiro frame do compositor Wayland.
+        // Task::perform do Iced e encadeado apos window::open() -- o primeiro
+        // frame e pintado com loading=true/entries=[] antes do DirLoaded
+        // chegar, causando skeleton permanente se o compositor nao pedir
+        // redraw depois do DirLoaded.
+        let initial_show_hidden = false;
+        let initial_entries: Vec<PathBuf> = ops::list_dir(&home)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|p| {
+                initial_show_hidden
+                    || p.file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|n| !n.starts_with('.'))
+                        .unwrap_or(true)
+            })
+            .collect();
+
+        let mut initial_tab = Tab::new(home.clone());
+        initial_tab.file_list.set_entries(initial_entries);
+        initial_tab.file_list.sort(SortBy::Name, true);
+
         let app = Self {
             tabs: vec![initial_tab],
             active_tab: 0,
@@ -251,16 +274,14 @@ impl App {
             properties: None,
             theme: ThemeSnapshot::from_env(),
             toasts: ToastQueue::new(),
-            loading: true,
+            loading: false,
             disk_cache: None,
             expanded: std::collections::HashSet::new(),
             home_subdirs: load_immediate_subdirs(&home),
         };
-        let task = Task::perform(load_dir(home.clone(), false), move |r| match r {
-            Ok(entries) => Message::DirLoaded(home.clone(), entries),
-            Err(e) => Message::OpError(e),
-        });
-        (app, task)
+        // Task::none(): dados ja carregados sincronamente acima.
+        // Breadcrumb e grid corretos desde o primeiro frame.
+        (app, Task::none())
     }
 
     /// Referencia imutavel para a tab ativa.
@@ -577,7 +598,6 @@ impl App {
 
             // -- Async results ---------------------------------------------
             Message::DirLoaded(path, entries) => {
-                eprintln!("[DEBUG] DirLoaded path={:?} entries={}", path, entries.len());
                 let label = path.file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "/".to_string());
@@ -642,7 +662,6 @@ impl App {
             }
 
             Message::OpError(e) => {
-                eprintln!("[DEBUG] OpError: {}", e);
                 self.status = e.clone();
                 self.toasts.push(Toast::new(ToastKind::Error, e));
                 Task::none()
@@ -902,7 +921,6 @@ impl App {
     // -----------------------------------------------------------------------
 
     pub fn view(&self) -> Element<Message> {
-        eprintln!("[DEBUG] view() called: entries={} loading={} active_tab={}", self.current_tab().file_list.entries.len(), self.loading, self.active_tab);
         let th = &self.theme;
         let bg = th.bg;
         let panel = th.bg_subtle;
@@ -1369,7 +1387,6 @@ impl App {
 
         // W19 BUG-FIX: empty wins over skeleton. Vazio = empty-state limpo,
         // nunca placeholders fantasmas sobrepostos com texto "Pasta vazia".
-        eprintln!("[DEBUG] view_as_grid entries={} loading={}", entries.len(), self.loading);
         if entries.is_empty() {
             if self.loading {
                 return self.view_grid_skeleton();
@@ -2007,7 +2024,6 @@ impl App {
 // ---------------------------------------------------------------------------
 
 pub(crate) async fn load_dir(path: PathBuf, show_hidden: bool) -> Result<Vec<PathBuf>, String> {
-    eprintln!("[DEBUG] load_dir called path={:?}", path);
     tokio::task::spawn_blocking(move || {
         let mut entries = ops::list_dir(&path).map_err(|e| e.to_string())?;
         if !show_hidden {
@@ -2021,8 +2037,7 @@ pub(crate) async fn load_dir(path: PathBuf, show_hidden: bool) -> Result<Vec<Pat
         Ok(entries)
     })
     .await
-    .map_err(|e| e.to_string())
-    .map(|r| { eprintln!("[DEBUG] load_dir done entries={}", r.as_ref().map(|v| v.len()).unwrap_or(0)); r })?
+    .map_err(|e| e.to_string())?
 }
 
 async fn xdg_open(path: PathBuf) -> Result<(), String> {
