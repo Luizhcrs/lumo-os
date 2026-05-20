@@ -63,6 +63,8 @@ pub fn send_command_to(path: &std::path::Path, cmd: &LumoCommand) -> Result<(), 
     payload.push('\n');
     stream.write_all(payload.as_bytes()).map_err(IpcError::Write)?;
     let _ = stream.flush();
+    // Compositor calloop ticks a ~16ms; aguardar garante leitura antes do close.
+    std::thread::sleep(std::time::Duration::from_millis(25));
     Ok(())
 }
 

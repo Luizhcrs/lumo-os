@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use iced::keyboard::{self, Key, Modifiers};
+use iced::mouse;
 use iced::widget::svg::Handle as SvgHandle;
 use iced::widget::{
     button, column, container, horizontal_rule, row, scrollable, text, text_input, Svg,
@@ -225,6 +226,8 @@ pub struct App {
     pub expanded: std::collections::HashSet<PathBuf>,
     /// W21: cache de subdirs de $HOME pra render tree sem hit FS por frame.
     pub home_subdirs: Vec<PathBuf>,
+    /// Manual hit-test: ultima posicao do cursor (window-relative).
+    pub last_cursor_pos: iced::Point,
 }
 
 impl App {
@@ -278,6 +281,7 @@ impl App {
             disk_cache: None,
             expanded: std::collections::HashSet::new(),
             home_subdirs: load_immediate_subdirs(&home),
+            last_cursor_pos: iced::Point::ORIGIN,
         };
         // Task::none(): dados ja carregados sincronamente acima.
         // Breadcrumb e grid corretos desde o primeiro frame.
@@ -891,9 +895,20 @@ impl App {
                 )
             }
 
-            // [debug] log todos eventos brutos para diagnostico hit-test
+            // Manual hit-test workaround: Iced widget hit-test nao dispara handlers
+            // em algumas configuracoes Wayland. Rastreamos cursor via RawEvent e
+            // disparamos mensagens corretas manualmente no ButtonPressed.
             Message::RawEvent(event) => {
-                eprintln!("[lumo-files debug] raw_event: {:?}", event);
+                match &event {
+                    iced::Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                        self.last_cursor_pos = *position;
+                    }
+                    iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                        let pos = self.last_cursor_pos;
+                        return self.dispatch_manual_click(pos);
+                    }
+                    _ => {}
+                }
                 Task::none()
             }
         }
@@ -912,7 +927,7 @@ impl App {
             iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick),
             iced::time::every(std::time::Duration::from_secs(1)).map(|_| Message::ToastTick),
             // [debug] captura todos eventos brutos para diagnostico hit-test
-            iced::event::listen().map(Message::RawEvent),
+            iced::event::listen_raw(|event, _status, _win| Some(event)).map(Message::RawEvent),
         ])
     }
 
@@ -2017,6 +2032,76 @@ impl App {
 
     fn push_back(&mut self) {
     }
+
+    // -----------------------------------------------------------------------
+    // Manual hit-test (workaround: Iced widget handlers nao disparam no
+    // compositor atual — usamos RawEvent + geometria estatica da sidebar)
+    // -----------------------------------------------------------------------
+
+    /// Constantes de layout da sidebar (coordenadas window-relative, px).
+    /// Toolbar ~44px + tab_bar ~34px = ~78px offset ate o corpo.
+    const SIDEBAR_BODY_Y: f32 = 78.0;
+    /// padding-top da sidebar column.
+    const SIDEBAR_COL_PAD_TOP: f32 = 8.0;
+    /// Altura do group_header INICIO (padding [10,12] + text ~10px).
+    const SIDEBAR_HEADER_H: f32 = 30.0;
+    /// Altura de cada item de sidebar (button padding [6,10] 16px icon + spacing 2).
+    const SIDEBAR_ROW_H: f32 = 30.0;
+    /// Largura maxima da sidebar (container width 220).
+    const SIDEBAR_W: f32 = 220.0;
+
+    fn dispatch_manual_click(&mut self, pos: iced::Point) -> Task<Message> {
+        let x = pos.x;
+        let y = pos.y;
+
+        // Ignora cliques fora da sidebar
+        if x >= Self::SIDEBAR_W {
+            return Task::none();
+        }
+
+        // y relativo ao inicio da coluna sidebar (abaixo do toolbar + tabbar)
+        let y_rel = y - Self::SIDEBAR_BODY_Y - Self::SIDEBAR_COL_PAD_TOP;
+        if y_rel < 0.0 {
+            return Task::none();
+        }
+
+        // Pula o header INICIO
+        let y_items = y_rel - Self::SIDEBAR_HEADER_H;
+        if y_items < 0.0 {
+            return Task::none();
+        }
+
+        // Calcula indice do item clicado
+        let raw_idx = (y_items / Self::SIDEBAR_ROW_H) as usize;
+
+        // Constroi lista flat de itens visiveis (igual ao render loop em view())
+        let mut flat: Vec<(std::path::PathBuf, bool)> = Vec::new();
+        // bool = true se e item expandivel (Home ou Drive)
+        for item in &self.sidebar {
+            let expandable = matches!(item.kind, crate::sidebar::SidebarKind::Home | crate::sidebar::SidebarKind::Drive);
+            flat.push((item.path.clone(), expandable));
+            if matches!(item.kind, crate::sidebar::SidebarKind::Home) && self.expanded.contains(&item.path) {
+                for sub in &self.home_subdirs {
+                    flat.push((sub.clone(), false));
+                }
+            }
+        }
+
+        if let Some((path, expandable)) = flat.get(raw_idx) {
+            let path = path.clone();
+            let expandable = *expandable;
+            // Chevron zone: container_pad(4) + btn_pad(10) + active_bar(3) + spacing(8) = 25..41
+            // active_bar(3) + spacing(8) + chevron(16) = chevron at x=[25, 41] from sidebar edge
+            let is_chevron_zone = expandable && x >= 25.0 && x <= 45.0;
+            if is_chevron_zone {
+                return self.update(Message::ToggleSidebarExpand(path));
+            } else {
+                return self.update(Message::Navigate(path));
+            }
+        }
+
+        Task::none()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2175,6 +2260,7 @@ mod tests {
             disk_cache: None,
             expanded: std::collections::HashSet::new(),
             home_subdirs: Vec::new(),
+            last_cursor_pos: iced::Point::ORIGIN,
         }
     }
 
