@@ -795,12 +795,17 @@ pub fn run(
                     return TimeoutAction::ToDuration(sleep_for);
                 }
                 render_drm(state);
-                // BUG2 FIX: 1ms causava spin ~1000 chamadas/s mesmo idle
-                // (render_frame com is_empty=true = GPU overhead sem damage).
-                // 16ms = periodo de 1 vblank 60Hz. compute_render_timeout ja
-                // afina o scheduling dentro do janela de 16ms quando vblank
-                // timestamp esta disponivel.
-                TimeoutAction::ToDuration(Duration::from_millis(16))
+                // W23: adaptive timer pra sub-1% CPU idle.
+                // - Active (should_render OR force_repaint OR anim ativa): 16ms (60Hz vblank)
+                // - Idle (nada mudou ultimo frame): 100ms (~10Hz wake-up)
+                // - Bridge IPC + commit handler set should_render=true = volta active
+                let active = state.should_render
+                    || state.drm_force_repaint
+                    || state.boot_curtain_alpha > 0.001
+                    || state.splash_alpha > 0.001
+                    || state.overview.is_some();
+                let timeout_ms = if active { 16 } else { 100 };
+                TimeoutAction::ToDuration(Duration::from_millis(timeout_ms))
             },
         )
         .map_err(|e| anyhow!("insert frame timer: {e}"))?;
