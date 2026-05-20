@@ -60,7 +60,7 @@ render_elements! {
 /// Altura da titlebar SSD em pixels logicos.
 pub const TITLEBAR_H: i32 = 30;
 /// Cor de fundo da titlebar: #1a1a1c (dark neutral).
-pub const TITLEBAR_BG: [f32; 4] = [0.0, 0.0, 0.0, 0.0]; // W27: transparent — botoes flutuam sobre content
+pub const TITLEBAR_BG: [f32; 4] = [0.098, 0.098, 0.106, 1.0];
 /// Cor do botao close: vermelho #c0392b (sem glow — sombra neutra).
 pub const CLOSE_BTN_COLOR: [f32; 4] = [0.753, 0.224, 0.169, 1.0];
 /// Tamanho do botao close (quadrado).
