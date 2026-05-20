@@ -35,6 +35,8 @@ impl CompositorHandler for LumoState {
 
     fn commit(&mut self, surface: &WlSurface) {
         on_commit_buffer_handler::<Self>(surface);
+        // W22: surface commit = render needed.
+        self.should_render = true;
 
         if !is_sync_subsurface(surface) {
             let mut root = surface.clone();

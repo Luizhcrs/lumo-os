@@ -949,6 +949,15 @@ fn render_drm(state: &mut LumoState) {
         }
     }
 
+    // W22: damage-gating. Skip render se nada mudou desde ultimo frame.
+    // should_render set true por: commit surface, cursor move, anim tick,
+    // focus change, decoration change. drm_force_repaint bypass gating.
+    if !state.should_render && !state.drm_force_repaint {
+        state.skipped_frames = state.skipped_frames.wrapping_add(1);
+        return;
+    }
+    state.should_render = false;
+
     state.frame_counter = state.frame_counter.wrapping_add(1);
     let trace = std::env::var("LUMO_TRACE_FRAMES").is_ok();
     let force_repaint = state.drm_force_repaint;

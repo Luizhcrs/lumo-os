@@ -149,6 +149,15 @@ pub struct LumoState {
     #[cfg(feature = "drm-backend")]
     pub drm_force_repaint: bool,
 
+    /// W22: damage-gating render. True quando ha mudanca de estado que
+    /// exige render (commit surface, cursor move, anim tick, focus change).
+    /// Frame timer skip render quando false = CPU idle <1%.
+    /// Reset apos render. Sempre true se drm_force_repaint=true.
+    pub should_render: bool,
+
+    /// W22: contador de skip render consecutivos (debug).
+    pub skipped_frames: u64,
+
     /// True quando outro VT esta ativo (SessionEvent::PauseSession).
     /// Watchdog ignora paused; render path skip enquanto paused.
     pub paused: bool,
@@ -337,6 +346,8 @@ impl LumoState {
             drm_backend: None,
             #[cfg(feature = "drm-backend")]
             drm_force_repaint: false,
+            should_render: true,
+            skipped_frames: 0,
             paused: false,
             watchdog_deadline: None,
             exit_code: 0,
