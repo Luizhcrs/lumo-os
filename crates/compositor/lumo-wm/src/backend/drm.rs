@@ -835,7 +835,16 @@ pub fn run(
                 // Tick IPC pra workspaces (broadcast pra lumo-bar quando
                 // Super+1..9 chega via libinput).
                 crate::ipc::tick(state);
-                TimeoutAction::ToDuration(Duration::from_millis(4))
+                // W23.2: adaptive dispatch_clients. 4ms active vs 20ms idle.
+                // 4ms = 250Hz era residual maior fonte ctxt switches. Idle
+                // 20ms = 50Hz suficiente pra latencia client perceivel.
+                let active = state.should_render
+                    || state.drm_force_repaint
+                    || state.boot_curtain_alpha > 0.001
+                    || state.splash_alpha > 0.001
+                    || state.overview.is_some();
+                let dispatch_ms = if active { 4 } else { 20 };
+                TimeoutAction::ToDuration(Duration::from_millis(dispatch_ms))
             },
         )
         .map_err(|e| anyhow!("insert DRM dispatch timer: {e}"))?;
