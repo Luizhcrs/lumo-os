@@ -200,10 +200,7 @@ pub async fn run(mut rx: mpsc::Receiver<NotifEvent>) {
             let _ = poll(&mut pfd, PollTimeout::try_from(16i32).unwrap());
             let _ = guard.read();
         }
-        match queue.dispatch_pending(&mut state) {
-            Err(e) => { let s = format!("{e:?}"); if s.contains("ConnectionReset") || s.contains("BrokenPipe") { break; } }
-            Ok(_) => {}
-        }
+        if let Err(e) = queue.dispatch_pending(&mut state) { let s = format!("{e:?}"); if s.contains("ConnectionReset") || s.contains("BrokenPipe") { break; } }
         if conn.flush().is_err() { break; }
     }
 }

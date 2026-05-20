@@ -18,7 +18,7 @@ pub fn search(query: &str, entries: &[DesktopEntry]) -> Vec<FuzzyResult> {
             .or_else(|| matcher.fuzzy_match(&e.comment, query))?;
         Some(FuzzyResult { entry: e.clone(), score })
     }).collect();
-    results.sort_by(|a, b| b.score.cmp(&a.score));
+    results.sort_by_key(|r| std::cmp::Reverse(r.score));
     results.truncate(MAX_RESULTS);
     results
 }

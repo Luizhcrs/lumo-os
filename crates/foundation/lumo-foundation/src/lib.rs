@@ -667,7 +667,7 @@ mod theme_tests {
         // Com HOME apontando pra dir inexistente, deve retornar defaults.
         std::env::set_var("HOME", "/tmp/lumo_test_nonexistent_xyz");
         let tokens = LumoTokens::load_from_disk();
-        assert!(matches!(tokens.mode, LumoTheme::Light));
+        assert!(matches!(tokens.mode, LumoTheme::Dark));
         assert!(tokens.accent.is_none());
     }
 

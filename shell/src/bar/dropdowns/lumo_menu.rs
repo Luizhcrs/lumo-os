@@ -28,7 +28,7 @@ pub fn draw_lumo_menu(
         MENU_LUMO_ITEMS,
         hover_idx,
         palette,
-        |c, x, y, w, h, r, color| fill_rrect(c, x, y, w, h, r, color),
+        fill_rrect,
         |c, x, y, label, size, color| {
             draw_text(c, x, y, label, size, color, false);
         },

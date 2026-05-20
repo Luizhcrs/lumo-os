@@ -168,5 +168,5 @@ impl ProvidesRegistryState for LumoLauncher {
 
 fn keysym_to_char(sym: Keysym) -> Option<char> {
     let raw = sym.raw();
-    if raw >= 0x20 && raw <= 0x7E { char::from_u32(raw) } else { None }
+    if (0x20..=0x7E).contains(&raw) { char::from_u32(raw) } else { None }
 }

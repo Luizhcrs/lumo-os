@@ -577,6 +577,7 @@ impl App {
 
             // -- Async results ---------------------------------------------
             Message::DirLoaded(path, entries) => {
+                eprintln!("[DEBUG] DirLoaded path={:?} entries={}", path, entries.len());
                 let label = path.file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "/".to_string());
@@ -641,6 +642,7 @@ impl App {
             }
 
             Message::OpError(e) => {
+                eprintln!("[DEBUG] OpError: {}", e);
                 self.status = e.clone();
                 self.toasts.push(Toast::new(ToastKind::Error, e));
                 Task::none()
@@ -900,6 +902,7 @@ impl App {
     // -----------------------------------------------------------------------
 
     pub fn view(&self) -> Element<Message> {
+        eprintln!("[DEBUG] view() called: entries={} loading={} active_tab={}", self.current_tab().file_list.entries.len(), self.loading, self.active_tab);
         let th = &self.theme;
         let bg = th.bg;
         let panel = th.bg_subtle;
@@ -1366,6 +1369,7 @@ impl App {
 
         // W19 BUG-FIX: empty wins over skeleton. Vazio = empty-state limpo,
         // nunca placeholders fantasmas sobrepostos com texto "Pasta vazia".
+        eprintln!("[DEBUG] view_as_grid entries={} loading={}", entries.len(), self.loading);
         if entries.is_empty() {
             if self.loading {
                 return self.view_grid_skeleton();
@@ -2003,6 +2007,7 @@ impl App {
 // ---------------------------------------------------------------------------
 
 pub(crate) async fn load_dir(path: PathBuf, show_hidden: bool) -> Result<Vec<PathBuf>, String> {
+    eprintln!("[DEBUG] load_dir called path={:?}", path);
     tokio::task::spawn_blocking(move || {
         let mut entries = ops::list_dir(&path).map_err(|e| e.to_string())?;
         if !show_hidden {
@@ -2016,7 +2021,8 @@ pub(crate) async fn load_dir(path: PathBuf, show_hidden: bool) -> Result<Vec<Pat
         Ok(entries)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())
+    .map(|r| { eprintln!("[DEBUG] load_dir done entries={}", r.as_ref().map(|v| v.len()).unwrap_or(0)); r })?
 }
 
 async fn xdg_open(path: PathBuf) -> Result<(), String> {

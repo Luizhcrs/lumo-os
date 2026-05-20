@@ -74,6 +74,7 @@ impl A11yTokens {
     }
 
     /// Parse TOML sem dependencia extra (subset para nosso formato).
+    #[allow(clippy::result_unit_err)]
     pub fn parse_toml(text: &str) -> Result<Self, ()> {
         let mut tokens = Self::default();
         for line in text.lines() {
@@ -168,11 +169,8 @@ pub fn watch_accessibility<F: Fn(A11yTokens) + Send + 'static>(callback: F) {
 
     std::thread::spawn(move || {
         let _watcher = watcher;
-        loop {
-            match rx.recv() {
-                Ok(()) => callback(A11yTokens::load_from_disk()),
-                Err(_) => break,
-            }
+        while let Ok(()) = rx.recv() {
+            callback(A11yTokens::load_from_disk());
         }
     });
 }

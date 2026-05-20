@@ -55,12 +55,12 @@ pub async fn load_notes() -> Vec<Note> {
         let title = path.file_stem().and_then(|s| s.to_str()).unwrap_or("sem titulo").to_string();
         let meta = entry.metadata().await;
         let modified = meta.ok().and_then(|m| m.modified().ok())
-            .map(|st| chrono::DateTime::<chrono::Local>::from(st))
+            .map(chrono::DateTime::<chrono::Local>::from)
             .unwrap_or_else(|| chrono::Local::now());
         notes.push(Note { id, title, content, modified, path });
         id += 1;
     }
-    notes.sort_by(|a, b| b.modified.cmp(&a.modified));
+    notes.sort_by_key(|n| std::cmp::Reverse(n.modified));
     notes
 }
 

@@ -107,21 +107,12 @@ impl IpcClient {
 }
 
 /// Estado do servidor IPC.
+#[derive(Default)]
 pub struct IpcServer {
     pub socket_path: Option<PathBuf>,
     pub clients: Vec<IpcClient>,
     /// L6: receiver de eventos de theme change do watcher thread.
     pub theme_rx: Option<mpsc::Receiver<lumo_ipc::ThemeMode>>,
-}
-
-impl Default for IpcServer {
-    fn default() -> Self {
-        Self {
-            socket_path: None,
-            clients: Vec::new(),
-            theme_rx: None,
-        }
-    }
 }
 
 impl IpcServer {

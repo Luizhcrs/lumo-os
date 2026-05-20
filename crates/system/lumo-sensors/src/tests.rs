@@ -79,11 +79,11 @@ mod platform_tests {
 
     #[test]
     fn profile_parse_all_variants() {
-        assert_eq!(Profile::from_str("low-power"), Some(Profile::LowPower));
-        assert_eq!(Profile::from_str("quiet"), Some(Profile::Quiet));
-        assert_eq!(Profile::from_str("balanced"), Some(Profile::Balanced));
-        assert_eq!(Profile::from_str("performance"), Some(Profile::Performance));
-        assert_eq!(Profile::from_str("unknown-mode"), None);
+        assert_eq!(Profile::from_sysfs("low-power"), Some(Profile::LowPower));
+        assert_eq!(Profile::from_sysfs("quiet"), Some(Profile::Quiet));
+        assert_eq!(Profile::from_sysfs("balanced"), Some(Profile::Balanced));
+        assert_eq!(Profile::from_sysfs("performance"), Some(Profile::Performance));
+        assert_eq!(Profile::from_sysfs("unknown-mode"), None);
     }
 
     #[test]
@@ -118,7 +118,7 @@ mod platform_tests {
     fn profile_sysfs_roundtrip() {
         for p in [Profile::LowPower, Profile::Quiet, Profile::Balanced, Profile::Performance] {
             let s = p.as_sysfs_str();
-            let parsed = Profile::from_str(s).expect("roundtrip failed");
+            let parsed = Profile::from_sysfs(s).expect("roundtrip failed");
             assert_eq!(parsed, p);
         }
     }

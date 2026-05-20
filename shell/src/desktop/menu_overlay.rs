@@ -54,8 +54,8 @@ pub fn paint_menu_at(
         MENU_ITEMS,
         menu_active.hover_idx,
         palette,
-        |c, x, y, w, h, r, color| fill_rrect(c, x, y, w, h, r, color),
-        |c, x, y, label, size, color| draw_text(c, x, y, label, size, color),
+        fill_rrect,
+        draw_text,
     );
 }
 

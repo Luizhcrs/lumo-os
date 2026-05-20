@@ -58,18 +58,13 @@ impl Rect {
 ///   Pressed -> Hover : pointer release dentro do rect (gera click)
 ///   Pressed -> Idle  : pointer release fora OU pointer sai durante press
 ///   * -> Disabled    : setado externamente; bloqueia hover/press
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WidgetState {
+    #[default]
     Idle,
     Hover,
     Pressed,
     Disabled,
-}
-
-impl Default for WidgetState {
-    fn default() -> Self {
-        WidgetState::Idle
-    }
 }
 
 /// Handle mantido pelo caller entre frames. Guarda state + rect (atualizado
@@ -419,6 +414,7 @@ impl Button {
     /// Render com state machine. Atualiza `handle.rect` com a hit area
     /// medida e modula visual (brightness / scale / shadow) baseado em
     /// `handle.state` + `handle.press_progress`.
+    #[allow(clippy::too_many_arguments)]
     pub fn queue_stateful(
         &self,
         quads: &mut Vec<QuadInstance>,
@@ -440,6 +436,7 @@ impl Button {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn queue_internal(
         &self,
         quads: &mut Vec<QuadInstance>,

@@ -20,7 +20,7 @@ pub enum Profile {
 }
 
 impl Profile {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_sysfs(s: &str) -> Option<Self> {
         match s {
             "low-power" => Some(Self::LowPower),
             "quiet" => Some(Self::Quiet),
@@ -78,7 +78,7 @@ impl SysfsPlatformProfile {
 impl PlatformProfile for SysfsPlatformProfile {
     fn current(&self) -> Profile {
         match read_sysfs_trimmed(&self.profile_path) {
-            Ok(s) => Profile::from_str(&s).unwrap_or(Profile::Balanced),
+            Ok(s) => Profile::from_sysfs(&s).unwrap_or(Profile::Balanced),
             Err(_) => Profile::Balanced,
         }
     }
@@ -92,7 +92,7 @@ impl PlatformProfile for SysfsPlatformProfile {
             Ok(s) => {
                 let v: Vec<Profile> = s
                     .split_whitespace()
-                    .filter_map(Profile::from_str)
+                    .filter_map(Profile::from_sysfs)
                     .collect();
                 if v.is_empty() { fallback } else { v }
             }
