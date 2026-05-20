@@ -87,6 +87,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/keyboard/type", post(routes::keyboard::type_text))
         .route("/keyboard/key", post(routes::keyboard::key_sequence))
         .route("/log/tail", get(routes::log::tail))
+        .route("/state/dump", get(routes::state::dump))
         .route("/procs", get(routes::state::procs))
         .layer(middleware::from_fn_with_state(state.clone(), auth::require_bearer));
 
