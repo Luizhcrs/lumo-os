@@ -1080,6 +1080,7 @@ fn render_drm(state: &mut LumoState) {
         titlebar_menu: titlebar_menu_opt,
         snap_preview: state.snap_preview,
         titlebar_corner_buffer: state.titlebar_corner_buffer.as_ref(),
+        titlebar_corner_buffer_right: state.titlebar_corner_buffer_right.as_ref(),
         overview_elements: state.overview.as_ref()
             .map(|ov| crate::overview::overview_elements(ov, ow, oh))
             .unwrap_or_default(),

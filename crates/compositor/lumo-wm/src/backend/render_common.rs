@@ -251,9 +251,11 @@ pub fn titlebar_corner_elements(
     space: &Space<Window>,
     ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
     corner_buffer: Option<&MemoryRenderBuffer>,
+    corner_buffer_right: Option<&MemoryRenderBuffer>,
 ) -> Vec<MemoryRenderBufferRenderElement<GlesRenderer>> {
     let mut out = Vec::new();
     let Some(buffer) = corner_buffer else { return out; };
+    let buffer_right = corner_buffer_right.unwrap_or(buffer);
     const CORNER_SZ: i32 = 12;
 
     for window in space.elements() {
@@ -292,7 +294,7 @@ pub fn titlebar_corner_elements(
         if let Ok(elem) = MemoryRenderBufferRenderElement::from_buffer(
             renderer,
             Point::<f64, Physical>::from((right_x as f64, titlebar_top_y as f64)),
-            buffer,
+            buffer_right,
             None,
             None,
             None,
@@ -629,6 +631,7 @@ pub struct OverlayInputs<'a> {
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
     pub titlebar_corner_buffer: Option<&'a MemoryRenderBuffer>,
+    pub titlebar_corner_buffer_right: Option<&'a MemoryRenderBuffer>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// W9.B: snap zone preview during window drag.
@@ -707,7 +710,7 @@ pub fn build_overlay(
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         overlay.push(LumoCustomElement::Solid(elem));
     }
-    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer) {
+    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer, inputs.titlebar_corner_buffer_right) {
         overlay.push(LumoCustomElement::Memory(elem));
     }
     // T1.1: menu popup SSD.
@@ -757,6 +760,7 @@ pub struct DrmCollectInputs<'a> {
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
     pub titlebar_corner_buffer: Option<&'a MemoryRenderBuffer>,
+    pub titlebar_corner_buffer_right: Option<&'a MemoryRenderBuffer>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// W9.B: snap zone preview during window drag.
@@ -881,7 +885,7 @@ pub fn collect_drm_elements(
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }
-    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer) {
+    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer, inputs.titlebar_corner_buffer_right) {
         out.push(LumoCustomElement::Memory(elem));
     }
     // T1.1: menu popup SSD.
@@ -1030,7 +1034,7 @@ pub fn build_winit_elements(
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }
-    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer) {
+    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer, inputs.titlebar_corner_buffer_right) {
         out.push(LumoCustomElement::Memory(elem));
     }
     // T1.1: menu popup SSD.

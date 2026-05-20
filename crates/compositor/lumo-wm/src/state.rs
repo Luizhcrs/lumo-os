@@ -234,6 +234,7 @@ pub struct LumoState {
     pub splash_buffer: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
     /// W28: 12x12 pixmap top-left corner round + 3 quadrants squared. Flipped on right side.
     pub titlebar_corner_buffer: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
+    pub titlebar_corner_buffer_right: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
     /// Telemetry: timestamp of last pointer button press for input-to-paint measurement.
     pub last_input_ts: Option<std::time::Instant>,
     /// W23.5: timestamp ultimo PointerMotion/Button. Sticky 200ms = active mode.
@@ -288,7 +289,8 @@ impl LumoState {
             )
         });
 
-        // W28: pre-render SSD titlebar top-left corner pixmap (12x12) com alpha mask round.
+        // W28: pre-render SSD titlebar top-LEFT corner pixmap (12x12) com alpha mask round.
+        // Corner anchor at (R, R) — round arc no quadrant top-left, demais 3 quadrants opacos.
         let titlebar_corner_buffer = {
             use smithay::backend::allocator::Fourcc;
             use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
@@ -302,10 +304,40 @@ impl LumoState {
                     let dy = (y as f32) - R + 0.5;
                     let inside = (dx >= 0.0 || dy >= 0.0) || (dx * dx + dy * dy).sqrt() <= R;
                     let alpha = if inside { 255u8 } else { 0u8 };
-                    pixels.push(0x1A); // R
-                    pixels.push(0x1A); // G
-                    pixels.push(0x1C); // B
-                    pixels.push(alpha); // A
+                    pixels.push(0x1A);
+                    pixels.push(0x1A);
+                    pixels.push(0x1C);
+                    pixels.push(alpha);
+                }
+            }
+            Some(MemoryRenderBuffer::from_slice(
+                &pixels,
+                Fourcc::Abgr8888,
+                (SZ as i32, SZ as i32),
+                1,
+                Transform::Normal,
+                None,
+            ))
+        };
+        // W28.2: top-RIGHT corner pixmap = mirrored horizontalmente (anchor R,R no quadrant top-right).
+        let titlebar_corner_buffer_right = {
+            use smithay::backend::allocator::Fourcc;
+            use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
+            use smithay::utils::Transform;
+            const SZ: usize = 12;
+            const R: f32 = 12.0;
+            let mut pixels = Vec::with_capacity(SZ * SZ * 4);
+            for y in 0..SZ {
+                for x in 0..SZ {
+                    // Mirror x: anchor em (-1, R) — round arc no top-right corner.
+                    let dx = R - 1.0 - (x as f32) + 0.5;
+                    let dy = (y as f32) - R + 0.5;
+                    let inside = (dx >= 0.0 || dy >= 0.0) || (dx * dx + dy * dy).sqrt() <= R;
+                    let alpha = if inside { 255u8 } else { 0u8 };
+                    pixels.push(0x1A);
+                    pixels.push(0x1A);
+                    pixels.push(0x1C);
+                    pixels.push(alpha);
                 }
             }
             Some(MemoryRenderBuffer::from_slice(
@@ -409,6 +441,7 @@ impl LumoState {
             splash_timer: 0.0,
             splash_buffer: crate::backend::wallpaper::load_splash_buffer(),
             titlebar_corner_buffer,
+            titlebar_corner_buffer_right,
             last_input_ts: None,
             cursor_last_motion_ts: None,
             #[cfg(feature = "drm-backend")]
