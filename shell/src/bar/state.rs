@@ -690,6 +690,9 @@ pub(crate) struct LumoBar {
     pub registrar_handle: crate::bar::registrar::RegistrarHandle,
     pub ipc_stream: Option<UnixStream>,
     pub ipc_rx_buf: Vec<u8>,
+    // IPC reconnect backoff: None = not pending; Some(t) = retry at t.
+    pub ipc_reconnect_at: Option<std::time::Instant>,
+    pub ipc_reconnect_delay: std::time::Duration,
     pub theme: LumoTheme,
     pub palette: LumoColors,
     // B4: animadores de abertura/fechamento de dropdown (scale 0.85->1.0, alpha 0->1).

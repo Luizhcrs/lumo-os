@@ -30,11 +30,11 @@ impl LFTokens {
     /// `#1a1a21` panel-hi -- sRGB normalizado.
     pub const PANEL_HI_SRGB:    [f32; 4] = [0.101_960_786, 0.101_960_786, 0.129_411_77, 1.0];
     /// `#131318` panel -- sRGB normalizado.
-    pub const PANEL_SRGB:       [f32; 4] = [0.074_509_805, 0.074_509_805, 0.094_117_65, 1.0];
+    pub const PANEL_SRGB:       [f32; 4] = [0.074_509_81, 0.074_509_81, 0.094_117_65, 1.0];
     /// `#059669` emerald-600 -- sRGB normalizado.
     pub const EMERALD_600_SRGB: [f32; 4] = [0.019_607_844, 0.588_235_3, 0.411_764_7, 1.0];
     /// `#10b981` emerald-500 -- sRGB normalizado.
-    pub const EMERALD_500_SRGB: [f32; 4] = [0.062_745_1, 0.725_490_2, 0.505_882_36, 1.0];
+    pub const EMERALD_500_SRGB: [f32; 4] = [0.062_745_1, 0.725_490_2, 0.505_882_4, 1.0];
     /// `#f5f5f7` pearl -- sRGB normalizado.
     pub const PEARL_SRGB:       [f32; 4] = [0.960_784_3, 0.960_784_3, 0.968_627_5, 1.0];
     /// `#9596a0` muted -- sRGB normalizado.
@@ -58,7 +58,7 @@ impl LFTokens {
     /// `#10b981` emerald-500 (accent secundario / hover) -- linear.
     pub const EMERALD_500: [f32; 4] = [0.005_181_5, 0.485_149_9, 0.219_526_2, 1.0];
     /// `#f5f5f7` quasi-white (texto, borders fortes) -- linear.
-    pub const PEARL:       [f32; 4] = [0.913_098_6, 0.913_098_6, 0.930_111_0, 1.0];
+    pub const PEARL:       [f32; 4] = [0.913_098_6, 0.913_098_6, 0.930_111, 1.0];
     /// `#9596a0` muted (text de baixa enfase) -- linear.
     pub const MUTED:       [f32; 4] = [0.301_318_7, 0.302_449_8, 0.350_975_3, 1.0];
     /// `#f87171` danger / red-400 -- linear.
@@ -318,11 +318,11 @@ impl LumoColors {
     }
 }
 
-/// Le `LUMO_THEME` do env. Default = Light (decisao A13).
+/// Le `LUMO_THEME` do env. Default = Dark.
 pub fn current_theme() -> LumoTheme {
     match std::env::var("LUMO_THEME").as_deref() {
-        Ok("dark") | Ok("Dark") | Ok("DARK") => LumoTheme::Dark,
-        _ => LumoTheme::Light,
+        Ok("light") | Ok("Light") | Ok("LIGHT") => LumoTheme::Light,
+        _ => LumoTheme::Dark,
     }
 }
 
@@ -489,8 +489,8 @@ impl LumoTokens {
 
     fn default_tokens() -> Self {
         let mode = match std::env::var("LUMO_THEME").as_deref() {
-            Ok("dark") | Ok("Dark") | Ok("DARK") => LumoTheme::Dark,
-            _ => LumoTheme::Light,
+            Ok("light") | Ok("Light") | Ok("LIGHT") => LumoTheme::Light,
+            _ => LumoTheme::Dark,
         };
         Self { mode, accent: None, ink_deep: None, pill_bg: None, font_sans: None, font_mono: None }
     }

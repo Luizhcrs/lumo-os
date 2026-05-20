@@ -166,6 +166,8 @@ pub fn run() {
         appmenu_submenu_rects: Vec::new(),
         ipc_stream: connect_ipc(),
         ipc_rx_buf: Vec::with_capacity(256),
+        ipc_reconnect_at: None,
+        ipc_reconnect_delay: Duration::from_secs(1),
         theme,
         palette,
         // B4: animadores dropdown. Iniciam em done (scale=1, alpha=1) = nenhuma animacao.
@@ -304,6 +306,27 @@ pub fn run() {
             break;
         }
 
+        // IPC reconnect: tenta reconectar quando backoff expira e stream esta None.
+        if state.ipc_stream.is_none() {
+            if let Some(due) = state.ipc_reconnect_at {
+                if Instant::now() >= due {
+                    state.ipc_reconnect_at = None;
+                    match crate::bar::ipc::connect_ipc() {
+                        Some(s) => {
+                            eprintln!("[lumo-bar] IPC reconectado");
+                            state.ipc_stream = Some(s);
+                            state.ipc_reconnect_delay = Duration::from_secs(1);
+                        }
+                        None => {
+                            // ainda nao disponivel; proximo backoff
+                            eprintln!("[lumo-bar] IPC reconnect falhou; proximo em {:?}", state.ipc_reconnect_delay);
+                            state.ipc_reconnect_at = Some(Instant::now() + state.ipc_reconnect_delay);
+                            state.ipc_reconnect_delay = (state.ipc_reconnect_delay * 2).min(Duration::from_secs(30));
+                        }
+                    }
+                }
+            }
+        }
         if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
             last_ipc_tick = Instant::now();
             if let Some(mut s) = state.ipc_stream.take() {
@@ -313,7 +336,10 @@ pub fn run() {
                 if alive {
                     state.ipc_stream = Some(s);
                 } else {
-                    eprintln!("[lumo-bar] IPC peer fechou; bar continua standalone");
+                    eprintln!("[lumo-bar] IPC peer fechou; reconnect em {:?}", state.ipc_reconnect_delay);
+                    state.ipc_reconnect_at = Some(Instant::now() + state.ipc_reconnect_delay);
+                    // exponential backoff, cap at 30s
+                    state.ipc_reconnect_delay = (state.ipc_reconnect_delay * 2).min(Duration::from_secs(30));
                 }
                 // A25/D2: CloseDropdowns IPC -> fecha dropdown ativo e appmenu submenu.
                 if close_dropdowns {
