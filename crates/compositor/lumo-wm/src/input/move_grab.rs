@@ -51,18 +51,25 @@ impl SnapZone {
     }
 
     /// Returns (x, y, w, h) layout in logical pixels.
-    pub fn layout(self, out_w: i32, out_h: i32) -> (i32, i32, i32, i32) {
-        let hw = out_w / 2;
-        let hh = out_h / 2;
+    /// W24: layout respect usable area (excludes bar layer-shell).
+    /// usable_x/usable_y = offset, usable_w/usable_h = dims.
+    pub fn layout_usable(self, usable_x: i32, usable_y: i32, usable_w: i32, usable_h: i32) -> (i32, i32, i32, i32) {
+        let hw = usable_w / 2;
+        let hh = usable_h / 2;
         match self {
-            SnapZone::Left        => (0,  0,  hw,          out_h),
-            SnapZone::Right       => (hw, 0,  out_w - hw,  out_h),
-            SnapZone::Maximize    => (0,  0,  out_w,       out_h),
-            SnapZone::TopLeft     => (0,  0,  hw,          hh),
-            SnapZone::TopRight    => (hw, 0,  out_w - hw,  hh),
-            SnapZone::BottomLeft  => (0,  hh, hw,          out_h - hh),
-            SnapZone::BottomRight => (hw, hh, out_w - hw,  out_h - hh),
+            SnapZone::Left        => (usable_x,        usable_y,         hw,            usable_h),
+            SnapZone::Right       => (usable_x + hw,   usable_y,         usable_w - hw, usable_h),
+            SnapZone::Maximize    => (usable_x,        usable_y,         usable_w,      usable_h),
+            SnapZone::TopLeft     => (usable_x,        usable_y,         hw,            hh),
+            SnapZone::TopRight    => (usable_x + hw,   usable_y,         usable_w - hw, hh),
+            SnapZone::BottomLeft  => (usable_x,        usable_y + hh,    hw,            usable_h - hh),
+            SnapZone::BottomRight => (usable_x + hw,   usable_y + hh,    usable_w - hw, usable_h - hh),
         }
+    }
+
+    /// Legacy wrapper assuming usable = entire output (no layer shell).
+    pub fn layout(self, out_w: i32, out_h: i32) -> (i32, i32, i32, i32) {
+        self.layout_usable(0, 0, out_w, out_h)
     }
 }
 
@@ -84,7 +91,12 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
         handle.motion(data, None, event);
 
         let delta = event.location - self.start_data.location;
-        let new_loc = self.initial_window_location + delta.to_i32_round();
+        let mut new_loc = self.initial_window_location + delta.to_i32_round();
+        // W24: clamp drag dentro usable area (excludes bar Layer::Top).
+        let usable = data.usable_geometry();
+        let win_bbox = self.window.bbox();
+        new_loc.x = new_loc.x.clamp(usable.loc.x, usable.loc.x + usable.size.w - win_bbox.size.w.max(64));
+        new_loc.y = new_loc.y.clamp(usable.loc.y, usable.loc.y + usable.size.h - 32);
         data.space.map_element(self.window.clone(), new_loc, true);
 
         // W9.B: update snap preview.
@@ -122,11 +134,8 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
             && event.state == smithay::backend::input::ButtonState::Released
         {
             if let Some(zone) = data.snap_preview.take() {
-                let (out_w, out_h) = data.space.outputs().next()
-                    .and_then(|o| o.current_mode())
-                    .map(|m| (m.size.w, m.size.h))
-                    .unwrap_or((1920, 1080));
-                let (sx, sy, sw, sh) = zone.layout(out_w, out_h);
+                let usable = data.usable_geometry();
+                let (sx, sy, sw, sh) = zone.layout_usable(usable.loc.x, usable.loc.y, usable.size.w, usable.size.h);
                 if let Some(tl) = self.window.toplevel() {
                     tl.with_pending_state(|state| {
                         state.size = Some(Size::from((sw, sh)));

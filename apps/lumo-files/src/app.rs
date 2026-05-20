@@ -306,6 +306,7 @@ impl App {
         match msg {
             // -- Navegacao --------------------------------------------------
             Message::Navigate(path) => {
+                eprintln!("[hit] Navigate handler called path={:?}", path);
                 {
                     let cur = self.current_tab().current_dir.clone();
                     self.current_tab_mut().back_stack.push_back(cur);
@@ -602,6 +603,7 @@ impl App {
 
             // -- Async results ---------------------------------------------
             Message::DirLoaded(path, entries) => {
+                eprintln!("[hit] DirLoaded path={:?} entries={}", path, entries.len());
                 let label = path.file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "/".to_string());
@@ -902,9 +904,11 @@ impl App {
                 match &event {
                     iced::Event::Mouse(mouse::Event::CursorMoved { position }) => {
                         self.last_cursor_pos = *position;
+                        eprintln!("[hit] CursorMoved {},{}", position.x, position.y);
                     }
                     iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                         let pos = self.last_cursor_pos;
+                        eprintln!("[hit] ButtonPressed dispatch x={} y={}", pos.x, pos.y);
                         return self.dispatch_manual_click(pos);
                     }
                     _ => {}
@@ -2094,9 +2098,11 @@ impl App {
             // active_bar(3) + spacing(8) + chevron(16) = chevron at x=[25, 41] from sidebar edge
             let is_chevron_zone = expandable && x >= 25.0 && x <= 45.0;
             if is_chevron_zone {
-                return self.update(Message::ToggleSidebarExpand(path));
+                let p = path.clone();
+                return Task::perform(async move { p }, Message::ToggleSidebarExpand);
             } else {
-                return self.update(Message::Navigate(path));
+                let p = path.clone();
+                return Task::perform(async move { p }, Message::Navigate);
             }
         }
 

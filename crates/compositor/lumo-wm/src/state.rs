@@ -481,24 +481,34 @@ impl LumoState {
 
     /// Calcula posicao pra nova janela. Estrategia: cursor center se nao
     /// colide com bar/desktop, fallback centro tela. Mac/Windows-like.
+    /// W24: rect onde apps xdg-shell podem mapear/mover.
+    /// Excludes layer-shell exclusive zones (bar Top, dock Bottom, etc).
+    /// Fallback (1920x1080) se sem output.
+    pub fn usable_geometry(&self) -> smithay::utils::Rectangle<i32, smithay::utils::Logical> {
+        use smithay::desktop::layer_map_for_output;
+        if let Some(output) = self.space.outputs().next() {
+            let map = layer_map_for_output(output);
+            map.non_exclusive_zone()
+        } else {
+            smithay::utils::Rectangle::new(
+                smithay::utils::Point::from((0, 0)),
+                smithay::utils::Size::from((1920, 1080)),
+            )
+        }
+    }
+
     pub fn next_tile_position(&self) -> Point<i32, Logical> {
-        // T1.7: ler dimensoes do output real em vez de hardcoded 1920x1080.
-        // Fallback pra 1920x1080 se sem output registrado.
+        // W24: usa usable_geometry (excludes bar). Janela centrada no cursor
+        // clamped dentro da area utilizavel — nunca invade bar Layer::Top.
         const DEFAULT_W: i32 = 800;
         const DEFAULT_H: i32 = 600;
-        const BAR_H: i32 = 40;
-        let (out_w, out_h) = self.space.outputs().next()
-            .and_then(|o| {
-                let mode = o.current_mode()?;
-                Some((mode.size.w, mode.size.h))
-            })
-            .unwrap_or((1920, 1080));
+        let usable = self.usable_geometry();
         let cx = self.pointer_location.x as i32;
         let cy = self.pointer_location.y as i32;
         let mut x = cx - DEFAULT_W / 2;
         let mut y = cy - DEFAULT_H / 2;
-        x = x.clamp(8, out_w - DEFAULT_W - 8);
-        y = y.clamp(BAR_H + 8, out_h - DEFAULT_H - 8);
+        x = x.clamp(usable.loc.x + 8, usable.loc.x + usable.size.w - DEFAULT_W - 8);
+        y = y.clamp(usable.loc.y + 8, usable.loc.y + usable.size.h - DEFAULT_H - 8);
         (x, y).into()
     }
 
