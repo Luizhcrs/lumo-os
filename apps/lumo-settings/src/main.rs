@@ -5,6 +5,7 @@
 mod app;
 mod appmenu;
 mod theme;
+mod icons;
 mod tabs;
 
 use app::App;

@@ -9,7 +9,7 @@ name = "lumo-settings"
 path = "src/main.rs"
 
 [dependencies]
-iced = { version = "0.13", features = ["tokio"] }
+iced = { version = "0.13", features = ["tokio", "svg"] }
 lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
 lumo-sensors = { path = "../../crates/system/lumo-sensors" }
 zbus = { version = "5", default-features = false, features = ["blocking-api", "tokio"] }

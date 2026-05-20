@@ -2,10 +2,12 @@
 //!
 //! Estado global, update e view. Cada aba renderizada via tab_view().
 
-use iced::widget::{button, column, container, row, scrollable, slider, text, text_input, Space};
+use iced::widget::svg::Handle as SvgHandle;
+use iced::widget::{button, column, container, row, scrollable, slider, text, text_input, Space, Svg};
 use iced::{Alignment, Color, Element, Length, Subscription, Task};
 
 use crate::appmenu::appmenu_subscription;
+use crate::icons;
 use crate::tabs::Tab;
 use crate::theme::{ButtonStyle, ContainerStyle, LumoTheme};
 
@@ -319,7 +321,24 @@ impl App {
             let active = self.tab == t;
             button(
                 row![
-                    text(t.icon()).size(12).color(if active { LumoTheme::accent() } else { LumoTheme::muted() }),
+                    {
+                        let icon_color = if active { LumoTheme::accent() } else { LumoTheme::muted() };
+                        let svg_bytes: &'static [u8] = match t {
+                            Tab::Display       => icons::DISPLAY,
+                            Tab::Wifi          => icons::WIFI,
+                            Tab::Bluetooth     => icons::BLUETOOTH,
+                            Tab::Audio         => icons::AUDIO,
+                            Tab::Battery       => icons::BATTERY,
+                            Tab::Appearance    => icons::APPEARANCE,
+                            Tab::Keyboard      => icons::KEYBOARD,
+                            Tab::Touchpad      => icons::TOUCHPAD,
+                            Tab::Accessibility => icons::ACCESSIBILITY,
+                        };
+                        Svg::new(SvgHandle::from_memory(svg_bytes))
+                            .width(16)
+                            .height(16)
+                            .style(move |_, _| iced::widget::svg::Style { color: Some(icon_color) })
+                    },
                     Space::with_width(8),
                     text(t.label()).size(13).color(if active { LumoTheme::accent() } else { LumoTheme::fg() }),
                 ]
