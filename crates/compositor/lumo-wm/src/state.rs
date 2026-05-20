@@ -319,7 +319,10 @@ impl LumoState {
                 None,
             ))
         };
-        // W28.2: top-RIGHT corner pixmap = mirrored horizontalmente (anchor R,R no quadrant top-right).
+        // W28.3: top-RIGHT corner pixmap. Arc anchor em (0, R) coord local pixmap.
+        // Arc curva top-right de canto. Pixels com dist > R do anchor = transparente.
+        // (anchor LEFT-side da pixmap; pixmap RIGHT col tem pixels longe = transparentes
+        // formando curve arredondada no top-right corner).
         let titlebar_corner_buffer_right = {
             use smithay::backend::allocator::Fourcc;
             use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
@@ -329,10 +332,10 @@ impl LumoState {
             let mut pixels = Vec::with_capacity(SZ * SZ * 4);
             for y in 0..SZ {
                 for x in 0..SZ {
-                    // Mirror x: anchor em (-1, R) — round arc no top-right corner.
-                    let dx = R - 1.0 - (x as f32) + 0.5;
-                    let dy = (y as f32) - R + 0.5;
-                    let inside = (dx >= 0.0 || dy >= 0.0) || (dx * dx + dy * dy).sqrt() <= R;
+                    let dx = (x as f32) + 0.5;            // 0.5..11.5
+                    let dy = (y as f32) - R + 0.5;        // -11.5..-0.5
+                    // Inside se y >= R (lower half ALWAYS opaco) OR dist <= R do anchor (0, R).
+                    let inside = dy >= 0.0 || (dx * dx + dy * dy).sqrt() <= R;
                     let alpha = if inside { 255u8 } else { 0u8 };
                     pixels.push(0x1A);
                     pixels.push(0x1A);
