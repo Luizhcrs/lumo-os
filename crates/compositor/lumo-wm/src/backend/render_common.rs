@@ -281,7 +281,7 @@ pub const CORNER_RADIUS: i32 = 10;
 /// Radius dos cantos de cada toplevel (A37). Quads pintados com cor
 /// do background cobrem os cantos da janela, simulando borda arredondada.
 /// Valor 12px.
-pub const CORNER_RADIUS_WINDOW: i32 = 0;
+pub const CORNER_RADIUS_WINDOW: i32 = 12;
 
 /// Cor da mascara de cantos. Runtime (le tema corrente) — necessario
 /// porque const eval nao consegue chamar `current_colors()`. Custo
