@@ -93,10 +93,13 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
         let delta = event.location - self.start_data.location;
         let mut new_loc = self.initial_window_location + delta.to_i32_round();
         // W24: clamp drag dentro usable area (excludes bar Layer::Top).
+        // W24.2: SSD titlebar fica acima window.loc.y. y_min += 30 pra titlebar
+        // nao invadir bar Layer::Top exclusive zone.
+        const SSD_TITLEBAR_H: i32 = 30;
         let usable = data.usable_geometry();
         let win_bbox = self.window.bbox();
         new_loc.x = new_loc.x.clamp(usable.loc.x, usable.loc.x + usable.size.w - win_bbox.size.w.max(64));
-        new_loc.y = new_loc.y.clamp(usable.loc.y, usable.loc.y + usable.size.h - 32);
+        new_loc.y = new_loc.y.clamp(usable.loc.y + SSD_TITLEBAR_H, usable.loc.y + usable.size.h - 32);
         data.space.map_element(self.window.clone(), new_loc, true);
 
         // W9.B: update snap preview.

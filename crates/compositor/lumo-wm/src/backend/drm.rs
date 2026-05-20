@@ -804,7 +804,7 @@ pub fn run(
                     || state.boot_curtain_alpha > 0.001
                     || state.splash_alpha > 0.001
                     || state.overview.is_some();
-                let timeout_ms = if active { 16 } else { 100 };
+                let timeout_ms = if active { 16 } else { 33 };
                 TimeoutAction::ToDuration(Duration::from_millis(timeout_ms))
             },
         )
@@ -843,7 +843,7 @@ pub fn run(
                     || state.boot_curtain_alpha > 0.001
                     || state.splash_alpha > 0.001
                     || state.overview.is_some();
-                let dispatch_ms = if active { 4 } else { 20 };
+                let dispatch_ms = if active { 4 } else { 8 };
                 TimeoutAction::ToDuration(Duration::from_millis(dispatch_ms))
             },
         )

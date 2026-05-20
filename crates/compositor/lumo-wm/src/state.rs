@@ -505,10 +505,13 @@ impl LumoState {
         let usable = self.usable_geometry();
         let cx = self.pointer_location.x as i32;
         let cy = self.pointer_location.y as i32;
+        // W24.2: SSD titlebar fica acima window.loc.y (TITLEBAR_H=30).
+        // Pra titlebar nao cobrir bar Layer::Top, y_min = usable.loc.y + TITLEBAR_H.
+        const SSD_TITLEBAR_H: i32 = 30;
         let mut x = cx - DEFAULT_W / 2;
         let mut y = cy - DEFAULT_H / 2;
         x = x.clamp(usable.loc.x + 8, usable.loc.x + usable.size.w - DEFAULT_W - 8);
-        y = y.clamp(usable.loc.y + 8, usable.loc.y + usable.size.h - DEFAULT_H - 8);
+        y = y.clamp(usable.loc.y + SSD_TITLEBAR_H + 8, usable.loc.y + usable.size.h - DEFAULT_H - 8);
         (x, y).into()
     }
 
