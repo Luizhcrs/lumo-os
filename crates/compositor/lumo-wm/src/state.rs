@@ -232,6 +232,8 @@ pub struct LumoState {
     pub splash_phase: u8,
     pub splash_timer: f32,
     pub splash_buffer: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
+    /// W28: 12x12 pixmap top-left corner round + 3 quadrants squared. Flipped on right side.
+    pub titlebar_corner_buffer: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
     /// Telemetry: timestamp of last pointer button press for input-to-paint measurement.
     pub last_input_ts: Option<std::time::Instant>,
     /// W23.5: timestamp ultimo PointerMotion/Button. Sticky 200ms = active mode.
@@ -285,6 +287,36 @@ impl LumoState {
                 None,
             )
         });
+
+        // W28: pre-render SSD titlebar top-left corner pixmap (12x12) com alpha mask round.
+        let titlebar_corner_buffer = {
+            use smithay::backend::allocator::Fourcc;
+            use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
+            use smithay::utils::Transform;
+            const SZ: usize = 12;
+            const R: f32 = 12.0;
+            let mut pixels = Vec::with_capacity(SZ * SZ * 4);
+            for y in 0..SZ {
+                for x in 0..SZ {
+                    let dx = (x as f32) - R + 0.5;
+                    let dy = (y as f32) - R + 0.5;
+                    let inside = (dx >= 0.0 || dy >= 0.0) || (dx * dx + dy * dy).sqrt() <= R;
+                    let alpha = if inside { 255u8 } else { 0u8 };
+                    pixels.push(0x1A); // R
+                    pixels.push(0x1A); // G
+                    pixels.push(0x1C); // B
+                    pixels.push(alpha); // A
+                }
+            }
+            Some(MemoryRenderBuffer::from_slice(
+                &pixels,
+                Fourcc::Abgr8888,
+                (SZ as i32, SZ as i32),
+                1,
+                Transform::Normal,
+                None,
+            ))
+        };
 
         let mut seat = seat_state.new_wl_seat(&display_handle, "lumo-seat-0");
         let keyboard = seat
@@ -376,6 +408,7 @@ impl LumoState {
             splash_phase: 0,
             splash_timer: 0.0,
             splash_buffer: crate::backend::wallpaper::load_splash_buffer(),
+            titlebar_corner_buffer,
             last_input_ts: None,
             cursor_last_motion_ts: None,
             #[cfg(feature = "drm-backend")]
