@@ -1098,6 +1098,13 @@ fn render_drm(state: &mut LumoState) {
         FrameFlags::DEFAULT,
     );
     let render_elapsed = _render_t0.elapsed();
+    // Telemetry: record frame render duration.
+    lumo_telemetry::histogram("frame_render_us", render_elapsed.as_micros() as u64);
+    // Telemetry: input-to-paint if a pointer event was recorded.
+    if let Some(input_ts) = state.last_input_ts.take() {
+        let input_to_paint_us = input_ts.elapsed().as_micros() as u64;
+        lumo_telemetry::histogram("input_to_paint_us", input_to_paint_us);
+    }
     // INSTR.A: warning imediato se render > 10ms (suspeita de starvation calloop).
     if render_elapsed > Duration::from_millis(10) {
         tracing::warn!(

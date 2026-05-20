@@ -21,6 +21,13 @@ use app::App;
 use iced::{Settings, Size};
 
 fn main() -> iced::Result {
+    let _launch_t0 = std::time::Instant::now();
+    lumo_telemetry::init();
+    {
+        let mut meta = std::collections::HashMap::new();
+        meta.insert("app".to_string(), "lumo-files".to_string());
+        lumo_telemetry::record_event(lumo_telemetry::EventKind::AppLaunch, meta);
+    }
     let tx = appmenu::init_channel();
     std::thread::Builder::new()
         .name("lumo-appmenu".into())
@@ -38,6 +45,9 @@ fn main() -> iced::Result {
         ..Default::default()
     };
     window_settings.platform_specific.application_id = "com.lumo.files".to_string();
+
+    // Record startup time before blocking on iced event loop.
+    lumo_telemetry::histogram("app_launch_us", _launch_t0.elapsed().as_micros() as u64);
 
     iced::application("Lumo Files", App::update, App::view)
         .subscription(App::subscription)

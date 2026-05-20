@@ -196,6 +196,8 @@ fn main() -> Result<()> {
         )
         .init();
 
+    lumo_telemetry::init();
+
     let backend = pick_backend();
     tracing::info!(
         "Lumo WM 0.1.0 - Fase 5.5 (A8: DRM backend + IPC + moldura) backend={:?}",

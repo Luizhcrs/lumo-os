@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "shell",
     "crates/foundation/lumo-foundation",
+    "crates/foundation/lumo-telemetry",
     "crates/graphics/lumo-beam",
     "crates/graphics/lumo-graphics",
     "crates/graphics/lumo-text",
@@ -38,6 +39,8 @@ codegen-units = 16
 [patch.crates-io]
 smithay = { path = "vendor/smithay" }
 winit = { path = "vendor/winit-0.30.13" }
+
+users = { path = "vendor/users-shim" }
 
 [workspace.metadata]
 # vendor smithay patched for sRGB8_ALPHA8 import (A17)

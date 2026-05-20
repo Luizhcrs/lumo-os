@@ -240,6 +240,16 @@ impl LumoState {
                 // C3 debug: log raw button code pra diagnostico BTN_RIGHT.
                 tracing::trace!(button, state = ?state, pos = ?(self.pointer_location.x as i32, self.pointer_location.y as i32), "C3 PointerButton");
 
+                // Telemetry: record click event + store input timestamp for input-to-paint.
+                {
+                    use lumo_telemetry::EventKind;
+                    let mut meta = std::collections::HashMap::new();
+                    meta.insert("button".to_string(), format!("{}", button));
+                    meta.insert("pos".to_string(), format!("{},{}", self.pointer_location.x as i32, self.pointer_location.y as i32));
+                    lumo_telemetry::record_event(EventKind::Click, meta);
+                    self.last_input_ts = Some(std::time::Instant::now());
+                }
+
                 if state == ButtonState::Pressed {
                     // M1: SSD hit-test antes de repassar o click ao cliente.
                     // Verifica close button e titlebar para janelas com SSD ativo.
