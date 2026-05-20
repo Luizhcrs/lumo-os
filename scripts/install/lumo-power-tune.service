@@ -1,0 +1,11 @@
+[Unit]
+Description=Lumo OS power tweaks (PowerTOP-like Galaxy KG7BR)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/lumo-power-tune
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target
