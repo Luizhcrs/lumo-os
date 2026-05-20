@@ -1,0 +1,12 @@
+[package]
+name = "users"
+version = "0.10.1"
+edition = "2021"
+description = "Shim: re-exports uzers as users (replaces vulnerable users 0.10.0)"
+license = "MIT"
+
+[features]
+default = []
+
+[dependencies]
+uzers = "0.12"

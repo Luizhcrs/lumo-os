@@ -1,0 +1,12 @@
+# Advisories acknowledged as mitigated.
+# All three `users` advisories: RUSTSEC-2023-0059 (unaligned read / unsound),
+# RUSTSEC-2025-0040 (privilege escalation), RUSTSEC-2023-0040 (unmaintained).
+# Mitigation: [patch.crates-io] in workspace Cargo.toml replaces `users` with
+# vendor/users-shim, which re-exports `uzers 0.12` (the recommended fork).
+# The vulnerable `users` code never executes; only uzers code runs.
+[advisories]
+ignore = [
+    "RUSTSEC-2023-0059",
+    "RUSTSEC-2025-0040",
+    "RUSTSEC-2023-0040",
+]
