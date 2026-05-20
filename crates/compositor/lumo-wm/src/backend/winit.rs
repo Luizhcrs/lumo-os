@@ -264,6 +264,7 @@ fn redraw(
         ssd_windows: &state.ssd_windows,
         titlebar_menu: state.titlebar_menu.as_ref().map(|(_, pos, hover)| (*pos, *hover)),
         snap_preview: state.snap_preview,
+        titlebar_corner_buffer: state.titlebar_corner_buffer.as_ref(),
         overview_elements: state.overview.as_ref()
             .map(|ov| crate::overview::overview_elements(ov, ow, oh))
             .unwrap_or_default(),

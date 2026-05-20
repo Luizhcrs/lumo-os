@@ -355,6 +355,7 @@ fn arm_and_refresh_now(state: &mut LumoState) {
         ssd_windows,
         titlebar_menu: titlebar_menu_opt,
         snap_preview,
+        titlebar_corner_buffer: None,
         overview_elements,
         picker_elements,
         space,

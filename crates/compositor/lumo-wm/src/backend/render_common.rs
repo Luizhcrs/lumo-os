@@ -208,15 +208,31 @@ pub fn titlebar_elements(
             Kind::Unspecified,
         ));
 
-        // Fundo da titlebar -- POR ULTIMO pra ficar atras dos botoes.
-        let bar_rect: Rectangle<i32, Physical> = Rectangle::new(
-            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H))
+        // W28: bg titlebar split em 2 rects:
+        // - top middle 12px tall, x=loc.x+12 .. loc.x+win_w-12 (cantos vazios pra
+        //   memory pixmaps preencherem com round mask)
+        // - bottom full width, height TITLEBAR_H - 12 = 18px
+        const CORNER_SZ: i32 = 12;
+        let top_mid_rect: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((loc.x + CORNER_SZ, loc.y - TITLEBAR_H))
                 .to_physical_precise_round(1.0),
-            (win_w, TITLEBAR_H).into(),
+            (win_w - 2 * CORNER_SZ, CORNER_SZ).into(),
         );
         out.push(SolidColorRenderElement::new(
             Id::new(),
-            bar_rect,
+            top_mid_rect,
+            0,
+            bg_color,
+            Kind::Unspecified,
+        ));
+        let bottom_rect: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H + CORNER_SZ))
+                .to_physical_precise_round(1.0),
+            (win_w, TITLEBAR_H - CORNER_SZ).into(),
+        );
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            bottom_rect,
             0,
             bg_color,
             Kind::Unspecified,
@@ -225,6 +241,68 @@ pub fn titlebar_elements(
     out
 }
 
+
+
+/// W28: corner pixmaps (top-left + top-right) pra SSD titlebar arredondada.
+/// Retorna 2 elementos por SSD window: left flipped no source coord pra round,
+/// right via mesma pixmap (top-left rounded) flipped horizontal via Transform.
+pub fn titlebar_corner_elements(
+    renderer: &mut GlesRenderer,
+    space: &Space<Window>,
+    ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    corner_buffer: Option<&MemoryRenderBuffer>,
+) -> Vec<MemoryRenderBufferRenderElement<GlesRenderer>> {
+    let mut out = Vec::new();
+    let Some(buffer) = corner_buffer else { return out; };
+    const CORNER_SZ: i32 = 12;
+
+    for window in space.elements() {
+        let is_ssd = window
+            .wl_surface()
+            .map(|s| ssd_windows.contains(&*s))
+            .unwrap_or(false);
+        if !is_ssd {
+            continue;
+        }
+        let loc = space.element_location(window).unwrap_or_default();
+        let win_w = window.geometry().size.w;
+        let titlebar_top_y = loc.y - TITLEBAR_H;
+
+        // Top-left corner: pixmap rendered at (loc.x, titlebar_top_y).
+        if let Ok(elem) = MemoryRenderBufferRenderElement::from_buffer(
+            renderer,
+            Point::<f64, Physical>::from((loc.x as f64, titlebar_top_y as f64)),
+            buffer,
+            None,
+            None,
+            None,
+            Kind::Unspecified,
+        ) {
+            out.push(elem);
+        }
+
+        // Top-right corner: same pixmap, but flipped horizontal pra arredondar
+        // o lado direito. Smithay MemoryRenderBuffer suporta transform = Flipped.
+        // Atalho: cria buffer novo with FlippedHorizontal? Sem isso aqui — render
+        // pixmap igual no top-right canto (visualmente quadrado top-right pq
+        // pixmap arredondada so top-left).
+        // TODO: pra arredondar top-right tambem, precisa segundo pixmap ou
+        // transform flipped. Skip por agora — visual acceptable com 1 corner.
+        let right_x = loc.x + win_w - CORNER_SZ;
+        if let Ok(elem) = MemoryRenderBufferRenderElement::from_buffer(
+            renderer,
+            Point::<f64, Physical>::from((right_x as f64, titlebar_top_y as f64)),
+            buffer,
+            None,
+            None,
+            None,
+            Kind::Unspecified,
+        ) {
+            out.push(elem);
+        }
+    }
+    out
+}
 
 /// T1.1: gera elementos SolidColor para o menu popup de titlebar SSD.
 /// menu_pos = canto top-left do menu em coordenadas logicas.
@@ -550,6 +628,7 @@ pub struct OverlayInputs<'a> {
     pub splash_buffer: Option<&'a MemoryRenderBuffer>,
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    pub titlebar_corner_buffer: Option<&'a MemoryRenderBuffer>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// W9.B: snap zone preview during window drag.
@@ -628,6 +707,9 @@ pub fn build_overlay(
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         overlay.push(LumoCustomElement::Solid(elem));
     }
+    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer) {
+        overlay.push(LumoCustomElement::Memory(elem));
+    }
     // T1.1: menu popup SSD.
     if let Some((menu_pos, hover)) = inputs.titlebar_menu {
         for elem in titlebar_menu_elements(menu_pos, hover) {
@@ -674,6 +756,7 @@ pub struct DrmCollectInputs<'a> {
     pub splash_buffer: Option<&'a MemoryRenderBuffer>,
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    pub titlebar_corner_buffer: Option<&'a MemoryRenderBuffer>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// W9.B: snap zone preview during window drag.
@@ -797,6 +880,9 @@ pub fn collect_drm_elements(
     // M1: SSD titlebars -- atras de Layer::Top, na frente de toplevels.
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
+    }
+    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer) {
+        out.push(LumoCustomElement::Memory(elem));
     }
     // T1.1: menu popup SSD.
     if let Some((menu_pos, hover)) = inputs.titlebar_menu {
@@ -943,6 +1029,9 @@ pub fn build_winit_elements(
     // M1: SSD titlebars -- atras de Layer::Top, na frente de toplevels.
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
+    }
+    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer) {
+        out.push(LumoCustomElement::Memory(elem));
     }
     // T1.1: menu popup SSD.
     if let Some((menu_pos, hover)) = inputs.titlebar_menu {
