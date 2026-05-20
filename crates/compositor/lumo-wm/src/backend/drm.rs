@@ -799,11 +799,16 @@ pub fn run(
                 // - Active (should_render OR force_repaint OR anim ativa): 16ms (60Hz vblank)
                 // - Idle (nada mudou ultimo frame): 100ms (~10Hz wake-up)
                 // - Bridge IPC + commit handler set should_render=true = volta active
+                // W23.5: sticky active 500ms apos pointer motion — mouse 60fps durante drag.
+                let recent_input = state.cursor_last_motion_ts
+                    .map(|t| t.elapsed() < Duration::from_millis(500))
+                    .unwrap_or(false);
                 let active = state.should_render
                     || state.drm_force_repaint
                     || state.boot_curtain_alpha > 0.001
                     || state.splash_alpha > 0.001
-                    || state.overview.is_some();
+                    || state.overview.is_some()
+                    || recent_input;
                 let timeout_ms = if active { 16 } else { 33 };
                 TimeoutAction::ToDuration(Duration::from_millis(timeout_ms))
             },
@@ -838,11 +843,15 @@ pub fn run(
                 // W23.2: adaptive dispatch_clients. 4ms active vs 20ms idle.
                 // 4ms = 250Hz era residual maior fonte ctxt switches. Idle
                 // 20ms = 50Hz suficiente pra latencia client perceivel.
+                let recent_input = state.cursor_last_motion_ts
+                    .map(|t| t.elapsed() < Duration::from_millis(500))
+                    .unwrap_or(false);
                 let active = state.should_render
                     || state.drm_force_repaint
                     || state.boot_curtain_alpha > 0.001
                     || state.splash_alpha > 0.001
-                    || state.overview.is_some();
+                    || state.overview.is_some()
+                    || recent_input;
                 let dispatch_ms = if active { 4 } else { 8 };
                 TimeoutAction::ToDuration(Duration::from_millis(dispatch_ms))
             },

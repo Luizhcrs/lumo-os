@@ -234,6 +234,8 @@ pub struct LumoState {
     pub splash_buffer: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
     /// Telemetry: timestamp of last pointer button press for input-to-paint measurement.
     pub last_input_ts: Option<std::time::Instant>,
+    /// W23.5: timestamp ultimo PointerMotion/Button. Sticky 200ms = active mode.
+    pub cursor_last_motion_ts: Option<std::time::Instant>,
     /// R1: posicao do cursor no ultimo frame renderizado. Bypass pending_flip
     /// quando cursor se moveu pra eliminar delay visual.
     #[cfg(feature = "drm-backend")]
@@ -375,6 +377,7 @@ impl LumoState {
             splash_timer: 0.0,
             splash_buffer: crate::backend::wallpaper::load_splash_buffer(),
             last_input_ts: None,
+            cursor_last_motion_ts: None,
             #[cfg(feature = "drm-backend")]
             last_rendered_cursor_pos: (0.0, 0.0).into(),
         }

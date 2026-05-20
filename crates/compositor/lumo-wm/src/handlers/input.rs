@@ -153,6 +153,7 @@ impl LumoState {
 
             InputEvent::PointerMotion { event } => {
                 self.should_render = true;
+                self.cursor_last_motion_ts = Some(std::time::Instant::now());
                 // W10.B: reset idle timer on any pointer movement.
                 self.idle_manager.reset();
                 {
@@ -207,6 +208,7 @@ impl LumoState {
 
             InputEvent::PointerMotionAbsolute { event } => {
                 self.should_render = true;
+                self.cursor_last_motion_ts = Some(std::time::Instant::now());
                 let x = event.x_transformed(1280);
                 let y = event.y_transformed(720);
                 self.pointer_location = (x, y).into();
@@ -236,6 +238,7 @@ impl LumoState {
 
             InputEvent::PointerButton { event } => {
                 self.should_render = true;
+                self.cursor_last_motion_ts = Some(std::time::Instant::now());
                 let serial = SERIAL_COUNTER.next_serial();
                 let button = event.button_code();
                 let state: ButtonState = event.state();

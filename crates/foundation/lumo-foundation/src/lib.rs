@@ -284,10 +284,10 @@ impl LumoColors {
             accent_subtle: 0x001E3A8A, // blue-900
             border:        0x002A2A2E, // hairline
             shadow:        0x00000000,
-            // A18 pill spec dark: pearl alpha 0x22 sutil sobre AMOLED.
-            // Pill bg quase invisivel — relevo dado pela sombra preta neutra.
-            pill_bg:           0x00FFFFFF,
-            pill_bg_alpha:     0xCC, // A19.15 dark mantem 80%
+            // W25 fix: pill dark = neutro escuro com transparencia leve.
+            // Anterior FFFFFF deixava pills BRANCOS sobre AMOLED — bug visual.
+            pill_bg:           0x001F2024, // bg_subtle (hover panel) dark
+            pill_bg_alpha:     0xE0,       // 88% opaco — destaca mas mantem profundidade
             pill_fg:           0x00F5F5F7,
             pill_shadow_alpha: 0x40,
             pill_sep:          0x00FFFFFF,
