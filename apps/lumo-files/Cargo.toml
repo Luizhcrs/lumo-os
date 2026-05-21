@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Lumo Files — file manager Iced nativo para Lumo OS."
 
+[lib]
+name = "lumo_files"
+path = "src/lib.rs"
+
 [[bin]]
 name = "lumo-files"
 path = "src/main.rs"

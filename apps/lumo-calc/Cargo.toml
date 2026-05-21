@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Lumo Calc -- calculadora Iced para Lumo OS."
 
+[lib]
+name = "lumo_calc"
+path = "src/lib.rs"
+
 [[bin]]
 name = "lumo-calc"
 path = "src/main.rs"

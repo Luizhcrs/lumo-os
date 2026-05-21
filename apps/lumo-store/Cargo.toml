@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Lumo Store -- loja de aplicativos Iced para Lumo OS."
 
+[lib]
+name = "lumo_store"
+path = "src/lib.rs"
+
 [[bin]]
 name = "lumo-store"
 path = "src/main.rs"

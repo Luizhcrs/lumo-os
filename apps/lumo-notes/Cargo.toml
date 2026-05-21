@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Lumo Notes -- notas markdown Iced para Lumo OS."
 
+[lib]
+name = "lumo_notes"
+path = "src/lib.rs"
+
 [[bin]]
 name = "lumo-notes"
 path = "src/main.rs"

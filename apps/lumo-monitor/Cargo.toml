@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Lumo Monitor -- monitor do sistema Iced para Lumo OS."
 
+[lib]
+name = "lumo_monitor"
+path = "src/lib.rs"
+
 [[bin]]
 name = "lumo-monitor"
 path = "src/main.rs"

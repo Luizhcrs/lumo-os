@@ -1,0 +1,20 @@
+[package]
+name = "lumo-apps"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Apps - dispatcher unico, runtime wgpu/iced compartilhado (W33)."
+
+[[bin]]
+name = "lumo-apps"
+path = "src/main.rs"
+
+[dependencies]
+iced = { version = "0.13", features = ["tokio"] }
+lumo-about    = { path = "../lumo-about" }
+lumo-calc     = { path = "../lumo-calc" }
+lumo-notes    = { path = "../lumo-notes" }
+lumo-monitor  = { path = "../lumo-monitor" }
+lumo-editor   = { path = "../lumo-editor" }
+lumo-files    = { path = "../lumo-files" }
+lumo-settings = { path = "../lumo-settings" }
+lumo-store    = { path = "../lumo-store" }

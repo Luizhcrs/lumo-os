@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Lumo Editor -- editor de texto minimal Iced para Lumo OS."
 
+[lib]
+name = "lumo_editor"
+path = "src/lib.rs"
+
 [[bin]]
 name = "lumo-editor"
 path = "src/main.rs"

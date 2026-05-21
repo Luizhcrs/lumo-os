@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "Lumo About - tela Sobre este Galaxy Book."
 
+[lib]
+name = "lumo_about"
+path = "src/lib.rs"
+
 [[bin]]
 name = "lumo-about"
 path = "src/main.rs"

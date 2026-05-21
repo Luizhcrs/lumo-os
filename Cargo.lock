@@ -4430,6 +4430,21 @@ name = "lumo-animation"
 version = "0.1.0"
 
 [[package]]
+name = "lumo-apps"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "lumo-about",
+ "lumo-calc",
+ "lumo-editor",
+ "lumo-files",
+ "lumo-monitor",
+ "lumo-notes",
+ "lumo-settings",
+ "lumo-store",
+]
+
+[[package]]
 name = "lumo-beam"
 version = "0.1.0"
 dependencies = [
