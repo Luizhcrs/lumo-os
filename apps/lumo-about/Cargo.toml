@@ -1,0 +1,13 @@
+[package]
+name = "lumo-about"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo About - tela Sobre este Galaxy Book."
+
+[[bin]]
+name = "lumo-about"
+path = "src/main.rs"
+
+[dependencies]
+iced = { version = "0.13", features = ["tokio"] }
+lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }

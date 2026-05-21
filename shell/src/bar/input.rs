@@ -363,13 +363,45 @@ impl PointerHandler for LumoBar {
                             }
                         }
                     }
-                    // A27: click em item do menu Lumo aberto -> log stub + fecha.
+                    // W30: click em item do menu Lumo -> spawn cmd respectivo.
                     if !handled && self.dropdown == DropdownActive::LumoMenu {
                         if let Some(idx) = self.lumo_menu_hit_test(px, py) {
-                            eprintln!(
-                                "[lumo-bar] menu Lumo item: '{}' (stub)",
-                                MENU_LUMO_ITEMS[idx].label
-                            );
+                            let label = MENU_LUMO_ITEMS[idx].label;
+                            eprintln!("[lumo-bar] menu Lumo: {}", label);
+                            // idx mapping (MENU_LUMO_ITEMS em tokens.rs):
+                            //   0 Sobre este Galaxy Book
+                            //   1 Software Update
+                            //   2 Lumo Store
+                            //   3 separator
+                            //   4 Preferencias do Sistema
+                            //   5 separator
+                            //   6 Bloquear tela
+                            //   7 Suspender
+                            //   8 Reiniciar
+                            //   9 Desligar
+                            let cmd: Option<(&str, &[&str])> = match idx {
+                                0 => Some(("lumo-about", &[])),
+                                1 => Some(("lumo-store", &["--tab", "updates"])),
+                                2 => Some(("lumo-store", &[])),
+                                4 => Some(("lumo-settings", &[])),
+                                6 => Some(("lumo-lock", &[])),
+                                7 => Some(("systemctl", &["suspend"])),
+                                8 => Some(("systemctl", &["reboot"])),
+                                9 => Some(("systemctl", &["poweroff"])),
+                                _ => None,
+                            };
+                            if let Some((bin, args)) = cmd {
+                                let bin_path = resolve_lumo_bin(bin);
+                                let res = std::process::Command::new(&bin_path)
+                                    .args(args)
+                                    .stdin(std::process::Stdio::null())
+                                    .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .spawn();
+                                if let Err(e) = res {
+                                    eprintln!("[lumo-bar] spawn {} falhou: {}", bin_path, e);
+                                }
+                            }
                             self.dropdown = DropdownActive::None;
                             self.lumo_menu_hover_idx = usize::MAX;
                             self.update_size_and_redraw(qh);
@@ -506,4 +538,33 @@ impl PointerHandler for LumoBar {
             }
         }
     }
+}
+
+/// W30: tenta resolver bin Lumo em paths comuns. Sequence:
+/// 1. CARGO_HOME/target/release (dev) -> nao confiavel runtime
+/// 2. lumo-tty.sh roda do dir lumo-shell -- target/release relative ao CWD
+/// 3. /usr/local/bin/<bin>
+/// 4. <bin> via PATH lookup
+fn resolve_lumo_bin(name: &str) -> String {
+    // 1. CWD/target/release/<bin>
+    if let Ok(cwd) = std::env::current_dir() {
+        let p = cwd.join("target/release").join(name);
+        if p.exists() {
+            return p.to_string_lossy().into_owned();
+        }
+    }
+    // 2. $HOME/Projects/lumo-shell/target/release/<bin>
+    if let Ok(home) = std::env::var("HOME") {
+        let p = std::path::PathBuf::from(home).join("Projects/lumo-shell/target/release").join(name);
+        if p.exists() {
+            return p.to_string_lossy().into_owned();
+        }
+    }
+    // 3. /usr/local/bin/<bin>
+    let p = std::path::PathBuf::from("/usr/local/bin").join(name);
+    if p.exists() {
+        return p.to_string_lossy().into_owned();
+    }
+    // 4. fallback PATH lookup
+    name.to_string()
 }

@@ -30,6 +30,7 @@ members = [
     "apps/lumo-firstrun",
     "apps/lumo-store",
     "apps/lumo-bridge",
+    "apps/lumo-about",
 ]
 
 [profile.release]
