@@ -169,6 +169,9 @@ cd "$(dirname "$0")/.."
 # ============================================================
 # Build com feature drm-backend (idempotente, cache cargo).
 # ============================================================
+# W31.5: redirect output ao log apos checks isatty (Lumo console limpo)
+exec > /tmp/lumo-tty-stdout.log 2>&1
+
 # W31.2: skip build se binarios fresh
 WM_BIN=./target/release/lumo-wm
 BAR_BIN=./target/release/lumo-bar
