@@ -1,0 +1,11 @@
+#
+# ~/.bash_profile
+#
+
+[[ -f ~/.bashrc ]] && . ~/.bashrc
+
+# Lumo TTY3 autostart - silenciar output (log em /tmp/lumo-tty-stdout.log)
+if [[ "$(tty)" = "/dev/tty3" ]] && [[ -z "$WAYLAND_DISPLAY" ]] && [[ -z "$DISPLAY" ]]; then
+    clear
+    exec ~/Projects/lumo-shell/scripts/lumo-tty.sh > /tmp/lumo-tty-stdout.log 2>&1
+fi
