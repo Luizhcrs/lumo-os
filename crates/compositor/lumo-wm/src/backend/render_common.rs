@@ -141,6 +141,87 @@ pub fn ssd_titlebar_rect_logical(
 /// Gera elementos de titlebar (fundo + close button) pra todas SSD windows.
 /// Retorna lista front->back: close button na frente, fundo atras.
 /// Caller insere esses elementos ANTES do Space na lista de render.
+/// W29.4: titlebar btns pra UMA window. Per-window helper pra interleave Z.
+pub fn titlebar_btns_for_window(
+    window: &Window,
+    space: &Space<Window>,
+    ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+) -> Vec<SolidColorRenderElement> {
+    let single = [window];
+    let mut out = Vec::new();
+    let bg_color = Color32F::new(TITLEBAR_BG[0], TITLEBAR_BG[1], TITLEBAR_BG[2], TITLEBAR_BG[3]);
+    let _ = bg_color;
+    let btn_color = Color32F::new(CLOSE_BTN_COLOR[0], CLOSE_BTN_COLOR[1], CLOSE_BTN_COLOR[2], CLOSE_BTN_COLOR[3]);
+    for window in single.iter().copied() {
+        let is_ssd = window
+            .wl_surface()
+            .map(|s| ssd_windows.contains(&*s))
+            .unwrap_or(false);
+        if !is_ssd { continue; }
+        let loc = space.element_location(window).unwrap_or_default();
+        let geo = window.geometry();
+        let win_w = geo.size.w;
+        let btn_rect = close_btn_rect(
+            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H)),
+            win_w,
+        );
+        out.push(SolidColorRenderElement::new(Id::new(), btn_rect, 0, btn_color, Kind::Unspecified));
+        let max_color = Color32F::new(BTN_MAX_COLOR[0], BTN_MAX_COLOR[1], BTN_MAX_COLOR[2], BTN_MAX_COLOR[3]);
+        let max_x = loc.x + win_w - CLOSE_BTN_SIZE * 2 - CLOSE_BTN_MARGIN - BTN_GAP;
+        let max_y = loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+        let max_rect: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((max_x, max_y)).to_physical_precise_round(1.0),
+            (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
+        );
+        out.push(SolidColorRenderElement::new(Id::new(), max_rect, 0, max_color, Kind::Unspecified));
+        let min_color = Color32F::new(BTN_MIN_COLOR[0], BTN_MIN_COLOR[1], BTN_MIN_COLOR[2], BTN_MIN_COLOR[3]);
+        let min_x = loc.x + win_w - CLOSE_BTN_SIZE * 3 - CLOSE_BTN_MARGIN - BTN_GAP * 2;
+        let min_y = loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+        let min_rect: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((min_x, min_y)).to_physical_precise_round(1.0),
+            (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
+        );
+        out.push(SolidColorRenderElement::new(Id::new(), min_rect, 0, min_color, Kind::Unspecified));
+    }
+    out
+}
+
+/// W29.4: titlebar bg shader pra UMA window. Per-window helper.
+pub fn titlebar_bg_for_window(
+    window: &Window,
+    space: &Space<Window>,
+    ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    bg_shader: Option<&crate::backend::corner_shader::TitlebarBgShader>,
+) -> Option<PixelShaderElement> {
+    let shader = bg_shader?;
+    let is_ssd = window
+        .wl_surface()
+        .map(|s| ssd_windows.contains(&*s))
+        .unwrap_or(false);
+    if !is_ssd { return None; }
+    let loc = space.element_location(window).unwrap_or_default();
+    let win_w = window.geometry().size.w;
+    let area: Rectangle<i32, smithay::utils::Logical> = Rectangle::new(
+        smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H)),
+        (win_w, TITLEBAR_H).into(),
+    );
+    let uniforms = vec![
+        smithay::backend::renderer::gles::Uniform::new(
+            "u_color",
+            (TITLEBAR_BG[0], TITLEBAR_BG[1], TITLEBAR_BG[2]),
+        ).into_owned(),
+        smithay::backend::renderer::gles::Uniform::new("u_radius", 12.0f32).into_owned(),
+    ];
+    Some(PixelShaderElement::new(
+        shader.program.clone(),
+        area,
+        None,
+        1.0,
+        uniforms,
+        Kind::Unspecified,
+    ))
+}
+
 pub fn titlebar_elements(
     space: &Space<Window>,
     ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
@@ -149,7 +230,11 @@ pub fn titlebar_elements(
     let bg_color = Color32F::new(TITLEBAR_BG[0], TITLEBAR_BG[1], TITLEBAR_BG[2], TITLEBAR_BG[3]);
     let btn_color = Color32F::new(CLOSE_BTN_COLOR[0], CLOSE_BTN_COLOR[1], CLOSE_BTN_COLOR[2], CLOSE_BTN_COLOR[3]);
 
-    for window in space.elements() {
+    // W29.4: iterar TOP-DOWN (focal first). Smithay vec front-first; focal
+    // push primeiro = vec[idx_menor] = drawn last em damage tracker = ON TOP.
+    // space.elements() default = bottom-to-top; .rev() = top-to-bottom.
+    let windows: Vec<&Window> = space.elements().rev().collect();
+    for window in windows.iter().copied() {
         let is_ssd = window
             .wl_surface()
             .map(|s| ssd_windows.contains(&*s))
@@ -228,7 +313,9 @@ pub fn titlebar_bg_elements(
     let mut out = Vec::new();
     let Some(shader) = bg_shader else { return out; };
 
-    for window in space.elements() {
+    // W29.4: TOP-DOWN ordem pra focal frente bg shader (vec[idx_menor]).
+    let windows: Vec<&Window> = space.elements().rev().collect();
+    for window in windows.iter().copied() {
         let is_ssd = window
             .wl_surface()
             .map(|s| ssd_windows.contains(&*s))
