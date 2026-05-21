@@ -951,43 +951,40 @@ pub fn collect_drm_elements(
         out.push(LumoCustomElement::Solid(elem));
     }
 
-    // 4. Toplevels + layer-shell via space_render_elements.
-    //    BUG1 FIX: split em upper layers (Layer::Top/Overlay, Surface variants
-    //    no inicio da lista front-first) e rest (toplevels Element + lower Surface).
-    //    Ordem correta: cursor -> Layer::Top -> SSD titlebars -> toplevels -> lower.
-    let (upper_layers, space_rest): (Vec<_>, Vec<_>) = match space_render_elements::<_, Window, _>(
+    // W29.5: per-window interleave. Em vez de espace_render_elements global
+    // que mistura todos toplevels (= SSD btns vazam sobre janela frente),
+    // split em upper (front)/lower (back) layers separados + iterar windows
+    // manualmente front-first. Pra cada janela: btns+bg+content como UM block
+    // no vec, garantindo Z-order per janela.
+    let all_elements = space_render_elements::<_, Window, _>(
         renderer,
         std::iter::once(inputs.space),
         inputs.output,
         1.0,
-    ) {
-        Ok(elements) => {
-            let first_elem = elements.iter().position(|e| {
-                matches!(e, smithay::desktop::space::SpaceRenderElements::Element(_))
-            }).unwrap_or(elements.len());
-            let mut upper = Vec::with_capacity(first_elem);
-            let mut rest = Vec::with_capacity(elements.len().saturating_sub(first_elem));
-            for (i, el) in elements.into_iter().enumerate() {
-                if i < first_elem { upper.push(el); } else { rest.push(el); }
+    ).unwrap_or_default();
+    let mut upper_layers: Vec<_> = Vec::new();
+    let mut lower_layers: Vec<_> = Vec::new();
+    let mut in_lower = false;
+    let mut element_seen = false;
+    for el in all_elements {
+        match &el {
+            smithay::desktop::space::SpaceRenderElements::Element(_) => { element_seen = true; }
+            smithay::desktop::space::SpaceRenderElements::Surface(_) => {
+                if element_seen { in_lower = true; }
             }
-            (upper, rest)
+            _ => {}
         }
-        Err(err) => {
-            tracing::warn!(?err, "space_render_elements falhou no DRM path");
-            (Vec::new(), Vec::new())
+        if matches!(el, smithay::desktop::space::SpaceRenderElements::Element(_)) {
+            continue;
         }
-    };
+        if in_lower { lower_layers.push(el); } else { upper_layers.push(el); }
+    }
 
     // 4a. Upper layers (Layer::Top/Overlay) na frente de titlebars.
     for el in upper_layers {
         out.push(LumoCustomElement::Space(el));
     }
 
-    // W29.3: SSD titlebar (btns+bg) movido pra DEPOIS space_rest (toplevels).
-    // Smithay vec front-first; toplevel content vec[idx_menor] = frente. Btns
-    // depois (vec[idx_maior]) = atras dos toplevels. Btns ficam em y < content_y
-    // entao nao sao cobertos pelo proprio content. Cross-window: editor (focal,
-    // vec[0..N]=frente) cobre files btns area se overlap. CORRECT Z.
     // T1.1: menu popup SSD.
     if let Some((menu_pos, hover)) = inputs.titlebar_menu {
         for elem in titlebar_menu_elements(menu_pos, hover) {
@@ -1008,27 +1005,58 @@ pub fn collect_drm_elements(
         out.push(LumoCustomElement::Solid(elem.clone()));
     }
 
-    // 4b. Toplevels + lower layer-shell (rest of space_render_elements).
-    //     A38: toplevels (Element variant) recebem SDF corner radius.
-    if let Some(cs) = inputs.corner_shader {
-        for el in wrap_space_elements_rounded(space_rest, cs) {
-            out.push(el);
+    // W29.5: per-window block. Iterar front-first. Pra cada window:
+    //   1. SSD btns (vec[idx_menor]=frente do bloco = ON TOP)
+    //   2. SSD bg shader
+    //   3. Window content via window.render_elements
+    // Resultado: focal window block frente do bg window block. Focal content
+    // cobre bg btns+bg+content em overlap area cross-window.
+    let windows: Vec<&Window> = inputs.space.elements().rev().collect();
+    for window in windows.iter().copied() {
+        // SSD btns
+        for btn in titlebar_btns_for_window(window, inputs.space, inputs.ssd_windows) {
+            out.push(LumoCustomElement::Solid(btn));
         }
-    } else {
-        for el in space_rest {
-            out.push(LumoCustomElement::Space(el));
+        // SSD bg shader
+        if let Some(bg) = titlebar_bg_for_window(window, inputs.space, inputs.ssd_windows, inputs.titlebar_bg_shader) {
+            out.push(LumoCustomElement::Pixel(bg));
         }
+        // Content via window.render_elements
+        let loc = inputs.space.element_location(window).unwrap_or_default();
+        let phys_loc: smithay::utils::Point<i32, smithay::utils::Physical> =
+            smithay::utils::Point::from((loc.x, loc.y)).to_physical_precise_round(1.0);
+        use smithay::desktop::space::SpaceElement;
+        let content_elems: Vec<WaylandSurfaceRenderElement<GlesRenderer>> =
+            smithay::backend::renderer::element::AsRenderElements::render_elements(
+                window,
+                renderer,
+                phys_loc,
+                smithay::utils::Scale::from(1.0),
+                1.0,
+            );
+        if let Some(cs) = inputs.corner_shader {
+            // Wrap content em RoundedSurfaceElement
+            for el in content_elems {
+                let space_wrap = smithay::desktop::space::SpaceRenderElements::Surface(el);
+                out.push(LumoCustomElement::Rounded(RoundedSurfaceElement::new(
+                    space_wrap, cs.program.clone(), CORNER_RADIUS_WINDOW as f32,
+                )));
+            }
+        } else {
+            for el in content_elems {
+                let space_wrap = smithay::desktop::space::SpaceRenderElements::Surface(el);
+                out.push(LumoCustomElement::Space(space_wrap));
+            }
+        }
+        let _ = SpaceElement::geometry(window); // mantem import
     }
 
-    // W29.3: SSD titlebar btns + bg shader DEPOIS dos toplevels (atras no Z).
-    // Wallpaper/shadow pintam ANTES desses. Toplevels content cobrem overlaps
-    // cross-window. Titlebar y range = ACIMA do content area = visivel.
-    for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
-        out.push(LumoCustomElement::Solid(elem));
+    // 4c. Lower layers (Layer::Bottom/Background) atras dos toplevels.
+    for el in lower_layers {
+        out.push(LumoCustomElement::Space(el));
     }
-    for elem in titlebar_bg_elements(inputs.space, inputs.ssd_windows, inputs.titlebar_bg_shader) {
-        out.push(LumoCustomElement::Pixel(elem));
-    }
+
+    // W29.5: SSD btns+bg ja foram pushed per-window acima junto com content.
 
     // shadow pos space: sombras renderem ABAIXO de popups/toplevels.
     // Lista smithay eh front-first; shadow apos space = atras.
