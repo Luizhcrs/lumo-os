@@ -218,8 +218,8 @@ trap post_exit EXIT
 # session. Pra parar permanente: touch /tmp/lumo-no-restart antes de matar.
 rm -f /tmp/lumo-no-restart
 while true; do
-    ./target/release/lumo-wm 2>&1 | tee /tmp/lumo-wm-tty.log
-    LUMO_EC=${PIPESTATUS[0]}
+    ./target/release/lumo-wm > /tmp/lumo-wm-tty.log 2>&1
+    LUMO_EC=$?
     echo "[hot-restart] lumo-wm exit code=$LUMO_EC"
     if [[ -f /tmp/lumo-no-restart ]]; then
         rm -f /tmp/lumo-no-restart

@@ -98,6 +98,7 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("GTK_MODULES", "appmenu-gtk-module");
         cmd.env("QT_QPA_PLATFORMTHEME", "appmenu-qt5");
         cmd.env("UBUNTU_MENUPROXY", "1");
+        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
         match cmd.spawn() {
             Ok(child) => tracing::info!(
                 pid = child.id(),
@@ -124,6 +125,7 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("GTK_MODULES", "appmenu-gtk-module");
         cmd.env("QT_QPA_PLATFORMTHEME", "appmenu-qt5");
         cmd.env("UBUNTU_MENUPROXY", "1");
+        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
         match cmd.spawn() {
             Ok(child) => tracing::info!(
                 pid = child.id(),
@@ -147,6 +149,7 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("HOME", &home);
         cmd.env("XDG_CONFIG_HOME", &xdg);
         cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
+        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
         match cmd.spawn() {
             Ok(child) => tracing::info!(pid = child.id(), osd = ?osd_path, "autostart lumo-osd"),
             Err(err) => tracing::warn!(?err, "autostart lumo-osd falhou"),
@@ -165,6 +168,7 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("HOME", &home);
         cmd.env("XDG_CONFIG_HOME", &xdg);
         cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
+        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
         match cmd.spawn() {
             Ok(child) => tracing::info!(pid = child.id(), power = ?power_path, "autostart lumo-power"),
             Err(err) => tracing::warn!(?err, "autostart lumo-power falhou"),
@@ -181,6 +185,7 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("HOME", &home);
         cmd.env("XDG_CONFIG_HOME", &xdg);
         cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
+        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
         match cmd.spawn() {
             Ok(child) => tracing::info!(pid = child.id(), "autostart foot"),
             Err(err) => tracing::warn!(?err, "autostart foot falhou"),
