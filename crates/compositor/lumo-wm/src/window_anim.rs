@@ -9,8 +9,8 @@ use std::collections::HashMap;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 
 const SPRING_MASS: f32      = 1.0;
-const SPRING_STIFFNESS: f32 = 170.0;
-const SPRING_DAMPING: f32   = 22.0;
+const SPRING_STIFFNESS: f32 = 400.0;
+const SPRING_DAMPING: f32   = 38.0;
 
 /// Per-window animation state.
 #[derive(Debug, Clone)]
@@ -36,7 +36,7 @@ impl WindowAnimState {
         match self {
             WindowAnimState::Opening { progress, velocity } => {
                 spring_step(progress, velocity, 1.0, dt);
-                if *progress >= 0.998 {
+                if *progress >= 0.985 {
                     *progress = 1.0;
                     *self = WindowAnimState::Idle;
                     return true;
@@ -44,7 +44,7 @@ impl WindowAnimState {
             }
             WindowAnimState::Closing { progress, velocity } => {
                 spring_step(progress, velocity, 0.0, dt);
-                if *progress <= 0.002 {
+                if *progress <= 0.015 {
                     *progress = 0.0;
                     *self = WindowAnimState::CloseDone;
                     return true;
