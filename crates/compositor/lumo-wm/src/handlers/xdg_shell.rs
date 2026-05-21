@@ -107,7 +107,18 @@ impl XdgShellHandler for LumoState {
         let serial = smithay::utils::SERIAL_COUNTER.next_serial();
         let kb = self.keyboard.clone();
         let new_focus = self.focus_manager.close_toplevel(next_surface);
-        kb.set_focus(self, new_focus, serial);
+        kb.set_focus(self, new_focus.clone(), serial);
+        // W32.2: broadcast ActiveApp imediato apos close pra bar limpar
+        // appmenu pills. set_focus nem sempre dispara focus_changed quando
+        // novo foco eh None (mesmo seat sem keyboard target).
+        if new_focus.is_none() {
+            use lumo_ipc::LumoEvent;
+            self.ipc.broadcast(&LumoEvent::ActiveApp {
+                app_id: String::new(),
+                title: String::new(),
+                pid: 0,
+            });
+        }
     }
 
     fn grab(&mut self, surface: PopupSurface, seat: WlSeat, serial: Serial) {
