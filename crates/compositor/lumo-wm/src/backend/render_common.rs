@@ -897,11 +897,13 @@ pub fn collect_drm_elements(
     }
 
     // M1: SSD titlebars -- atras de Layer::Top, na frente de toplevels.
-    for elem in titlebar_bg_elements(inputs.space, inputs.ssd_windows, inputs.titlebar_bg_shader) {
-        out.push(LumoCustomElement::Pixel(elem));
-    }
+    // W29.1: botoes ANTES bg shader. Smithay vec[0]=topmost. Bg shader
+    // cobre area inteira titlebar; precisa ficar atras dos botoes.
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
+    }
+    for elem in titlebar_bg_elements(inputs.space, inputs.ssd_windows, inputs.titlebar_bg_shader) {
+        out.push(LumoCustomElement::Pixel(elem));
     }
     // W28.9: mask preto cantos desativado (visivel sobre titlebar dark)
     // for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
@@ -1050,11 +1052,13 @@ pub fn build_winit_elements(
     }
 
     // M1: SSD titlebars -- atras de Layer::Top, na frente de toplevels.
-    for elem in titlebar_bg_elements(inputs.space, inputs.ssd_windows, inputs.titlebar_bg_shader) {
-        out.push(LumoCustomElement::Pixel(elem));
-    }
+    // W29.1: botoes ANTES bg shader. Smithay vec[0]=topmost. Bg shader
+    // cobre area inteira titlebar; precisa ficar atras dos botoes.
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
+    }
+    for elem in titlebar_bg_elements(inputs.space, inputs.ssd_windows, inputs.titlebar_bg_shader) {
+        out.push(LumoCustomElement::Pixel(elem));
     }
     // W28.9: mask preto cantos desativado (visivel sobre titlebar dark)
     // for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
