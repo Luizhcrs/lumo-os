@@ -731,9 +731,10 @@ pub fn build_overlay(
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         overlay.push(LumoCustomElement::Solid(elem));
     }
-    for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
-        overlay.push(LumoCustomElement::Pixel(elem));
-    }
+    // W28.9: mask preto cantos desativado
+    // for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
+    //     overlay.push(LumoCustomElement::Pixel(elem));
+    // }
     // T1.1: menu popup SSD.
     if let Some((menu_pos, hover)) = inputs.titlebar_menu {
         for elem in titlebar_menu_elements(menu_pos, hover) {
@@ -905,9 +906,10 @@ pub fn collect_drm_elements(
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }
-    for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
-        out.push(LumoCustomElement::Pixel(elem));
-    }
+    // W28.9: mask preto cantos desativado (visivel sobre titlebar dark)
+    // for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
+    //     out.push(LumoCustomElement::Pixel(elem));
+    // }
     // T1.1: menu popup SSD.
     if let Some((menu_pos, hover)) = inputs.titlebar_menu {
         for elem in titlebar_menu_elements(menu_pos, hover) {
@@ -1054,9 +1056,10 @@ pub fn build_winit_elements(
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }
-    for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
-        out.push(LumoCustomElement::Pixel(elem));
-    }
+    // W28.9: mask preto cantos desativado (visivel sobre titlebar dark)
+    // for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
+    //     out.push(LumoCustomElement::Pixel(elem));
+    // }
     // T1.1: menu popup SSD.
     if let Some((menu_pos, hover)) = inputs.titlebar_menu {
         for elem in titlebar_menu_elements(menu_pos, hover) {
