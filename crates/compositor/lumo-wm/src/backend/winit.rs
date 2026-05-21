@@ -139,6 +139,10 @@ pub fn init(
         Ok(cs) => Some(cs),
         Err(e) => { tracing::warn!("corner_mask_shader compile falhou: {:?}", e); None }
     };
+    state.titlebar_bg_shader = match crate::backend::corner_shader::TitlebarBgShader::compile(backend.renderer()) {
+        Ok(cs) => Some(cs),
+        Err(e) => { tracing::warn!("titlebar_bg_shader compile falhou: {:?}", e); None }
+    };
 
     let backend = Rc::new(RefCell::new(backend));
     let damage_tracker = Rc::new(RefCell::new(damage_tracker));
@@ -269,6 +273,7 @@ fn redraw(
         titlebar_menu: state.titlebar_menu.as_ref().map(|(_, pos, hover)| (*pos, *hover)),
         snap_preview: state.snap_preview,
         corner_mask_shader: state.corner_mask_shader.as_ref(),
+        titlebar_bg_shader: state.titlebar_bg_shader.as_ref(),
         overview_elements: state.overview.as_ref()
             .map(|ov| crate::overview::overview_elements(ov, ow, oh))
             .unwrap_or_default(),

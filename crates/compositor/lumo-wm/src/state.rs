@@ -234,6 +234,7 @@ pub struct LumoState {
     pub splash_buffer: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
     /// W28: 12x12 pixmap top-left corner round + 3 quadrants squared. Flipped on right side.
     pub corner_mask_shader: Option<crate::backend::corner_shader::CornerMaskShader>,
+    pub titlebar_bg_shader: Option<crate::backend::corner_shader::TitlebarBgShader>,
     /// Telemetry: timestamp of last pointer button press for input-to-paint measurement.
     pub last_input_ts: Option<std::time::Instant>,
     /// W23.5: timestamp ultimo PointerMotion/Button. Sticky 200ms = active mode.
@@ -289,6 +290,7 @@ impl LumoState {
         });
 
         let corner_mask_shader: Option<crate::backend::corner_shader::CornerMaskShader> = None;
+        let titlebar_bg_shader: Option<crate::backend::corner_shader::TitlebarBgShader> = None;
 
         let mut seat = seat_state.new_wl_seat(&display_handle, "lumo-seat-0");
         let keyboard = seat
@@ -381,6 +383,7 @@ impl LumoState {
             splash_timer: 0.0,
             splash_buffer: crate::backend::wallpaper::load_splash_buffer(),
             corner_mask_shader,
+            titlebar_bg_shader,
             last_input_ts: None,
             cursor_last_motion_ts: None,
             #[cfg(feature = "drm-backend")]

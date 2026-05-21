@@ -70,9 +70,11 @@ void main() {
         float d = sdf_rounded_rect(px - center, half_size, u_corner_radius);
         float aa = 1.0;
         float mask = 1.0 - smoothstep(-aa, aa, d);
-        // W28.8: SDF aplicado em 4 cantos. CornerMaskShader cobre
-        // wallpaper atras dos cantos top da SSD titlebar.
-        color.a *= mask;
+        // W29: SDF content so bottom half. Top corners shader-rounded
+        // pela TitlebarBgShader que renderiza titlebar bg + SDF top-only.
+        if (px.y >= center.y) {
+            color.a *= mask;
+        }
     }
 
     vec3 srgb_rgb;
@@ -259,5 +261,74 @@ impl CornerMaskShader {
             ],
         )?;
         Ok(CornerMaskShader { program })
+    }
+}
+
+// W29: TitlebarBgShader -- renderiza bg titlebar dark com SDF top-only round.
+// Substitui SolidColorRenderElement da titlebar. Top corners arredondados via
+// SDF AA, bottom edge da titlebar squared (conecta ao content top squared).
+const TITLEBAR_BG_FRAG: &str = "
+//_DEFINES_
+
+precision mediump float;
+varying vec2 v_coords;
+uniform vec2 size;
+uniform float alpha;
+uniform vec3 u_color;
+uniform float u_radius;
+
+#if defined(DEBUG_FLAGS)
+uniform float tint;
+#endif
+
+void main() {
+    vec2 px = v_coords * size;
+    // SDF top-only round: rect cuja top edge tem cantos arredondados raio r,
+    // bottom edge squared. Pixels inside -> alpha=1, outside -> alpha=0.
+    // px in [0..size]. Cantos top: (r,r) e (size.x-r,r).
+    float d = 0.0;
+    if (px.x < u_radius && px.y < u_radius) {
+        d = distance(px, vec2(u_radius)) - u_radius;
+    } else if (px.x > size.x - u_radius && px.y < u_radius) {
+        d = distance(px, vec2(size.x - u_radius, u_radius)) - u_radius;
+    } else {
+        // dentro do retangulo, fora dos cantos round
+        float dx = max(0.0, max(-px.x, px.x - size.x));
+        float dy = max(0.0, max(-px.y, px.y - size.y));
+        d = length(vec2(dx, dy));
+        // Sinal negativo dentro do rect
+        if (dx == 0.0 && dy == 0.0) {
+            d = -1.0;
+        }
+    }
+    float aa = 1.0;
+    float mask = 1.0 - smoothstep(-aa, aa, d);
+    // Hardcoded titlebar dark #1A1A1C linear = (0.0089, 0.0089, 0.0102)
+    // sRGB after gamma pow(1/2.2) ~ (0.103, 0.103, 0.110)
+    vec3 lin = vec3(0.0089, 0.0089, 0.0102);
+    vec3 srgb = pow(lin, vec3(1.0/2.2));
+    float a = mask * alpha;
+    gl_FragColor = vec4(srgb * a, a);
+    // Tag uniforms pra nao virarem unused
+    if (u_color.x < -100.0) gl_FragColor = vec4(1.0);
+    if (u_radius < -100.0) gl_FragColor = vec4(1.0);
+}
+";
+
+#[derive(Clone)]
+pub struct TitlebarBgShader {
+    pub program: smithay::backend::renderer::gles::GlesPixelProgram,
+}
+
+impl TitlebarBgShader {
+    pub fn compile(renderer: &mut GlesRenderer) -> Result<Self, GlesError> {
+        let program = renderer.compile_custom_pixel_shader(
+            TITLEBAR_BG_FRAG,
+            &[
+                UniformName::new("u_color", UniformType::_3f),
+                UniformName::new("u_radius", UniformType::_1f),
+            ],
+        )?;
+        Ok(TitlebarBgShader { program })
     }
 }

@@ -210,58 +210,50 @@ pub fn titlebar_elements(
             Kind::Unspecified,
         ));
 
-        // W28.7: split bg titlebar pra cantos round via pixmap.
-        // Top-left + top-right: rect preto 12x12 ANTES pixmap (cobre wallpaper).
-        // Top middle: bg dark 12px tall x=loc.x+12..win_w-12.
-        // Bottom: bg dark full width altura TITLEBAR_H-12=18.
-        const CORNER_SZ: i32 = 12;
-        let black_color = [0.0, 0.0, 0.0, 1.0];
-        let tl_black: Rectangle<i32, Physical> = Rectangle::new(
-            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H))
-                .to_physical_precise_round(1.0),
-            (CORNER_SZ, CORNER_SZ).into(),
+        // W29: bg titlebar renderizado por titlebar_bg_elements (PixelShaderElement
+        // com SDF top-round). titlebar_elements retorna SO botoes agora.
+    }
+    let _ = bg_color;
+    out
+}
+
+/// W29: titlebar bg via shader. UM PixelShaderElement por janela SSD cobrindo
+/// area titlebar inteira (loc.x..loc.x+win_w, loc.y-TITLEBAR_H..loc.y). Shader
+/// = TitlebarBgShader SDF top-round (top corners radius=12, bottom squared).
+pub fn titlebar_bg_elements(
+    space: &Space<Window>,
+    ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    bg_shader: Option<&crate::backend::corner_shader::TitlebarBgShader>,
+) -> Vec<PixelShaderElement> {
+    let mut out = Vec::new();
+    let Some(shader) = bg_shader else { return out; };
+
+    for window in space.elements() {
+        let is_ssd = window
+            .wl_surface()
+            .map(|s| ssd_windows.contains(&*s))
+            .unwrap_or(false);
+        if !is_ssd { continue; }
+        let loc = space.element_location(window).unwrap_or_default();
+        let win_w = window.geometry().size.w;
+
+        let area: Rectangle<i32, smithay::utils::Logical> = Rectangle::new(
+            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H)),
+            (win_w, TITLEBAR_H).into(),
         );
-        out.push(SolidColorRenderElement::new(
-            Id::new(),
-            tl_black,
-            0,
-            black_color,
-            Kind::Unspecified,
-        ));
-        let tr_black: Rectangle<i32, Physical> = Rectangle::new(
-            smithay::utils::Point::from((loc.x + win_w - CORNER_SZ, loc.y - TITLEBAR_H))
-                .to_physical_precise_round(1.0),
-            (CORNER_SZ, CORNER_SZ).into(),
-        );
-        out.push(SolidColorRenderElement::new(
-            Id::new(),
-            tr_black,
-            0,
-            black_color,
-            Kind::Unspecified,
-        ));
-        let top_mid_rect: Rectangle<i32, Physical> = Rectangle::new(
-            smithay::utils::Point::from((loc.x + CORNER_SZ, loc.y - TITLEBAR_H))
-                .to_physical_precise_round(1.0),
-            (win_w - 2 * CORNER_SZ, CORNER_SZ).into(),
-        );
-        out.push(SolidColorRenderElement::new(
-            Id::new(),
-            top_mid_rect,
-            0,
-            bg_color,
-            Kind::Unspecified,
-        ));
-        let bottom_rect: Rectangle<i32, Physical> = Rectangle::new(
-            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H + CORNER_SZ))
-                .to_physical_precise_round(1.0),
-            (win_w, TITLEBAR_H - CORNER_SZ).into(),
-        );
-        out.push(SolidColorRenderElement::new(
-            Id::new(),
-            bottom_rect,
-            0,
-            bg_color,
+        let uniforms = vec![
+            smithay::backend::renderer::gles::Uniform::new(
+                "u_color",
+                (TITLEBAR_BG[0], TITLEBAR_BG[1], TITLEBAR_BG[2]),
+            ).into_owned(),
+            smithay::backend::renderer::gles::Uniform::new("u_radius", 12.0f32).into_owned(),
+        ];
+        out.push(PixelShaderElement::new(
+            shader.program.clone(),
+            area,
+            None,
+            1.0,
+            uniforms,
             Kind::Unspecified,
         ));
     }
@@ -653,6 +645,7 @@ pub struct OverlayInputs<'a> {
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
     pub corner_mask_shader: Option<&'a CornerMaskShader>,
+    pub titlebar_bg_shader: Option<&'a crate::backend::corner_shader::TitlebarBgShader>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// W9.B: snap zone preview during window drag.
@@ -782,6 +775,7 @@ pub struct DrmCollectInputs<'a> {
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
     pub corner_mask_shader: Option<&'a CornerMaskShader>,
+    pub titlebar_bg_shader: Option<&'a crate::backend::corner_shader::TitlebarBgShader>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// W9.B: snap zone preview during window drag.
@@ -903,6 +897,9 @@ pub fn collect_drm_elements(
     }
 
     // M1: SSD titlebars -- atras de Layer::Top, na frente de toplevels.
+    for elem in titlebar_bg_elements(inputs.space, inputs.ssd_windows, inputs.titlebar_bg_shader) {
+        out.push(LumoCustomElement::Pixel(elem));
+    }
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }
@@ -1053,6 +1050,9 @@ pub fn build_winit_elements(
     }
 
     // M1: SSD titlebars -- atras de Layer::Top, na frente de toplevels.
+    for elem in titlebar_bg_elements(inputs.space, inputs.ssd_windows, inputs.titlebar_bg_shader) {
+        out.push(LumoCustomElement::Pixel(elem));
+    }
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }

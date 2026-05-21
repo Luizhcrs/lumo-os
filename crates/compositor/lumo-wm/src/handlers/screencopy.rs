@@ -292,6 +292,7 @@ fn arm_and_refresh_now(state: &mut LumoState) {
         ref space,
         ref wallpaper,
         ref corner_shader,
+        ref titlebar_bg_shader,
         ref ssd_windows,
         ref splash_buffer,
         ..
@@ -356,6 +357,7 @@ fn arm_and_refresh_now(state: &mut LumoState) {
         titlebar_menu: titlebar_menu_opt,
         snap_preview,
         corner_mask_shader: None,
+        titlebar_bg_shader: titlebar_bg_shader.as_ref(),
         overview_elements,
         picker_elements,
         space,
