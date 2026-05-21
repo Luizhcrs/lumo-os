@@ -161,6 +161,8 @@ pub fn titlebar_btns_for_window(
         let loc = space.element_location(window).unwrap_or_default();
         let geo = window.geometry();
         let win_w = geo.size.w;
+        // W32.1: skip se janela ainda nao configurada (size<200 = ack inicial pendente)
+        if win_w < 200 { continue; }
         let btn_rect = close_btn_rect(
             smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H)),
             win_w,
@@ -201,6 +203,8 @@ pub fn titlebar_bg_for_window(
     if !is_ssd { return None; }
     let loc = space.element_location(window).unwrap_or_default();
     let win_w = window.geometry().size.w;
+    // W32.1: skip se janela ainda nao configurada (evita flicker btns lado esquerdo)
+    if win_w < 200 { return None; }
     let area: Rectangle<i32, smithay::utils::Logical> = Rectangle::new(
         smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H)),
         (win_w, TITLEBAR_H).into(),
