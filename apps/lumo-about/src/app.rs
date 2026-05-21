@@ -24,6 +24,10 @@ pub enum Message {
 pub struct App {
     uptime: String,
     kernel: String,
+    cpu_model: String,
+    mem_total: String,
+    disk_used: String,
+    battery: String,
 }
 
 impl App {
@@ -32,6 +36,10 @@ impl App {
             Self {
                 uptime: read_uptime(),
                 kernel: read_kernel(),
+                cpu_model: read_cpu_model(),
+                mem_total: read_mem_total(),
+                disk_used: read_disk_usage(),
+                battery: read_battery(),
             },
             Task::none(),
         )
@@ -68,12 +76,12 @@ impl App {
             .spacing(2);
 
         let hw = column![
-            spec_row("Processador", "Intel Processor U300 (1P + 4E cores)"),
-            spec_row("Memoria",      "8 GB LPDDR5"),
-            spec_row("Grafica",      "Intel UHD Graphics Xe-LP (48 EU)"),
-            spec_row("Display",      "15.6\" IPS, 60 Hz"),
-            spec_row("Armazenamento","256 GB NVMe"),
-            spec_row("Bateria",      "54 Wh - charge end 80%"),
+            spec_row_owned("Processador",  self.cpu_model.clone()),
+            spec_row_owned("Memoria",      self.mem_total.clone()),
+            spec_row("Grafica",            "Intel UHD Graphics Xe-LP (48 EU)"),
+            spec_row("Display",            "15.6\" IPS, 60 Hz"),
+            spec_row_owned("Armazenamento",self.disk_used.clone()),
+            spec_row_owned("Bateria",      self.battery.clone()),
         ]
         .spacing(10);
 
@@ -135,6 +143,86 @@ fn spec_row<'a>(label: &'a str, value: &'a str) -> Element<'a, Message> {
     ]
     .spacing(10)
     .into()
+}
+
+fn spec_row_owned<'a>(label: &'a str, value: String) -> Element<'a, Message> {
+    row![
+        text(label)
+            .width(Length::Fixed(140.0))
+            .style(|_t: &Theme| iced::widget::text::Style {
+                color: Some(Color::from_rgb8(0x8a, 0x8a, 0x90)),
+            }),
+        text(value)
+            .style(|_t: &Theme| iced::widget::text::Style {
+                color: Some(Color::from_rgb8(0xe6, 0xe6, 0xea)),
+            }),
+    ]
+    .spacing(10)
+    .into()
+}
+
+fn read_cpu_model() -> String {
+    std::fs::read_to_string("/proc/cpuinfo")
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find(|l| l.starts_with("model name"))
+                .and_then(|l| l.split(':').nth(1))
+                .map(|v| v.trim().to_string())
+        })
+        .unwrap_or_else(|| "Intel Processor U300".into())
+}
+
+fn read_mem_total() -> String {
+    std::fs::read_to_string("/proc/meminfo")
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find(|l| l.starts_with("MemTotal"))
+                .and_then(|l| l.split_whitespace().nth(1))
+                .and_then(|v| v.parse::<u64>().ok())
+        })
+        .map(|kb| {
+            let gb = (kb as f64) / 1024.0 / 1024.0;
+            format!("{:.1} GB LPDDR5", gb)
+        })
+        .unwrap_or_else(|| "8 GB LPDDR5".into())
+}
+
+fn read_disk_usage() -> String {
+    let out = std::process::Command::new("df")
+        .args(["-B1", "--output=size,used", "/"])
+        .output()
+        .ok();
+    if let Some(out) = out {
+        if let Ok(s) = String::from_utf8(out.stdout) {
+            if let Some(line) = s.lines().nth(1) {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() == 2 {
+                    if let (Ok(sz), Ok(used)) = (parts[0].parse::<u64>(), parts[1].parse::<u64>()) {
+                        let gb_total = (sz as f64) / 1e9;
+                        let gb_used = (used as f64) / 1e9;
+                        return format!("{:.0} GB NVMe ({:.0} GB usado)", gb_total, gb_used);
+                    }
+                }
+            }
+        }
+    }
+    "256 GB NVMe".into()
+}
+
+fn read_battery() -> String {
+    let cap = std::fs::read_to_string("/sys/class/power_supply/BAT0/capacity")
+        .ok()
+        .map(|s| s.trim().to_string());
+    let limit = std::fs::read_to_string("/sys/class/power_supply/BAT0/charge_control_end_threshold")
+        .ok()
+        .map(|s| s.trim().to_string());
+    match (cap, limit) {
+        (Some(c), Some(l)) => format!("{}% atual - charge end {}%", c, l),
+        (Some(c), None) => format!("{}% atual", c),
+        _ => "54 Wh - charge end 80%".into(),
+    }
 }
 
 fn read_uptime() -> String {
