@@ -560,7 +560,7 @@ impl LumoState {
                 self.ipc.broadcast(&LumoEvent::ThemeReloaded { mode });
             }
             LumoCommand::CloseFocusedToplevel => {
-                // T1.2: bar pediu fechar o toplevel com foco atual.
+                // W32.6: snap close instantaneo (igual btn X).
                 use smithay::wayland::seat::WaylandFocus;
                 let kb = self.keyboard.clone();
                 if let Some(focused) = kb.current_focus() {
@@ -570,8 +570,12 @@ impl LumoState {
                     if let Some(w) = win {
                         if let Some(tl) = w.toplevel() {
                             tl.send_close();
-                            tracing::info!("T1.2: CloseFocusedToplevel -> send_close");
                         }
+                        if let Some(s) = w.wl_surface() {
+                            self.ssd_windows.remove(&*s);
+                        }
+                        self.space.unmap_elem(&w);
+                        self.should_render = true;
                     }
                 }
             }

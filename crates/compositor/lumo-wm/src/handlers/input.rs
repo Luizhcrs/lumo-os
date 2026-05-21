@@ -283,7 +283,13 @@ impl LumoState {
                                 self.titlebar_menu = None;
                                 match idx {
                                     0 => {
+                                        // W32.6: snap close (igual btn X) - unmap imediato.
                                         if let Some(tl) = menu_win.toplevel() { tl.send_close(); }
+                                        if let Some(s) = menu_win.wl_surface() {
+                                            self.ssd_windows.remove(&*s);
+                                        }
+                                        self.space.unmap_elem(&menu_win);
+                                        self.should_render = true;
                                     }
                                     1 => {
                                         if let Some(tl) = menu_win.toplevel() {
@@ -795,7 +801,8 @@ impl LumoState {
     }
 
     /// Fecha a janela com foco via xdg_toplevel send_close.
-    fn close_focused_window(&self) {
+    /// W32.6: snap unmap pra close instantaneo visual.
+    fn close_focused_window(&mut self) {
         let kb = self.keyboard.clone();
         if let Some(focused) = kb.current_focus() {
             let window = self
@@ -811,6 +818,11 @@ impl LumoState {
                 if let Some(toplevel) = win.toplevel() {
                     toplevel.send_close();
                 }
+                if let Some(s) = win.wl_surface() {
+                    self.ssd_windows.remove(&*s);
+                }
+                self.space.unmap_elem(&win);
+                self.should_render = true;
             }
         }
     }
