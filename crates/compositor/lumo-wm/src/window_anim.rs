@@ -22,14 +22,14 @@ pub enum WindowAnimState {
 }
 
 impl WindowAnimState {
-    pub fn new_opening(reduced_motion: bool) -> Self {
-        if reduced_motion { return WindowAnimState::Idle; }
-        WindowAnimState::Opening { progress: 0.0, velocity: 0.0 }
+    pub fn new_opening(_reduced_motion: bool) -> Self {
+        // W32.4: anim window open desativada (instant). User reclamou demora.
+        WindowAnimState::Idle
     }
 
-    pub fn new_closing(reduced_motion: bool) -> Self {
-        if reduced_motion { return WindowAnimState::CloseDone; }
-        WindowAnimState::Closing { progress: 1.0, velocity: 0.0 }
+    pub fn new_closing(_reduced_motion: bool) -> Self {
+        // W32.4: anim window close desativada (instant).
+        WindowAnimState::CloseDone
     }
 
     pub fn tick(&mut self, dt: f32) -> bool {
