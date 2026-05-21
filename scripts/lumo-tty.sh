@@ -169,8 +169,14 @@ cd "$(dirname "$0")/.."
 # ============================================================
 # Build com feature drm-backend (idempotente, cache cargo).
 # ============================================================
-echo "[1/3] Build lumo-wm (feature drm-backend) + lumo-bar..."
-cargo build --release --features lumo-wm/drm-backend --bin lumo-wm --bin lumo-bar 2>&1 | tail -6
+# W31.2: skip build se binarios fresh
+WM_BIN=./target/release/lumo-wm
+BAR_BIN=./target/release/lumo-bar
+if [ -x "$WM_BIN" ] && [ -x "$BAR_BIN" ] && [ "$WM_BIN" -nt Cargo.lock ] && [ "$BAR_BIN" -nt Cargo.lock ]; then
+    : # binaries fresh, skip
+else
+    cargo build --release --features lumo-wm/drm-backend --bin lumo-wm --bin lumo-bar > /tmp/lumo-build.log 2>&1
+fi
 
 # ============================================================
 # Env (source de lumo-env.conf).
@@ -185,10 +191,10 @@ set -a; source "$ENV_FILE"; set +a
 # A13: LUMO_THEME default light; override: LUMO_THEME=dark ./scripts/lumo-tty.sh
 export LUMO_THEME="${LUMO_THEME:-dark}"
 
-echo "[2/3] TTY = $current_tty, user = $(id -un)"
-echo "[3/3] Iniciando lumo-wm DRM..."
-echo ""
-echo "  Sair limpo:           Ctrl+Alt+Backspace"
+true
+true
+true
+false_skip="  Sair limpo:           Ctrl+Alt+Backspace"
 echo "  Voltar TTY1:          Ctrl+Alt+F1 (Hyprland esta morto, vai dar console)"
 echo "  Display manager:      Ctrl+Alt+F2"
 echo ""
@@ -217,6 +223,8 @@ trap post_exit EXIT
 # Loop hot-restart: pkill lumo-wm relauncha automatico, preserva TTY DRM
 # session. Pra parar permanente: touch /tmp/lumo-no-restart antes de matar.
 rm -f /tmp/lumo-no-restart
+clear
+printf "[2J[H"
 while true; do
     ./target/release/lumo-wm > /tmp/lumo-wm-tty.log 2>&1
     LUMO_EC=$?
