@@ -254,7 +254,10 @@ pub fn titlebar_corner_elements(
     corner_buffer_right: Option<&MemoryRenderBuffer>,
 ) -> Vec<MemoryRenderBufferRenderElement<GlesRenderer>> {
     let mut out = Vec::new();
-    let Some(buffer) = corner_buffer else { return out; };
+    let Some(buffer) = corner_buffer else {
+        eprintln!("[W28] corner_buffer NONE");
+        return out;
+    };
     let buffer_right = corner_buffer_right.unwrap_or(buffer);
     const CORNER_SZ: i32 = 12;
 
@@ -270,36 +273,34 @@ pub fn titlebar_corner_elements(
         let win_w = window.geometry().size.w;
         let titlebar_top_y = loc.y - TITLEBAR_H;
 
-        // Top-left corner: pixmap rendered at (loc.x, titlebar_top_y).
-        if let Ok(elem) = MemoryRenderBufferRenderElement::from_buffer(
+        let left_pos = Point::<f64, Physical>::from((loc.x as f64, titlebar_top_y as f64));
+        let left_result = MemoryRenderBufferRenderElement::from_buffer(
             renderer,
-            Point::<f64, Physical>::from((loc.x as f64, titlebar_top_y as f64)),
+            left_pos,
             buffer,
             None,
             None,
             None,
             Kind::Unspecified,
-        ) {
+        );
+        eprintln!("[W28] LEFT pos=({},{}) ok={}", loc.x, titlebar_top_y, left_result.is_ok());
+        if let Ok(elem) = left_result {
             out.push(elem);
         }
 
-        // Top-right corner: same pixmap, but flipped horizontal pra arredondar
-        // o lado direito. Smithay MemoryRenderBuffer suporta transform = Flipped.
-        // Atalho: cria buffer novo with FlippedHorizontal? Sem isso aqui — render
-        // pixmap igual no top-right canto (visualmente quadrado top-right pq
-        // pixmap arredondada so top-left).
-        // TODO: pra arredondar top-right tambem, precisa segundo pixmap ou
-        // transform flipped. Skip por agora — visual acceptable com 1 corner.
         let right_x = loc.x + win_w - CORNER_SZ;
-        if let Ok(elem) = MemoryRenderBufferRenderElement::from_buffer(
+        let right_pos = Point::<f64, Physical>::from((right_x as f64, titlebar_top_y as f64));
+        let right_result = MemoryRenderBufferRenderElement::from_buffer(
             renderer,
-            Point::<f64, Physical>::from((right_x as f64, titlebar_top_y as f64)),
+            right_pos,
             buffer_right,
             None,
             None,
             None,
             Kind::Unspecified,
-        ) {
+        );
+        eprintln!("[W28] RIGHT pos=({},{}) ok={}", right_x, titlebar_top_y, right_result.is_ok());
+        if let Ok(elem) = right_result {
             out.push(elem);
         }
     }

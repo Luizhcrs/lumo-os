@@ -304,10 +304,10 @@ impl LumoState {
                     let dy = (y as f32) - R + 0.5;
                     let inside = (dx >= 0.0 || dy >= 0.0) || (dx * dx + dy * dy).sqrt() <= R;
                     let alpha = if inside { 255u8 } else { 0u8 };
-                    pixels.push(0x1A);
-                    pixels.push(0x1A);
-                    pixels.push(0x1C);
-                    pixels.push(alpha);
+                    pixels.push(alpha); // A
+                    pixels.push(0x00); // B
+                    pixels.push(0x00); // G
+                    pixels.push(0xFF); // R DEBUG
                 }
             }
             Some(MemoryRenderBuffer::from_slice(
@@ -337,10 +337,10 @@ impl LumoState {
                     // Inside se y >= R (lower half ALWAYS opaco) OR dist <= R do anchor (0, R).
                     let inside = dy >= 0.0 || (dx * dx + dy * dy).sqrt() <= R;
                     let alpha = if inside { 255u8 } else { 0u8 };
-                    pixels.push(0x1A);
-                    pixels.push(0x1A);
-                    pixels.push(0x1C);
-                    pixels.push(alpha);
+                    pixels.push(alpha); // A
+                    pixels.push(0x00); // B
+                    pixels.push(0x00); // G
+                    pixels.push(0xFF); // R DEBUG
                 }
             }
             Some(MemoryRenderBuffer::from_slice(

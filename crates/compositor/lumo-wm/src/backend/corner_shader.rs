@@ -70,7 +70,12 @@ void main() {
         float d = sdf_rounded_rect(px - center, half_size, u_corner_radius);
         float aa = 1.0;
         float mask = 1.0 - smoothstep(-aa, aa, d);
-        color.a *= mask;
+        // W28.4: SDF aplicado SO bottom half — top corners ficam squared
+        // pq SSD titlebar (compositor-drawn) cobre top edge. Content top
+        // arredondado criava buraco entre titlebar bottom (squared) e content.
+        if (px.y >= center.y) {
+            color.a *= mask;
+        }
     }
 
     vec3 srgb_rgb;
