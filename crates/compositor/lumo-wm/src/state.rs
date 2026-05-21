@@ -233,8 +233,7 @@ pub struct LumoState {
     pub splash_timer: f32,
     pub splash_buffer: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
     /// W28: 12x12 pixmap top-left corner round + 3 quadrants squared. Flipped on right side.
-    pub titlebar_corner_buffer: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
-    pub titlebar_corner_buffer_right: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
+    pub corner_mask_shader: Option<crate::backend::corner_shader::CornerMaskShader>,
     /// Telemetry: timestamp of last pointer button press for input-to-paint measurement.
     pub last_input_ts: Option<std::time::Instant>,
     /// W23.5: timestamp ultimo PointerMotion/Button. Sticky 200ms = active mode.
@@ -289,69 +288,7 @@ impl LumoState {
             )
         });
 
-        // W28: pre-render SSD titlebar top-LEFT corner pixmap (12x12) com alpha mask round.
-        // Corner anchor at (R, R) — round arc no quadrant top-left, demais 3 quadrants opacos.
-        let titlebar_corner_buffer = {
-            use smithay::backend::allocator::Fourcc;
-            use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
-            use smithay::utils::Transform;
-            const SZ: usize = 12;
-            const R: f32 = 12.0;
-            let mut pixels = Vec::with_capacity(SZ * SZ * 4);
-            for y in 0..SZ {
-                for x in 0..SZ {
-                    let dx = (x as f32) - R + 0.5;
-                    let dy = (y as f32) - R + 0.5;
-                    let inside = (dx >= 0.0 || dy >= 0.0) || (dx * dx + dy * dy).sqrt() <= R;
-                    let alpha = if inside { 255u8 } else { 0u8 };
-                    pixels.push(alpha); // A
-                    pixels.push(0x1C); // B
-                    pixels.push(0x1A); // G
-                    pixels.push(0x1A); // R
-                }
-            }
-            Some(MemoryRenderBuffer::from_slice(
-                &pixels,
-                Fourcc::Abgr8888,
-                (SZ as i32, SZ as i32),
-                1,
-                Transform::Normal,
-                None,
-            ))
-        };
-        // W28.3: top-RIGHT corner pixmap. Arc anchor em (0, R) coord local pixmap.
-        // Arc curva top-right de canto. Pixels com dist > R do anchor = transparente.
-        // (anchor LEFT-side da pixmap; pixmap RIGHT col tem pixels longe = transparentes
-        // formando curve arredondada no top-right corner).
-        let titlebar_corner_buffer_right = {
-            use smithay::backend::allocator::Fourcc;
-            use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
-            use smithay::utils::Transform;
-            const SZ: usize = 12;
-            const R: f32 = 12.0;
-            let mut pixels = Vec::with_capacity(SZ * SZ * 4);
-            for y in 0..SZ {
-                for x in 0..SZ {
-                    let dx = (x as f32) + 0.5;            // 0.5..11.5
-                    let dy = (y as f32) - R + 0.5;        // -11.5..-0.5
-                    // Inside se y >= R (lower half ALWAYS opaco) OR dist <= R do anchor (0, R).
-                    let inside = dy >= 0.0 || (dx * dx + dy * dy).sqrt() <= R;
-                    let alpha = if inside { 255u8 } else { 0u8 };
-                    pixels.push(alpha); // A
-                    pixels.push(0x1C); // B
-                    pixels.push(0x1A); // G
-                    pixels.push(0x1A); // R
-                }
-            }
-            Some(MemoryRenderBuffer::from_slice(
-                &pixels,
-                Fourcc::Abgr8888,
-                (SZ as i32, SZ as i32),
-                1,
-                Transform::Normal,
-                None,
-            ))
-        };
+        let corner_mask_shader: Option<crate::backend::corner_shader::CornerMaskShader> = None;
 
         let mut seat = seat_state.new_wl_seat(&display_handle, "lumo-seat-0");
         let keyboard = seat
@@ -443,8 +380,7 @@ impl LumoState {
             splash_phase: 0,
             splash_timer: 0.0,
             splash_buffer: crate::backend::wallpaper::load_splash_buffer(),
-            titlebar_corner_buffer,
-            titlebar_corner_buffer_right,
+            corner_mask_shader,
             last_input_ts: None,
             cursor_last_motion_ts: None,
             #[cfg(feature = "drm-backend")]

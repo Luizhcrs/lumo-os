@@ -476,6 +476,10 @@ pub fn run(
         Ok(cs) => Some(cs),
         Err(e) => { tracing::warn!("corner_shader compile falhou: {:?}", e); None }
     };
+    state.corner_mask_shader = match crate::backend::corner_shader::CornerMaskShader::compile(&mut renderer) {
+        Ok(cs) => Some(cs),
+        Err(e) => { tracing::warn!("corner_mask_shader compile falhou: {:?}", e); None }
+    };
 
     // A10 frente 1: dmabuf-v1 global. Galaxy U300 = Intel i915 render
     // node /dev/dri/renderD128. EGLContext.dmabuf_render_formats() ja
@@ -1079,8 +1083,7 @@ fn render_drm(state: &mut LumoState) {
         ssd_windows,
         titlebar_menu: titlebar_menu_opt,
         snap_preview: state.snap_preview,
-        titlebar_corner_buffer: state.titlebar_corner_buffer.as_ref(),
-        titlebar_corner_buffer_right: state.titlebar_corner_buffer_right.as_ref(),
+        corner_mask_shader: state.corner_mask_shader.as_ref(),
         overview_elements: state.overview.as_ref()
             .map(|ov| crate::overview::overview_elements(ov, ow, oh))
             .unwrap_or_default(),

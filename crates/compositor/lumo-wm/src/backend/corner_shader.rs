@@ -70,12 +70,9 @@ void main() {
         float d = sdf_rounded_rect(px - center, half_size, u_corner_radius);
         float aa = 1.0;
         float mask = 1.0 - smoothstep(-aa, aa, d);
-        // W28.4: SDF aplicado SO bottom half — top corners ficam squared
-        // pq SSD titlebar (compositor-drawn) cobre top edge. Content top
-        // arredondado criava buraco entre titlebar bottom (squared) e content.
-        if (px.y >= center.y) {
-            color.a *= mask;
-        }
+        // W28.8: SDF aplicado em 4 cantos. CornerMaskShader cobre
+        // wallpaper atras dos cantos top da SSD titlebar.
+        color.a *= mask;
     }
 
     vec3 srgb_rgb;
@@ -205,5 +202,62 @@ impl RenderElement<GlesRenderer> for RoundedSurfaceElement {
         );
         frame.clear_tex_program_override();
         res
+    }
+}
+
+
+// W28.8: pixel shader que renderiza alpha=1 fora curva, alpha=0 inside.
+// Cor preto solido. Usado pra mascarar wallpaper atras dos cantos round
+// da janela (SSD titlebar nao tem texture; pixmap binary alpha tinha
+// staircase aliased de 12x12).
+//
+// Posiciona-se sobre cada um dos 4 cantos da janela (12x12 cada).
+// u_anchor (vec2 [0..1]) = anchor da curva dentro da rect:
+//   TL canto janela: anchor=(1.0, 1.0) (curve at BR of mask rect)
+//   TR canto janela: anchor=(0.0, 1.0)
+//   BL canto janela: anchor=(1.0, 0.0)
+//   BR canto janela: anchor=(0.0, 0.0)
+const CORNER_MASK_FRAG: &str = "
+//_DEFINES_
+
+precision mediump float;
+varying vec2 v_coords;
+uniform vec2 size;
+uniform float alpha;
+uniform vec2 u_anchor;
+uniform float u_radius;
+
+#if defined(DEBUG_FLAGS)
+uniform float tint;
+#endif
+
+void main() {
+    vec2 px = v_coords * size;
+    vec2 center = u_anchor * size;
+    float d = distance(px, center) - u_radius;
+    float aa = 1.0;
+    float mask = smoothstep(-aa, aa, d);
+    // Preto premultiplied (rgb*alpha = 0 quando rgb=0)
+    gl_FragColor = vec4(0.0, 0.0, 0.0, mask * alpha);
+}
+";
+
+/// Pixel shader pra mascarar cantos round da janela.
+/// Compile uma vez por renderer.
+#[derive(Clone)]
+pub struct CornerMaskShader {
+    pub program: smithay::backend::renderer::gles::GlesPixelProgram,
+}
+
+impl CornerMaskShader {
+    pub fn compile(renderer: &mut GlesRenderer) -> Result<Self, GlesError> {
+        let program = renderer.compile_custom_pixel_shader(
+            CORNER_MASK_FRAG,
+            &[
+                UniformName::new("u_anchor", UniformType::_2f),
+                UniformName::new("u_radius", UniformType::_1f),
+            ],
+        )?;
+        Ok(CornerMaskShader { program })
     }
 }

@@ -16,7 +16,8 @@
 //! mesmo valor em DRM e winit (consistencia visual entre Lumo
 //! nested e Lumo fullscreen).
 
-use super::corner_shader::{CornerShader, RoundedSurfaceElement};
+use super::corner_shader::{CornerMaskShader, CornerShader, RoundedSurfaceElement};
+use smithay::backend::renderer::gles::element::PixelShaderElement;
 use smithay::backend::renderer::element::memory::{
     MemoryRenderBuffer, MemoryRenderBufferRenderElement,
 };
@@ -54,6 +55,7 @@ render_elements! {
     Texture=TextureRenderElement<GlesTexture>,
     Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
     Rounded=RoundedSurfaceElement,
+    Pixel=PixelShaderElement,
 }
 
 // M1: SSD titlebar dimensions.
@@ -208,11 +210,36 @@ pub fn titlebar_elements(
             Kind::Unspecified,
         ));
 
-        // W28: bg titlebar split em 2 rects:
-        // - top middle 12px tall, x=loc.x+12 .. loc.x+win_w-12 (cantos vazios pra
-        //   memory pixmaps preencherem com round mask)
-        // - bottom full width, height TITLEBAR_H - 12 = 18px
+        // W28.7: split bg titlebar pra cantos round via pixmap.
+        // Top-left + top-right: rect preto 12x12 ANTES pixmap (cobre wallpaper).
+        // Top middle: bg dark 12px tall x=loc.x+12..win_w-12.
+        // Bottom: bg dark full width altura TITLEBAR_H-12=18.
         const CORNER_SZ: i32 = 12;
+        let black_color = [0.0, 0.0, 0.0, 1.0];
+        let tl_black: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H))
+                .to_physical_precise_round(1.0),
+            (CORNER_SZ, CORNER_SZ).into(),
+        );
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            tl_black,
+            0,
+            black_color,
+            Kind::Unspecified,
+        ));
+        let tr_black: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((loc.x + win_w - CORNER_SZ, loc.y - TITLEBAR_H))
+                .to_physical_precise_round(1.0),
+            (CORNER_SZ, CORNER_SZ).into(),
+        );
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            tr_black,
+            0,
+            black_color,
+            Kind::Unspecified,
+        ));
         let top_mid_rect: Rectangle<i32, Physical> = Rectangle::new(
             smithay::utils::Point::from((loc.x + CORNER_SZ, loc.y - TITLEBAR_H))
                 .to_physical_precise_round(1.0),
@@ -243,23 +270,20 @@ pub fn titlebar_elements(
 
 
 
-/// W28: corner pixmaps (top-left + top-right) pra SSD titlebar arredondada.
-/// Retorna 2 elementos por SSD window: left flipped no source coord pra round,
-/// right via mesma pixmap (top-left rounded) flipped horizontal via Transform.
-pub fn titlebar_corner_elements(
-    renderer: &mut GlesRenderer,
+/// W28.8: corner mask elements (TL+TR+BL+BR) com SDF AA preto premultiplied.
+/// Cobre wallpaper atras dos cantos round da janela. 4 PixelShaderElement
+/// por janela SSD, 12x12 logico cada, anchor=(1,1)/(0,1)/(1,0)/(0,0).
+pub fn ssd_corner_masks(
     space: &Space<Window>,
     ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
-    corner_buffer: Option<&MemoryRenderBuffer>,
-    corner_buffer_right: Option<&MemoryRenderBuffer>,
-) -> Vec<MemoryRenderBufferRenderElement<GlesRenderer>> {
+    mask_shader: Option<&CornerMaskShader>,
+) -> Vec<PixelShaderElement> {
     let mut out = Vec::new();
-    let Some(buffer) = corner_buffer else {
-        eprintln!("[W28] corner_buffer NONE");
+    let Some(shader) = mask_shader else {
         return out;
     };
-    let buffer_right = corner_buffer_right.unwrap_or(buffer);
     const CORNER_SZ: i32 = 12;
+    const R: f32 = 12.0;
 
     for window in space.elements() {
         let is_ssd = window
@@ -271,37 +295,34 @@ pub fn titlebar_corner_elements(
         }
         let loc = space.element_location(window).unwrap_or_default();
         let win_w = window.geometry().size.w;
+        let win_h = window.geometry().size.h;
         let titlebar_top_y = loc.y - TITLEBAR_H;
+        let content_bottom_y = loc.y + win_h - CORNER_SZ;
 
-        let left_pos = Point::<f64, Physical>::from((loc.x as f64, titlebar_top_y as f64));
-        let left_result = MemoryRenderBufferRenderElement::from_buffer(
-            renderer,
-            left_pos,
-            buffer,
-            None,
-            None,
-            None,
-            Kind::Unspecified,
-        );
-        eprintln!("[W28] LEFT pos=({},{}) ok={}", loc.x, titlebar_top_y, left_result.is_ok());
-        if let Ok(elem) = left_result {
-            out.push(elem);
-        }
+        let corners: [((i32, i32), (f32, f32)); 4] = [
+            ((loc.x, titlebar_top_y), (1.0, 1.0)),
+            ((loc.x + win_w - CORNER_SZ, titlebar_top_y), (0.0, 1.0)),
+            ((loc.x, content_bottom_y), (1.0, 0.0)),
+            ((loc.x + win_w - CORNER_SZ, content_bottom_y), (0.0, 0.0)),
+        ];
 
-        let right_x = loc.x + win_w - CORNER_SZ;
-        let right_pos = Point::<f64, Physical>::from((right_x as f64, titlebar_top_y as f64));
-        let right_result = MemoryRenderBufferRenderElement::from_buffer(
-            renderer,
-            right_pos,
-            buffer_right,
-            None,
-            None,
-            None,
-            Kind::Unspecified,
-        );
-        eprintln!("[W28] RIGHT pos=({},{}) ok={}", right_x, titlebar_top_y, right_result.is_ok());
-        if let Ok(elem) = right_result {
-            out.push(elem);
+        for ((cx, cy), (ax, ay)) in corners {
+            let area: Rectangle<i32, smithay::utils::Logical> = Rectangle::new(
+                smithay::utils::Point::from((cx, cy)),
+                (CORNER_SZ, CORNER_SZ).into(),
+            );
+            let uniforms = vec![
+                smithay::backend::renderer::gles::Uniform::new("u_anchor", (ax, ay)).into_owned(),
+                smithay::backend::renderer::gles::Uniform::new("u_radius", R).into_owned(),
+            ];
+            out.push(PixelShaderElement::new(
+                shader.program.clone(),
+                area,
+                None,
+                1.0,
+                uniforms,
+                Kind::Unspecified,
+            ));
         }
     }
     out
@@ -631,8 +652,7 @@ pub struct OverlayInputs<'a> {
     pub splash_buffer: Option<&'a MemoryRenderBuffer>,
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
-    pub titlebar_corner_buffer: Option<&'a MemoryRenderBuffer>,
-    pub titlebar_corner_buffer_right: Option<&'a MemoryRenderBuffer>,
+    pub corner_mask_shader: Option<&'a CornerMaskShader>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// W9.B: snap zone preview during window drag.
@@ -711,8 +731,8 @@ pub fn build_overlay(
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         overlay.push(LumoCustomElement::Solid(elem));
     }
-    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer, inputs.titlebar_corner_buffer_right) {
-        overlay.push(LumoCustomElement::Memory(elem));
+    for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
+        overlay.push(LumoCustomElement::Pixel(elem));
     }
     // T1.1: menu popup SSD.
     if let Some((menu_pos, hover)) = inputs.titlebar_menu {
@@ -760,8 +780,7 @@ pub struct DrmCollectInputs<'a> {
     pub splash_buffer: Option<&'a MemoryRenderBuffer>,
     /// M1: surfaces SSD para pintar titlebar.
     pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
-    pub titlebar_corner_buffer: Option<&'a MemoryRenderBuffer>,
-    pub titlebar_corner_buffer_right: Option<&'a MemoryRenderBuffer>,
+    pub corner_mask_shader: Option<&'a CornerMaskShader>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
     pub titlebar_menu: Option<(smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
     /// W9.B: snap zone preview during window drag.
@@ -886,8 +905,8 @@ pub fn collect_drm_elements(
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }
-    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer, inputs.titlebar_corner_buffer_right) {
-        out.push(LumoCustomElement::Memory(elem));
+    for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
+        out.push(LumoCustomElement::Pixel(elem));
     }
     // T1.1: menu popup SSD.
     if let Some((menu_pos, hover)) = inputs.titlebar_menu {
@@ -1035,8 +1054,8 @@ pub fn build_winit_elements(
     for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
         out.push(LumoCustomElement::Solid(elem));
     }
-    for elem in titlebar_corner_elements(renderer, inputs.space, inputs.ssd_windows, inputs.titlebar_corner_buffer, inputs.titlebar_corner_buffer_right) {
-        out.push(LumoCustomElement::Memory(elem));
+    for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
+        out.push(LumoCustomElement::Pixel(elem));
     }
     // T1.1: menu popup SSD.
     if let Some((menu_pos, hover)) = inputs.titlebar_menu {
