@@ -896,19 +896,11 @@ pub fn collect_drm_elements(
         out.push(LumoCustomElement::Space(el));
     }
 
-    // M1: SSD titlebars -- atras de Layer::Top, na frente de toplevels.
-    // W29.1: botoes ANTES bg shader. Smithay vec[0]=topmost. Bg shader
-    // cobre area inteira titlebar; precisa ficar atras dos botoes.
-    for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
-        out.push(LumoCustomElement::Solid(elem));
-    }
-    for elem in titlebar_bg_elements(inputs.space, inputs.ssd_windows, inputs.titlebar_bg_shader) {
-        out.push(LumoCustomElement::Pixel(elem));
-    }
-    // W28.9: mask preto cantos desativado (visivel sobre titlebar dark)
-    // for elem in ssd_corner_masks(inputs.space, inputs.ssd_windows, inputs.corner_mask_shader) {
-    //     out.push(LumoCustomElement::Pixel(elem));
-    // }
+    // W29.3: SSD titlebar (btns+bg) movido pra DEPOIS space_rest (toplevels).
+    // Smithay vec front-first; toplevel content vec[idx_menor] = frente. Btns
+    // depois (vec[idx_maior]) = atras dos toplevels. Btns ficam em y < content_y
+    // entao nao sao cobertos pelo proprio content. Cross-window: editor (focal,
+    // vec[0..N]=frente) cobre files btns area se overlap. CORRECT Z.
     // T1.1: menu popup SSD.
     if let Some((menu_pos, hover)) = inputs.titlebar_menu {
         for elem in titlebar_menu_elements(menu_pos, hover) {
@@ -939,6 +931,16 @@ pub fn collect_drm_elements(
         for el in space_rest {
             out.push(LumoCustomElement::Space(el));
         }
+    }
+
+    // W29.3: SSD titlebar btns + bg shader DEPOIS dos toplevels (atras no Z).
+    // Wallpaper/shadow pintam ANTES desses. Toplevels content cobrem overlaps
+    // cross-window. Titlebar y range = ACIMA do content area = visivel.
+    for elem in titlebar_elements(inputs.space, inputs.ssd_windows) {
+        out.push(LumoCustomElement::Solid(elem));
+    }
+    for elem in titlebar_bg_elements(inputs.space, inputs.ssd_windows, inputs.titlebar_bg_shader) {
+        out.push(LumoCustomElement::Pixel(elem));
     }
 
     // shadow pos space: sombras renderem ABAIXO de popups/toplevels.
