@@ -359,7 +359,16 @@ impl LumoState {
                                 break;
                             }
                             if button == 0x110 && close_rect.contains(ptr_pos) {
-                                if let Some(toplevel) = window.toplevel() { toplevel.send_close(); }
+                                // W32.5: snap close - unmap imediato + send_close async.
+                                // Visual: janela some no proximo frame (sem espera cliente).
+                                if let Some(toplevel) = window.toplevel() {
+                                    toplevel.send_close();
+                                }
+                                if let Some(s) = window.wl_surface() {
+                                    self.ssd_windows.remove(&*s);
+                                }
+                                self.space.unmap_elem(&window);
+                                self.should_render = true;
                                 ssd_handled = true;
                                 break;
                             }
