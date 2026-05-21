@@ -509,18 +509,20 @@ impl LumoState {
     }
 
     pub fn next_tile_position(&self) -> Point<i32, Logical> {
-        // W24: usa usable_geometry (excludes bar). Janela centrada no cursor
-        // clamped dentro da area utilizavel — nunca invade bar Layer::Top.
+        // W32: janela nova abre CENTRADA na tela usable (era no cursor).
+        // Cascade offset pequeno (24px) por janela ja aberta evita stack
+        // perfeito sobre janelas anteriores.
         const DEFAULT_W: i32 = 800;
         const DEFAULT_H: i32 = 600;
-        let usable = self.usable_geometry();
-        let cx = self.pointer_location.x as i32;
-        let cy = self.pointer_location.y as i32;
-        // W24.2: SSD titlebar fica acima window.loc.y (TITLEBAR_H=30).
-        // Pra titlebar nao cobrir bar Layer::Top, y_min = usable.loc.y + TITLEBAR_H.
         const SSD_TITLEBAR_H: i32 = 30;
-        let mut x = cx - DEFAULT_W / 2;
-        let mut y = cy - DEFAULT_H / 2;
+        const CASCADE_STEP: i32 = 24;
+        let usable = self.usable_geometry();
+        let n_open = self.space.elements().count() as i32;
+        let cx = usable.loc.x + usable.size.w / 2;
+        let cy = usable.loc.y + usable.size.h / 2;
+        let cascade = (n_open % 6) * CASCADE_STEP;
+        let mut x = cx - DEFAULT_W / 2 + cascade;
+        let mut y = cy - DEFAULT_H / 2 + cascade;
         x = x.clamp(usable.loc.x + 8, usable.loc.x + usable.size.w - DEFAULT_W - 8);
         y = y.clamp(usable.loc.y + SSD_TITLEBAR_H + 8, usable.loc.y + usable.size.h - DEFAULT_H - 8);
         (x, y).into()
