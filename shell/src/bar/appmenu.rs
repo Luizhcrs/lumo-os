@@ -58,8 +58,15 @@ impl AppMenuState {
             }
             _ => {}
         }
-        // Fallback: apps GTK3 registram com gtk_window_id (random), nao PID.
-        // Tenta listar TODOS windows registrados + pegar primeiro com items.
+        // W33.1: skip fallback se app_id Lumo nativo (apps Iced nao exportam
+        // appmenu DBus). Evita varrer 100 wids = 100 calls DBus sincronos
+        // (200-2000ms blocking dependendo do bus).
+        if app_id.starts_with("com.lumo") || app_id.starts_with("lumo-") {
+            let mut s = Self::default();
+            s.app_id = app_id.to_string();
+            s.title = title.to_string();
+            return s;
+        }
         match fetch_any_registered(app_id) {
             Ok(mut state) => {
                 state.title = title.to_string();
@@ -243,7 +250,7 @@ fn activate_inner(
 /// Retorna primeiro com items nao-vazios.
 /// Apps GTK3 registram via gtk_window_id (nao PID) -- pode ser qualquer u32.
 fn fetch_any_registered(app_id: &str) -> Result<AppMenuState, Box<dyn std::error::Error>> {
-    for wid in 1u32..=100 {
+    for wid in 1u32..=10 {  // W33.1: 100->10 (reduce DBus blocking)
         match fetch_inner(wid, app_id) {
             Ok(state) if !state.items.is_empty() => {
                 eprintln!("[appmenu] C5: fallback wid={} -> {} items", wid, state.items.len());
