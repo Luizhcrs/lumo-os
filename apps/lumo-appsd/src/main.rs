@@ -158,9 +158,9 @@ fn init() -> (State, Task<Msg>) {
     let _ = std::fs::remove_file(&sock);
     eprintln!("[appsd] ready (W34.2) socket={}", sock.display());
     let state = State { windows: HashMap::new(), pending_files_path: None };
-    // Abre About inicial pra runtime persistir.
-    let task = Task::done(Msg::OpenApp(AppKind::About));
-    (state, task)
+    // W34.8: skip auto-open. Daemon Iced runtime persiste sem windows.
+    // Bug: about inicial abria com size errado (renderiza so metade).
+    (state, Task::none())
 }
 
 fn ipc_subscription(_state: &State) -> Subscription<Msg> {
