@@ -107,6 +107,10 @@ impl AppMenuState {
 
     /// Busca subitens (submenu) de um item top-level via DBus.
     pub fn fetch_submenu(&self, parent_id: i32) -> Vec<AppMenuItem> {
+        // W34.6: apps Lumo hardcoded submenus (service vazio, sem DBus).
+        if self.service.is_empty() && (self.app_id.starts_with("com.lumo.") || self.app_id.starts_with("lumo-")) {
+            return hardcoded_submenu(&self.app_id, parent_id);
+        }
         if self.service.is_empty() {
             return Vec::new();
         }
@@ -290,4 +294,40 @@ fn fetch_submenu_inner(
     let _: zbus::Result<(bool,)> = proxy.call("AboutToShow", &(parent_id,));
 
     parse_layout_at(&proxy, parent_id)
+}
+
+
+/// W34.6: submenus hardcoded por app_id + parent_id (sem DBus).
+fn hardcoded_submenu(app_id: &str, parent_id: i32) -> Vec<AppMenuItem> {
+    let labels: &[&str] = match (app_id, parent_id) {
+        ("com.lumo.files", 0)    => &["Nova janela", "Nova pasta", "Fechar"],
+        ("com.lumo.files", 1)    => &["Recortar", "Copiar", "Colar"],
+        ("com.lumo.files", 2)    => &["Inicio", "Documentos", "Downloads"],
+        ("com.lumo.files", 3)    => &["Sobre Lumo Files"],
+        ("com.lumo.editor", 0)   => &["Novo", "Abrir", "Salvar", "Fechar"],
+        ("com.lumo.editor", 1)   => &["Desfazer", "Refazer", "Recortar", "Copiar", "Colar"],
+        ("com.lumo.editor", 2)   => &["Localizar", "Substituir"],
+        ("com.lumo.editor", 3)   => &["Sobre Lumo Editor"],
+        ("com.lumo.calc", 0)     => &["Limpar", "Fechar"],
+        ("com.lumo.calc", 1)     => &["Copiar resultado"],
+        ("com.lumo.calc", 2)     => &["Sobre Lumo Calc"],
+        ("com.lumo.notes", 0)    => &["Nova nota", "Salvar", "Fechar"],
+        ("com.lumo.notes", 1)    => &["Desfazer", "Refazer"],
+        ("com.lumo.notes", 2)    => &["Negrito", "Italico"],
+        ("com.lumo.notes", 3)    => &["Sobre Lumo Notes"],
+        ("com.lumo.monitor", 0)  => &["Atualizar", "Fechar"],
+        ("com.lumo.monitor", 1)  => &["Processos", "Memoria", "Disco"],
+        ("com.lumo.monitor", 2)  => &["Sobre Lumo Monitor"],
+        ("com.lumo.settings", 0) => &["Fechar"],
+        ("com.lumo.settings", 1) => &["Sobre Lumo Settings"],
+        ("com.lumo.store", 0)    => &["Atualizar lista", "Fechar"],
+        ("com.lumo.store", 1)    => &["Disponiveis", "Instalados", "Atualizacoes"],
+        ("com.lumo.store", 2)    => &["Sobre Lumo Store"],
+        ("com.lumo.about", 0)    => &["Sobre Lumo OS"],
+        _ => &[],
+    };
+    labels.iter().enumerate().map(|(i, l)| AppMenuItem {
+        id: (parent_id * 100 + i as i32 + 1) as i32,
+        label: l.to_string(),
+    }).collect()
 }
