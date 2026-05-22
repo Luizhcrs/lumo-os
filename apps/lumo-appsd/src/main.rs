@@ -127,8 +127,30 @@ struct State {
 fn main() -> iced::Result {
     daemon(title_fn, update, view)
         .theme(|_state, _id| Theme::Dark)
-        .subscription(ipc_subscription)
+        .subscription(combined_subscription)
         .run_with(init)
+}
+
+/// W34.7: batch sub-app subscriptions + IPC + window close events.
+fn combined_subscription(state: &State) -> Subscription<Msg> {
+    let mut subs: Vec<Subscription<Msg>> = vec![ipc_subscription(state)];
+    // Sub-app subscriptions wrapped per window id.
+    for (&id, win) in state.windows.iter() {
+        let s = match win {
+            WindowState::About(a)    => a.subscription().map(move |m| Msg::About(id, m)),
+            WindowState::Calc(a)     => a.subscription().map(move |m| Msg::Calc(id, m)),
+            WindowState::Notes(a)    => a.subscription().map(move |m| Msg::Notes(id, m)),
+            WindowState::Monitor(a)  => a.subscription().map(move |m| Msg::Monitor(id, m)),
+            WindowState::Editor(a)   => a.subscription().map(move |m| Msg::Editor(id, m)),
+            WindowState::Files(a)    => a.subscription().map(move |m| Msg::Files(id, m)),
+            WindowState::Settings(a) => a.subscription().map(move |m| Msg::Settings(id, m)),
+            WindowState::Store(_)    => continue, // lumo-store no subscription()
+        };
+        subs.push(s);
+    }
+    // Window close events -> Msg::WindowClosed pra cleanup state.windows.
+    subs.push(iced::window::close_events().map(Msg::WindowClosed));
+    Subscription::batch(subs)
 }
 
 fn init() -> (State, Task<Msg>) {
