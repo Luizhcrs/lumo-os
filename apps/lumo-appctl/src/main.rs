@@ -17,12 +17,18 @@ fn socket_path() -> PathBuf {
 }
 
 fn main() -> ExitCode {
-    let arg = match std::env::args().nth(1) {
-        Some(a) => a,
+    let argv: Vec<String> = std::env::args().collect();
+    let kind = match argv.get(1) {
+        Some(k) => k.clone(),
         None => {
-            eprintln!("uso: lumo-appctl <about|calc>");
+            eprintln!("uso: lumo-appctl <kind> [arg]");
             return ExitCode::from(2);
         }
+    };
+    // Payload: kind ou kind:arg (path pra files/editor)
+    let arg = match argv.get(2) {
+        Some(p) => format!("{}:{}", kind, p),
+        None => kind,
     };
     let path = socket_path();
     let mut stream = match UnixStream::connect(&path) {

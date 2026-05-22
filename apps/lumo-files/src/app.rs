@@ -232,7 +232,11 @@ pub struct App {
 
 impl App {
     pub fn new() -> (Self, Task<Message>) {
-        let home = dirs_home();
+        Self::new_with_dir(dirs_home())
+    }
+
+    pub fn new_with_dir(initial: PathBuf) -> (Self, Task<Message>) {
+        let home = initial;
         let sidebar = build_sidebar(&username());
 
         // Carrega diretorio inicial de forma sincrona para eliminar race

@@ -360,8 +360,14 @@ impl IconsState {
     pub fn open_icon(&self, idx: usize) {
         if let Some(icon) = self.icons.get(idx) {
             let path = icon.path.to_string_lossy().to_string();
-            Command::new("xdg-open").arg(&path).spawn().ok();
-            eprintln!("[lumo-desktop] xdg-open {}", path);
+            // W34.3: dir -> lumo-appctl files <path>. Resto -> xdg-open.
+            if icon.path.is_dir() {
+                Command::new("lumo-appctl").arg("files").arg(&path).spawn().ok();
+                eprintln!("[lumo-desktop] lumo-appctl files {}", path);
+            } else {
+                Command::new("xdg-open").arg(&path).spawn().ok();
+                eprintln!("[lumo-desktop] xdg-open {}", path);
+            }
         }
     }
 }

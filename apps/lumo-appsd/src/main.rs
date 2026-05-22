@@ -92,6 +92,7 @@ enum WindowState {
 #[derive(Debug, Clone)]
 enum Msg {
     OpenApp(AppKind),
+    OpenAppArg(AppKind, Option<String>),
     Opened(AppKind, WinId),
     About(WinId, lumo_about::app::Message),
     Calc(WinId, lumo_calc::app::Message),
@@ -106,6 +107,7 @@ enum Msg {
 
 struct State {
     windows: HashMap<WinId, WindowState>,
+    pending_files_path: Option<std::path::PathBuf>,
 }
 
 fn main() -> iced::Result {
@@ -119,7 +121,7 @@ fn init() -> (State, Task<Msg>) {
     let sock = socket_path();
     let _ = std::fs::remove_file(&sock);
     eprintln!("[appsd] ready (W34.2) socket={}", sock.display());
-    let state = State { windows: HashMap::new() };
+    let state = State { windows: HashMap::new(), pending_files_path: None };
     // Abre About inicial pra runtime persistir.
     let task = Task::done(Msg::OpenApp(AppKind::About));
     (state, task)
@@ -152,8 +154,13 @@ fn ipc_subscription(_state: &State) -> Subscription<Msg> {
                 let mut buf = String::new();
                 if stream.read_to_string(&mut buf).await.is_err() { continue; }
                 eprintln!("[appsd] IPC recv: {:?}", buf.trim());
-                if let Some(kind) = AppKind::parse(&buf) {
-                    let _ = output.send(Msg::OpenApp(kind)).await;
+                let line = buf.trim();
+                let (k_str, arg) = match line.find(':') {
+                    Some(i) => (&line[..i], Some(line[i+1..].to_string())),
+                    None => (line, None),
+                };
+                if let Some(kind) = AppKind::parse(k_str) {
+                    let _ = output.send(Msg::OpenAppArg(kind, arg)).await;
                 }
             }
         }),
@@ -178,6 +185,14 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
     match msg {
         Msg::OpenApp(kind) => {
             let (_id, open_task) = window::open(kind.settings());
+            open_task.map(move |id| Msg::Opened(kind, id))
+        }
+        Msg::OpenAppArg(kind, arg) => {
+            let (_id, open_task) = window::open(kind.settings());
+            // Stash arg in pending map keyed by next window id.
+            if let (AppKind::Files, Some(path)) = (kind, arg.clone()) {
+                state.pending_files_path = Some(path.into());
+            }
             open_task.map(move |id| Msg::Opened(kind, id))
         }
         Msg::Opened(AppKind::About, id) => {
@@ -206,7 +221,11 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
             t.map(move |m| Msg::Editor(id, m))
         }
         Msg::Opened(AppKind::Files, id) => {
-            let (app, t) = lumo_files::app::App::new();
+            let (app, t) = if let Some(p) = state.pending_files_path.take() {
+                lumo_files::app::App::new_with_dir(p)
+            } else {
+                lumo_files::app::App::new()
+            };
             state.windows.insert(id, WindowState::Files(app));
             t.map(move |m| Msg::Files(id, m))
         }
