@@ -58,13 +58,27 @@ impl AppMenuState {
             }
             _ => {}
         }
-        // W33.1: skip fallback se app_id Lumo nativo (apps Iced nao exportam
-        // appmenu DBus). Evita varrer 100 wids = 100 calls DBus sincronos
-        // (200-2000ms blocking dependendo do bus).
-        if app_id.starts_with("com.lumo") || app_id.starts_with("lumo-") {
+        // W34.5: apps Lumo nativos sem dbusmenu. Pills hardcoded por app_id
+        // pra sincronizar com abertura da janela (era vazio + delay DBus).
+        if app_id.starts_with("com.lumo.") || app_id.starts_with("lumo-") {
+            let labels: &[&str] = match app_id {
+                "com.lumo.files"    => &["Arquivo", "Editar", "Ir", "Ajuda"],
+                "com.lumo.editor"   => &["Arquivo", "Editar", "Localizar", "Ajuda"],
+                "com.lumo.calc"     => &["Arquivo", "Editar", "Ajuda"],
+                "com.lumo.notes"    => &["Arquivo", "Editar", "Formatar", "Ajuda"],
+                "com.lumo.monitor"  => &["Arquivo", "Ver", "Ajuda"],
+                "com.lumo.settings" => &["Arquivo", "Ajuda"],
+                "com.lumo.store"    => &["Arquivo", "Ver", "Ajuda"],
+                "com.lumo.about"    => &["Ajuda"],
+                _ => &[],
+            };
             let mut s = Self::default();
             s.app_id = app_id.to_string();
             s.title = title.to_string();
+            s.items = labels.iter().enumerate().map(|(i, l)| AppMenuItem {
+                id: i as i32,
+                label: l.to_string(),
+            }).collect();
             return s;
         }
         match fetch_any_registered(app_id) {

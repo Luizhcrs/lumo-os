@@ -43,6 +43,18 @@ impl AppKind {
             _ => None,
         }
     }
+    fn app_id(self) -> &'static str {
+        match self {
+            AppKind::About    => "com.lumo.about",
+            AppKind::Calc     => "com.lumo.calc",
+            AppKind::Notes    => "com.lumo.notes",
+            AppKind::Monitor  => "com.lumo.monitor",
+            AppKind::Editor   => "com.lumo.editor",
+            AppKind::Files    => "com.lumo.files",
+            AppKind::Settings => "com.lumo.settings",
+            AppKind::Store    => "com.lumo.store",
+        }
+    }
     fn settings(self) -> window::Settings {
         use window::Position::Centered;
         let (w, h, min_w, min_h, resize) = match self {
@@ -55,14 +67,16 @@ impl AppKind {
             AppKind::Settings => (900.0, 620.0, 700.0, 480.0, true),
             AppKind::Store    => (900.0, 640.0, 720.0, 480.0, true),
         };
-        window::Settings {
+        let mut s = window::Settings {
             size: Size::new(w, h),
             min_size: Some(Size::new(min_w, min_h)),
             resizable: resize,
             decorations: true,
             position: Centered,
             ..Default::default()
-        }
+        };
+        s.platform_specific.application_id = self.app_id().to_string();
+        s
     }
     fn title(self) -> &'static str {
         match self {
