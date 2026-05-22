@@ -226,6 +226,16 @@ trap post_exit EXIT
 # Loop hot-restart: pkill lumo-wm relauncha automatico, preserva TTY DRM
 # session. Pra parar permanente: touch /tmp/lumo-no-restart antes de matar.
 rm -f /tmp/lumo-no-restart
+# W34.0: prewarm Lumo apps libs em page cache (background + kill rapido).
+# Cold start subsequente: ~150ms vs ~500ms (libs Iced/wgpu ja cached).
+(
+    sleep 5
+    for app in about files calc notes editor settings store monitor; do
+        # Read binary pra forçar page cache
+        cat ./target/release/lumo-$app >/dev/null 2>&1
+    done
+) &
+
 clear
 printf "[2J[H"
 while true; do
