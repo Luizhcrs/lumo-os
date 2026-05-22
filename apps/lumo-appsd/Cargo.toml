@@ -2,7 +2,6 @@
 name = "lumo-appsd"
 version = "0.1.0"
 edition = "2021"
-description = "Lumo Apps daemon - Iced runtime persistente multi-window (W34)."
 
 [[bin]]
 name = "lumo-appsd"
@@ -11,7 +10,11 @@ path = "src/main.rs"
 [dependencies]
 iced = { version = "0.13", features = ["tokio", "multi-window"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-lumo-about = { path = "../lumo-about" }
-lumo-calc  = { path = "../lumo-calc" }
+lumo-about    = { path = "../lumo-about" }
+lumo-calc     = { path = "../lumo-calc" }
+lumo-notes    = { path = "../lumo-notes" }
+lumo-monitor  = { path = "../lumo-monitor" }
+lumo-editor   = { path = "../lumo-editor" }
+lumo-files    = { path = "../lumo-files" }
+lumo-settings = { path = "../lumo-settings" }
+lumo-store    = { path = "../lumo-store" }

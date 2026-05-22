@@ -226,6 +226,14 @@ trap post_exit EXIT
 # Loop hot-restart: pkill lumo-wm relauncha automatico, preserva TTY DRM
 # session. Pra parar permanente: touch /tmp/lumo-no-restart antes de matar.
 rm -f /tmp/lumo-no-restart
+# W34.2: spawn lumo-appsd daemon em background (runtime Iced persistente).
+(
+    sleep 3
+    if [ ! -S /run/user/$(id -u)/lumo-appsd.sock ]; then
+        nohup ./target/release/lumo-appsd > /tmp/lumo-appsd.log 2>&1 < /dev/null &
+    fi
+) &
+
 # W34.0: prewarm Lumo apps libs em page cache (background + kill rapido).
 # Cold start subsequente: ~150ms vs ~500ms (libs Iced/wgpu ja cached).
 (

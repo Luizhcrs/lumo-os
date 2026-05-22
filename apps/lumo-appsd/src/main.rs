@@ -1,7 +1,9 @@
-//! lumo-appsd - daemon Iced multi-window (W34.1).
+//! lumo-appsd - daemon Iced multi-window completo (W34.2).
 //!
-//! Subscription async escuta unix socket. Cliente IPC manda "open <kind>".
-//! Daemon abre window correspondente reusando runtime.
+//! 8 apps Lumo co-existem em runtime Iced unico:
+//! about, calc, notes, monitor, editor, files, settings, store.
+//!
+//! IPC via /run/user/UID/lumo-appsd.sock. Cliente: lumo-appctl <kind>.
 
 use iced::{daemon, window, Size, Task, Theme, Subscription};
 use iced::window::Id as WinId;
@@ -16,14 +18,62 @@ fn socket_path() -> PathBuf {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum AppKind { About, Calc }
+pub enum AppKind {
+    About,
+    Calc,
+    Notes,
+    Monitor,
+    Editor,
+    Files,
+    Settings,
+    Store,
+}
 
 impl AppKind {
     fn parse(s: &str) -> Option<Self> {
         match s.trim() {
-            "about" => Some(Self::About),
-            "calc"  => Some(Self::Calc),
+            "about"    => Some(Self::About),
+            "calc"     => Some(Self::Calc),
+            "notes"    => Some(Self::Notes),
+            "monitor"  => Some(Self::Monitor),
+            "editor"   => Some(Self::Editor),
+            "files"    => Some(Self::Files),
+            "settings" => Some(Self::Settings),
+            "store"    => Some(Self::Store),
             _ => None,
+        }
+    }
+    fn settings(self) -> window::Settings {
+        use window::Position::Centered;
+        let (w, h, min_w, min_h, resize) = match self {
+            AppKind::About    => (540.0, 600.0, 480.0, 520.0, false),
+            AppKind::Calc     => (460.0, 560.0, 380.0, 480.0, true),
+            AppKind::Notes    => (900.0, 620.0, 600.0, 400.0, true),
+            AppKind::Monitor  => (900.0, 640.0, 700.0, 480.0, true),
+            AppKind::Editor   => (880.0, 600.0, 400.0, 300.0, true),
+            AppKind::Files    => (1000.0, 660.0, 600.0, 400.0, true),
+            AppKind::Settings => (900.0, 620.0, 700.0, 480.0, true),
+            AppKind::Store    => (900.0, 640.0, 720.0, 480.0, true),
+        };
+        window::Settings {
+            size: Size::new(w, h),
+            min_size: Some(Size::new(min_w, min_h)),
+            resizable: resize,
+            decorations: true,
+            position: Centered,
+            ..Default::default()
+        }
+    }
+    fn title(self) -> &'static str {
+        match self {
+            AppKind::About    => "Sobre este Galaxy Book",
+            AppKind::Calc     => "Lumo Calc",
+            AppKind::Notes    => "Lumo Notes",
+            AppKind::Monitor  => "Lumo Monitor",
+            AppKind::Editor   => "Lumo Editor",
+            AppKind::Files    => "Lumo Files",
+            AppKind::Settings => "Lumo Settings",
+            AppKind::Store    => "Lumo Store",
         }
     }
 }
@@ -31,6 +81,12 @@ impl AppKind {
 enum WindowState {
     About(lumo_about::app::App),
     Calc(lumo_calc::app::App),
+    Notes(lumo_notes::app::App),
+    Monitor(lumo_monitor::app::App),
+    Editor(lumo_editor::app::App),
+    Files(lumo_files::app::App),
+    Settings(lumo_settings::app::App),
+    Store(lumo_store::app::StoreApp),
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +95,12 @@ enum Msg {
     Opened(AppKind, WinId),
     About(WinId, lumo_about::app::Message),
     Calc(WinId, lumo_calc::app::Message),
+    Notes(WinId, lumo_notes::app::Message),
+    Monitor(WinId, lumo_monitor::app::Message),
+    Editor(WinId, lumo_editor::app::Message),
+    Files(WinId, lumo_files::app::Message),
+    Settings(WinId, lumo_settings::app::Message),
+    Store(WinId, lumo_store::app::Msg),
     WindowClosed(WinId),
 }
 
@@ -47,7 +109,7 @@ struct State {
 }
 
 fn main() -> iced::Result {
-    daemon(title, update, view)
+    daemon(title_fn, update, view)
         .theme(|_state, _id| Theme::Dark)
         .subscription(ipc_subscription)
         .run_with(init)
@@ -56,9 +118,9 @@ fn main() -> iced::Result {
 fn init() -> (State, Task<Msg>) {
     let sock = socket_path();
     let _ = std::fs::remove_file(&sock);
-    eprintln!("[appsd] ready (W34.1) socket={}", sock.display());
+    eprintln!("[appsd] ready (W34.2) socket={}", sock.display());
     let state = State { windows: HashMap::new() };
-    // Abre About inicial pra runtime persistir + warm-up.
+    // Abre About inicial pra runtime persistir.
     let task = Task::done(Msg::OpenApp(AppKind::About));
     (state, task)
 }
@@ -98,10 +160,16 @@ fn ipc_subscription(_state: &State) -> Subscription<Msg> {
     )
 }
 
-fn title(state: &State, id: WinId) -> String {
+fn title_fn(state: &State, id: WinId) -> String {
     match state.windows.get(&id) {
-        Some(WindowState::About(_)) => "Sobre este Galaxy Book".into(),
-        Some(WindowState::Calc(_))  => "Lumo Calc".into(),
+        Some(WindowState::About(_))    => AppKind::About.title().into(),
+        Some(WindowState::Calc(_))     => AppKind::Calc.title().into(),
+        Some(WindowState::Notes(_))    => AppKind::Notes.title().into(),
+        Some(WindowState::Monitor(_))  => AppKind::Monitor.title().into(),
+        Some(WindowState::Editor(_))   => AppKind::Editor.title().into(),
+        Some(WindowState::Files(_))    => AppKind::Files.title().into(),
+        Some(WindowState::Settings(_)) => AppKind::Settings.title().into(),
+        Some(WindowState::Store(_))    => AppKind::Store.title().into(),
         None => "Lumo Apps".into(),
     }
 }
@@ -109,25 +177,8 @@ fn title(state: &State, id: WinId) -> String {
 fn update(state: &mut State, msg: Msg) -> Task<Msg> {
     match msg {
         Msg::OpenApp(kind) => {
-            let settings = match kind {
-                AppKind::About => window::Settings {
-                    size: Size::new(540.0, 600.0),
-                    min_size: Some(Size::new(480.0, 520.0)),
-                    resizable: false,
-                    decorations: true,
-                    position: window::Position::Centered,
-                    ..Default::default()
-                },
-                AppKind::Calc => window::Settings {
-                    size: Size::new(460.0, 560.0),
-                    min_size: Some(Size::new(380.0, 480.0)),
-                    decorations: true,
-                    position: window::Position::Centered,
-                    ..Default::default()
-                },
-            };
-            let (id, open_task) = window::open(settings);
-            open_task.map(move |_| Msg::Opened(kind, id))
+            let (_id, open_task) = window::open(kind.settings());
+            open_task.map(move |id| Msg::Opened(kind, id))
         }
         Msg::Opened(AppKind::About, id) => {
             let (app, t) = lumo_about::app::App::new();
@@ -139,6 +190,36 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
             state.windows.insert(id, WindowState::Calc(app));
             t.map(move |m| Msg::Calc(id, m))
         }
+        Msg::Opened(AppKind::Notes, id) => {
+            let (app, t) = lumo_notes::app::App::new();
+            state.windows.insert(id, WindowState::Notes(app));
+            t.map(move |m| Msg::Notes(id, m))
+        }
+        Msg::Opened(AppKind::Monitor, id) => {
+            let (app, t) = lumo_monitor::app::App::new();
+            state.windows.insert(id, WindowState::Monitor(app));
+            t.map(move |m| Msg::Monitor(id, m))
+        }
+        Msg::Opened(AppKind::Editor, id) => {
+            let (app, t) = lumo_editor::app::App::new(None);
+            state.windows.insert(id, WindowState::Editor(app));
+            t.map(move |m| Msg::Editor(id, m))
+        }
+        Msg::Opened(AppKind::Files, id) => {
+            let (app, t) = lumo_files::app::App::new();
+            state.windows.insert(id, WindowState::Files(app));
+            t.map(move |m| Msg::Files(id, m))
+        }
+        Msg::Opened(AppKind::Settings, id) => {
+            let (app, t) = lumo_settings::app::App::new();
+            state.windows.insert(id, WindowState::Settings(app));
+            t.map(move |m| Msg::Settings(id, m))
+        }
+        Msg::Opened(AppKind::Store, id) => {
+            let (app, t) = lumo_store::app::StoreApp::new();
+            state.windows.insert(id, WindowState::Store(app));
+            t.map(move |m| Msg::Store(id, m))
+        }
         Msg::About(id, m) => {
             if let Some(WindowState::About(app)) = state.windows.get_mut(&id) {
                 app.update(m).map(move |m| Msg::About(id, m))
@@ -147,6 +228,36 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
         Msg::Calc(id, m) => {
             if let Some(WindowState::Calc(app)) = state.windows.get_mut(&id) {
                 app.update(m).map(move |m| Msg::Calc(id, m))
+            } else { Task::none() }
+        }
+        Msg::Notes(id, m) => {
+            if let Some(WindowState::Notes(app)) = state.windows.get_mut(&id) {
+                app.update(m).map(move |m| Msg::Notes(id, m))
+            } else { Task::none() }
+        }
+        Msg::Monitor(id, m) => {
+            if let Some(WindowState::Monitor(app)) = state.windows.get_mut(&id) {
+                app.update(m).map(move |m| Msg::Monitor(id, m))
+            } else { Task::none() }
+        }
+        Msg::Editor(id, m) => {
+            if let Some(WindowState::Editor(app)) = state.windows.get_mut(&id) {
+                app.update(m).map(move |m| Msg::Editor(id, m))
+            } else { Task::none() }
+        }
+        Msg::Files(id, m) => {
+            if let Some(WindowState::Files(app)) = state.windows.get_mut(&id) {
+                app.update(m).map(move |m| Msg::Files(id, m))
+            } else { Task::none() }
+        }
+        Msg::Settings(id, m) => {
+            if let Some(WindowState::Settings(app)) = state.windows.get_mut(&id) {
+                app.update(m).map(move |m| Msg::Settings(id, m))
+            } else { Task::none() }
+        }
+        Msg::Store(id, m) => {
+            if let Some(WindowState::Store(app)) = state.windows.get_mut(&id) {
+                app.update(m).map(move |m| Msg::Store(id, m))
             } else { Task::none() }
         }
         Msg::WindowClosed(id) => {
@@ -158,8 +269,14 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
 
 fn view(state: &State, id: WinId) -> iced::Element<'_, Msg> {
     match state.windows.get(&id) {
-        Some(WindowState::About(app)) => app.view().map(move |m| Msg::About(id, m)),
-        Some(WindowState::Calc(app))  => app.view().map(move |m| Msg::Calc(id, m)),
+        Some(WindowState::About(app))    => app.view().map(move |m| Msg::About(id, m)),
+        Some(WindowState::Calc(app))     => app.view().map(move |m| Msg::Calc(id, m)),
+        Some(WindowState::Notes(app))    => app.view().map(move |m| Msg::Notes(id, m)),
+        Some(WindowState::Monitor(app))  => app.view().map(move |m| Msg::Monitor(id, m)),
+        Some(WindowState::Editor(app))   => app.view().map(move |m| Msg::Editor(id, m)),
+        Some(WindowState::Files(app))    => app.view().map(move |m| Msg::Files(id, m)),
+        Some(WindowState::Settings(app)) => app.view().map(move |m| Msg::Settings(id, m)),
+        Some(WindowState::Store(app))    => app.view().map(move |m| Msg::Store(id, m)),
         None => iced::widget::text("lumo-appsd loading...").into(),
     }
 }

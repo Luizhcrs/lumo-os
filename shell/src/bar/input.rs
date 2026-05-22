@@ -379,11 +379,12 @@ impl PointerHandler for LumoBar {
                             //   7 Suspender
                             //   8 Reiniciar
                             //   9 Desligar
+                            // W34.2: prefere lumo-appctl pra apps daemonized (instant via socket).
                             let cmd: Option<(&str, &[&str])> = match idx {
-                                0 => Some(("lumo-about", &[])),
-                                1 => Some(("lumo-store", &["--tab", "updates"])),
-                                2 => Some(("lumo-store", &[])),
-                                4 => Some(("lumo-settings", &[])),
+                                0 => Some(("lumo-appctl", &["about"])),
+                                1 => Some(("lumo-appctl", &["store"])),
+                                2 => Some(("lumo-appctl", &["store"])),
+                                4 => Some(("lumo-appctl", &["settings"])),
                                 6 => Some(("lumo-lock", &[])),
                                 7 => Some(("systemctl", &["suspend"])),
                                 8 => Some(("systemctl", &["reboot"])),

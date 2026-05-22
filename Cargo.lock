@@ -4455,8 +4455,12 @@ dependencies = [
  "iced",
  "lumo-about",
  "lumo-calc",
- "serde",
- "serde_json",
+ "lumo-editor",
+ "lumo-files",
+ "lumo-monitor",
+ "lumo-notes",
+ "lumo-settings",
+ "lumo-store",
  "tokio",
 ]
 
