@@ -47,19 +47,7 @@ impl AppMenuState {
             s.title = title.to_string();
             return s;
         }
-        // Tenta lookup direto por PID primeiro.
-        match fetch_inner(pid, app_id) {
-            Ok(mut state) if !state.items.is_empty() => {
-                state.title = title.to_string();
-                return state;
-            }
-            Err(e) => {
-                eprintln!("[appmenu] C5: fetch direto pid={} falhou: {}", pid, e);
-            }
-            _ => {}
-        }
-        // W34.5: apps Lumo nativos sem dbusmenu. Pills hardcoded por app_id
-        // pra sincronizar com abertura da janela (era vazio + delay DBus).
+        // W34.5: apps Lumo nativos pills hardcoded SEM DBus fetch.
         if app_id.starts_with("com.lumo.") || app_id.starts_with("lumo-") {
             let labels: &[&str] = match app_id {
                 "com.lumo.files"    => &["Arquivo", "Editar", "Ir", "Ajuda"],
@@ -80,6 +68,17 @@ impl AppMenuState {
                 label: l.to_string(),
             }).collect();
             return s;
+        }
+        // Tenta lookup direto por PID primeiro.
+        match fetch_inner(pid, app_id) {
+            Ok(mut state) if !state.items.is_empty() => {
+                state.title = title.to_string();
+                return state;
+            }
+            Err(e) => {
+                eprintln!("[appmenu] C5: fetch direto pid={} falhou: {}", pid, e);
+            }
+            _ => {}
         }
         match fetch_any_registered(app_id) {
             Ok(mut state) => {
