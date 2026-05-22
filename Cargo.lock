@@ -4445,6 +4445,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumo-appsd"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "lumo-about",
+ "lumo-calc",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "lumo-beam"
 version = "0.1.0"
 dependencies = [
