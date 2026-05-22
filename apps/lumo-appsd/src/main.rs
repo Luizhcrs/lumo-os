@@ -1,6 +1,9 @@
-//! lumo-appsd - daemon Iced multi-window (W34).
+//! lumo-appsd - daemon Iced multi-window (W34.1).
+//!
+//! Subscription async escuta unix socket. Cliente IPC manda "open <kind>".
+//! Daemon abre window correspondente reusando runtime.
 
-use iced::{daemon, window, Size, Task, Theme};
+use iced::{daemon, window, Size, Task, Theme, Subscription};
 use iced::window::Id as WinId;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -12,7 +15,7 @@ fn socket_path() -> PathBuf {
     PathBuf::from(runtime).join(SOCKET_FILENAME)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum AppKind { About, Calc }
 
 impl AppKind {
@@ -46,37 +49,53 @@ struct State {
 fn main() -> iced::Result {
     daemon(title, update, view)
         .theme(|_state, _id| Theme::Dark)
+        .subscription(ipc_subscription)
         .run_with(init)
 }
 
 fn init() -> (State, Task<Msg>) {
     let sock = socket_path();
     let _ = std::fs::remove_file(&sock);
-    std::thread::spawn(move || ipc_listener(sock));
-    eprintln!("[appsd] ready (W34)");
+    eprintln!("[appsd] ready (W34.1) socket={}", sock.display());
     let state = State { windows: HashMap::new() };
-    // Abre About inicial pra Iced runtime persistir + warm-up.
+    // Abre About inicial pra runtime persistir + warm-up.
     let task = Task::done(Msg::OpenApp(AppKind::About));
     (state, task)
 }
 
-fn ipc_listener(path: PathBuf) {
-    use std::io::Read;
-    use std::os::unix::net::UnixListener;
-    let listener = match UnixListener::bind(&path) {
-        Ok(l) => l,
-        Err(e) => { eprintln!("[appsd] bind: {}", e); return; }
-    };
-    for stream in listener.incoming() {
-        let mut s = match stream { Ok(s) => s, Err(_) => continue };
-        let mut buf = String::new();
-        if s.read_to_string(&mut buf).is_err() { continue; }
-        eprintln!("[appsd] IPC: {:?}", buf.trim());
-        if let Some(kind) = AppKind::parse(&buf) {
-            // Append to pending file - daemon Iced thread reads in subscription.
-            let _ = std::fs::write(format!("/tmp/lumo-appsd-pending.{:?}", kind), "1");
-        }
-    }
+fn ipc_subscription(_state: &State) -> Subscription<Msg> {
+    use iced::stream::channel;
+    use iced::futures::SinkExt;
+    use tokio::io::AsyncReadExt;
+    use tokio::net::UnixListener;
+
+    Subscription::run_with_id(
+        "lumo-appsd-ipc",
+        channel(16, |mut output| async move {
+            let path = socket_path();
+            let listener = match UnixListener::bind(&path) {
+                Ok(l) => l,
+                Err(e) => {
+                    eprintln!("[appsd] bind socket: {}", e);
+                    std::future::pending::<()>().await;
+                    unreachable!();
+                }
+            };
+            eprintln!("[appsd] IPC listening {}", path.display());
+            loop {
+                let (mut stream, _addr) = match listener.accept().await {
+                    Ok(s) => s,
+                    Err(e) => { eprintln!("[appsd] accept: {}", e); continue; }
+                };
+                let mut buf = String::new();
+                if stream.read_to_string(&mut buf).await.is_err() { continue; }
+                eprintln!("[appsd] IPC recv: {:?}", buf.trim());
+                if let Some(kind) = AppKind::parse(&buf) {
+                    let _ = output.send(Msg::OpenApp(kind)).await;
+                }
+            }
+        }),
+    )
 }
 
 fn title(state: &State, id: WinId) -> String {
@@ -108,8 +127,7 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
                 },
             };
             let (id, open_task) = window::open(settings);
-            let kind_clone = kind.clone();
-            open_task.map(move |_| Msg::Opened(kind_clone.clone(), id))
+            open_task.map(move |_| Msg::Opened(kind, id))
         }
         Msg::Opened(AppKind::About, id) => {
             let (app, t) = lumo_about::app::App::new();

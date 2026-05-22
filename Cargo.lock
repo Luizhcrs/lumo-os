@@ -4430,6 +4430,10 @@ name = "lumo-animation"
 version = "0.1.0"
 
 [[package]]
+name = "lumo-appctl"
+version = "0.1.0"
+
+[[package]]
 name = "lumo-apps"
 version = "0.1.0"
 dependencies = [

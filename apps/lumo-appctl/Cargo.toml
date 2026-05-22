@@ -1,0 +1,11 @@
+[package]
+name = "lumo-appctl"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo Apps CLI - cliente thin pra lumo-appsd daemon (W34.1)."
+
+[[bin]]
+name = "lumo-appctl"
+path = "src/main.rs"
+
+[dependencies]
