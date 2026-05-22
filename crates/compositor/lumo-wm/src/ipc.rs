@@ -194,6 +194,15 @@ pub fn init(loop_handle: LoopHandle<'static, LumoState>) -> Result<IpcServer> {
                                     last.enqueue(bytes);
                                     let _ = last.drain_tx();
                                 }
+                                // W34.4: re-broadcast ActiveApp atual pra bar restaurar appmenu pills.
+                                if let Some((app_id, title, pid)) = state.last_active_app.clone() {
+                                    let ev = LumoEvent::ActiveApp { app_id, title, pid };
+                                    let bytes = encode_event(&ev).into_bytes();
+                                    if let Some(last) = state.ipc.clients.last_mut() {
+                                        last.enqueue(bytes);
+                                        let _ = last.drain_tx();
+                                    }
+                                }
                                 tracing::info!(
                                     "IPC client conectado (total={})",
                                     state.ipc.clients.len()

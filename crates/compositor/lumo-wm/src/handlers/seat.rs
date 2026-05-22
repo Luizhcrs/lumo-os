@@ -119,6 +119,7 @@ impl SeatHandler for LumoState {
             (String::new(), String::new(), 0u32)
         };
         tracing::debug!(%app_id, %title, pid, "C5: focus_changed -> ActiveApp broadcast");
+        self.last_active_app = Some((app_id.clone(), title.clone(), pid));
         self.ipc.broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
     }
 

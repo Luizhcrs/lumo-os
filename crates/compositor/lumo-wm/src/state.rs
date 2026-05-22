@@ -122,6 +122,8 @@ pub struct LumoState {
     /// Workspace ativo no instante atual. 1..=MAX_WORKSPACES.
     /// Default = 1 no startup.
     pub active_workspace: u8,
+    /// W34.4: ultimo ActiveApp broadcast pra re-enviar ao bar quando reconecta.
+    pub last_active_app: Option<(String, String, u32)>,
 
     // B2: keybindings configuracao carregada de TOML.
     pub keyboard_config: KeyboardConfig,
@@ -339,6 +341,7 @@ impl LumoState {
             cursor_buffer,
             ipc: IpcServer::default(),
             active_workspace: 1,
+            last_active_app: None,
             screencopy: None,
             color_manager: Some(color_manager),
             fifo_manager_state,
