@@ -41,6 +41,9 @@ pub enum LumoEvent {
     CloseDesktopMenu,
     DesktopOpenSelected,
     ActiveApp { app_id: String, title: String, pid: u32 },
+    /// W34.11: explicit clear (todas janelas fecharam). Bar reseta pills.
+    /// Diferente de ActiveApp{app_id:""} que e transient focus_changed.
+    ActiveAppCleared,
     ShowOsd { text: String, icon: OsdIcon, duration_ms: u32 },
     ThemeReloaded { mode: ThemeMode },
     /// W9.C: novo output conectado ou adicionado em hot-plug.
@@ -87,6 +90,8 @@ pub enum LumoCommand {
     /// WM faz broadcast LumoEvent::ActiveApp com esses dados pro bar popular pills.
     /// Bypass Iced 0.13 que nao emite xdg_toplevel.set_app_id antes do focus_changed.
     AppActivated { app_id: String, title: String, pid: u32 },
+    /// W34.11: lumo-appsd notifica WM que fechou todas janelas. Limpar pills bar.
+    AppDeactivated,
 }
 
 pub fn default_socket_path() -> Option<std::path::PathBuf> {

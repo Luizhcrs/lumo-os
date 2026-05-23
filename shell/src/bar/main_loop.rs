@@ -259,12 +259,19 @@ pub fn run() {
                 if let Some((app_id, title, pid)) = res.active_app {
                     // W34.9 v2: ignore TODO ActiveApp empty. focus_changed dispara
                     // empty em transiente keyboard handover. Pills so limpam por
-                    // novo broadcast com app_id valido (NUNCA pelo empty).
+                    // novo broadcast com app_id valido OU ActiveAppCleared.
                     if !app_id.is_empty() {
                         state.appmenu = crate::bar::appmenu::AppMenuState::fetch(pid, &app_id, &title);
                         state.appmenu_open_idx = None;
                         state.redraw(&qh);
                     }
+                }
+                if res.clear_appmenu {
+                    // W34.11: explicit clear (appsd fechou todas janelas).
+                    state.appmenu = crate::bar::appmenu::AppMenuState::default();
+                    state.appmenu_open_idx = None;
+                    state.appmenu_submenu.clear();
+                    state.redraw(&qh);
                 }
                 if res.theme_reloaded {
                     state.refresh_anim = LAAnimator::new(0.7f32, 1.0f32, AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.25 });

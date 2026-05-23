@@ -634,6 +634,13 @@ impl LumoState {
                 }
                 self.ipc.broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
             }
+            LumoCommand::AppDeactivated => {
+                // W34.11: appsd fechou todas janelas. Bar limpa pills.
+                tracing::info!("W34.11: AppDeactivated IPC");
+                eprintln!("[wm] W34.11 AppDeactivated -> clear");
+                self.last_active_app = None;
+                self.ipc.broadcast(&LumoEvent::ActiveAppCleared);
+            }
         }
     }
 

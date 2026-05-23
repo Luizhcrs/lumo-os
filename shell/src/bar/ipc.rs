@@ -35,6 +35,8 @@ pub struct DrainResult {
     pub alive: bool,
     pub close_dropdowns: bool,
     pub active_app: Option<(String, String, u32)>,
+    /// W34.11: explicit clear pills (todas janelas Lumo fecharam).
+    pub clear_appmenu: bool,
     // M2: F5 -> ThemeReloaded recebido.
     pub theme_reloaded: bool,
 }
@@ -49,6 +51,7 @@ pub fn drain_ipc(
     let mut alive = true;
     let mut close_dropdowns = false;
     let mut active_app: Option<(String, String, u32)> = None;
+    let mut clear_appmenu = false;
     let mut theme_reloaded = false;
     loop {
         match stream.read(&mut tmp) {
@@ -85,6 +88,10 @@ pub fn drain_ipc(
                     LumoEvent::ActiveApp { app_id, title, pid } => {
                         active_app = Some((app_id, title, pid));
                     }
+                    LumoEvent::ActiveAppCleared => {
+                        // W34.11: explicit clear pills.
+                        clear_appmenu = true;
+                    }
                     LumoEvent::ThemeReloaded { .. } => {
                         // M2: sinaliza pra main loop iniciar fade da bar.
                         theme_reloaded = true;
@@ -98,7 +105,7 @@ pub fn drain_ipc(
             }
         }
     }
-    DrainResult { alive, close_dropdowns, active_app, theme_reloaded }
+    DrainResult { alive, close_dropdowns, active_app, clear_appmenu, theme_reloaded }
 }
 
 impl LumoBar {

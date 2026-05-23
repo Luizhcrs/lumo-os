@@ -54,6 +54,27 @@ fn send_wm_app_activated(app_id: &str, title: &str) {
     }
 }
 
+/// W34.11: notifica lumo-wm que todas janelas fecharam. Bar limpa pills.
+fn send_wm_app_deactivated() {
+    use std::io::Write;
+    use std::os::unix::net::UnixStream;
+    let runtime = match std::env::var("XDG_RUNTIME_DIR") {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+    let path = format!("{}/lumo-wm.sock", runtime);
+    let mut s = match UnixStream::connect(&path) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let payload = b"{\"type\":\"app_deactivated\"}\n";
+    if let Err(e) = s.write_all(payload) {
+        eprintln!("[appsd] W34.11 write wm: {}", e);
+    } else {
+        eprintln!("[appsd] W34.11 sent AppDeactivated");
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppKind {
     About,
@@ -392,6 +413,10 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
         }
         Msg::WindowClosed(id) => {
             state.windows.remove(&id);
+            // W34.11: se nenhuma janela mais, notifica bar pra limpar pills.
+            if state.windows.is_empty() {
+                send_wm_app_deactivated();
+            }
             Task::none()
         }
     }
