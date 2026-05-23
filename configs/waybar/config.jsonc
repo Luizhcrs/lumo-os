@@ -2,23 +2,15 @@
     "layer": "top",
     "position": "top",
     "height": 32,
-    "margin-top": 0,
-    "margin-left": 0,
-    "margin-right": 0,
     "spacing": 0,
-    "modules-left": ["custom/lumo", "hyprland/workspaces"],
+    "modules-left": ["custom/lumo"],
     "modules-center": ["hyprland/window"],
-    "modules-right": ["battery", "network", "backlight", "tray", "clock"],
+    "modules-right": ["backlight", "network", "battery", "clock"],
 
     "custom/lumo": {
         "format": " Lumo",
         "tooltip": false,
         "on-click": "rofi -show drun -theme ~/.config/rofi/lumo.rasi"
-    },
-
-    "hyprland/workspaces": {
-        "format": "{name}",
-        "on-click": "activate"
     },
 
     "hyprland/window": {
@@ -30,28 +22,28 @@
     "battery": {
         "states": { "warning": 30, "critical": 15 },
         "format": "{capacity}%",
-        "format-charging": "{capacity}%",
-        "format-icons": ["", "", "", "", ""]
+        "format-charging": "{capacity}% +",
+        "on-click": "~/.config/waybar/scripts/battery-panel.sh"
     },
 
     "network": {
         "format-wifi": "{signalStrength}%",
         "format-ethernet": "ETH",
         "format-disconnected": "off",
-        "tooltip-format": "{essid} ({signalStrength}%)\n{ifname}: {ipaddr}/{cidr}"
+        "on-click": "~/.config/waybar/scripts/wifi-menu.sh",
+        "tooltip-format": "{essid} ({signalStrength}%)\n{ifname}: {ipaddr}"
     },
 
     "backlight": {
-        "format": "{percent}%"
+        "format": "{percent}%",
+        "on-scroll-up": "brightnessctl s 5%+",
+        "on-scroll-down": "brightnessctl s 5%-",
+        "on-click": "~/.config/waybar/scripts/brightness-panel.sh"
     },
 
     "clock": {
         "format": "{:%a %d %b %H:%M}",
-        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
-    },
-
-    "tray": {
-        "icon-size": 16,
-        "spacing": 8
+        "tooltip": false,
+        "on-click": "swaync-client -t -sw"
     }
 }
