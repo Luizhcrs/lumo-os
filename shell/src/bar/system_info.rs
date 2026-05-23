@@ -358,7 +358,7 @@ pub fn weekday_abbr_pt(d: chrono::Weekday) -> &'static str {
     use chrono::Weekday::*;
     match d {
         Mon => "seg", Tue => "ter", Wed => "qua", Thu => "qui",
-        Fri => "sex", Sat => "sab", Sun => "dom",
+        Fri => "sex", Sat => "sáb", Sun => "dom",
     }
 }
 

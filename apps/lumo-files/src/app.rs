@@ -1170,7 +1170,7 @@ impl App {
         };
 
         let mut sidebar_col = column![].spacing(2).padding([8, 6]);
-        sidebar_col = sidebar_col.push(group_header("INICIO"));
+        sidebar_col = sidebar_col.push(group_header("INÍCIO"));
         for btn in locais_col {
             sidebar_col = sidebar_col.push(btn);
         }
