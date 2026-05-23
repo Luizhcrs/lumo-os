@@ -169,8 +169,13 @@ cd "$(dirname "$0")/.."
 # ============================================================
 # Build com feature drm-backend (idempotente, cache cargo).
 # ============================================================
-echo "[1/3] Build lumo-wm (feature drm-backend) + lumo-bar..."
-cargo build --release --features lumo-wm/drm-backend --bin lumo-wm --bin lumo-bar 2>&1 | tail -6
+# W34.24: skip rebuild se binaries fresh (Iced cold start nao precisa re-compile cada login).
+if [[ ! -f target/release/lumo-wm ]] || [[ ! -f target/release/lumo-bar ]]; then
+    echo "[1/3] Build lumo-wm (feature drm-backend) + lumo-bar..."
+    cargo build --release --features lumo-wm/drm-backend --bin lumo-wm --bin lumo-bar 2>&1 | tail -6
+else
+    echo "[1/3] Skipping build, binaries already present"
+fi
 
 # ============================================================
 # Env (source de lumo-env.conf).
