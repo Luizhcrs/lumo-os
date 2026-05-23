@@ -35,14 +35,22 @@ fn try_connect(path: &PathBuf) -> Option<UnixStream> {
 
 fn spawn_daemon() -> std::io::Result<()> {
     use std::process::Stdio;
+    use std::os::unix::process::CommandExt;
     let bin = resolve_appsd_bin();
     eprintln!("[appctl] spawning daemon: {}", bin);
-    // Detach: setsid + nohup pattern via std::process::Command + setpgid.
     let mut cmd = Command::new(&bin);
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::null());
     cmd.stderr(Stdio::null());
-    // Preserve env (XDG_RUNTIME_DIR, WAYLAND_DISPLAY, ICED_BACKEND).
+    // W34.23: setsid pra detach do process group do appctl.
+    // Sem setsid, signals propagam pro child quando appctl exit.
+    unsafe {
+        cmd.pre_exec(|| {
+            // Cria new session + process group. Detacha completamente.
+            libc::setsid();
+            Ok(())
+        });
+    }
     let _child = cmd.spawn()?;
     Ok(())
 }
@@ -62,21 +70,24 @@ fn main() -> ExitCode {
     };
     let path = socket_path();
 
-    // W34.21: tenta connect; se falhar, spawn daemon + retry ate 3s.
+    // W34.21: tenta connect; se falhar, spawn daemon + retry ate 10s.
+    // W34.23: stale socket file pos appsd exit (W34.21). remove antes spawn.
     let mut stream = match try_connect(&path) {
         Some(s) => s,
         None => {
+            // Remove stale socket file (peer fechou, file ainda existe).
+            let _ = std::fs::remove_file(&path);
             if let Err(e) = spawn_daemon() {
                 eprintln!("lumo-appctl: spawn daemon: {}", e);
                 return ExitCode::from(1);
             }
-            // Aguarda socket aparecer + bind.
-            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            // Iced runtime cold start ~3-5s. Wait 10s deadline.
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
             loop {
-                std::thread::sleep(Duration::from_millis(50));
+                std::thread::sleep(Duration::from_millis(100));
                 if let Some(s) = try_connect(&path) { break s; }
                 if std::time::Instant::now() > deadline {
-                    eprintln!("lumo-appctl: daemon nao subiu em 5s");
+                    eprintln!("lumo-appctl: daemon nao subiu em 10s");
                     return ExitCode::from(1);
                 }
             }
