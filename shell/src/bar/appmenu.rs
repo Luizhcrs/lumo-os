@@ -395,23 +395,27 @@ fn home_path(suffix: &str) -> Option<String> {
 }
 
 fn send_wm_close_focused() {
-    use std::io::Write;
-    use std::os::unix::net::UnixStream;
-    let runtime = match std::env::var("XDG_RUNTIME_DIR") {
-        Ok(r) => r,
-        Err(_) => { eprintln!("[appmenu] XDG_RUNTIME_DIR ausente; close skip"); return; }
-    };
-    let path = format!("{}/lumo-wm.sock", runtime);
-    let mut s = match UnixStream::connect(&path) {
-        Ok(s) => s,
-        Err(e) => { eprintln!("[appmenu] connect lumo-wm: {}", e); return; }
-    };
-    let payload = "{\"type\":\"close_focused_toplevel\"}\n";
-    if let Err(e) = s.write_all(payload.as_bytes()) {
-        eprintln!("[appmenu] write CloseFocusedToplevel: {}", e);
-    } else {
+    // W34.18: thread+sleep mesmo fix W34.16/17 pra escape race tokio/calloop.
+    std::thread::spawn(|| {
+        use std::io::Write;
+        use std::os::unix::net::UnixStream;
+        let runtime = match std::env::var("XDG_RUNTIME_DIR") {
+            Ok(r) => r,
+            Err(_) => { eprintln!("[appmenu] XDG_RUNTIME_DIR ausente; close skip"); return; }
+        };
+        let path = format!("{}/lumo-wm.sock", runtime);
+        let mut s = match UnixStream::connect(&path) {
+            Ok(s) => s,
+            Err(e) => { eprintln!("[appmenu] connect lumo-wm: {}", e); return; }
+        };
+        let payload = "{\"type\":\"close_focused_toplevel\"}\n";
+        if let Err(e) = s.write_all(payload.as_bytes()) {
+            eprintln!("[appmenu] write CloseFocusedToplevel: {}", e);
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
         eprintln!("[appmenu] sent CloseFocusedToplevel via {}", path);
-    }
+    });
 }
 
 /// W34.6: submenus hardcoded por app_id + parent_id (sem DBus).
