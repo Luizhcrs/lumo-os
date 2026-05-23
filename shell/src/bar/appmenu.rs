@@ -41,6 +41,8 @@ impl AppMenuState {
     /// Busca menubar via DBus AppMenu.Registrar + dbusmenu.
     /// Em caso de falha retorna estado vazio (silencio).
     pub fn fetch(pid: u32, app_id: &str, title: &str) -> Self {
+        // W34.9 debug: log app_id recebido pra diagnosticar pills missing.
+        eprintln!("[appmenu] W34.9 fetch pid={} app_id={:?} title={:?}", pid, app_id, title);
         if pid == 0 {
             let mut s = Self::default();
             s.app_id = app_id.to_string();
