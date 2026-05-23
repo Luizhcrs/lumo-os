@@ -28,51 +28,59 @@ fn socket_path() -> PathBuf {
 /// Workaround Iced 0.13 (nao emite xdg_toplevel.set_app_id a tempo).
 /// Envia LumoCommand::AppActivated via socket lumo-wm.sock.
 fn send_wm_app_activated(app_id: &str, title: &str) {
-    use std::io::Write;
-    use std::os::unix::net::UnixStream;
-    let runtime = match std::env::var("XDG_RUNTIME_DIR") {
-        Ok(r) => r,
-        Err(_) => return,
-    };
-    let path = format!("{}/lumo-wm.sock", runtime);
-    let mut s = match UnixStream::connect(&path) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("[appsd] W34.10 connect wm: {}", e);
+    let app_id = app_id.to_string();
+    let title = title.to_string();
+    let pid = std::process::id();
+    // W34.16: spawn thread + sleep antes drop pra dar tempo WM ler buffered bytes.
+    std::thread::spawn(move || {
+        use std::io::Write;
+        use std::os::unix::net::UnixStream;
+        let runtime = match std::env::var("XDG_RUNTIME_DIR") {
+            Ok(r) => r,
+            Err(_) => return,
+        };
+        let path = format!("{}/lumo-wm.sock", runtime);
+        let mut s = match UnixStream::connect(&path) {
+            Ok(s) => s,
+            Err(e) => { eprintln!("[appsd] W34.10 connect wm: {}", e); return; }
+        };
+        let payload = format!(
+            "{{\"type\":\"app_activated\",\"app_id\":\"{}\",\"title\":\"{}\",\"pid\":{}}}\n",
+            app_id, title, pid
+        );
+        if let Err(e) = s.write_all(payload.as_bytes()) {
+            eprintln!("[appsd] W34.10 write wm: {}", e);
             return;
         }
-    };
-    let pid = std::process::id();
-    let payload = format!(
-        "{{\"type\":\"app_activated\",\"app_id\":\"{}\",\"title\":\"{}\",\"pid\":{}}}\n",
-        app_id, title, pid
-    );
-    if let Err(e) = s.write_all(payload.as_bytes()) {
-        eprintln!("[appsd] W34.10 write wm: {}", e);
-    } else {
+        // W34.17: hold connection alive ate WM read. 100ms suficiente pro calloop tick (4ms).
+        std::thread::sleep(std::time::Duration::from_millis(100));
         eprintln!("[appsd] W34.10 sent AppActivated {} pid={}", app_id, pid);
-    }
+        // drop fecha socket
+    });
 }
 
 /// W34.11: notifica lumo-wm que todas janelas fecharam. Bar limpa pills.
 fn send_wm_app_deactivated() {
-    use std::io::Write;
-    use std::os::unix::net::UnixStream;
-    let runtime = match std::env::var("XDG_RUNTIME_DIR") {
-        Ok(r) => r,
-        Err(_) => return,
-    };
-    let path = format!("{}/lumo-wm.sock", runtime);
-    let mut s = match UnixStream::connect(&path) {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-    let payload = b"{\"type\":\"app_deactivated\"}\n";
-    if let Err(e) = s.write_all(payload) {
-        eprintln!("[appsd] W34.11 write wm: {}", e);
-    } else {
-        eprintln!("[appsd] W34.11 sent AppDeactivated");
-    }
+    std::thread::spawn(|| {
+        use std::io::Write;
+        use std::os::unix::net::UnixStream;
+        let runtime = match std::env::var("XDG_RUNTIME_DIR") {
+            Ok(r) => r,
+            Err(_) => { eprintln!("[appsd] W34.11 sem XDG_RUNTIME_DIR"); return; }
+        };
+        let path = format!("{}/lumo-wm.sock", runtime);
+        let mut s = match UnixStream::connect(&path) {
+            Ok(s) => s,
+            Err(e) => { eprintln!("[appsd] W34.11 connect wm: {}", e); return; }
+        };
+        let payload = b"{\"type\":\"app_deactivated\"}\n";
+        if let Err(e) = s.write_all(payload) {
+            eprintln!("[appsd] W34.11 write wm: {}", e);
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        eprintln!("[appsd] W34.11 sent AppDeactivated to {}", path);
+    });
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

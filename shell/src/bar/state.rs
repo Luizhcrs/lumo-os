@@ -237,6 +237,20 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     }
 
     // ============================================================
+    // PILL CENTRO: [Focused Window Title] (W34.11)
+    // ============================================================
+    if !snap.appmenu_title.is_empty() {
+        let title_w = measure_text(&snap.appmenu_title, FONT_PILL, true);
+        let pill_c_w = pill_pad_x * 2.0 + title_w;
+        let pill_c_x = (snap.width as f32 - pill_c_w) / 2.0;
+
+        let mut canvas = pixmap.as_mut();
+        draw_pill_bg(&mut canvas, pill_c_x, pill_y, pill_c_w, pill_h, pill_bg, 0);
+
+        draw_text(&mut canvas, pill_c_x + pill_pad_x, text_top, &snap.appmenu_title, FONT_PILL, pill_fg, true);
+    }
+
+    // ============================================================
     // PILL DIREITA: [wifi] [bat icone] HH:MM (A19.8: removido texto %)
     // ============================================================
     let bat_icon_w = bat_w_override.unwrap_or_else(battery_total_width);
@@ -516,7 +530,7 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                         item_y += sub_item_h;
                     }
                     result.appmenu_submenu_rects = submenu_rects;
-                    composite_dropdown(pixmap, &sub, sub_x, sub_y, snap.dropdown_scale, snap.dropdown_alpha);
+                    composite_dropdown(pixmap, &sub, sub_x, sub_y, 1.0, 1.0);
                 }
             }
         }
