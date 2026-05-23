@@ -25,8 +25,8 @@ fn socket_path() -> PathBuf {
 }
 
 /// W34.10: notifica lumo-wm que abriu janela com app_id conhecido.
-/// Workaround Iced 0.13 (nao emite xdg_toplevel.set_app_id a tempo).
-/// Envia LumoCommand::AppActivated via socket lumo-wm.sock.
+/// W34.22: PIVOT Hyprland (2026-05-23) — socket lumo-wm.sock nao existe.
+/// Skip silenciosamente se nao encontrado. Mantido pra reuso futuro.
 fn send_wm_app_activated(app_id: &str, title: &str) {
     let app_id = app_id.to_string();
     let title = title.to_string();
@@ -40,9 +40,13 @@ fn send_wm_app_activated(app_id: &str, title: &str) {
             Err(_) => return,
         };
         let path = format!("{}/lumo-wm.sock", runtime);
+        if !std::path::Path::new(&path).exists() {
+            // W34.22: Hyprland mode, sem lumo-wm socket. Skip silenciosamente.
+            return;
+        }
         let mut s = match UnixStream::connect(&path) {
             Ok(s) => s,
-            Err(e) => { eprintln!("[appsd] W34.10 connect wm: {}", e); return; }
+            Err(_) => return, // socket gone between exists()+connect
         };
         let payload = format!(
             "{{\"type\":\"app_activated\",\"app_id\":\"{}\",\"title\":\"{}\",\"pid\":{}}}\n",
@@ -69,9 +73,12 @@ fn send_wm_app_deactivated() {
             Err(_) => { eprintln!("[appsd] W34.11 sem XDG_RUNTIME_DIR"); return; }
         };
         let path = format!("{}/lumo-wm.sock", runtime);
+        if !std::path::Path::new(&path).exists() {
+            return; // W34.22: Hyprland mode
+        }
         let mut s = match UnixStream::connect(&path) {
             Ok(s) => s,
-            Err(e) => { eprintln!("[appsd] W34.11 connect wm: {}", e); return; }
+            Err(_) => return,
         };
         let payload = b"{\"type\":\"app_deactivated\"}\n";
         if let Err(e) = s.write_all(payload) {
@@ -424,6 +431,14 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
             // W34.11: se nenhuma janela mais, notifica bar pra limpar pills.
             if state.windows.is_empty() {
                 send_wm_app_deactivated();
+                // W34.21: exit daemon quando empty pra liberar Iced runtime leak
+                // (Iced 0.13 vaza ~40MB + 7% CPU por ciclo). Sistema spawn novo
+                // appsd via lumo-appctl OR systemd socket activation.
+                eprintln!("[appsd] W34.21 all windows closed -> exit pra liberar runtime");
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    std::process::exit(0);
+                });
             }
             Task::none()
         }
