@@ -406,7 +406,7 @@ fn send_wm_close_focused() {
         Ok(s) => s,
         Err(e) => { eprintln!("[appmenu] connect lumo-wm: {}", e); return; }
     };
-    let payload = "\"CloseFocusedToplevel\"\n";
+    let payload = "{\"type\":\"close_focused_toplevel\"}\n";
     if let Err(e) = s.write_all(payload.as_bytes()) {
         eprintln!("[appmenu] write CloseFocusedToplevel: {}", e);
     } else {
