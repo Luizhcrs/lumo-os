@@ -132,14 +132,15 @@ pub fn run() {
         brightness_preset_day_rect: None,
         brightness_preset_night_rect: None,
         brightness_dragging: false,
+        brightness_dragging_slider: false,
+        dropdown_rect: None,
+        dropdown_h_final: 0.0,
         brightness_drag_last_y: 0.0,
         wifi_toggle_rect: None,
         wifi_disconnect_rect: None,
         wifi_connect_rects: Vec::new(),
         last_click_at: None,
         dropdown: DropdownActive::None,
-        dropdown_rect: None,
-        dropdown_h_final: 0.0,
         viewed_year: Local::now().year(),
         viewed_month: Local::now().month(),
         selected_day: None,
@@ -159,7 +160,6 @@ pub fn run() {
         ipc_reconnect_delay: Duration::from_secs(1),
         theme,
         palette,
-        brightness_dragging_slider: false,
         dropdown_scale_anim: {
             let mut a = LAAnimator::new(1.0f32, 1.0f32, AnimCurve::Bezier { curve: LACurve::ease_in_out(), duration: 0.28 });
             a.elapsed = 1.0;
