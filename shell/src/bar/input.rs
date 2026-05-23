@@ -485,15 +485,14 @@ impl PointerHandler for LumoBar {
                             }
                         });
                         if let Some(idx) = hit {
+                            eprintln!("[lumo-bar] W34.12 pill click idx={} app_id={:?} items={}", idx, self.appmenu.app_id, self.appmenu.items.len());
                             if self.appmenu_open_idx == Some(idx) {
-                                // Clicou no mesmo -> fecha.
                                 self.appmenu_open_idx = None;
                                 self.appmenu_submenu.clear();
                             } else {
-                                // Busca submenu do item.
-                                let submenu = self.appmenu.fetch_submenu(
-                                    self.appmenu.items.get(idx).map(|it| it.id).unwrap_or(0)
-                                );
+                                let item_id = self.appmenu.items.get(idx).map(|it| it.id).unwrap_or(0);
+                                let submenu = self.appmenu.fetch_submenu(item_id);
+                                eprintln!("[lumo-bar] W34.12 fetch_submenu item_id={} -> {} items", item_id, submenu.len());
                                 self.appmenu_open_idx = Some(idx);
                                 self.appmenu_submenu = submenu;
                             }

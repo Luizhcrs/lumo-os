@@ -124,6 +124,9 @@ pub struct LumoState {
     pub active_workspace: u8,
     /// W34.4: ultimo ActiveApp broadcast pra re-enviar ao bar quando reconecta.
     pub last_active_app: Option<(String, String, u32)>,
+    /// W34.13: cache pid -> (app_id, title) populado por AppActivated.
+    /// focus_changed resolve app_id vazio (Iced lifecycle bug) via lookup.
+    pub pid_app_cache: std::collections::HashMap<u32, (String, String)>,
 
     // B2: keybindings configuracao carregada de TOML.
     pub keyboard_config: KeyboardConfig,
@@ -342,6 +345,7 @@ impl LumoState {
             ipc: IpcServer::default(),
             active_workspace: 1,
             last_active_app: None,
+            pid_app_cache: std::collections::HashMap::new(),
             screencopy: None,
             color_manager: Some(color_manager),
             fifo_manager_state,
@@ -631,6 +635,8 @@ impl LumoState {
                 eprintln!("[wm] W34.10 AppActivated app_id={:?} title={:?} pid={}", app_id, title, pid);
                 if !app_id.is_empty() {
                     self.last_active_app = Some((app_id.clone(), title.clone(), pid));
+                    // W34.13: cache pid -> app_id pra resolver focus_changed empty later.
+                    self.pid_app_cache.insert(pid, (app_id.clone(), title.clone()));
                 }
                 self.ipc.broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
             }
@@ -788,23 +794,14 @@ impl XdgDecorationHandler for LumoState {
     }
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
-        // W20: honor cliente. GTK/Chrome (ClientSide) = CSD nativa, sem SSD.
-        // Iced 0.13 (decorations:true) = ServerSide, compositor desenha SSD.
+        // P0 #2: force ServerSide para garantir consistência visual no Lumo OS
         toplevel.with_pending_state(|state| {
-            state.decoration_mode = Some(mode);
+            state.decoration_mode = Some(Mode::ServerSide);
         });
         toplevel.send_configure();
         let surf = toplevel.wl_surface().clone();
-        match mode {
-            Mode::ServerSide => {
-                self.ssd_windows.insert(surf);
-            }
-            Mode::ClientSide => {
-                self.ssd_windows.remove(&surf);
-            }
-            _ => {}
-        }
-        tracing::debug!("xdg_decoration: request_mode -> {:?}", mode);
+        self.ssd_windows.insert(surf);
+        tracing::debug!("xdg_decoration: request_mode -> forced ServerSide (was {:?})", mode);
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {

@@ -132,15 +132,14 @@ pub fn run() {
         brightness_preset_day_rect: None,
         brightness_preset_night_rect: None,
         brightness_dragging: false,
-        brightness_dragging_slider: false,
-        dropdown_rect: None,
-        dropdown_h_final: 0.0,
         brightness_drag_last_y: 0.0,
         wifi_toggle_rect: None,
         wifi_disconnect_rect: None,
         wifi_connect_rects: Vec::new(),
         last_click_at: None,
         dropdown: DropdownActive::None,
+        dropdown_rect: None,
+        dropdown_h_final: 0.0,
         viewed_year: Local::now().year(),
         viewed_month: Local::now().month(),
         selected_day: None,
@@ -160,6 +159,7 @@ pub fn run() {
         ipc_reconnect_delay: Duration::from_secs(1),
         theme,
         palette,
+        brightness_dragging_slider: false,
         dropdown_scale_anim: {
             let mut a = LAAnimator::new(1.0f32, 1.0f32, AnimCurve::Bezier { curve: LACurve::ease_in_out(), duration: 0.28 });
             a.elapsed = 1.0;
@@ -257,14 +257,14 @@ pub fn run() {
                     state.update_size_and_redraw(&qh);
                 }
                 if let Some((app_id, title, pid)) = res.active_app {
-                    // W34.9 v2: ignore TODO ActiveApp empty. focus_changed dispara
-                    // empty em transiente keyboard handover. Pills so limpam por
-                    // novo broadcast com app_id valido OU ActiveAppCleared.
-                    if !app_id.is_empty() {
-                        state.appmenu = crate::bar::appmenu::AppMenuState::fetch(pid, &app_id, &title);
-                        state.appmenu_open_idx = None;
-                        state.redraw(&qh);
-                    }
+                    // W34.13: respeita TODO ActiveApp broadcast (empty inclusive).
+                    // Click fora da janela -> focus_changed=None -> empty -> bar limpa pills.
+                    // Mac-style: pills only when janela focada. Trade-off: flash transient
+                    // durante Iced window create (empty antes set_app_id). Aceito.
+                    state.appmenu = crate::bar::appmenu::AppMenuState::fetch(pid, &app_id, &title);
+                    state.appmenu_open_idx = None;
+                    state.appmenu_submenu.clear();
+                    state.redraw(&qh);
                 }
                 if res.clear_appmenu {
                     // W34.11: explicit clear (appsd fechou todas janelas).

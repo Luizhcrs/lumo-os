@@ -69,7 +69,7 @@ impl SeatHandler for LumoState {
                     );
                     self.cursor = Some(loaded);
                     self.cursor_buffer = Some(buf);
-                    // W19.4: forca repaint imediato pra cursor icon muda
+                    // W19.4: forca repaint imediato pra cursor icon mudar
                     // no proximo frame (sem esperar vsync pending_flip).
                     #[cfg(feature = "drm-backend")]
                     { self.drm_force_repaint = true; }
@@ -118,15 +118,22 @@ impl SeatHandler for LumoState {
         } else {
             (String::new(), String::new(), 0u32)
         };
+        // W34.13: se app_id vazio (Iced bug) E pid em cache, resolve.
+        let (mut app_id, mut title, pid) = (app_id, title, pid);
+        if app_id.is_empty() && pid != 0 {
+            if let Some((cached_id, cached_title)) = self.pid_app_cache.get(&pid) {
+                app_id = cached_id.clone();
+                title = cached_title.clone();
+                eprintln!("[wm] W34.13 resolved focus app_id={:?} via cache pid={}", app_id, pid);
+            }
+        }
         tracing::debug!(%app_id, %title, pid, "C5: focus_changed -> ActiveApp broadcast");
-        // W34.9 debug eprintln (stderr) pra correlacionar com /tmp/lumo-wm-tty.log
         eprintln!("[wm] focus_changed -> ActiveApp app_id={:?} title={:?} pid={} focused_some={}",
             app_id, title, pid, focused.is_some());
-        // W34.9 fix #3 v2: armazena last_active_app SOMENTE quando app_id nao-vazio.
-        // focus_changed pode disparar com empty transiente (e.g. surface destroyed antes
-        // do proximo focar) -- nao queremos clobber state usado em reconnect re-broadcast.
         if !app_id.is_empty() {
             self.last_active_app = Some((app_id.clone(), title.clone(), pid));
+        } else {
+            self.last_active_app = None;
         }
         self.ipc.broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
     }
