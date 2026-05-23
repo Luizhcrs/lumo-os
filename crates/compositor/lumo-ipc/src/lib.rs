@@ -83,6 +83,10 @@ pub enum LumoCommand {
     /// W17.1: minimize/iconify (stub) no toplevel com foco. Sem Wayland
     /// iconify protocol estavel; loga info e nao altera estado.
     MinimizeFocused,
+    /// W34.10: lumo-appsd notifica WM que abriu janela com app_id conhecido.
+    /// WM faz broadcast LumoEvent::ActiveApp com esses dados pro bar popular pills.
+    /// Bypass Iced 0.13 que nao emite xdg_toplevel.set_app_id antes do focus_changed.
+    AppActivated { app_id: String, title: String, pid: u32 },
 }
 
 pub fn default_socket_path() -> Option<std::path::PathBuf> {

@@ -24,6 +24,36 @@ fn socket_path() -> PathBuf {
     PathBuf::from(runtime).join(SOCKET_FILENAME)
 }
 
+/// W34.10: notifica lumo-wm que abriu janela com app_id conhecido.
+/// Workaround Iced 0.13 (nao emite xdg_toplevel.set_app_id a tempo).
+/// Envia LumoCommand::AppActivated via socket lumo-wm.sock.
+fn send_wm_app_activated(app_id: &str, title: &str) {
+    use std::io::Write;
+    use std::os::unix::net::UnixStream;
+    let runtime = match std::env::var("XDG_RUNTIME_DIR") {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+    let path = format!("{}/lumo-wm.sock", runtime);
+    let mut s = match UnixStream::connect(&path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[appsd] W34.10 connect wm: {}", e);
+            return;
+        }
+    };
+    let pid = std::process::id();
+    let payload = format!(
+        "{{\"type\":\"app_activated\",\"app_id\":\"{}\",\"title\":\"{}\",\"pid\":{}}}\n",
+        app_id, title, pid
+    );
+    if let Err(e) = s.write_all(payload.as_bytes()) {
+        eprintln!("[appsd] W34.10 write wm: {}", e);
+    } else {
+        eprintln!("[appsd] W34.10 sent AppActivated {} pid={}", app_id, pid);
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppKind {
     About,
@@ -255,21 +285,25 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
         Msg::Opened(AppKind::About, id) => {
             let (app, t) = lumo_about::app::App::new();
             state.windows.insert(id, WindowState::About(app));
+            send_wm_app_activated(AppKind::About.app_id(), AppKind::About.title());
             t.map(move |m| Msg::About(id, m))
         }
         Msg::Opened(AppKind::Calc, id) => {
             let (app, t) = lumo_calc::app::App::new();
             state.windows.insert(id, WindowState::Calc(app));
+            send_wm_app_activated(AppKind::Calc.app_id(), AppKind::Calc.title());
             t.map(move |m| Msg::Calc(id, m))
         }
         Msg::Opened(AppKind::Notes, id) => {
             let (app, t) = lumo_notes::app::App::new();
             state.windows.insert(id, WindowState::Notes(app));
+            send_wm_app_activated(AppKind::Notes.app_id(), AppKind::Notes.title());
             t.map(move |m| Msg::Notes(id, m))
         }
         Msg::Opened(AppKind::Monitor, id) => {
             let (app, t) = lumo_monitor::app::App::new();
             state.windows.insert(id, WindowState::Monitor(app));
+            send_wm_app_activated(AppKind::Monitor.app_id(), AppKind::Monitor.title());
             t.map(move |m| Msg::Monitor(id, m))
         }
         Msg::Opened(AppKind::Editor, id) => {
@@ -278,6 +312,7 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
                 .and_then(|q| q.pop_front());
             let (app, t) = lumo_editor::app::App::new(arg);
             state.windows.insert(id, WindowState::Editor(app));
+            send_wm_app_activated(AppKind::Editor.app_id(), AppKind::Editor.title());
             t.map(move |m| Msg::Editor(id, m))
         }
         Msg::Opened(AppKind::Files, id) => {
@@ -289,6 +324,7 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
                 lumo_files::app::App::new()
             };
             state.windows.insert(id, WindowState::Files(app));
+            send_wm_app_activated(AppKind::Files.app_id(), AppKind::Files.title());
             t.map(move |m| Msg::Files(id, m))
         }
         Msg::Opened(AppKind::Settings, id) => {
@@ -299,6 +335,7 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
                 eprintln!("[appsd] settings arg ignorado (sem tab API): {}", tab);
             }
             state.windows.insert(id, WindowState::Settings(app));
+            send_wm_app_activated(AppKind::Settings.app_id(), AppKind::Settings.title());
             t.map(move |m| Msg::Settings(id, m))
         }
         Msg::Opened(AppKind::Store, id) => {
@@ -310,6 +347,7 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
                 eprintln!("[appsd] store tab={} (StoreApp::new sem tab arg ainda)", tab);
             }
             state.windows.insert(id, WindowState::Store(app));
+            send_wm_app_activated(AppKind::Store.app_id(), AppKind::Store.title());
             t.map(move |m| Msg::Store(id, m))
         }
         Msg::About(id, m) => {

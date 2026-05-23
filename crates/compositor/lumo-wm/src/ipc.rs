@@ -46,19 +46,16 @@ impl IpcClient {
         })
     }
 
-    /// Le bytes disponiveis e devolve linhas completas. Retorna
-    /// Err se peer fechou ou se buffer cresceu sem `\n` (proteção
-    /// contra peer cuspindo lixo).
-    fn read_lines(&mut self) -> std::io::Result<Vec<String>> {
+    /// Le bytes disponiveis e devolve linhas completas + flag eof.
+    /// W34.10 fix: NAO descartar lines em EOF — one-shot clients
+    /// (appsd connect+write+close) ficavam silenciados. Tick handle
+    /// processa lines, depois dropa client se eof=true OU err.
+    fn read_lines(&mut self) -> std::io::Result<(Vec<String>, bool)> {
         let mut tmp = [0u8; 512];
+        let mut eof = false;
         loop {
             match self.stream.read(&mut tmp) {
-                Ok(0) => {
-                    return Err(std::io::Error::new(
-                        ErrorKind::UnexpectedEof,
-                        "peer fechou",
-                    ));
-                }
+                Ok(0) => { eof = true; break; }
                 Ok(n) => self.rx_buf.extend_from_slice(&tmp[..n]),
                 Err(e) if e.kind() == ErrorKind::WouldBlock => break,
                 Err(e) => return Err(e),
@@ -77,7 +74,7 @@ impl IpcClient {
                 "rx buffer overflow",
             ));
         }
-        Ok(out)
+        Ok((out, eof))
     }
 
     /// Drena tx_queue ate WouldBlock. Returns Ok(()) sempre que
@@ -238,8 +235,9 @@ pub fn tick(state: &mut LumoState) {
     let mut dead: Vec<usize> = Vec::new();
     let mut commands: Vec<LumoCommand> = Vec::new();
     for (i, client) in state.ipc.clients.iter_mut().enumerate() {
+        let mut eof_after = false;
         match client.read_lines() {
-            Ok(lines) => {
+            Ok((lines, eof)) => {
                 for line in lines {
                     match parse_command(&line) {
                         Some(Ok(cmd)) => commands.push(cmd),
@@ -249,15 +247,24 @@ pub fn tick(state: &mut LumoState) {
                         None => {}
                     }
                 }
+                if eof {
+                    // W34.10 fix: process lines first, THEN drop client.
+                    tracing::debug!("IPC client EOF apos {} lines pendentes", commands.len());
+                    eof_after = true;
+                }
             }
             Err(err) => {
                 tracing::debug!(?err, "IPC client read erro");
-                dead.push(i);
-                continue;
+                eof_after = true;
             }
         }
-        if let Err(err) = client.drain_tx() {
-            tracing::debug!(?err, "IPC client write erro");
+        if !eof_after {
+            if let Err(err) = client.drain_tx() {
+                tracing::debug!(?err, "IPC client write erro");
+                eof_after = true;
+            }
+        }
+        if eof_after {
             dead.push(i);
         }
     }

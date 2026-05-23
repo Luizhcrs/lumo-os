@@ -623,6 +623,17 @@ impl LumoState {
                 // W17.1: stub. Sem iconify protocol Wayland estavel; loga apenas.
                 tracing::info!("W17.1: MinimizeFocused IPC (stub, no protocol)");
             }
+            LumoCommand::AppActivated { app_id, title, pid } => {
+                // W34.10: lumo-appsd notificou abertura de app Lumo. Iced 0.13 nao
+                // propaga xdg_toplevel.set_app_id a tempo do focus_changed; este
+                // path bypassa e seta cache + broadcast pro bar render pills.
+                tracing::info!(%app_id, %title, pid, "W34.10: AppActivated IPC");
+                eprintln!("[wm] W34.10 AppActivated app_id={:?} title={:?} pid={}", app_id, title, pid);
+                if !app_id.is_empty() {
+                    self.last_active_app = Some((app_id.clone(), title.clone(), pid));
+                }
+                self.ipc.broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
+            }
         }
     }
 
