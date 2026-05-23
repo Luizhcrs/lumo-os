@@ -1,0 +1,90 @@
+// Lumo OS - rofi launcher theme (Mac Spotlight clone).
+
+* {
+    bg: #1A1A1Ccc;
+    bg-alt: #28282C;
+    fg: #F5F5F7;
+    fg-dim: rgba(245, 245, 247, 0.5);
+    accent: #00C896;
+    border: rgba(255, 255, 255, 0.08);
+    radius: 14px;
+
+    background-color: transparent;
+    text-color: @fg;
+    font: "Inter 14";
+}
+
+window {
+    transparency: "real";
+    background-color: @bg;
+    border: 1px solid;
+    border-color: @border;
+    border-radius: @radius;
+    width: 600px;
+    padding: 0;
+    location: center;
+    anchor: center;
+}
+
+mainbox {
+    children: [ inputbar, listview ];
+    padding: 0;
+}
+
+inputbar {
+    background-color: transparent;
+    children: [ prompt, entry ];
+    padding: 16px 20px;
+    border: 0 0 1px 0;
+    border-color: @border;
+    spacing: 12px;
+}
+
+prompt {
+    background-color: transparent;
+    text-color: @accent;
+    font: "Inter Bold 14";
+}
+
+entry {
+    background-color: transparent;
+    placeholder-color: @fg-dim;
+    placeholder: "Buscar aplicativos…";
+}
+
+listview {
+    background-color: transparent;
+    columns: 1;
+    lines: 8;
+    cycle: true;
+    dynamic: true;
+    scrollbar: false;
+    padding: 8px;
+    spacing: 2px;
+}
+
+element {
+    background-color: transparent;
+    text-color: @fg;
+    padding: 10px 14px;
+    border-radius: 10px;
+    spacing: 12px;
+    children: [ element-icon, element-text ];
+}
+
+element selected {
+    background-color: @accent;
+    text-color: white;
+}
+
+element-icon {
+    size: 22px;
+    vertical-align: 0.5;
+    background-color: transparent;
+}
+
+element-text {
+    text-color: inherit;
+    background-color: transparent;
+    vertical-align: 0.5;
+}

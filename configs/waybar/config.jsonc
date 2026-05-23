@@ -1,0 +1,57 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": 32,
+    "margin-top": 0,
+    "margin-left": 0,
+    "margin-right": 0,
+    "spacing": 0,
+    "modules-left": ["custom/lumo", "hyprland/workspaces"],
+    "modules-center": ["hyprland/window"],
+    "modules-right": ["battery", "network", "backlight", "tray", "clock"],
+
+    "custom/lumo": {
+        "format": " Lumo",
+        "tooltip": false,
+        "on-click": "rofi -show drun -theme ~/.config/rofi/lumo.rasi"
+    },
+
+    "hyprland/workspaces": {
+        "format": "{name}",
+        "on-click": "activate"
+    },
+
+    "hyprland/window": {
+        "format": "{title}",
+        "max-length": 80,
+        "separate-outputs": true
+    },
+
+    "battery": {
+        "states": { "warning": 30, "critical": 15 },
+        "format": "{capacity}%",
+        "format-charging": "{capacity}%",
+        "format-icons": ["", "", "", "", ""]
+    },
+
+    "network": {
+        "format-wifi": "{signalStrength}%",
+        "format-ethernet": "ETH",
+        "format-disconnected": "off",
+        "tooltip-format": "{essid} ({signalStrength}%)\n{ifname}: {ipaddr}/{cidr}"
+    },
+
+    "backlight": {
+        "format": "{percent}%"
+    },
+
+    "clock": {
+        "format": "{:%a %d %b %H:%M}",
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    },
+
+    "tray": {
+        "icon-size": 16,
+        "spacing": 8
+    }
+}
