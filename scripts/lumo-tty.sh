@@ -219,18 +219,22 @@ post_exit() {
 }
 trap post_exit EXIT
 
-# W34.2: spawn lumo-appsd daemon em background (runtime Iced persistente).
-# W34.9 fix #11: path absoluto via $REPO (relativo quebra se subshell cwd diferente).
+# W34.25: respawn watchdog lumo-appsd (W34.21 lazy-exit + auto-respawn = reopen rapido).
 APPSD_BIN="$REPO/target/release/lumo-appsd"
 (
     sleep 5
-    # Auto-detecta socket criado pelo WM
     W_SOCKET=$(ls -t /run/user/$(id -u)/wayland-* 2>/dev/null | grep -v ".lock" | head -n 1 | xargs basename)
     export WAYLAND_DISPLAY="${W_SOCKET:-wayland-0}"
     export ICED_BACKEND=tiny-skia
     export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-    echo "[boot] lumo-appsd tentando conectar em $WAYLAND_DISPLAY (bin=$APPSD_BIN)" >> /tmp/lumo-appsd.log
-    nohup "$APPSD_BIN" >> /tmp/lumo-appsd.log 2>&1 < /dev/null &
+    while true; do
+        if ! pgrep -f "$APPSD_BIN" > /dev/null; then
+            rm -f "/run/user/$(id -u)/lumo-appsd.sock"
+            echo "[watchdog] spawning lumo-appsd" >> /tmp/lumo-appsd.log
+            nohup "$APPSD_BIN" >> /tmp/lumo-appsd.log 2>&1 < /dev/null &
+        fi
+        sleep 2
+    done
 ) &
 
 # Garante lumo-appctl no path pro menu Lumo funcionar
