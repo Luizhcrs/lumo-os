@@ -566,24 +566,32 @@ impl LumoState {
                 tracing::info!(?mode, "L6: ThemeReloaded broadcast");
                 self.ipc.broadcast(&LumoEvent::ThemeReloaded { mode });
             }
-            LumoCommand::CloseFocusedToplevel => {
+            LumoCommand::CloseFocusedToplevel => { eprintln!("[wm] CloseFocusedToplevel recv");
                 // W32.6: snap close instantaneo (igual btn X).
+                // W34.20: fallback last xdg_toplevel se kb sem focus (click via bar layer-shell
+                // pode shiftar keyboard focus pra bar surface, quebrando current_focus()).
                 use smithay::wayland::seat::WaylandFocus;
                 let kb = self.keyboard.clone();
-                if let Some(focused) = kb.current_focus() {
-                    let win = self.space.elements()
+                let win = if let Some(focused) = kb.current_focus() {
+                    self.space.elements()
                         .find(|w| w.wl_surface().map(|s| *s == focused).unwrap_or(false))
-                        .cloned();
-                    if let Some(w) = win {
-                        if let Some(tl) = w.toplevel() {
-                            tl.send_close();
-                        }
-                        if let Some(s) = w.wl_surface() {
-                            self.ssd_windows.remove(&*s);
-                        }
-                        self.space.unmap_elem(&w);
-                        self.should_render = true;
+                        .cloned()
+                } else {
+                    // Sem keyboard focus: pega top-most toplevel mapeado.
+                    self.space.elements().last().cloned()
+                };
+                if let Some(w) = win {
+                    eprintln!("[wm] CloseFocusedToplevel -> close window");
+                    if let Some(tl) = w.toplevel() {
+                        tl.send_close();
                     }
+                    if let Some(s) = w.wl_surface() {
+                        self.ssd_windows.remove(&*s);
+                    }
+                    self.space.unmap_elem(&w);
+                    self.should_render = true;
+                } else {
+                    eprintln!("[wm] CloseFocusedToplevel: nenhuma janela pra fechar");
                 }
             }
             LumoCommand::SyntheticPointerMove { x, y } => {
