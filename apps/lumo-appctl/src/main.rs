@@ -18,8 +18,15 @@ fn socket_path() -> PathBuf {
 }
 
 fn resolve_appsd_bin() -> String {
-    if Command::new("lumo-appsd").arg("--version").output().is_ok() {
-        return "lumo-appsd".to_string();
+    // W34.24: NAO spawn lumo-appsd --version pra probe (Iced runtime full spawn = hang).
+    // Use which command OR PATH search direto.
+    if let Ok(p) = std::env::var("PATH") {
+        for dir in p.split(':') {
+            let candidate = format!("{}/lumo-appsd", dir);
+            if std::path::Path::new(&candidate).is_file() {
+                return candidate;
+            }
+        }
     }
     let home = std::env::var("HOME").unwrap_or_default();
     let candidate = format!("{}/Projects/lumo-shell/target/release/lumo-appsd", home);
