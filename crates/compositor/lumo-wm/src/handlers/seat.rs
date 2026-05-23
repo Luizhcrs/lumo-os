@@ -119,7 +119,13 @@ impl SeatHandler for LumoState {
             (String::new(), String::new(), 0u32)
         };
         tracing::debug!(%app_id, %title, pid, "C5: focus_changed -> ActiveApp broadcast");
-        self.last_active_app = Some((app_id.clone(), title.clone(), pid));
+        // W34.9 fix #3: clear last_active_app pra None quando focused=None (era Some empty,
+        // re-broadcast a novos clients enviava ActiveApp vazio em vez de "limpar").
+        if focused.is_none() {
+            self.last_active_app = None;
+        } else {
+            self.last_active_app = Some((app_id.clone(), title.clone(), pid));
+        }
         self.ipc.broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
     }
 

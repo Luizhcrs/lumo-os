@@ -37,8 +37,22 @@ impl PointerHandler for LumoBar {
                 PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
                     self.pointer_x = ev.position.0 as f32;
                     self.pointer_pos = Some(ev.position);
-                    // Q4: drag brilho ativo — ajusta pct proporcional ao delta Y.
-                    if self.brightness_dragging {
+
+                    // Q4: drag brilho ativo no SLIDER HORIZONTAL (dentro do dropdown).
+                    if self.brightness_dragging && self.brightness_dragging_slider {
+                        if let Some((rx, _ry, rw, _rh)) = self.brightness_slider_rect {
+                            let px = ev.position.0 as f32;
+                            let rel = ((px - rx) / rw).clamp(0.0, 1.0);
+                            let new_pct = (rel * 100.0).round() as u8;
+                            if new_pct != self.brightness_info.pct {
+                                crate::bar::system_info::set_brightness_pct(new_pct);
+                                self.brightness_info.pct = new_pct;
+                                self.update_size_and_redraw(qh);
+                            }
+                        }
+                    }
+                    // Q4: drag brilho ativo no ICONE (vertical).
+                    else if self.brightness_dragging {
                         let py_now = ev.position.1 as f32;
                         let dy = self.brightness_drag_last_y - py_now; // arrasto pra cima = mais brilho
                         self.brightness_drag_last_y = py_now;
@@ -199,12 +213,29 @@ impl PointerHandler for LumoBar {
                         }
                     }
                     if !handled {
-                        // L5: brilho pill -> abre dropdown Brightness.
+                        // L5: clique em dropdown aberto -> fecha se for clique externo (A31.6).
+                    if !handled && self.dropdown != DropdownActive::None {
+                        if let Some((rx, ry, rw, rh)) = self.dropdown_rect {
+                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                // Clique INTERNO: processa items
+                                eprintln!("[lumo-bar] clique interno no dropdown");
+                            } else {
+                                // Clique EXTERNO: fecha.
+                                eprintln!("[lumo-bar] clique externo -> fechando dropdown {:?}", self.dropdown);
+                                self.start_close_anim(self.dropdown);
+                                self.update_size_and_redraw(qh);
+                                handled = true;
+                            }
+                        }
+                    }
+
+                    // L5: brilho pill -> abre dropdown Brightness + inicia drag.
                         if let Some((rx, ry, rw, rh)) = self.brightness_hit_rect {
                             if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
-                                // Q4: iniciar drag brilho.
+                                // Q4: iniciar drag brilho (permite ajuste movendo mouse sem dropdown aberto).
                                 self.brightness_dragging = true;
                                 self.brightness_drag_last_y = py;
+                                
                                 if self.dropdown == DropdownActive::Brightness {
                                     self.start_close_anim(DropdownActive::Brightness);
                                 } else {
@@ -276,15 +307,20 @@ impl PointerHandler for LumoBar {
                                 }
                             }
                         }
-                        // Slider: click sets pct from x position.
+                        // Slider: click sets pct from x position + inicia drag.
                         if !handled {
                             if let Some((rx, ry, rw, rh)) = self.brightness_slider_rect {
                                 if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
                                     let rel = ((px - rx) / rw).clamp(0.0, 1.0);
                                     let new_pct = (rel * 100.0).round() as u8;
-                                    eprintln!("[lumo-bar] L5 brightness slider -> {}%", new_pct);
+                                    eprintln!("[lumo-bar] L5 brightness slider start drag -> {}%", new_pct);
                                     crate::bar::system_info::set_brightness_pct(new_pct);
                                     self.brightness_info.pct = new_pct;
+                                    
+                                    // Q4: Inicia arrasto no slider interno.
+                                    self.brightness_dragging = true;
+                                    self.brightness_dragging_slider = true; // Flag nova pra saber que eh o slider horizontal
+                                    
                                     self.update_size_and_redraw(qh);
                                     handled = true;
                                 }
@@ -295,12 +331,19 @@ impl PointerHandler for LumoBar {
                     if !handled && self.dropdown == DropdownActive::Battery {
                         if let Some((rx, ry, rw, rh)) = self.bat_charge_limit_toggle_rect {
                             if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                // A31.5 fix: toggle real 80 <-> 100.
                                 let current_limit = self.battery_info.charge_limit.unwrap_or(100);
-                                let new_limit: u8 = if current_limit <= 80 { 100 } else { 80 };
-                                eprintln!("[lumo-bar] L5 charge limit -> {}", new_limit);
+                                let new_limit: u8 = if current_limit == 80 { 100 } else { 80 };
+                                
+                                eprintln!("[lumo-bar] L5 charge limit toggle: {} -> {}", current_limit, new_limit);
+                                
                                 let path = std::path::PathBuf::from(
                                     "/sys/class/power_supply/BAT1/charge_control_end_threshold");
-                                let _ = std::fs::write(&path, new_limit.to_string());
+                                // Tenta escrever. Se falhar (falta sudo no runtime), loga.
+                                if let Err(e) = std::fs::write(&path, new_limit.to_string()) {
+                                    eprintln!("[lumo-bar] Erro ao escrever charge_limit: {:?}", e);
+                                }
+                                
                                 self.battery_info.charge_limit = Some(new_limit);
                                 self.update_size_and_redraw(qh);
                                 handled = true;
@@ -363,45 +406,28 @@ impl PointerHandler for LumoBar {
                             }
                         }
                     }
-                    // W30: click em item do menu Lumo -> spawn cmd respectivo.
+                    // A27: click em item do menu Lumo aberto -> executa acao.
                     if !handled && self.dropdown == DropdownActive::LumoMenu {
                         if let Some(idx) = self.lumo_menu_hit_test(px, py) {
                             let label = MENU_LUMO_ITEMS[idx].label;
-                            eprintln!("[lumo-bar] menu Lumo: {}", label);
-                            // idx mapping (MENU_LUMO_ITEMS em tokens.rs):
-                            //   0 Sobre este Galaxy Book
-                            //   1 Software Update
-                            //   2 Lumo Store
-                            //   3 separator
-                            //   4 Preferencias do Sistema
-                            //   5 separator
-                            //   6 Bloquear tela
-                            //   7 Suspender
-                            //   8 Reiniciar
-                            //   9 Desligar
-                            // W34.2: prefere lumo-appctl pra apps daemonized (instant via socket).
-                            let cmd: Option<(&str, &[&str])> = match idx {
-                                0 => Some(("lumo-appctl", &["about"])),
-                                1 => Some(("lumo-appctl", &["store"])),
-                                2 => Some(("lumo-appctl", &["store"])),
-                                4 => Some(("lumo-appctl", &["settings"])),
-                                6 => Some(("lumo-lock", &[])),
-                                7 => Some(("systemctl", &["suspend"])),
-                                8 => Some(("systemctl", &["reboot"])),
-                                9 => Some(("systemctl", &["poweroff"])),
-                                _ => None,
-                            };
-                            if let Some((bin, args)) = cmd {
-                                let bin_path = resolve_lumo_bin(bin);
-                                let res = std::process::Command::new(&bin_path)
-                                    .args(args)
-                                    .stdin(std::process::Stdio::null())
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .spawn();
-                                if let Err(e) = res {
-                                    eprintln!("[lumo-bar] spawn {} falhou: {}", bin_path, e);
+                            eprintln!("[lumo-bar] menu Lumo acao: '{}'", label);
+                            // W34.9 fix #9: log spawn err em vez de silenciar.
+                            let spawn_log = |bin: &str, args: &[&str]| {
+                                let mut cmd = std::process::Command::new(bin);
+                                cmd.args(args);
+                                match cmd.spawn() {
+                                    Ok(_) => eprintln!("[lumo-bar] menu spawn {} {:?}", bin, args),
+                                    Err(e) => eprintln!("[lumo-bar] ERR menu spawn {} {:?}: {}", bin, args, e),
                                 }
+                            };
+                            match idx {
+                                0 => { spawn_log("lumo-appctl", &["about"]); }
+                                2 => { spawn_log("lumo-appctl", &["store"]); }
+                                4 => { spawn_log("lumo-appctl", &["settings"]); }
+                                6 => { spawn_log("lumo-lock", &[]); }
+                                8 => { spawn_log("reboot", &[]); }
+                                9 => { spawn_log("poweroff", &[]); }
+                                _ => {}
                             }
                             self.dropdown = DropdownActive::None;
                             self.lumo_menu_hover_idx = usize::MAX;
@@ -533,39 +559,11 @@ impl PointerHandler for LumoBar {
                     // Q4: encerra drag brilho no release.
                     if self.brightness_dragging {
                         self.brightness_dragging = false;
+                        self.brightness_dragging_slider = false;
                     }
                 }
                 _ => {}
             }
         }
     }
-}
-
-/// W30: tenta resolver bin Lumo em paths comuns. Sequence:
-/// 1. CARGO_HOME/target/release (dev) -> nao confiavel runtime
-/// 2. lumo-tty.sh roda do dir lumo-shell -- target/release relative ao CWD
-/// 3. /usr/local/bin/<bin>
-/// 4. <bin> via PATH lookup
-fn resolve_lumo_bin(name: &str) -> String {
-    // 1. CWD/target/release/<bin>
-    if let Ok(cwd) = std::env::current_dir() {
-        let p = cwd.join("target/release").join(name);
-        if p.exists() {
-            return p.to_string_lossy().into_owned();
-        }
-    }
-    // 2. $HOME/Projects/lumo-shell/target/release/<bin>
-    if let Ok(home) = std::env::var("HOME") {
-        let p = std::path::PathBuf::from(home).join("Projects/lumo-shell/target/release").join(name);
-        if p.exists() {
-            return p.to_string_lossy().into_owned();
-        }
-    }
-    // 3. /usr/local/bin/<bin>
-    let p = std::path::PathBuf::from("/usr/local/bin").join(name);
-    if p.exists() {
-        return p.to_string_lossy().into_owned();
-    }
-    // 4. fallback PATH lookup
-    name.to_string()
 }

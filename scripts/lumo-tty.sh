@@ -169,17 +169,8 @@ cd "$(dirname "$0")/.."
 # ============================================================
 # Build com feature drm-backend (idempotente, cache cargo).
 # ============================================================
-# W31.5: redirect output ao log apos checks isatty (Lumo console limpo)
-exec > /tmp/lumo-tty-stdout.log 2>&1
-
-# W31.2: skip build se binarios fresh
-WM_BIN=./target/release/lumo-wm
-BAR_BIN=./target/release/lumo-bar
-if [ -x "$WM_BIN" ] && [ -x "$BAR_BIN" ] && [ "$WM_BIN" -nt Cargo.lock ] && [ "$BAR_BIN" -nt Cargo.lock ]; then
-    : # binaries fresh, skip
-else
-    cargo build --release --features lumo-wm/drm-backend --bin lumo-wm --bin lumo-bar > /tmp/lumo-build.log 2>&1
-fi
+echo "[1/3] Build lumo-wm (feature drm-backend) + lumo-bar..."
+cargo build --release --features lumo-wm/drm-backend --bin lumo-wm --bin lumo-bar 2>&1 | tail -6
 
 # ============================================================
 # Env (source de lumo-env.conf).
@@ -194,10 +185,10 @@ set -a; source "$ENV_FILE"; set +a
 # A13: LUMO_THEME default light; override: LUMO_THEME=dark ./scripts/lumo-tty.sh
 export LUMO_THEME="${LUMO_THEME:-dark}"
 
-true
-true
-true
-false_skip="  Sair limpo:           Ctrl+Alt+Backspace"
+echo "[2/3] TTY = $current_tty, user = $(id -un)"
+echo "[3/3] Iniciando lumo-wm DRM..."
+echo ""
+echo "  Sair limpo:           Ctrl+Alt+Backspace"
 echo "  Voltar TTY1:          Ctrl+Alt+F1 (Hyprland esta morto, vai dar console)"
 echo "  Display manager:      Ctrl+Alt+F2"
 echo ""
@@ -223,32 +214,26 @@ post_exit() {
 }
 trap post_exit EXIT
 
-# Loop hot-restart: pkill lumo-wm relauncha automatico, preserva TTY DRM
-# session. Pra parar permanente: touch /tmp/lumo-no-restart antes de matar.
-rm -f /tmp/lumo-no-restart
 # W34.2: spawn lumo-appsd daemon em background (runtime Iced persistente).
-(
-    sleep 3
-    if [ ! -S /run/user/$(id -u)/lumo-appsd.sock ]; then
-        nohup ./target/release/lumo-appsd > /tmp/lumo-appsd.log 2>&1 < /dev/null &
-    fi
-) &
-
-# W34.0: prewarm Lumo apps libs em page cache (background + kill rapido).
-# Cold start subsequente: ~150ms vs ~500ms (libs Iced/wgpu ja cached).
+# W34.9 fix #11: path absoluto via $REPO (relativo quebra se subshell cwd diferente).
+APPSD_BIN="$REPO/target/release/lumo-appsd"
 (
     sleep 5
-    for app in about files calc notes editor settings store monitor; do
-        # Read binary pra forçar page cache
-        cat ./target/release/lumo-$app >/dev/null 2>&1
-    done
+    # Auto-detecta socket criado pelo WM
+    W_SOCKET=$(ls -t /run/user/$(id -u)/wayland-* 2>/dev/null | grep -v ".lock" | head -n 1 | xargs basename)
+    export WAYLAND_DISPLAY="${W_SOCKET:-wayland-0}"
+    export ICED_BACKEND=tiny-skia
+    export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    echo "[boot] lumo-appsd tentando conectar em $WAYLAND_DISPLAY (bin=$APPSD_BIN)" >> /tmp/lumo-appsd.log
+    nohup "$APPSD_BIN" >> /tmp/lumo-appsd.log 2>&1 < /dev/null &
 ) &
 
-clear
-printf "[2J[H"
+# Garante lumo-appctl no path pro menu Lumo funcionar
+export PATH="$PATH:$REPO/target/release"
+
 while true; do
-    ./target/release/lumo-wm > /tmp/lumo-wm-tty.log 2>&1
-    LUMO_EC=$?
+    ./target/release/lumo-wm 2>&1 | tee /tmp/lumo-wm-tty.log
+    LUMO_EC=${PIPESTATUS[0]}
     echo "[hot-restart] lumo-wm exit code=$LUMO_EC"
     if [[ -f /tmp/lumo-no-restart ]]; then
         rm -f /tmp/lumo-no-restart

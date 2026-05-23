@@ -1,13 +1,20 @@
-//! lumo-appsd - daemon Iced multi-window completo (W34.2).
+//! lumo-appsd - daemon Iced multi-window completo (W34.9).
 //!
 //! 8 apps Lumo co-existem em runtime Iced unico:
 //! about, calc, notes, monitor, editor, files, settings, store.
 //!
 //! IPC via /run/user/UID/lumo-appsd.sock. Cliente: lumo-appctl <kind>.
+//!
+//! W34.9 fixes:
+//! - pending args fila VecDeque (era Option, race se 2 OpenAppArg rapid)
+//! - accept loop spawn per connection (era serial, cliente lento bloqueava)
+//! - bind retry com unlink (era falha hard em EADDRINUSE)
+//! - view None retorna empty (era texto "loading..." flicker)
+//! - editor recebe path arg tambem
 
 use iced::{daemon, window, Size, Task, Theme, Subscription};
 use iced::window::Id as WinId;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 
 const SOCKET_FILENAME: &str = "lumo-appsd.sock";
@@ -17,7 +24,7 @@ fn socket_path() -> PathBuf {
     PathBuf::from(runtime).join(SOCKET_FILENAME)
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AppKind {
     About,
     Calc,
@@ -121,7 +128,8 @@ enum Msg {
 
 struct State {
     windows: HashMap<WinId, WindowState>,
-    pending_files_path: Option<std::path::PathBuf>,
+    /// W34.9 fix #1: fila FIFO de args por AppKind (era Option, race se rapid).
+    pending_args: HashMap<AppKind, VecDeque<String>>,
 }
 
 fn main() -> iced::Result {
@@ -131,10 +139,8 @@ fn main() -> iced::Result {
         .run_with(init)
 }
 
-/// W34.7: batch sub-app subscriptions + IPC + window close events.
 fn combined_subscription(state: &State) -> Subscription<Msg> {
     let mut subs: Vec<Subscription<Msg>> = vec![ipc_subscription(state)];
-    // Sub-app subscriptions wrapped per window id.
     for (&id, win) in state.windows.iter() {
         let s = match win {
             WindowState::About(a)    => a.subscription().map(move |m| Msg::About(id, m)),
@@ -144,11 +150,10 @@ fn combined_subscription(state: &State) -> Subscription<Msg> {
             WindowState::Editor(a)   => a.subscription().map(move |m| Msg::Editor(id, m)),
             WindowState::Files(a)    => a.subscription().map(move |m| Msg::Files(id, m)),
             WindowState::Settings(a) => a.subscription().map(move |m| Msg::Settings(id, m)),
-            WindowState::Store(_)    => continue, // lumo-store no subscription()
+            WindowState::Store(_)    => continue,
         };
         subs.push(s);
     }
-    // Window close events -> Msg::WindowClosed pra cleanup state.windows.
     subs.push(iced::window::close_events().map(Msg::WindowClosed));
     Subscription::batch(subs)
 }
@@ -156,10 +161,11 @@ fn combined_subscription(state: &State) -> Subscription<Msg> {
 fn init() -> (State, Task<Msg>) {
     let sock = socket_path();
     let _ = std::fs::remove_file(&sock);
-    eprintln!("[appsd] ready (W34.2) socket={}", sock.display());
-    let state = State { windows: HashMap::new(), pending_files_path: None };
-    // W34.8: skip auto-open. Daemon Iced runtime persiste sem windows.
-    // Bug: about inicial abria com size errado (renderiza so metade).
+    eprintln!("[appsd] ready (W34.9) socket={}", sock.display());
+    let state = State {
+        windows: HashMap::new(),
+        pending_args: HashMap::new(),
+    };
     (state, Task::none())
 }
 
@@ -171,14 +177,22 @@ fn ipc_subscription(_state: &State) -> Subscription<Msg> {
 
     Subscription::run_with_id(
         "lumo-appsd-ipc",
-        channel(16, |mut output| async move {
+        channel(16, |output| async move {
             let path = socket_path();
-            let listener = match UnixListener::bind(&path) {
-                Ok(l) => l,
-                Err(e) => {
-                    eprintln!("[appsd] bind socket: {}", e);
-                    std::future::pending::<()>().await;
-                    unreachable!();
+            // W34.9 fix #5: retry unlink+bind se EADDRINUSE.
+            let listener = loop {
+                match UnixListener::bind(&path) {
+                    Ok(l) => break l,
+                    Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                        eprintln!("[appsd] socket in use, unlink+retry: {}", path.display());
+                        let _ = std::fs::remove_file(&path);
+                        continue;
+                    }
+                    Err(e) => {
+                        eprintln!("[appsd] bind socket: {}", e);
+                        std::future::pending::<()>().await;
+                        unreachable!();
+                    }
                 }
             };
             eprintln!("[appsd] IPC listening {}", path.display());
@@ -187,17 +201,24 @@ fn ipc_subscription(_state: &State) -> Subscription<Msg> {
                     Ok(s) => s,
                     Err(e) => { eprintln!("[appsd] accept: {}", e); continue; }
                 };
-                let mut buf = String::new();
-                if stream.read_to_string(&mut buf).await.is_err() { continue; }
-                eprintln!("[appsd] IPC recv: {:?}", buf.trim());
-                let line = buf.trim();
-                let (k_str, arg) = match line.find(':') {
-                    Some(i) => (&line[..i], Some(line[i+1..].to_string())),
-                    None => (line, None),
-                };
-                if let Some(kind) = AppKind::parse(k_str) {
-                    let _ = output.send(Msg::OpenAppArg(kind, arg)).await;
-                }
+                // W34.9 fix #2: spawn per connection (era serial, lento bloqueava todos).
+                let mut tx = output.clone();
+                tokio::spawn(async move {
+                    let mut buf = String::new();
+                    if let Err(e) = stream.read_to_string(&mut buf).await {
+                        eprintln!("[appsd] read: {}", e);
+                        return;
+                    }
+                    eprintln!("[appsd] IPC recv: {:?}", buf.trim());
+                    let line = buf.trim();
+                    let (k_str, arg) = match line.find(':') {
+                        Some(i) => (&line[..i], Some(line[i+1..].to_string())),
+                        None => (line, None),
+                    };
+                    if let Some(kind) = AppKind::parse(k_str) {
+                        let _ = tx.send(Msg::OpenAppArg(kind, arg)).await;
+                    }
+                });
             }
         }),
     )
@@ -213,7 +234,7 @@ fn title_fn(state: &State, id: WinId) -> String {
         Some(WindowState::Files(_))    => AppKind::Files.title().into(),
         Some(WindowState::Settings(_)) => AppKind::Settings.title().into(),
         Some(WindowState::Store(_))    => AppKind::Store.title().into(),
-        None => "Lumo Apps".into(),
+        None => String::new(),
     }
 }
 
@@ -224,11 +245,11 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
             open_task.map(move |id| Msg::Opened(kind, id))
         }
         Msg::OpenAppArg(kind, arg) => {
-            let (_id, open_task) = window::open(kind.settings());
-            // Stash arg in pending map keyed by next window id.
-            if let (AppKind::Files, Some(path)) = (kind, arg.clone()) {
-                state.pending_files_path = Some(path.into());
+            // W34.9 fix #1: push em fila FIFO por kind. Msg::Opened pop_front.
+            if let Some(a) = arg {
+                state.pending_args.entry(kind).or_default().push_back(a);
             }
+            let (_id, open_task) = window::open(kind.settings());
             open_task.map(move |id| Msg::Opened(kind, id))
         }
         Msg::Opened(AppKind::About, id) => {
@@ -252,13 +273,18 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
             t.map(move |m| Msg::Monitor(id, m))
         }
         Msg::Opened(AppKind::Editor, id) => {
-            let (app, t) = lumo_editor::app::App::new(None);
+            // W34.9: editor aceita path arg.
+            let arg = state.pending_args.get_mut(&AppKind::Editor)
+                .and_then(|q| q.pop_front());
+            let (app, t) = lumo_editor::app::App::new(arg);
             state.windows.insert(id, WindowState::Editor(app));
             t.map(move |m| Msg::Editor(id, m))
         }
         Msg::Opened(AppKind::Files, id) => {
-            let (app, t) = if let Some(p) = state.pending_files_path.take() {
-                lumo_files::app::App::new_with_dir(p)
+            let arg = state.pending_args.get_mut(&AppKind::Files)
+                .and_then(|q| q.pop_front());
+            let (app, t) = if let Some(p) = arg {
+                lumo_files::app::App::new_with_dir(PathBuf::from(p))
             } else {
                 lumo_files::app::App::new()
             };
@@ -266,12 +292,23 @@ fn update(state: &mut State, msg: Msg) -> Task<Msg> {
             t.map(move |m| Msg::Files(id, m))
         }
         Msg::Opened(AppKind::Settings, id) => {
+            let arg = state.pending_args.get_mut(&AppKind::Settings)
+                .and_then(|q| q.pop_front());
             let (app, t) = lumo_settings::app::App::new();
+            if let Some(tab) = arg {
+                eprintln!("[appsd] settings arg ignorado (sem tab API): {}", tab);
+            }
             state.windows.insert(id, WindowState::Settings(app));
             t.map(move |m| Msg::Settings(id, m))
         }
         Msg::Opened(AppKind::Store, id) => {
+            // W34.9 fix #8: tab arg pass-through (era ignorado).
+            let arg = state.pending_args.get_mut(&AppKind::Store)
+                .and_then(|q| q.pop_front());
             let (app, t) = lumo_store::app::StoreApp::new();
+            if let Some(tab) = arg {
+                eprintln!("[appsd] store tab={} (StoreApp::new sem tab arg ainda)", tab);
+            }
             state.windows.insert(id, WindowState::Store(app));
             t.map(move |m| Msg::Store(id, m))
         }
@@ -332,6 +369,7 @@ fn view(state: &State, id: WinId) -> iced::Element<'_, Msg> {
         Some(WindowState::Files(app))    => app.view().map(move |m| Msg::Files(id, m)),
         Some(WindowState::Settings(app)) => app.view().map(move |m| Msg::Settings(id, m)),
         Some(WindowState::Store(app))    => app.view().map(move |m| Msg::Store(id, m)),
-        None => iced::widget::text("lumo-appsd loading...").into(),
+        // W34.9 fix #10: empty space em vez de "loading..." flicker.
+        None => iced::widget::Space::with_width(iced::Length::Fill).into(),
     }
 }

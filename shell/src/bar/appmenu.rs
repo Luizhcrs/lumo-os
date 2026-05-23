@@ -48,7 +48,8 @@ impl AppMenuState {
             return s;
         }
         // W34.5: apps Lumo nativos pills hardcoded SEM DBus fetch.
-        if app_id.starts_with("com.lumo.") || app_id.starts_with("lumo-") {
+        // W34.9 fix #6: tighten "com.lumo." only (era || "lumo-", intercepta 3rd-party).
+        if app_id.starts_with("com.lumo.") {
             let labels: &[&str] = match app_id {
                 "com.lumo.files"    => &["Arquivo", "Editar", "Ir", "Ajuda"],
                 "com.lumo.editor"   => &["Arquivo", "Editar", "Localizar", "Ajuda"],
@@ -97,6 +98,12 @@ impl AppMenuState {
 
     /// Envia DBus Event "clicked" pro item com o dado id.
     pub fn activate(&self, item_id: i32) {
+        // W34.9: pill submenu click no-op fix. Apps Lumo hardcoded tem service vazio.
+        // Dispatch local via (app_id, item_id) -> Command::spawn / IPC.
+        if self.service.is_empty() && self.app_id.starts_with("com.lumo.") {
+            hardcoded_activate(&self.app_id, item_id);
+            return;
+        }
         if self.service.is_empty() || self.object_path.is_empty() {
             return;
         }
@@ -108,7 +115,8 @@ impl AppMenuState {
     /// Busca subitens (submenu) de um item top-level via DBus.
     pub fn fetch_submenu(&self, parent_id: i32) -> Vec<AppMenuItem> {
         // W34.6: apps Lumo hardcoded submenus (service vazio, sem DBus).
-        if self.service.is_empty() && (self.app_id.starts_with("com.lumo.") || self.app_id.starts_with("lumo-")) {
+        // W34.9 fix #6: tighten "com.lumo." only.
+        if self.service.is_empty() && self.app_id.starts_with("com.lumo.") {
             return hardcoded_submenu(&self.app_id, parent_id);
         }
         if self.service.is_empty() {
@@ -296,6 +304,113 @@ fn fetch_submenu_inner(
     parse_layout_at(&proxy, parent_id)
 }
 
+
+/// W34.9: dispatch local pra (app_id, item_id) hardcoded. Sem DBus.
+/// item_id segue convencao hardcoded_submenu: parent_pill * 100 + idx + 1.
+/// Pra "Fechar": envia LumoCommand::CloseFocusedToplevel via socket lumo-wm.
+/// Pra demais: spawn lumo-appctl <kind>[:arg] ou cmd direto.
+fn hardcoded_activate(app_id: &str, item_id: i32) {
+    use std::process::Command;
+    let pill = item_id / 100;
+    let idx = item_id - pill * 100; // 1-indexed
+    eprintln!("[appmenu] W34.9 hardcoded_activate {} pill={} idx={}", app_id, pill, idx);
+    match (app_id, pill, idx) {
+        // -------- Files --------
+        ("com.lumo.files", 0, 1) => { spawn_appctl("files", None); }                        // Nova janela
+        ("com.lumo.files", 0, 2) => { eprintln!("[appmenu] TODO: Nova pasta"); }            // Nova pasta
+        ("com.lumo.files", 0, 3) => { send_wm_close_focused(); }                            // Fechar
+        ("com.lumo.files", 1, _) => { eprintln!("[appmenu] clipboard via app stub"); }      // Recortar/Copiar/Colar
+        ("com.lumo.files", 2, 1) => { spawn_appctl("files", home_path("").as_deref()); }    // Inicio
+        ("com.lumo.files", 2, 2) => { spawn_appctl("files", home_path("Documents").as_deref()); }
+        ("com.lumo.files", 2, 3) => { spawn_appctl("files", home_path("Downloads").as_deref()); }
+        ("com.lumo.files", 3, 1) => { spawn_appctl("about", None); }                        // Sobre Lumo Files
+        // -------- Editor --------
+        ("com.lumo.editor", 0, 1) => { spawn_appctl("editor", None); }                      // Novo
+        ("com.lumo.editor", 0, 4) => { send_wm_close_focused(); }                           // Fechar
+        ("com.lumo.editor", 3, 1) => { spawn_appctl("about", None); }                       // Sobre Editor
+        // -------- Calc --------
+        ("com.lumo.calc", 0, 2) => { send_wm_close_focused(); }                             // Fechar
+        ("com.lumo.calc", 2, 1) => { spawn_appctl("about", None); }                         // Sobre Calc
+        // -------- Notes --------
+        ("com.lumo.notes", 0, 3) => { send_wm_close_focused(); }                            // Fechar
+        ("com.lumo.notes", 3, 1) => { spawn_appctl("about", None); }                        // Sobre Notes
+        // -------- Monitor --------
+        ("com.lumo.monitor", 0, 2) => { send_wm_close_focused(); }                          // Fechar
+        ("com.lumo.monitor", 2, 1) => { spawn_appctl("about", None); }                      // Sobre Monitor
+        // -------- Settings --------
+        ("com.lumo.settings", 0, 1) => { send_wm_close_focused(); }                         // Fechar
+        ("com.lumo.settings", 1, 1) => { spawn_appctl("about", None); }                     // Sobre Settings
+        // -------- Store --------
+        ("com.lumo.store", 0, 2) => { send_wm_close_focused(); }                            // Fechar
+        ("com.lumo.store", 1, 1) => { spawn_appctl("store", Some("available")); }           // Disponiveis
+        ("com.lumo.store", 1, 2) => { spawn_appctl("store", Some("installed")); }           // Instalados
+        ("com.lumo.store", 1, 3) => { spawn_appctl("store", Some("updates")); }             // W34.9 fix #8: Atualizacoes
+        ("com.lumo.store", 2, 1) => { spawn_appctl("about", None); }                        // Sobre Store
+        // -------- About --------
+        ("com.lumo.about", 0, 1) => { spawn_appctl("about", None); }                        // Sobre Lumo OS (re-open)
+        _ => {
+            eprintln!("[appmenu] hardcoded_activate unmapped: app={} pill={} idx={}", app_id, pill, idx);
+        }
+    }
+    let _ = Command::new("true").spawn();
+}
+
+fn spawn_appctl(kind: &str, arg: Option<&str>) {
+    use std::process::Command;
+    let payload = match arg {
+        Some(a) => format!("{}:{}", kind, a),
+        None => kind.to_string(),
+    };
+    // W34.9 fix #7: resolve path lumo-appctl. PATH primeiro, fallback ./target/release.
+    let bin = resolve_lumo_bin("lumo-appctl");
+    match Command::new(&bin).arg(&payload).spawn() {
+        Ok(_) => eprintln!("[appmenu] spawn {} {}", bin, payload),
+        Err(e) => eprintln!("[appmenu] ERR spawn {} {}: {}", bin, payload, e),  // W34.9 fix #9
+    }
+}
+
+fn resolve_lumo_bin(name: &str) -> String {
+    // Tenta PATH; se PATH falha (TTY autologin sem PATH completo), tenta
+    // local de build relativo a $HOME/Projects/lumo-shell/target/release/.
+    if std::process::Command::new(name).arg("--version").output().is_ok() {
+        return name.to_string();
+    }
+    let home = std::env::var("HOME").unwrap_or_default();
+    let candidate = format!("{}/Projects/lumo-shell/target/release/{}", home, name);
+    if std::path::Path::new(&candidate).exists() {
+        return candidate;
+    }
+    name.to_string()
+}
+
+fn home_path(suffix: &str) -> Option<String> {
+    let home = std::env::var("HOME").ok()?;
+    if suffix.is_empty() {
+        Some(home)
+    } else {
+        Some(format!("{}/{}", home, suffix))
+    }
+}
+
+fn send_wm_close_focused() {
+    use std::io::Write;
+    use std::os::unix::net::UnixStream;
+    let runtime = match std::env::var("XDG_RUNTIME_DIR") {
+        Ok(r) => r,
+        Err(_) => { eprintln!("[appmenu] XDG_RUNTIME_DIR ausente; close skip"); return; }
+    };
+    let path = format!("{}/lumo-wm.sock", runtime);
+    let mut s = match UnixStream::connect(&path) {
+        Ok(s) => s,
+        Err(e) => { eprintln!("[appmenu] connect lumo-wm: {}", e); return; }
+    };
+    let payload = "\"CloseFocusedToplevel\"\n";
+    if let Err(e) = s.write_all(payload.as_bytes()) {
+        eprintln!("[appmenu] write CloseFocusedToplevel: {}", e);
+    } else {
+        eprintln!("[appmenu] sent CloseFocusedToplevel via {}", path);
+    }
+}
 
 /// W34.6: submenus hardcoded por app_id + parent_id (sem DBus).
 fn hardcoded_submenu(app_id: &str, parent_id: i32) -> Vec<AppMenuItem> {

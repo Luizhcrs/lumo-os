@@ -361,15 +361,35 @@ impl IconsState {
         if let Some(icon) = self.icons.get(idx) {
             let path = icon.path.to_string_lossy().to_string();
             // W34.3: dir -> lumo-appctl files <path>. Resto -> xdg-open.
+            // W34.9 fix #7+#9: resolve lumo-appctl path + log spawn err.
             if icon.path.is_dir() {
-                Command::new("lumo-appctl").arg("files").arg(&path).spawn().ok();
-                eprintln!("[lumo-desktop] lumo-appctl files {}", path);
+                let bin = resolve_lumo_bin("lumo-appctl");
+                let payload = format!("files:{}", path);
+                match Command::new(&bin).arg(&payload).spawn() {
+                    Ok(_) => eprintln!("[lumo-desktop] {} {}", bin, payload),
+                    Err(e) => eprintln!("[lumo-desktop] ERR spawn {} {}: {}", bin, payload, e),
+                }
             } else {
-                Command::new("xdg-open").arg(&path).spawn().ok();
-                eprintln!("[lumo-desktop] xdg-open {}", path);
+                match Command::new("xdg-open").arg(&path).spawn() {
+                    Ok(_) => eprintln!("[lumo-desktop] xdg-open {}", path),
+                    Err(e) => eprintln!("[lumo-desktop] ERR xdg-open {}: {}", path, e),
+                }
             }
         }
     }
+}
+
+/// W34.9 fix #7: resolve lumo-* bin path. PATH primeiro, fallback ./target/release.
+fn resolve_lumo_bin(name: &str) -> String {
+    if Command::new(name).arg("--version").output().is_ok() {
+        return name.to_string();
+    }
+    let home = std::env::var("HOME").unwrap_or_default();
+    let candidate = format!("{}/Projects/lumo-shell/target/release/{}", home, name);
+    if std::path::Path::new(&candidate).exists() {
+        return candidate;
+    }
+    name.to_string()
 }
 
 // ============================================================
