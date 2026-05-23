@@ -28,7 +28,7 @@ Modo: balanced
 Modo: performance
 Modo: power-saver"
 
-CHOICE=$(echo "$PANEL" | rofi -dmenu -p "Bateria" -theme ~/.config/rofi/lumo.rasi -width 30)
+CHOICE=$(echo "$PANEL" | rofi -dmenu -p "Bateria" -theme ~/.config/rofi/lumo-dropdown.rasi -width 30)
 
 case "$CHOICE" in
     "Cuidar bateria (80%)")

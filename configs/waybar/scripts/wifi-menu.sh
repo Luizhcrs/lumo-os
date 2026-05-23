@@ -13,7 +13,7 @@ NETWORKS=$(nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY dev wifi list 2>/dev/null | \
     }')
 
 if [[ -z "$NETWORKS" ]]; then
-    rofi -e "Nenhuma rede disponivel" -theme ~/.config/rofi/lumo.rasi
+    rofi -e "Nenhuma rede disponivel" -theme ~/.config/rofi/lumo-dropdown.rasi
     exit 0
 fi
 
@@ -22,7 +22,7 @@ MENU="Toggle WiFi
 ─────────
 $NETWORKS"
 
-CHOICE=$(echo "$MENU" | rofi -dmenu -p "WiFi" -theme ~/.config/rofi/lumo.rasi)
+CHOICE=$(echo "$MENU" | rofi -dmenu -p "WiFi" -theme ~/.config/rofi/lumo-dropdown.rasi)
 
 if [[ -z "$CHOICE" ]]; then
     exit 0
@@ -51,7 +51,7 @@ if echo "$RESULT" | grep -q "successfully"; then
     notify-send "WiFi" "Conectado a $SSID"
 elif echo "$RESULT" | grep -qi "secrets\|password\|secret"; then
     # Precisa senha.
-    PASS=$(rofi -dmenu -password -p "Senha $SSID" -theme ~/.config/rofi/lumo.rasi)
+    PASS=$(rofi -dmenu -password -p "Senha $SSID" -theme ~/.config/rofi/lumo-dropdown.rasi)
     if [[ -n "$PASS" ]]; then
         nmcli dev wifi connect "$SSID" password "$PASS" \
             && notify-send "WiFi" "Conectado a $SSID" \

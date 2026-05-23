@@ -14,7 +14,7 @@ Maximo (100%)
 +5%
 -5%"
 
-CHOICE=$(echo "$PANEL" | rofi -dmenu -p "Brilho" -theme ~/.config/rofi/lumo.rasi)
+CHOICE=$(echo "$PANEL" | rofi -dmenu -p "Brilho" -theme ~/.config/rofi/lumo-dropdown.rasi)
 
 case "$CHOICE" in
     "Dia (80%)") brightnessctl s 80% ;;
