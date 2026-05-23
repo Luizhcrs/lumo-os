@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "shell",
     "crates/foundation/lumo-foundation",
+    "crates/foundation/lumo-style",
     "crates/foundation/lumo-telemetry",
     "crates/graphics/lumo-beam",
     "crates/graphics/lumo-graphics",

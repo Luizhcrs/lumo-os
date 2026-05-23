@@ -1,0 +1,13 @@
+[package]
+name = "lumo-style"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo OS Design System CSS engine. Parse CSS subset, resolve vars, hot-reload."
+
+[dependencies]
+cssparser = "0.34"
+notify = { version = "8", default-features = false, features = ["macos_kqueue"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
