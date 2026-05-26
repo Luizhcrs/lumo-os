@@ -94,7 +94,7 @@ impl CompositorHandler for LumoState {
                     new_y = new_y.clamp(min_y, max_y.max(min_y));
 
                     if new_x != current_loc.x || new_y != current_loc.y {
-                        self.space.map_element(window.clone(), (new_x, new_y).into(), true);
+                        self.space.map_element(window.clone(), (new_x, new_y), true);
                     }
                 }
             }
