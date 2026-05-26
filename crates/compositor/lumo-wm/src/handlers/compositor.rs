@@ -50,6 +50,53 @@ impl CompositorHandler for LumoState {
                 .cloned()
             {
                 window.on_commit();
+
+                // LIMITES DE GEOMETRIA: Respeite a usable_geometry() do compositor.
+                // Janelas flutuantes nao devem abrir maiores que o espaco util da tela
+                // nem transborde para fora dos limites.
+                if self.tiling_mode == crate::tiling::TilingMode::Floating {
+                    let usable = self.usable_geometry();
+                    let geo = window.geometry();
+                    let mut size_changed = false;
+                    let mut new_w = geo.size.w;
+                    let mut new_h = geo.size.h;
+
+                    if new_w > usable.size.w {
+                        new_w = usable.size.w;
+                        size_changed = true;
+                    }
+                    if new_h > usable.size.h {
+                        new_h = usable.size.h;
+                        size_changed = true;
+                    }
+
+                    if size_changed {
+                        if let Some(tl) = window.toplevel() {
+                            tl.with_pending_state(|state| {
+                                state.size = Some(smithay::utils::Size::from((new_w, new_h)));
+                            });
+                            let _ = tl.send_configure();
+                        }
+                    }
+
+                    let current_loc = self.space.element_location(&window).unwrap_or_default();
+                    let mut new_x = current_loc.x;
+                    let mut new_y = current_loc.y;
+
+                    const SSD_TITLEBAR_H: i32 = 30;
+                    
+                    let min_x = usable.loc.x;
+                    let min_y = usable.loc.y + SSD_TITLEBAR_H;
+                    let max_x = (usable.loc.x + usable.size.w - new_w).max(min_x);
+                    let max_y = (usable.loc.y + usable.size.h - new_h).max(min_y);
+
+                    new_x = new_x.clamp(min_x, max_x.max(min_x));
+                    new_y = new_y.clamp(min_y, max_y.max(min_y));
+
+                    if new_x != current_loc.x || new_y != current_loc.y {
+                        self.space.map_element(window.clone(), (new_x, new_y).into(), true);
+                    }
+                }
             }
 
             // Fix 4 (5.4): initial-configure pra layer-shell surfaces

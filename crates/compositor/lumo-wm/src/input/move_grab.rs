@@ -107,11 +107,13 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
         // W24.3: Seguranca contra panics de clamp (min > max).
         // Se a janela for maior que a area util, max_x/max_y ficariam negativos.
         // Forcamos max >= min para evitar crash total do compositor.
-        let max_x = (usable.loc.x + usable.size.w - win_bbox.size.w.max(64)).max(usable.loc.x);
-        let max_y = (usable.loc.y + usable.size.h - 32).max(usable.loc.y + SSD_TITLEBAR_H);
+        let min_x = usable.loc.x;
+        let max_x = (usable.loc.x + usable.size.w - win_bbox.size.w.max(64)).max(min_x);
+        new_loc.x = new_loc.x.clamp(min_x, max_x.max(min_x));
 
-        new_loc.x = new_loc.x.clamp(usable.loc.x, max_x);
-        new_loc.y = new_loc.y.clamp(usable.loc.y + SSD_TITLEBAR_H, max_y);
+        let min_y = usable.loc.y + SSD_TITLEBAR_H;
+        let max_y = (usable.loc.y + usable.size.h - 32).max(min_y);
+        new_loc.y = new_loc.y.clamp(min_y, max_y.max(min_y));
 
         data.space.map_element(self.window.clone(), new_loc, true);
 
@@ -372,21 +374,30 @@ mod tests {
 
     #[test]
     fn regression_clamp_logic_safety() {
-        // Mock data
+        // Mock data para janela muito maior que a tela (caso do Mousepad)
         let usable_x = 0;
         let usable_w = 1000;
-        let win_w = 1052; // Caso do Mousepad bizarro
+        let win_w = 2500; // Janela gigantesca
         
-        // A logica que causava panic:
-        // let max_x = usable_x + usable_w - win_w; // -> -52
-        // target.clamp(usable_x, max_x); // -> panic: 0 > -52
-        
-        // A logica corrigida:
+        let min_x = usable_x;
         let max_x = (usable_x + usable_w - win_w).max(usable_x);
-        assert_eq!(max_x, 0); // max deve ser no minimo o proprio min
+        assert_eq!(max_x, 0); // O limite superior nao deve ser menor que min_x
         
-        let target = 500;
-        let clamped = target.clamp(usable_x, max_x);
-        assert_eq!(clamped, 0); // move para o limite seguro
+        let target_x = 500;
+        let clamped_x = target_x.clamp(min_x, max_x.max(min_x));
+        assert_eq!(clamped_x, 0);
+
+        // Teste para o eixo Y
+        let usable_y = 40;
+        let usable_h = 960;
+        let win_h = 1500; // Janela verticalmente gigante
+        const SSD_TITLEBAR_H: i32 = 30;
+
+        let min_y = usable_y + SSD_TITLEBAR_H;
+        let max_y = (usable_y + usable_h - 32).max(min_y);
+        
+        let target_y = 600;
+        let clamped_y = target_y.clamp(min_y, max_y.max(min_y));
+        assert!(clamped_y >= min_y);
     }
 }

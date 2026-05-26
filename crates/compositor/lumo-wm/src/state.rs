@@ -568,11 +568,11 @@ impl LumoState {
         // W24.5: Protecao de bordas (garante que nao abra fora da tela se o monitor for pequeno)
         let min_x = usable.loc.x + 8;
         let max_x = (usable.loc.x + usable.size.w - FIXED_W - 8).max(min_x);
-        x = x.clamp(min_x, max_x);
+        x = x.clamp(min_x, max_x.max(min_x));
         
         let min_y = usable.loc.y + SSD_TITLEBAR_H + 8;
         let max_y = (usable.loc.y + usable.size.h - FIXED_H - 8).max(min_y);
-        y = y.clamp(min_y, max_y);
+        y = y.clamp(min_y, max_y.max(min_y));
         
         (x, y).into()
     }
