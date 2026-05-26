@@ -162,6 +162,7 @@ pub fn run() {
         appmenu: crate::bar::appmenu::AppMenuState::default(),
         appmenu_open_idx: None,
         appmenu_submenu: Vec::new(),
+        appmenu_submenu_hover_idx: usize::MAX,
         appmenu_pill_rects: Vec::new(),
         appmenu_submenu_rects: Vec::new(),
         ipc_stream: connect_ipc(),

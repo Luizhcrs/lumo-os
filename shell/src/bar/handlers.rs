@@ -163,6 +163,7 @@ impl LumoBar {
             appmenu_items: self.appmenu.items.clone(),
             appmenu_open_idx: self.appmenu_open_idx,
             appmenu_submenu: self.appmenu_submenu.clone(),
+            appmenu_submenu_hover_idx: self.appmenu_submenu_hover_idx,
             // S2: fallback app state.
             appmenu_app_id: self.appmenu.app_id.clone(),
             appmenu_title: self.appmenu.title.clone(),

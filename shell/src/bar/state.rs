@@ -63,6 +63,8 @@ pub(crate) struct BarSnapshot {
     pub appmenu_items: Vec<crate::bar::appmenu::AppMenuItem>,
     pub appmenu_open_idx: Option<usize>,
     pub appmenu_submenu: Vec<crate::bar::appmenu::AppMenuItem>,
+    /// W37.6: indice do item em hover no submenu appmenu (usize::MAX = nenhum).
+    pub appmenu_submenu_hover_idx: usize,
     // S2: appmenu fallback metadata.
     pub appmenu_app_id: String,
     pub appmenu_title: String,
@@ -678,81 +680,71 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
             .find(|(i, _)| *i == open_idx)
         {
             if !snap.appmenu_submenu.is_empty() {
-                // Calcula dimensoes do submenu.
-                let sub_item_h: f32 = 22.0;
-                let sub_pad: f32 = 8.0;
-                let max_label_w = snap
+                // W37.6: usa menu::draw_menu_dyn pra identidade visual unica
+                // com bar dropdowns + desktop ctx menus (palette, radius 14,
+                // font 13, hover accent solid).
+                use crate::menu;
+                let dyn_items: Vec<menu::DynMenuItem<'_>> = snap
                     .appmenu_submenu
                     .iter()
                     .map(|it| {
                         if it.label == "---" {
-                            0.0
+                            menu::DynMenuItem::separator()
                         } else {
-                            measure_text(&it.label, FONT_PILL, false)
+                            menu::DynMenuItem::action(&it.label)
                         }
                     })
-                    .fold(0.0f32, f32::max);
-                let sub_w = (max_label_w + pill_pad_x * 2.0).max(120.0);
-                let sub_h = snap
+                    .collect();
+
+                let max_label_w = snap
                     .appmenu_submenu
                     .iter()
-                    .map(|it| if it.label == "---" { 8.0 } else { sub_item_h })
-                    .sum::<f32>()
-                    + sub_pad * 2.0;
+                    .filter(|it| it.label != "---")
+                    .map(|it| measure_text(&it.label, menu::FONT_MENU, false))
+                    .fold(0.0f32, f32::max);
+                let sub_w = (max_label_w + menu::MENU_PAD_X * 2.0).max(menu::MENU_W_DESKTOP * 0.8);
+                let sub_h = menu::menu_height_dyn(&dyn_items);
                 let sub_x = rx.max(pill_margin);
                 let sub_y = ry + rh + DROPDOWN_GAP;
 
+                let _ = rw; // suprime warning unused legado.
+
                 if let Some(mut sub) = tiny_skia::Pixmap::new(sub_w as u32, sub_h as u32) {
                     use crate::bar::icons::fill_rrect;
-                    let bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
                     {
                         let mut canvas = sub.as_mut();
-                        // Fundo do dropdown.
-                        fill_rrect(&mut canvas, 0.0, 0.0, sub_w, sub_h, 10.0, bg);
+                        menu::draw_menu_dyn(
+                            &mut canvas,
+                            0.0,
+                            0.0,
+                            sub_w,
+                            &dyn_items,
+                            snap.appmenu_submenu_hover_idx,
+                            &palette,
+                            fill_rrect,
+                            |c, x, y, label, size, color| {
+                                draw_text(c, x, y, label, size, color, false);
+                            },
+                        );
                     }
+                    // Hit rects para handler de click (precisa coords absolutas).
                     let mut submenu_rects: Vec<(usize, (f32, f32, f32, f32))> = Vec::new();
-                    let mut item_y = sub_pad;
+                    let mut item_y = menu::MENU_PAD_Y;
                     for (sidx, item) in snap.appmenu_submenu.iter().enumerate() {
                         if item.label == "---" {
-                            // Separador: linha horizontal fina.
-                            let sep_color = rgba_hex(palette.pill_sep, palette.pill_sep_alpha);
-                            {
-                                let mut canvas = sub.as_mut();
-                                fill_rrect(
-                                    &mut canvas,
-                                    pill_pad_x,
-                                    item_y + 3.0,
-                                    sub_w - pill_pad_x * 2.0,
-                                    1.0,
-                                    0.0,
-                                    sep_color,
-                                );
-                            }
-                            item_y += 8.0;
+                            item_y += menu::MENU_SEPARATOR_BLOCK_H;
                             continue;
-                        }
-                        {
-                            let mut canvas = sub.as_mut();
-                            draw_text(
-                                &mut canvas,
-                                pill_pad_x,
-                                item_y + (sub_item_h - FONT_PILL * 1.2) / 2.0,
-                                &item.label,
-                                FONT_PILL,
-                                opaque(palette.pill_fg),
-                                false,
-                            );
                         }
                         submenu_rects.push((
                             sidx,
                             (
-                                sub_x + pill_pad_x,
+                                sub_x + menu::MENU_ROW_HOVER_INSET,
                                 sub_y + item_y,
-                                sub_w - pill_pad_x * 2.0,
-                                sub_item_h,
+                                sub_w - menu::MENU_ROW_HOVER_INSET * 2.0,
+                                menu::MENU_ROW_H,
                             ),
                         ));
-                        item_y += sub_item_h;
+                        item_y += menu::MENU_ROW_H;
                     }
                     result.appmenu_submenu_rects = submenu_rects;
                     composite_dropdown(pixmap, &sub, sub_x, sub_y, 1.0, 1.0);
@@ -917,6 +909,8 @@ pub(crate) struct LumoBar {
     pub appmenu: crate::bar::appmenu::AppMenuState,
     pub appmenu_open_idx: Option<usize>,
     pub appmenu_submenu: Vec<crate::bar::appmenu::AppMenuItem>,
+    /// W37.6: hover idx no submenu appmenu.
+    pub appmenu_submenu_hover_idx: usize,
     pub appmenu_pill_rects: Vec<(usize, (f32, f32, f32, f32))>,
     pub appmenu_submenu_rects: Vec<(usize, (f32, f32, f32, f32))>,
     // S2: appmenu fallback mirror.

@@ -80,6 +80,25 @@ impl PointerHandler for LumoBar {
                             self.update_size_and_redraw(qh);
                         }
                     }
+                    // W37.6: hover tracking no submenu appmenu (Arquivo/Editar/etc).
+                    if self.appmenu_open_idx.is_some() {
+                        let (px, py) = (ev.position.0 as f32, ev.position.1 as f32);
+                        let new_idx = self
+                            .appmenu_submenu_rects
+                            .iter()
+                            .find_map(|(sidx, (rx, ry, rw, rh))| {
+                                if px >= *rx && px <= *rx + *rw && py >= *ry && py <= *ry + *rh {
+                                    Some(*sidx)
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or(usize::MAX);
+                        if new_idx != self.appmenu_submenu_hover_idx {
+                            self.appmenu_submenu_hover_idx = new_idx;
+                            self.update_size_and_redraw(qh);
+                        }
+                    }
                 }
                 PointerEventKind::Leave { .. } => {
                     self.pointer_pos = None;
@@ -87,6 +106,10 @@ impl PointerHandler for LumoBar {
                         && self.lumo_menu_hover_idx != usize::MAX
                     {
                         self.lumo_menu_hover_idx = usize::MAX;
+                        self.update_size_and_redraw(qh);
+                    }
+                    if self.appmenu_submenu_hover_idx != usize::MAX {
+                        self.appmenu_submenu_hover_idx = usize::MAX;
                         self.update_size_and_redraw(qh);
                     }
                 }

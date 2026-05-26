@@ -178,6 +178,82 @@ pub fn clamp_menu_origin(
 }
 
 // ============================================================
+// Dynamic-label variant (submenu appmenu, labels nao-static).
+// ============================================================
+
+/// Versao dinamica de MenuItem (label nao-static). Usada pelo submenu
+/// appmenu pill da bar (labels vem de dbusmenu IPC em runtime).
+#[derive(Debug, Clone)]
+pub struct DynMenuItem<'a> {
+    pub label: &'a str,
+    pub kind: MenuItemKind,
+}
+
+impl<'a> DynMenuItem<'a> {
+    pub fn action(label: &'a str) -> Self {
+        Self {
+            label,
+            kind: MenuItemKind::Action,
+        }
+    }
+    pub fn separator() -> Self {
+        Self {
+            label: "",
+            kind: MenuItemKind::Separator,
+        }
+    }
+    pub fn is_clickable(&self) -> bool {
+        matches!(self.kind, MenuItemKind::Action | MenuItemKind::Toggle(_))
+    }
+}
+
+/// Altura total de um slice dynamic.
+pub fn menu_height_dyn(items: &[DynMenuItem<'_>]) -> f32 {
+    let mut h = MENU_PAD_Y * 2.0;
+    for it in items {
+        h += match it.kind {
+            MenuItemKind::Separator => MENU_SEPARATOR_BLOCK_H,
+            _ => MENU_ROW_H,
+        };
+    }
+    h
+}
+
+/// Hit-test dynamic.
+pub fn hit_test_dyn(
+    items: &[DynMenuItem<'_>],
+    mx: f32,
+    my: f32,
+    w: f32,
+    px: f32,
+    py: f32,
+) -> Option<usize> {
+    let h = menu_height_dyn(items);
+    if px < mx || px > mx + w || py < my || py > my + h {
+        return None;
+    }
+    let py_rel = py - my - MENU_PAD_Y;
+    if py_rel < 0.0 {
+        return None;
+    }
+    let mut acc = 0.0;
+    for (i, it) in items.iter().enumerate() {
+        let block = match it.kind {
+            MenuItemKind::Separator => MENU_SEPARATOR_BLOCK_H,
+            _ => MENU_ROW_H,
+        };
+        if py_rel >= acc && py_rel < acc + block {
+            if it.is_clickable() {
+                return Some(i);
+            }
+            return None;
+        }
+        acc += block;
+    }
+    None
+}
+
+// ============================================================
 // Render via callbacks.
 // ============================================================
 //
@@ -196,6 +272,68 @@ pub fn rgba_hex(hex: u32, alpha: u8) -> Color {
 
 pub fn opaque(hex: u32) -> Color {
     rgba_hex(hex, 0xff)
+}
+
+/// Versao dynamic (label runtime): identica a draw_menu mas com slice
+/// de DynMenuItem<'a>. Reusada pelo submenu appmenu pill da bar.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_menu_dyn<TextFn, RrectFn>(
+    canvas: &mut PixmapMut,
+    mx: f32,
+    my: f32,
+    w: f32,
+    items: &[DynMenuItem<'_>],
+    hover_idx: usize,
+    palette: &LumoColors,
+    mut fill_rrect_fn: RrectFn,
+    mut draw_text_fn: TextFn,
+) where
+    TextFn: FnMut(&mut PixmapMut, f32, f32, &str, f32, Color),
+    RrectFn: FnMut(&mut PixmapMut, f32, f32, f32, f32, f32, Color),
+{
+    let mh = menu_height_dyn(items);
+    let bg = rgba_hex(palette.pill_bg, palette.pill_bg_alpha);
+    fill_rrect_fn(canvas, mx, my, w, mh, MENU_RADIUS, bg);
+    let fg = opaque(palette.pill_fg);
+    let hover_bg = opaque(palette.accent);
+    let hover_fg = opaque(0xffffff);
+    let sep_color = rgba_hex(palette.border, 0xff);
+    let mut cur_y = my + MENU_PAD_Y;
+    for (i, it) in items.iter().enumerate() {
+        match it.kind {
+            MenuItemKind::Separator => {
+                let line_y = (cur_y + 4.0).round();
+                fill_rrect_fn(
+                    canvas,
+                    mx + MENU_SEPARATOR_INSET_X,
+                    line_y,
+                    w - MENU_SEPARATOR_INSET_X * 2.0,
+                    1.0,
+                    0.5,
+                    sep_color,
+                );
+                cur_y += MENU_SEPARATOR_BLOCK_H;
+            }
+            MenuItemKind::Action | MenuItemKind::Toggle(_) => {
+                let is_hover = i == hover_idx;
+                if is_hover {
+                    fill_rrect_fn(
+                        canvas,
+                        mx + MENU_ROW_HOVER_INSET,
+                        cur_y + 1.0,
+                        w - MENU_ROW_HOVER_INSET * 2.0,
+                        MENU_ROW_H - 2.0,
+                        MENU_ROW_HOVER_RADIUS,
+                        hover_bg,
+                    );
+                }
+                let text_color = if is_hover { hover_fg } else { fg };
+                let text_y = (cur_y + (MENU_ROW_H - FONT_MENU * 1.4) / 2.0).round();
+                draw_text_fn(canvas, mx + MENU_PAD_X, text_y, it.label, FONT_MENU, text_color);
+                cur_y += MENU_ROW_H;
+            }
+        }
+    }
 }
 
 /// Pinta o menu inteiro. `draw_text_fn(canvas, x, y, label, size, color)`,
@@ -283,5 +421,63 @@ pub fn draw_menu<TextFn, RrectFn>(
                 cur_y += MENU_ROW_H;
             }
         }
+    }
+}
+
+// ============================================================
+// Tests.
+// ============================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn w37_6_menu_height_dyn_action_e_separator() {
+        let items = vec![
+            DynMenuItem::action("Arquivo"),
+            DynMenuItem::separator(),
+            DynMenuItem::action("Editar"),
+        ];
+        let h = menu_height_dyn(&items);
+        // pad(6*2) + row(28) + sep(9) + row(28) = 12 + 28 + 9 + 28 = 77
+        assert_eq!(h, MENU_PAD_Y * 2.0 + MENU_ROW_H * 2.0 + MENU_SEPARATOR_BLOCK_H);
+    }
+
+    #[test]
+    fn w37_6_hit_test_dyn_skip_separator() {
+        let items = vec![
+            DynMenuItem::action("A"),
+            DynMenuItem::separator(),
+            DynMenuItem::action("B"),
+        ];
+        // (10, 10) origem; w 200.
+        // Item 0: y rel 0..28 -> abs 16..44
+        // Sep: y rel 28..37 -> abs 44..53
+        // Item 1: y rel 37..65 -> abs 53..81
+        assert_eq!(hit_test_dyn(&items, 10.0, 10.0, 200.0, 50.0, 30.0), Some(0));
+        // hit no separator -> None
+        assert_eq!(hit_test_dyn(&items, 10.0, 10.0, 200.0, 50.0, 48.0), None);
+        // hit no item 1
+        assert_eq!(hit_test_dyn(&items, 10.0, 10.0, 200.0, 50.0, 60.0), Some(2));
+    }
+
+    #[test]
+    fn w37_6_hit_test_dyn_fora_e_none() {
+        let items = vec![DynMenuItem::action("A")];
+        // px < mx
+        assert_eq!(hit_test_dyn(&items, 100.0, 100.0, 200.0, 50.0, 105.0), None);
+        // py < my
+        assert_eq!(hit_test_dyn(&items, 100.0, 100.0, 200.0, 150.0, 90.0), None);
+    }
+
+    #[test]
+    fn w37_6_menu_radius_e_padroes_unificados() {
+        // Confirma constantes que driving identidade visual unica.
+        assert_eq!(MENU_RADIUS, 14.0);
+        assert_eq!(MENU_ROW_H, 28.0);
+        assert_eq!(FONT_MENU, 13.0);
+        assert_eq!(MENU_ROW_HOVER_RADIUS, 6.0);
+        assert_eq!(MENU_PAD_X, 14.0);
     }
 }
