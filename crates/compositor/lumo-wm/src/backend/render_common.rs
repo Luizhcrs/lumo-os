@@ -166,7 +166,6 @@ pub fn titlebar_btns_for_window(
         TITLEBAR_BG[2],
         TITLEBAR_BG[3],
     );
-    let _ = bg_color;
     let btn_color = Color32F::new(
         CLOSE_BTN_COLOR[0],
         CLOSE_BTN_COLOR[1],
@@ -190,6 +189,17 @@ pub fn titlebar_btns_for_window(
         }
         // W24.6: Ajusta loc com offset interno da geometria (geo.loc)
         let actual_loc = loc + geo.loc;
+
+        // W37.7: BG da titlebar full-width. Antes faltava -> SSD aparecia
+        // como botoes + titulo flutuante isolados, conteudo da janela
+        // vazava por baixo (bug "barra errada" no Mousepad).
+        // NOTA: Push order em smithay - PRIMEIRO elem renderiza POR CIMA
+        // (front). bg vai z=1 + pushed APOS botoes pra renderizar atras.
+        let tb_bg_rect: Rectangle<i32, Physical> = Rectangle::new(
+            smithay::utils::Point::from((actual_loc.x, actual_loc.y - TITLEBAR_H))
+                .to_physical_precise_round(1.0),
+            (win_w, TITLEBAR_H).into(),
+        );
 
         let btn_rect = close_btn_rect(
             smithay::utils::Point::from((actual_loc.x, actual_loc.y - TITLEBAR_H)),
@@ -238,6 +248,16 @@ pub fn titlebar_btns_for_window(
             min_rect,
             0,
             min_color,
+            Kind::Unspecified,
+        ));
+
+        // W37.7: BG pushed POR ULTIMO (smithay renderiza Vec em ordem
+        // reversa - ultimo elem renderiza atras). z=1 reforca atras.
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            tb_bg_rect,
+            1,
+            bg_color,
             Kind::Unspecified,
         ));
     }
@@ -1425,6 +1445,48 @@ pub fn snap_preview_element(
         (w, h).into(),
     );
     SolidColorRenderElement::new(Id::new(), geo, 0, color, Kind::Unspecified)
+}
+
+#[cfg(test)]
+mod w37_7_tb_bg_tests {
+    use super::*;
+    use smithay::utils::Point;
+
+    /// W37.7: BG da titlebar deve cobrir full-width na altura TITLEBAR_H.
+    /// Antes faltava esse rect -> SSD aparecia como botoes flutuantes
+    /// + titulo isolado, conteudo da janela vazava por baixo.
+    #[test]
+    fn w37_7_titlebar_bg_full_width() {
+        let actual_x = 100;
+        let actual_y = 200;
+        let win_w = 800;
+        // Constroi o rect manualmente igual ao paint code.
+        let bg_rect: Rectangle<i32, Physical> = Rectangle::new(
+            Point::<i32, smithay::utils::Logical>::from((actual_x, actual_y - TITLEBAR_H))
+                .to_physical_precise_round(1.0),
+            (win_w, TITLEBAR_H).into(),
+        );
+        assert_eq!(bg_rect.size.w, win_w);
+        assert_eq!(bg_rect.size.h, TITLEBAR_H);
+        // Botoes devem estar DENTRO do bg rect.
+        let close = ssd_close_btn_rect_logical(
+            Point::<i32, smithay::utils::Logical>::from((actual_x, actual_y - TITLEBAR_H)),
+            win_w,
+        );
+        let max = ssd_max_btn_rect_logical(
+            Point::<i32, smithay::utils::Logical>::from((actual_x, actual_y - TITLEBAR_H)),
+            win_w,
+        );
+        let min = ssd_min_btn_rect_logical(
+            Point::<i32, smithay::utils::Logical>::from((actual_x, actual_y - TITLEBAR_H)),
+            win_w,
+        );
+        // Bg cobre toda a area da titlebar onde os botoes ficam.
+        assert!(close.loc.x >= bg_rect.loc.x);
+        assert!(close.loc.x + close.size.w <= bg_rect.loc.x + bg_rect.size.w);
+        assert!(max.loc.x >= bg_rect.loc.x);
+        assert!(min.loc.x >= bg_rect.loc.x);
+    }
 }
 
 #[cfg(test)]
