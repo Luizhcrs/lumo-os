@@ -115,7 +115,10 @@ impl SeatHandler for LumoState {
             });
 
             if is_mapped {
-                let (app_id, title) = wl_compositor::with_states(surf, |states| {
+                // W37.5: le XdgToplevelSurfaceData de ROOT (nao surf). Subsurfaces
+                // do toolkit (Iced/winit) nao tem XdgToplevelSurfaceData -> antes
+                // retornava app_id vazio e quebrava appmenu.
+                let (app_id, title) = wl_compositor::with_states(&root, |states| {
                     if let Some(data) = states.data_map.get::<XdgToplevelSurfaceData>() {
                         let lock = data
                             .lock()
@@ -128,7 +131,8 @@ impl SeatHandler for LumoState {
                         (String::new(), String::new())
                     }
                 });
-                let pid = surf
+                // pid do root (toplevel), nao da subsurface.
+                let pid = root
                     .client()
                     .and_then(|c| c.get_credentials(&self.display_handle).ok())
                     .map(|creds| creds.pid as u32)
@@ -160,21 +164,47 @@ impl SeatHandler for LumoState {
             pid,
             focused.is_some()
         );
-        // W35: se app_id ainda vazio (ex: surface interna Iced "winit window"),
-        // forcamos title e pid a vazio tambem pra bar limpar -- nao vazar
-        // titulo de superficie interna do compositor.
-        let (app_id, title, pid) = if app_id.is_empty() {
-            (String::new(), String::new(), 0u32)
-        } else {
-            (app_id, title, pid)
-        };
-        if !app_id.is_empty() {
-            self.last_active_app = Some((app_id.clone(), title.clone(), pid));
-        } else {
-            self.last_active_app = None;
+        // W37.5: decisao via fn pura -> evita appmenu piscar em focus events
+        // transientes de surfaces internas Iced/winit.
+        let last_ref = self
+            .last_active_app
+            .as_ref()
+            .map(|(id, _, p)| (id.as_str(), *p));
+        let decision = decide_focus_broadcast(&app_id, pid, last_ref);
+        match decision {
+            FocusBroadcastDecision::Ignore => {
+                eprintln!(
+                    "[wm] W37.5 ignora focus_changed app_id='' pid={} == last_pid",
+                    pid
+                );
+            }
+            FocusBroadcastDecision::KeepLast => {
+                if let Some((last_id, last_title, last_pid)) = self.last_active_app.clone() {
+                    eprintln!(
+                        "[wm] W37.5 re-broadcast last app={:?} pid={}",
+                        last_id, last_pid
+                    );
+                    self.ipc.broadcast(&LumoEvent::ActiveApp {
+                        app_id: last_id,
+                        title: last_title,
+                        pid: last_pid,
+                    });
+                }
+            }
+            FocusBroadcastDecision::Clear => {
+                self.last_active_app = None;
+                self.ipc.broadcast(&LumoEvent::ActiveApp {
+                    app_id: String::new(),
+                    title: String::new(),
+                    pid: 0,
+                });
+            }
+            FocusBroadcastDecision::Update => {
+                self.last_active_app = Some((app_id.clone(), title.clone(), pid));
+                self.ipc
+                    .broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
+            }
         }
-        self.ipc
-            .broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
     }
 
     fn led_state_changed(&mut self, _seat: &Seat<Self>, led_state: LedState) {
@@ -187,6 +217,47 @@ impl SeatHandler for LumoState {
 }
 
 smithay::delegate_seat!(LumoState);
+
+/// W37.5: decisao pura de broadcast pra focus_changed.
+/// Recebe (incoming_app_id, incoming_pid, last_active_app) e retorna
+/// qual broadcast deve sair (ou Skip se manter estado).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FocusBroadcastDecision {
+    /// Limpa appmenu (broadcast empty).
+    Clear,
+    /// Mantem estado anterior (re-broadcast last).
+    KeepLast,
+    /// Ignora o evento sem broadcast nenhum (transient toolkit event).
+    Ignore,
+    /// Novo app focado, broadcast (app_id, title, pid).
+    Update,
+}
+
+pub fn decide_focus_broadcast(
+    incoming_app_id: &str,
+    incoming_pid: u32,
+    last: Option<(&str, u32)>,
+) -> FocusBroadcastDecision {
+    if incoming_app_id.is_empty() {
+        match last {
+            Some((_, last_pid)) if incoming_pid != 0 && incoming_pid == last_pid => {
+                // Mesmo pid -> surface transient da mesma janela.
+                FocusBroadcastDecision::Ignore
+            }
+            Some(_) if incoming_pid == 0 => {
+                // pid zero (Iced winit internal) -> rebroadcast ultimo.
+                FocusBroadcastDecision::KeepLast
+            }
+            Some(_) => {
+                // pid diferente e nao zero -> outro processo sem app_id.
+                FocusBroadcastDecision::Clear
+            }
+            None => FocusBroadcastDecision::Clear,
+        }
+    } else {
+        FocusBroadcastDecision::Update
+    }
+}
 
 /// Maps smithay CursorIcon variants to xcursor theme icon names.
 /// W10.C: covers the most common contextual cursors apps request.
@@ -227,6 +298,45 @@ pub fn cursor_icon_to_xcursor_name(icon: smithay::input::pointer::CursorIcon) ->
         CursorIcon::NeswResize => "nesw-resize",
         CursorIcon::NwseResize => "nwse-resize",
         _ => "default",
+    }
+}
+
+#[cfg(test)]
+mod focus_broadcast_tests {
+    use super::{decide_focus_broadcast, FocusBroadcastDecision};
+
+    #[test]
+    fn w37_5_app_id_valido_atualiza() {
+        let d = decide_focus_broadcast("com.lumo.files", 100, None);
+        assert_eq!(d, FocusBroadcastDecision::Update);
+    }
+
+    #[test]
+    fn w37_5_app_id_vazio_mesmo_pid_ignora() {
+        // Surface transient da mesma janela -> mantem state.
+        let d = decide_focus_broadcast("", 100, Some(("com.lumo.files", 100)));
+        assert_eq!(d, FocusBroadcastDecision::Ignore);
+    }
+
+    #[test]
+    fn w37_5_app_id_vazio_pid_zero_keeps_last() {
+        // Iced/winit internal surface -> rebroadcast ultimo.
+        let d = decide_focus_broadcast("", 0, Some(("com.lumo.files", 100)));
+        assert_eq!(d, FocusBroadcastDecision::KeepLast);
+    }
+
+    #[test]
+    fn w37_5_app_id_vazio_pid_diferente_clear() {
+        // Outro processo sem app_id -> limpa.
+        let d = decide_focus_broadcast("", 200, Some(("com.lumo.files", 100)));
+        assert_eq!(d, FocusBroadcastDecision::Clear);
+    }
+
+    #[test]
+    fn w37_5_app_id_vazio_sem_last_clear() {
+        // Estado inicial sem janela focada.
+        let d = decide_focus_broadcast("", 0, None);
+        assert_eq!(d, FocusBroadcastDecision::Clear);
     }
 }
 
