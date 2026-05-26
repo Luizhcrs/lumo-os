@@ -166,7 +166,7 @@ impl App {
         }
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let tab_bar: Vec<Element<Message>> = Tab::ALL
             .iter()
             .map(|&t| {
@@ -201,7 +201,7 @@ impl App {
         column![tabs, content, status].into()
     }
 
-    fn view_tab(&self) -> Element<Message> {
+    fn view_tab(&self) -> Element<'_, Message> {
         match self.tab {
             Tab::Cpu => self.view_cpu(),
             Tab::Memory => self.view_memory(),
@@ -211,7 +211,7 @@ impl App {
         }
     }
 
-    fn view_cpu(&self) -> Element<Message> {
+    fn view_cpu(&self) -> Element<'_, Message> {
         let bar = bar_str(self.cpu_pct, 40);
         let history_text: String = self
             .cpu_history
@@ -247,7 +247,7 @@ impl App {
         .into()
     }
 
-    fn view_memory(&self) -> Element<Message> {
+    fn view_memory(&self) -> Element<'_, Message> {
         let used_gb = self.mem.used_kb() as f32 / 1_048_576.0;
         let total_gb = self.mem.total_kb as f32 / 1_048_576.0;
         let pct = self.mem.used_percent();
@@ -288,7 +288,7 @@ impl App {
         .into()
     }
 
-    fn view_disk(&self) -> Element<Message> {
+    fn view_disk(&self) -> Element<'_, Message> {
         let rows: Vec<Element<Message>> = self
             .mounts
             .iter()
@@ -339,7 +339,7 @@ impl App {
         .into()
     }
 
-    fn view_network(&self) -> Element<Message> {
+    fn view_network(&self) -> Element<'_, Message> {
         let rows: Vec<Element<Message>> = self
             .net_curr
             .iter()
@@ -391,7 +391,7 @@ impl App {
         .into()
     }
 
-    fn view_processes(&self) -> Element<Message> {
+    fn view_processes(&self) -> Element<'_, Message> {
         let header = container(row![
             text("PID")
                 .size(11)

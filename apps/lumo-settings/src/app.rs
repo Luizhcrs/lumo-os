@@ -367,7 +367,7 @@ impl App {
         }
     }
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let sidebar = self.view_sidebar();
         let content = self.view_tab();
         let layout = row![
@@ -388,7 +388,7 @@ impl App {
             .into()
     }
 
-    fn view_sidebar(&self) -> Element<Message> {
+    fn view_sidebar(&self) -> Element<'_, Message> {
         let items: Vec<Element<Message>> = Tab::ALL
             .iter()
             .map(|&t| {
@@ -440,7 +440,7 @@ impl App {
         scrollable(col).into()
     }
 
-    fn view_tab(&self) -> Element<Message> {
+    fn view_tab(&self) -> Element<'_, Message> {
         match self.tab {
             Tab::Display => self.view_display(),
             Tab::Wifi => self.view_wifi(),
@@ -461,7 +461,7 @@ impl App {
             .into()
     }
 
-    fn view_display(&self) -> Element<Message> {
+    fn view_display(&self) -> Element<'_, Message> {
         column![
             Self::section_title("Display"),
             Space::with_height(16),
@@ -492,7 +492,7 @@ impl App {
         .into()
     }
 
-    fn view_wifi(&self) -> Element<Message> {
+    fn view_wifi(&self) -> Element<'_, Message> {
         let toggle_label = if self.wifi_enabled {
             "Wi-Fi: Ligado"
         } else {
@@ -541,7 +541,7 @@ impl App {
         .into()
     }
 
-    fn view_bluetooth(&self) -> Element<Message> {
+    fn view_bluetooth(&self) -> Element<'_, Message> {
         let devices: Vec<Element<Message>> = self
             .bt_devices
             .iter()
@@ -569,7 +569,7 @@ impl App {
         .into()
     }
 
-    fn view_audio(&self) -> Element<Message> {
+    fn view_audio(&self) -> Element<'_, Message> {
         column![
             Self::section_title("Audio"),
             Space::with_height(16),
@@ -589,7 +589,7 @@ impl App {
         .into()
     }
 
-    fn view_battery(&self) -> Element<Message> {
+    fn view_battery(&self) -> Element<'_, Message> {
         let limit_label = if self.charge_limit_80 {
             "Limite 80%: Ligado"
         } else {
@@ -619,7 +619,7 @@ impl App {
         .into()
     }
 
-    fn view_appearance(&self) -> Element<Message> {
+    fn view_appearance(&self) -> Element<'_, Message> {
         let theme_label = if self.dark_mode {
             "Tema: Escuro"
         } else {
@@ -684,7 +684,7 @@ impl App {
         .into()
     }
 
-    fn view_keyboard(&self) -> Element<Message> {
+    fn view_keyboard(&self) -> Element<'_, Message> {
         let layouts: Vec<Element<Message>> = KBD_LAYOUTS
             .iter()
             .enumerate()
@@ -727,8 +727,8 @@ impl App {
         .into()
     }
 
-    fn view_touchpad(&self) -> Element<Message> {
-        let bool_btn = |label: &'static str, val: bool, msg: Message| -> Element<Message> {
+    fn view_touchpad(&self) -> Element<'_, Message> {
+        let bool_btn = |label: &'static str, val: bool, msg: Message| -> Element<'_, Message> {
             button(
                 text(format!("{}: {}", label, if val { "Sim" } else { "Nao" }))
                     .size(13)
@@ -776,7 +776,7 @@ impl App {
         .into()
     }
 
-    fn view_accessibility(&self) -> Element<Message> {
+    fn view_accessibility(&self) -> Element<'_, Message> {
         let rm_label = if self.a11y_reduced_motion {
             "Reducir animacoes: Sim"
         } else {

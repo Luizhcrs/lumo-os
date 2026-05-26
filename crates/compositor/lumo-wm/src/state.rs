@@ -549,28 +549,31 @@ impl LumoState {
     }
 
     pub fn next_tile_position(&self) -> Point<i32, Logical> {
-        // W32: janela nova abre CENTRADA na tela usable (era no cursor).
-        // Cascade offset pequeno (24px) por janela ja aberta evita stack
-        // perfeito sobre janelas anteriores.
-        const DEFAULT_W: i32 = 800;
-        const DEFAULT_H: i32 = 600;
+        // W32: Janelas novas abrem CENTRADAS na tela (estilo Windows/macOS).
+        // Resoluçao fixa padrao: 1024x768.
+        const FIXED_W: i32 = 1024;
+        const FIXED_H: i32 = 768;
         const SSD_TITLEBAR_H: i32 = 30;
-        const CASCADE_STEP: i32 = 24;
-        let usable = self.usable_geometry();
-        let n_open = self.space.elements().count() as i32;
-        let cx = usable.loc.x + usable.size.w / 2;
-        let cy = usable.loc.y + usable.size.h / 2;
-        let cascade = (n_open % 6) * CASCADE_STEP;
-        let mut x = cx - DEFAULT_W / 2 + cascade;
-        let mut y = cy - DEFAULT_H / 2 + cascade;
         
+        let usable = self.usable_geometry();
+        
+        // Calcula o centro da area util
+        let cx = usable.loc.x + (usable.size.w / 2);
+        let cy = usable.loc.y + (usable.size.h / 2);
+        
+        // Posicao top-left para que o centro da janela coincida com o centro da tela
+        let mut x = cx - (FIXED_W / 2);
+        let mut y = cy - (FIXED_H / 2);
+        
+        // W24.5: Protecao de bordas (garante que nao abra fora da tela se o monitor for pequeno)
         let min_x = usable.loc.x + 8;
-        let max_x = (usable.loc.x + usable.size.w - DEFAULT_W - 8).max(min_x);
+        let max_x = (usable.loc.x + usable.size.w - FIXED_W - 8).max(min_x);
         x = x.clamp(min_x, max_x);
         
         let min_y = usable.loc.y + SSD_TITLEBAR_H + 8;
-        let max_y = (usable.loc.y + usable.size.h - DEFAULT_H - 8).max(min_y);
+        let max_y = (usable.loc.y + usable.size.h - FIXED_H - 8).max(min_y);
         y = y.clamp(min_y, max_y);
+        
         (x, y).into()
     }
 
