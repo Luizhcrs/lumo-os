@@ -200,18 +200,8 @@ impl SeatHandler for LumoState {
                 });
             }
             FocusBroadcastDecision::Update => {
-                // W37.8: apps que preferem CSD perdem SSD pra evitar 2 titlebars.
-                if app_prefers_csd(&app_id) {
-                    if let Some(surf) = focused {
-                        let removed = self.ssd_windows.remove(surf);
-                        if removed {
-                            eprintln!(
-                                "[wm] W37.8 app_prefers_csd app_id={:?} -> remove SSD",
-                                app_id
-                            );
-                        }
-                    }
-                }
+                // W37.9: app_prefers_csd revertido (gtk3-nocsd suprime CSD na
+                // origem via lumo-launch.sh). SSD do Lumo sempre presente.
                 self.last_active_app = Some((app_id.clone(), title.clone(), pid));
                 self.ipc
                     .broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
