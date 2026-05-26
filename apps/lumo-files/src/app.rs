@@ -573,7 +573,9 @@ impl App {
 
             // -- Teclado ---------------------------------------------------
             Message::KeyPressed(key, modifiers) => {
-                self.context_menu = None;
+                // W37: fecha context_menu apenas em Escape (linha abaixo).
+                // Fechar em qualquer tecla causa sumir instantaneo quando
+                // winit/wayland emite modifier ao redor de right-click.
                 match key.as_ref() {
                     Key::Named(keyboard::key::Named::Delete) => {
                         return self.update(Message::DeleteSelected);
@@ -587,6 +589,7 @@ impl App {
                         return self.update(Message::OpenSelected);
                     }
                     Key::Named(keyboard::key::Named::Escape) => {
+                        self.context_menu = None;
                         self.current_tab_mut().file_list.clear_selection();
                         self.current_tab_mut().file_list.cancel_rename();
                         self.new_folder_input = None;
@@ -955,10 +958,23 @@ impl App {
                         self.context_menu = Some(ctx);
                     }
                     iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                        // W36: left-click fora do menu fecha ele (dismiss).
-                        // Se havia menu aberto, apenas fecha sem propagar sidebar nav.
-                        if self.context_menu.is_some() {
-                            self.context_menu = None;
+                        // W37: left-click. Se menu aberto e click FORA do rect
+                        // do menu -> fecha. Click DENTRO do menu -> deixa os
+                        // botoes do menu processarem (rename/copy/etc).
+                        if let Some(ref ctx) = self.context_menu {
+                            let (mx, my) = match ctx {
+                                ContextMenu::Item { x, y } | ContextMenu::Area { x, y } => {
+                                    (*x, *y)
+                                }
+                            };
+                            let pos = self.last_cursor_pos;
+                            let inside = pos.x >= mx
+                                && pos.x <= mx + 240.0
+                                && pos.y >= my
+                                && pos.y <= my + 260.0;
+                            if !inside {
+                                self.context_menu = None;
+                            }
                             return Task::none();
                         }
                         let pos = self.last_cursor_pos;
@@ -1446,19 +1462,20 @@ impl App {
             root.into()
         };
 
-        // -- Context menu overlay ------------------------------------------
-        let with_ctx: Element<Message> = if let Some(ref ctx) = self.context_menu {
-            self.view_context_menu(ctx, root, fg, panel_hi, muted, accent)
-        } else {
+        // -- Toasts entram ANTES do context menu para garantir que o stack
+        // do context_menu tenha bounds full-window. Se toast vai depois,
+        // o column encolhe o stack e padding-based positioning clipa o menu.
+        let root_with_toasts: Element<Message> = if self.toasts.is_empty() {
             root
+        } else {
+            column![root, crate::toast::view(&self.theme, &self.toasts),].into()
         };
 
-        // -- Toasts overlay (bottom-right, inline column) ------------------
-        if self.toasts.is_empty() {
-            with_ctx
+        // -- Context menu overlay (TOPMOST) --------------------------------
+        if let Some(ref ctx) = self.context_menu {
+            self.view_context_menu(ctx, root_with_toasts, fg, panel_hi, muted, accent)
         } else {
-            // Embaixo da base, alinha a direita.
-            column![with_ctx, crate::toast::view(&self.theme, &self.toasts),].into()
+            root_with_toasts
         }
     }
 
@@ -2260,16 +2277,18 @@ impl App {
         } else {
             Message::ContextMenuClose
         };
-        let menu = ctxmenu::view(&self.theme, ctx, rename_msg);
+        let has_clipboard = self.clipboard.is_some();
+        let menu = ctxmenu::view(&self.theme, ctx, rename_msg, has_clipboard);
 
         let (mx, my) = match ctx {
             ContextMenu::Item { x, y } => (*x, *y),
             ContextMenu::Area { x, y } => (*x, *y),
         };
 
-        // Clamp para nao sair da tela (240px largura, 200px altura estimada).
+        // Clamp para nao sair da tela. Menu unificado tem ~9 items + 3 sep
+        // = ~260 altura.
         let menu_w = 240.0_f32;
-        let menu_h = 200.0_f32;
+        let menu_h = 260.0_f32;
         // Fallback resolucao Galaxy Book 4 (1920x1080 scaled).
         let win_w = 1366.0_f32;
         let win_h = 768.0_f32;
@@ -2277,6 +2296,8 @@ impl App {
         let py = my.min(win_h - menu_h - 4.0).max(0.0);
 
         // Menu posicionado com padding a partir do canto superior-esquerdo.
+        // RawEvent::ButtonPressed(Left) ja respeita o rect do menu antes de
+        // fechar; nao precisa envolver em mouse_area aqui.
         let positioned_menu = container(container(menu).width(Length::Fixed(menu_w)))
             .padding(iced::Padding {
                 top: py,
@@ -2287,23 +2308,19 @@ impl App {
             .width(Length::Fill)
             .height(Length::Fill);
 
-        // Camada dismiss transparente: fecha ao clicar fora do menu.
-        let dismiss_btn = button(
+        // W37: mouse_area no lugar de button para dismiss. button tem
+        // comportamento de captura/release especifico em Iced; mouse_area
+        // tem semantica de on_press (left) explicita e nao gera state
+        // ambiguo no widget tree.
+        let dismiss = iced::widget::mouse_area(
             container(iced::widget::horizontal_space())
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
-        .on_press(Message::ContextMenuClose)
-        .padding(0)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(|_, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(Color::TRANSPARENT)),
-            ..Default::default()
-        });
+        .on_press(Message::ContextMenuClose);
 
         // stack! empilha: base -> dismiss -> menu posicionado.
-        iced::widget::stack![base, dismiss_btn, positioned_menu].into()
+        iced::widget::stack![base, dismiss, positioned_menu].into()
     }
 
     // -----------------------------------------------------------------------

@@ -115,6 +115,77 @@ async fn test_search_toggle_clears_query() {
         assert!(app.clipboard.is_some());
     }
 
+    // W37: context menu fix - abrir Item/Area + nao fechar em key press
+    #[tokio::test]
+    async fn test_context_menu_abre_em_area_vazia() {
+        use crate::app::ContextMenu;
+        let temp = tempfile::tempdir().unwrap();
+        let (mut app, _) = App::new_with_dir(temp.path().to_path_buf());
+
+        let _ = app.update(Message::ContextMenuOpen(ContextMenu::Area {
+            x: 500.0,
+            y: 300.0,
+        }));
+
+        assert!(matches!(app.context_menu, Some(ContextMenu::Area { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_context_menu_abre_em_item() {
+        use crate::app::ContextMenu;
+        let temp = tempfile::tempdir().unwrap();
+        let (mut app, _) = App::new_with_dir(temp.path().to_path_buf());
+
+        let _ = app.update(Message::ContextMenuOpen(ContextMenu::Item {
+            x: 100.0,
+            y: 200.0,
+        }));
+
+        assert!(matches!(app.context_menu, Some(ContextMenu::Item { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_context_menu_close_message() {
+        use crate::app::ContextMenu;
+        let temp = tempfile::tempdir().unwrap();
+        let (mut app, _) = App::new_with_dir(temp.path().to_path_buf());
+
+        let _ = app.update(Message::ContextMenuOpen(ContextMenu::Area {
+            x: 0.0,
+            y: 0.0,
+        }));
+        assert!(app.context_menu.is_some());
+
+        let _ = app.update(Message::ContextMenuClose);
+        assert!(app.context_menu.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_context_menu_persiste_apos_key_nao_escape() {
+        // W37: bug fix - modifier key emitido por right-click nao deve fechar menu.
+        use crate::app::ContextMenu;
+        use iced::keyboard::{key::Named, Key, Modifiers};
+        let temp = tempfile::tempdir().unwrap();
+        let (mut app, _) = App::new_with_dir(temp.path().to_path_buf());
+
+        let _ = app.update(Message::ContextMenuOpen(ContextMenu::Area {
+            x: 100.0,
+            y: 100.0,
+        }));
+        assert!(app.context_menu.is_some());
+
+        // Tecla generica (modificador-like) nao fecha menu
+        let _ = app.update(Message::KeyPressed(Key::Named(Named::Control), Modifiers::CTRL));
+        assert!(
+            app.context_menu.is_some(),
+            "menu nao deve fechar em tecla nao-Escape"
+        );
+
+        // Escape fecha
+        let _ = app.update(Message::KeyPressed(Key::Named(Named::Escape), Modifiers::default()));
+        assert!(app.context_menu.is_none(), "Escape fecha menu");
+    }
+
     #[tokio::test]
     async fn test_error_flow_invalid_directory() {
         let (mut app, _) = App::new_with_dir(PathBuf::from("/invalid/path/that/doesnt/exist"));

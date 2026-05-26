@@ -17,6 +17,7 @@ pub struct ItemRow {
     pub shortcut: Option<&'static str>,
     pub msg: Message,
     pub destructive: bool,
+    pub enabled: bool,
 }
 
 /// Item entry for a separator.
@@ -27,71 +28,91 @@ fn sep() -> Element<'static, Message> {
         .into()
 }
 
-pub fn items_for_item(rename_msg: Message) -> Vec<Vec<ItemRow>> {
+/// Menu unificado: mesma estrutura para Item e Area, items desabilitados
+/// conforme contexto. Single source of truth (herda do mesmo lugar).
+///
+/// - `has_selection`: arquivo/pasta selecionado (true em ContextMenu::Item).
+/// - `has_clipboard`: copy/cut pendente (habilita Colar).
+/// - `rename_msg`: Message para Renomear (None se sem selecao).
+pub fn items_unified(
+    has_selection: bool,
+    has_clipboard: bool,
+    rename_msg: Message,
+) -> Vec<Vec<ItemRow>> {
     vec![
-        vec![ItemRow {
-            label: "Abrir",
-            shortcut: Some("Enter"),
-            msg: Message::OpenSelected,
-            destructive: false,
-        }],
+        // Grupo abrir + criar
+        vec![
+            ItemRow {
+                label: "Abrir",
+                shortcut: Some("Enter"),
+                msg: Message::OpenSelected,
+                destructive: false,
+                enabled: has_selection,
+            },
+            ItemRow {
+                label: "Nova pasta",
+                shortcut: Some("Ctrl+N"),
+                msg: Message::NewFolder,
+                destructive: false,
+                enabled: true,
+            },
+        ],
+        // Grupo manipulacao
         vec![
             ItemRow {
                 label: "Renomear",
                 shortcut: Some("F2"),
                 msg: rename_msg,
                 destructive: false,
+                enabled: has_selection,
             },
             ItemRow {
                 label: "Copiar",
                 shortcut: Some("Ctrl+C"),
                 msg: Message::CopySelected,
                 destructive: false,
+                enabled: has_selection,
             },
             ItemRow {
                 label: "Recortar",
                 shortcut: Some("Ctrl+X"),
                 msg: Message::CutSelected,
                 destructive: false,
-            },
-        ],
-        vec![ItemRow {
-            label: "Mover para Lixeira",
-            shortcut: Some("Del"),
-            msg: Message::DeleteSelected,
-            destructive: true,
-        }],
-        vec![ItemRow {
-            label: "Propriedades",
-            shortcut: Some("Ctrl+I"),
-            msg: Message::OpenProperties,
-            destructive: false,
-        }],
-    ]
-}
-
-pub fn items_for_area() -> Vec<Vec<ItemRow>> {
-    vec![
-        vec![
-            ItemRow {
-                label: "Nova pasta",
-                shortcut: Some("Ctrl+N"),
-                msg: Message::NewFolder,
-                destructive: false,
+                enabled: has_selection,
             },
             ItemRow {
                 label: "Colar",
                 shortcut: Some("Ctrl+V"),
                 msg: Message::Paste,
                 destructive: false,
+                enabled: has_clipboard,
             },
         ],
+        // Grupo destrutivo
         vec![ItemRow {
-            label: "Atualizar",
-            shortcut: Some("F5"),
-            msg: Message::Refresh,
-            destructive: false,
+            label: "Mover para Lixeira",
+            shortcut: Some("Del"),
+            msg: Message::DeleteSelected,
+            destructive: true,
+            enabled: has_selection,
         }],
+        // Grupo info + refresh
+        vec![
+            ItemRow {
+                label: "Propriedades",
+                shortcut: Some("Ctrl+I"),
+                msg: Message::OpenProperties,
+                destructive: false,
+                enabled: has_selection,
+            },
+            ItemRow {
+                label: "Atualizar",
+                shortcut: Some("F5"),
+                msg: Message::Refresh,
+                destructive: false,
+                enabled: true,
+            },
+        ],
     ]
 }
 
@@ -99,11 +120,10 @@ pub fn view<'a>(
     th: &ThemeSnapshot,
     ctx: &ContextMenu,
     rename_msg: Message,
+    has_clipboard: bool,
 ) -> Element<'a, Message> {
-    let groups = match ctx {
-        ContextMenu::Item { .. } => items_for_item(rename_msg),
-        ContextMenu::Area { .. } => items_for_area(),
-    };
+    let has_selection = matches!(ctx, ContextMenu::Item { .. });
+    let groups = items_unified(has_selection, has_clipboard, rename_msg);
 
     let mut col = column![].spacing(0).padding([6, 0]);
     let last = groups.len().saturating_sub(1);
@@ -140,28 +160,36 @@ pub fn view<'a>(
 }
 
 fn menu_btn<'a>(th: &ThemeSnapshot, item: ItemRow) -> Element<'a, Message> {
-    let label_color = if item.destructive { th.danger } else { th.fg };
+    // Item desabilitado: cor dim, sem on_press, sem hover.
+    let label_color = if !item.enabled {
+        th.fg_subtle
+    } else if item.destructive {
+        th.danger
+    } else {
+        th.fg
+    };
+    let shortcut_color = if item.enabled { th.fg_subtle } else { th.fg_subtle };
     let row_el = row![
         text(item.label)
             .size(13)
             .color(label_color)
             .width(Length::Fill),
         match item.shortcut {
-            Some(s) => text(s).size(11).color(th.fg_subtle).into(),
+            Some(s) => text(s).size(11).color(shortcut_color).into(),
             None => Element::from(iced::widget::horizontal_space()),
         },
     ]
     .spacing(12)
     .align_y(Alignment::Center);
 
-    let fg = th.fg;
+    let fg = label_color;
     let hover = th.bg_subtle;
-    button(container(row_el).padding([6, 14]).width(Length::Fill))
-        .on_press(item.msg)
+    let enabled = item.enabled;
+    let mut btn = button(container(row_el).padding([6, 14]).width(Length::Fill))
         .padding(0)
         .width(Length::Fill)
         .style(move |_, status| {
-            let bg = if status == iced::widget::button::Status::Hovered {
+            let bg = if enabled && status == iced::widget::button::Status::Hovered {
                 hover
             } else {
                 Color::TRANSPARENT
@@ -175,8 +203,11 @@ fn menu_btn<'a>(th: &ThemeSnapshot, item: ItemRow) -> Element<'a, Message> {
                 text_color: fg,
                 ..Default::default()
             }
-        })
-        .into()
+        });
+    if enabled {
+        btn = btn.on_press(item.msg);
+    }
+    btn.into()
 }
 
 #[cfg(test)]
@@ -184,15 +215,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn items_for_item_tem_grupo_destrutivo() {
-        let groups = items_for_item(Message::ContextMenuClose);
+    fn unified_tem_destrutivo() {
+        let groups = items_unified(true, false, Message::ContextMenuClose);
         let has_trash = groups.iter().flatten().any(|i| i.destructive);
         assert!(has_trash, "esperava ao menos um item destrutivo");
     }
 
     #[test]
-    fn items_for_area_tem_nova_pasta_e_colar() {
-        let groups = items_for_area();
+    fn unified_tem_nova_pasta_e_colar() {
+        let groups = items_unified(false, true, Message::ContextMenuClose);
         let flat: Vec<_> = groups.iter().flatten().collect();
         let labels: Vec<_> = flat.iter().map(|i| i.label).collect();
         assert!(labels.contains(&"Nova pasta"));
@@ -200,13 +231,32 @@ mod tests {
     }
 
     #[test]
-    fn items_for_item_tem_atalhos() {
-        let groups = items_for_item(Message::ContextMenuClose);
-        let with_shortcut: Vec<_> = groups
+    fn sem_selecao_desabilita_itens_de_arquivo() {
+        let groups = items_unified(false, false, Message::ContextMenuClose);
+        let by_label: std::collections::HashMap<_, _> = groups
             .iter()
             .flatten()
-            .filter(|i| i.shortcut.is_some())
+            .map(|i| (i.label, i.enabled))
             .collect();
-        assert!(with_shortcut.len() >= 4);
+        assert_eq!(by_label["Abrir"], false);
+        assert_eq!(by_label["Renomear"], false);
+        assert_eq!(by_label["Copiar"], false);
+        assert_eq!(by_label["Mover para Lixeira"], false);
+        assert_eq!(by_label["Nova pasta"], true);
+        assert_eq!(by_label["Atualizar"], true);
+        assert_eq!(by_label["Colar"], false);
+    }
+
+    #[test]
+    fn com_selecao_habilita_itens_de_arquivo() {
+        let groups = items_unified(true, false, Message::ContextMenuClose);
+        let by_label: std::collections::HashMap<_, _> = groups
+            .iter()
+            .flatten()
+            .map(|i| (i.label, i.enabled))
+            .collect();
+        assert_eq!(by_label["Abrir"], true);
+        assert_eq!(by_label["Renomear"], true);
+        assert_eq!(by_label["Mover para Lixeira"], true);
     }
 }
