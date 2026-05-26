@@ -3,7 +3,6 @@
 //! Entry point logico da aplicacao Iced.
 //! Organizado por feature: sidebar, grid, toolbar/breadcrumb, context menu.
 
-use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -1334,10 +1333,17 @@ impl App {
                 .unwrap_or("--")
                 .to_string();
             let perms = {
-                use std::os::unix::fs::PermissionsExt;
-                path.metadata()
-                    .map(|m| format!("{:o}", m.permissions().mode() & 0o777))
-                    .unwrap_or_else(|_| "--".to_string())
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    path.metadata()
+                        .map(|m| format!("{:o}", m.permissions().mode() & 0o777))
+                        .unwrap_or_else(|_| "--".to_string())
+                }
+                #[cfg(not(unix))]
+                {
+                    "--".to_string()
+                }
             };
 
             let btn_apply = button(text("Aplicar").size(13).color(fg))

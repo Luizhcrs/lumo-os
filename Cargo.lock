@@ -4668,6 +4668,7 @@ dependencies = [
  "bytemuck",
  "lumo-beam",
  "lumo-foundation",
+ "tokio",
  "wgpu 23.0.1",
 ]
 

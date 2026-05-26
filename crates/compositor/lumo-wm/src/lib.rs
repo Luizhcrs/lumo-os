@@ -23,6 +23,9 @@ pub mod perf;
 pub mod state;
 pub mod workspace;
 
+#[cfg(test)]
+mod state_tests;
+
 pub use state::{init_socket, ClientState, LumoState};
 pub mod multi_monitor;
 pub mod overview;

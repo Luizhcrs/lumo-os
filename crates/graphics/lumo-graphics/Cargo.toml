@@ -12,3 +12,6 @@ wgpu = "23"
 bytemuck = { version = "1", features = ["derive"] }
 lumo-foundation = { path = "../../foundation/lumo-foundation" }
 lumo-beam = { path = "../lumo-beam" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

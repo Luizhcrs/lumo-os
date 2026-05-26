@@ -293,4 +293,31 @@ mod tests {
         let json = serde_json::to_string(&ev).unwrap();
         assert!(json.contains("output_added"), "json={json}");
     }
+
+    // --- SEGURANCA E ROBUSTEZ ---
+
+    #[test]
+    fn malicious_invalid_json_fails_gracefully() {
+        let bad_json = r#"{"type":"switch", "to": "MWAHAHA"}"#; // "to" deve ser numero
+        let result = parse_command(bad_json).unwrap();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn malicious_unknown_command_ignored() {
+        let unknown = r#"{"type":"execute_format_c", "confirm": true}"#;
+        let result = parse_command(unknown).unwrap();
+        assert!(result.is_err()); // Serde falha ao nao encontrar variante no enum
+    }
+
+    #[test]
+    fn robustness_large_payload_ignored() {
+        let mut large = String::from(r#"{"type":"switch", "to":1, "junk":""#);
+        for _ in 0..1000 { large.push('A'); }
+        large.push_str(r#""}"#);
+        // JSON com campo extra eh aceito pelo Serde se nao configurado deny_unknown_fields,
+        // mas aqui testamos que ele pelo menos nao causa pânico.
+        let result = parse_command(&large).unwrap();
+        assert!(result.is_ok());
+    }
 }

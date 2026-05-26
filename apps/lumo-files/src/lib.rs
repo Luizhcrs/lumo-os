@@ -15,6 +15,9 @@ pub mod thumbs;
 pub mod toast;
 pub mod toolbar;
 
+#[cfg(test)]
+mod app_tests;
+
 use app::App;
 use iced::{Settings, Size};
 
@@ -42,7 +45,10 @@ pub fn run() -> iced::Result {
         position: iced::window::Position::Centered,
         ..Default::default()
     };
-    window_settings.platform_specific.application_id = "com.lumo.files".to_string();
+    #[cfg(target_os = "linux")]
+    {
+        window_settings.platform_specific.application_id = "com.lumo.files".to_string();
+    }
 
     // Record startup time before blocking on iced event loop.
     lumo_telemetry::histogram("app_launch_us", _launch_t0.elapsed().as_micros() as u64);

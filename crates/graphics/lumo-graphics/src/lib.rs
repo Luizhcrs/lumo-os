@@ -460,3 +460,55 @@ impl LGQuadRenderer {
         pass.draw_indexed(0..QUAD_INDICES.len() as u32, 0, 0..self.instance_count);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_quad_instance_new() {
+        let center = [0.0, 0.0];
+        let size = [100.0, 50.0];
+        let bg = [1.0, 1.0, 1.0, 1.0];
+        let border = [0.0, 0.0, 0.0, 1.0];
+        let inst = LGQuadInstance::new(center, size, bg, border, 2.0, 4.0);
+        
+        assert_eq!(inst.center, center);
+        assert_eq!(inst.half_size, [50.0, 25.0]);
+        assert_eq!(inst.bg, bg);
+        assert_eq!(inst.border, border);
+        assert_eq!(inst.border_width, 2.0);
+        assert_eq!(inst.corner_radius, 4.0);
+    }
+
+    #[tokio::test]
+    async fn test_quad_instance_with_shadow() {
+        let inst = LGQuadInstance::default().with_shadow([0.0, 0.0, 0.0, 0.5], [5.0, 5.0], 10.0);
+        assert_eq!(inst.shadow_color, [0.0, 0.0, 0.0, 0.5]);
+        assert_eq!(inst.shadow_offset, [5.0, 5.0]);
+        assert_eq!(inst.shadow_radius, 10.0);
+    }
+
+    #[tokio::test]
+    async fn test_renderer_initialization() {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            ..Default::default()
+        });
+        let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+            ..Default::default()
+        }).await;
+        
+        let adapter = match adapter {
+            Some(a) => a,
+            None => {
+                eprintln!("Skipping test: no GPU adapter found");
+                return;
+            }
+        };
+
+        let (device, _) = adapter.request_device(&Default::default(), None).await.unwrap();
+        let renderer = LGQuadRenderer::new(&device, wgpu::TextureFormat::Rgba8Unorm, 10);
+        assert_eq!(renderer.instance_count, 0);
+    }
+}
