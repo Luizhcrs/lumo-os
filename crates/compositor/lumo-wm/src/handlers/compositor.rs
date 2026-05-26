@@ -43,12 +43,13 @@ impl CompositorHandler for LumoState {
             while let Some(parent) = get_parent(&root) {
                 root = parent;
             }
-            if let Some(window) = self
+            let window = self
                 .space
                 .elements()
                 .find(|w| w.wl_surface().map(|s| s.as_ref() == &root).unwrap_or(false))
-                .cloned()
-            {
+                .cloned();
+
+            if let Some(window) = window {
                 window.on_commit();
 
                 // LIMITES DE GEOMETRIA: Respeite a usable_geometry() do compositor.
