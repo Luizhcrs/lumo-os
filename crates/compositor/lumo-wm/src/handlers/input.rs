@@ -498,11 +498,12 @@ impl LumoState {
                         pointer.frame(self);
                         return;
                     }
-                    // D2: broadcast CloseDropdowns quando click fora da bar.
+                    // D2: broadcast CloseDropdowns quando LEFT click fora da bar.
                     // Bar fecha dropdown se ativo; desktop fecha menu/ctx_menu.
-                    // Nao broadcast se click esta dentro da bar (evita fechar o proprio dropdown).
-                    // TODO D3: CloseDropdowns deve carregar coordenada do click; cada client decide se fecha.
-                    if !self.pos_is_on_bar(self.pointer_location) {
+                    // W37: NAO broadcast em right-click - desktop ABRE menu no right
+                    //      click, broadcast logo apos abertura fechava o menu (race).
+                    //      Right-click no compositor nao deve fechar dropdowns alheios.
+                    if button == 0x110 && !self.pos_is_on_bar(self.pointer_location) {
                         self.ipc.broadcast(&lumo_ipc::LumoEvent::CloseDropdowns);
                     }
 

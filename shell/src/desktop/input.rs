@@ -82,7 +82,14 @@ impl PointerHandler for LumoDesktop {
                             need_redraw = true;
                         }
                         if let Some(idx) = self.icons.hit(px, py) {
-                            self.icons.ctx_menu = Some((idx, px, py));
+                            // W37: clamp menu_x/menu_y para nao sair da tela.
+                            use crate::desktop::icons::{ctx_menu_h, CTX_MENU_W};
+                            let w = self.width as f32;
+                            let h = self.height as f32;
+                            let mh = ctx_menu_h();
+                            let cx = px.min(w - CTX_MENU_W - 4.0).max(0.0);
+                            let cy = py.min(h - mh - 4.0).max(0.0);
+                            self.icons.ctx_menu = Some((idx, cx, cy));
                             self.icons.ctx_hover = usize::MAX;
                             need_redraw = true;
                         } else {

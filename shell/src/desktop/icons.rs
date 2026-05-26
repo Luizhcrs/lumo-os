@@ -506,7 +506,7 @@ pub fn paint_ctx_menu(
     accent_hex: u32,
 ) {
     let h = ctx_menu_h();
-    let bg = Color::from_rgba8(0x28, 0x28, 0x2C, 0xF2);
+    let bg = Color::from_rgba8(0x28, 0x28, 0x2C, 0xFF);  // W37: alpha solido (0xF2 deixava icons vazarem por baixo)
     fill_rrect(canvas, menu_x, menu_y, CTX_MENU_W, h, 8.0, bg);
 
     let border_color = Color::from_rgba8(0x60, 0x60, 0x68, 0x80);

@@ -299,19 +299,85 @@ pub fn drain_ipc_events(
         let line: Vec<u8> = rx_buf.drain(..=nl).collect();
         if let Ok(s) = std::str::from_utf8(&line[..line.len() - 1]) {
             if let Ok(ev) = serde_json::from_str::<LumoEvent>(s.trim()) {
-                match ev {
-                    LumoEvent::CloseDesktopMenu => close_menu = true,
-                    // D2: CloseDropdowns broadcast pelo compositor em todo click.
-                    // Desktop fecha menu contextual e ctx_menu de icone se ativos.
-                    LumoEvent::CloseDropdowns => close_menu = true,
-                    LumoEvent::DesktopOpenSelected => open_selected = true,
-                    LumoEvent::ThemeReloaded { mode } => theme_reloaded = Some(mode),
-                    _ => {}
-                }
+                apply_event(ev, &mut close_menu, &mut open_selected, &mut theme_reloaded);
             }
         }
     }
     (alive, close_menu, open_selected, theme_reloaded)
+}
+
+/// Aplica um LumoEvent aos flags de drain_ipc_events.
+/// Extraido para teste unitario.
+pub fn apply_event(
+    ev: LumoEvent,
+    close_menu: &mut bool,
+    open_selected: &mut bool,
+    theme_reloaded: &mut Option<lumo_ipc::ThemeMode>,
+) {
+    match ev {
+        LumoEvent::CloseDesktopMenu => *close_menu = true,
+        // W37: CloseDropdowns NAO fecha menu do desktop.
+        // Desktop ENVIA CloseDropdowns para fechar dropdown do bar; o
+        // compositor broadcasta de volta, fechando o proprio menu
+        // recem-aberto (race). Bar tem seu proprio handler para
+        // CloseDropdowns; desktop nao deve reagir ao seu proprio echo.
+        LumoEvent::CloseDropdowns => {}
+        LumoEvent::DesktopOpenSelected => *open_selected = true,
+        LumoEvent::ThemeReloaded { mode } => *theme_reloaded = Some(mode),
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod ipc_event_tests {
+    use super::apply_event;
+    use lumo_ipc::LumoEvent;
+
+    #[test]
+    fn w37_close_dropdowns_nao_seta_close_menu() {
+        let mut close_menu = false;
+        let mut open_selected = false;
+        let mut theme = None;
+        apply_event(
+            LumoEvent::CloseDropdowns,
+            &mut close_menu,
+            &mut open_selected,
+            &mut theme,
+        );
+        assert!(
+            !close_menu,
+            "CloseDropdowns nao deve fechar menu do desktop (W37)"
+        );
+    }
+
+    #[test]
+    fn close_desktop_menu_seta_close_menu() {
+        let mut close_menu = false;
+        let mut open_selected = false;
+        let mut theme = None;
+        apply_event(
+            LumoEvent::CloseDesktopMenu,
+            &mut close_menu,
+            &mut open_selected,
+            &mut theme,
+        );
+        assert!(close_menu, "CloseDesktopMenu DEVE fechar menu");
+    }
+
+    #[test]
+    fn desktop_open_selected_seta_flag() {
+        let mut close_menu = false;
+        let mut open_selected = false;
+        let mut theme = None;
+        apply_event(
+            LumoEvent::DesktopOpenSelected,
+            &mut close_menu,
+            &mut open_selected,
+            &mut theme,
+        );
+        assert!(open_selected);
+        assert!(!close_menu);
+    }
 }
 
 // ============================================================
