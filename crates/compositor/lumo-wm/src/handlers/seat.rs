@@ -6,6 +6,7 @@ use smithay::input::keyboard::LedState;
 use smithay::input::pointer::CursorImageStatus;
 use smithay::input::{Seat, SeatHandler, SeatState};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use smithay::wayland::seat::WaylandFocus;
 
 use crate::state::LumoState;
 
