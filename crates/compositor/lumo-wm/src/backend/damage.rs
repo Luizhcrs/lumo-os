@@ -47,32 +47,34 @@ fn coverage_area(rects: &[Rectangle<i32, Physical>]) -> i64 {
 ///
 /// Condicoes de merge:
 ///   - damage.len() > max_rects (default 8), OU
-///   - coverage(damage) / total_area < coverage_threshold (default 0.6)
-///
-/// Quando merge acontece, substitui lista inteira pelo bbox.
-/// total_area = output_w * output_h.
+///   - a densidade da Bounding Box unificada eh alta (ratio > density_threshold),
+///     o que significa que os retangulos estao proximos e sobrepostos, tornando
+///     vantajoso desenhar uma unica Bounding Box em vez de multiplos draw calls.
 pub fn merge_if_complex(
     damage: &mut Vec<Rectangle<i32, Physical>>,
-    total_area: i64,
+    _total_area: i64,
     max_rects: usize,
-    coverage_threshold: f32,
+    density_threshold: f32,
 ) {
     if damage.is_empty() {
         return;
     }
 
     let too_many = damage.len() > max_rects;
-    let low_coverage = {
-        let covered = coverage_area(damage);
-        let ratio = if total_area > 0 {
-            covered as f32 / total_area as f32
+    let high_density = if let Some(bbox) = bounding_box(damage) {
+        let bbox_area = bbox.size.w as i64 * bbox.size.h as i64;
+        if bbox_area > 0 {
+            let covered = coverage_area(damage);
+            let ratio = covered as f32 / bbox_area as f32;
+            ratio > density_threshold
         } else {
-            1.0
-        };
-        ratio < coverage_threshold
+            false
+        }
+    } else {
+        false
     };
 
-    if too_many || low_coverage {
+    if too_many || high_density {
         if let Some(bbox) = bounding_box(damage) {
             let before = damage.len();
             damage.clear();
@@ -82,7 +84,7 @@ pub fn merge_if_complex(
     }
 }
 
-/// Versao com parametros default (max_rects=8, coverage_threshold=0.6).
+/// Versao com parametros default (max_rects=8, density_threshold=0.6).
 pub fn merge_if_complex_default(
     damage: &mut Vec<Rectangle<i32, Physical>>,
     output_w: i32,
@@ -109,16 +111,20 @@ mod tests {
     }
 
     #[test]
-    fn no_merge_few_rects_good_coverage() {
-        // 3 rects com boa coverage -> nao merge (len <= 8 e ratio >= 0.6)
+    fn merge_high_density_full_screen() {
+        // 3 rects adjacentes que cobrem o bbox total -> alta densidade -> merge
         let mut damage = vec![
             rect(0, 0, 640, 1080),
             rect(640, 0, 640, 1080),
             rect(1280, 0, 640, 1080),
         ];
-        let before_len = damage.len();
         merge_if_complex_default(&mut damage, 1920, 1080);
-        assert_eq!(damage.len(), before_len);
+        assert_eq!(damage.len(), 1);
+        let bb = damage[0];
+        assert_eq!(bb.loc.x, 0);
+        assert_eq!(bb.loc.y, 0);
+        assert_eq!(bb.size.w, 1920);
+        assert_eq!(bb.size.h, 1080);
     }
 
     #[test]
@@ -137,16 +143,28 @@ mod tests {
     }
 
     #[test]
-    fn merge_low_coverage() {
-        // 2 rects minusculos em output grande -> coverage baixo -> merge
+    fn no_merge_low_density() {
+        // 2 rects minusculos em locais opostos -> densidade muito baixa -> nao merge
         let mut damage = vec![rect(0, 0, 10, 10), rect(1910, 1070, 10, 10)];
+        let before_len = damage.len();
+        merge_if_complex_default(&mut damage, 1920, 1080);
+        assert_eq!(damage.len(), before_len);
+    }
+
+    #[test]
+    fn merge_high_density() {
+        // 2 rects sobrepostos/proximos -> alta densidade no bbox -> merge
+        let mut damage = vec![
+            rect(10, 10, 50, 50),
+            rect(30, 30, 50, 50),
+        ];
         merge_if_complex_default(&mut damage, 1920, 1080);
         assert_eq!(damage.len(), 1);
         let bb = damage[0];
-        assert_eq!(bb.loc.x, 0);
-        assert_eq!(bb.loc.y, 0);
-        assert_eq!(bb.size.w, 1920);
-        assert_eq!(bb.size.h, 1080);
+        assert_eq!(bb.loc.x, 10);
+        assert_eq!(bb.loc.y, 10);
+        assert_eq!(bb.size.w, 70);
+        assert_eq!(bb.size.h, 70);
     }
 
     #[test]
@@ -167,9 +185,6 @@ mod tests {
 
     #[test]
     fn bounding_box_multiple_non_overlapping() {
-        // rect A: (10,10) size (20,20) -> spans x[10..30], y[10..30]
-        // rect B: (50, 5) size (30,40) -> spans x[50..80], y[5..45]
-        // bbox: x[10..80] w=70, y[5..45] h=40
         let rects = vec![rect(10, 10, 20, 20), rect(50, 5, 30, 40)];
         let bb = bounding_box(&rects).unwrap();
         assert_eq!(bb.loc.x, 10);
