@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.WORKFLOW_PAT }}
 
       - name: Install Rust stable
         run: |
@@ -32,6 +34,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.WORKFLOW_PAT }}
 
       - name: Install Rust stable
         run: |
@@ -67,6 +71,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.WORKFLOW_PAT }}
 
       - name: Install Rust stable
         run: |
@@ -103,6 +109,8 @@ jobs:
     needs: [test]
     steps:
       - uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.WORKFLOW_PAT }}
 
       - name: Install Rust stable
         run: |
@@ -138,6 +146,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.WORKFLOW_PAT }}
 
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked
@@ -150,6 +160,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          token: ${{ secrets.WORKFLOW_PAT }}
 
       - name: Install Rust stable
         run: |
