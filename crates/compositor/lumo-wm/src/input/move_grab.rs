@@ -104,14 +104,16 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
         const SSD_TITLEBAR_H: i32 = 30;
         let usable = data.usable_geometry();
         let win_bbox = self.window.bbox();
-        new_loc.x = new_loc.x.clamp(
-            usable.loc.x,
-            usable.loc.x + usable.size.w - win_bbox.size.w.max(64),
-        );
-        new_loc.y = new_loc.y.clamp(
-            usable.loc.y + SSD_TITLEBAR_H,
-            usable.loc.y + usable.size.h - 32,
-        );
+
+        // W24.3: Seguranca contra panics de clamp (min > max).
+        // Se a janela for maior que a area util, max_x/max_y ficariam negativos.
+        // Forcamos max >= min para evitar crash total do compositor.
+        let max_x = (usable.loc.x + usable.size.w - win_bbox.size.w.max(64)).max(usable.loc.x);
+        let max_y = (usable.loc.y + usable.size.h - 32).max(usable.loc.y + SSD_TITLEBAR_H);
+
+        new_loc.x = new_loc.x.clamp(usable.loc.x, max_x);
+        new_loc.y = new_loc.y.clamp(usable.loc.y + SSD_TITLEBAR_H, max_y);
+
         data.space.map_element(self.window.clone(), new_loc, true);
 
         // W9.B: update snap preview.
@@ -367,5 +369,25 @@ mod tests {
         let (_, _, _, h3) = SnapZone::BottomLeft.layout(1920, 1080);
         assert_eq!(w1 + w2, 1920);
         assert_eq!(h1 + h3, 1080);
+    }
+
+    #[test]
+    fn regression_clamp_logic_safety() {
+        // Mock data
+        let usable_x = 0;
+        let usable_w = 1000;
+        let win_w = 1052; // Caso do Mousepad bizarro
+        
+        // A logica que causava panic:
+        // let max_x = usable_x + usable_w - win_w; // -> -52
+        // target.clamp(usable_x, max_x); // -> panic: 0 > -52
+        
+        // A logica corrigida:
+        let max_x = (usable_x + usable_w - win_w).max(usable_x);
+        assert_eq!(max_x, 0); // max deve ser no minimo o proprio min
+        
+        let target = 500;
+        let clamped = target.clamp(usable_x, max_x);
+        assert_eq!(clamped, 0); // move para o limite seguro
     }
 }
