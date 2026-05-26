@@ -854,31 +854,51 @@ impl LumoState {
 use smithay::wayland::shell::xdg::decoration::XdgDecorationHandler;
 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode;
 
+/// W37.8: decisao pura - dado mode pedido pelo cliente, retorna mode escolhido.
+/// ClientSide respeita; default ServerSide.
+pub fn decide_decoration_mode(requested: Mode) -> Mode {
+    match requested {
+        Mode::ClientSide => Mode::ClientSide,
+        _ => Mode::ServerSide,
+    }
+}
+
 impl XdgDecorationHandler for LumoState {
     fn new_decoration(&mut self, toplevel: ToplevelSurface) {
+        // W37.8: default ServerSide. Cliente pode pedir ClientSide via request_mode.
         toplevel.with_pending_state(|state| {
             state.decoration_mode = Some(Mode::ServerSide);
         });
         self.ssd_windows.insert(toplevel.wl_surface().clone());
         toplevel.send_configure();
-        tracing::debug!("xdg_decoration: new_decoration -> ServerSide");
+        tracing::debug!("xdg_decoration: new_decoration -> ServerSide (default)");
     }
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: Mode) {
-        // P0 #2: force ServerSide para garantir consistência visual no Lumo OS
+        // W37.8: respeita pedido do cliente para evitar 2 titlebars empilhadas
+        // quando GTK3/Xfce4 (Mousepad) insistem em CSD mesmo com ServerSide
+        // setado. Antes: forcava ServerSide sempre + cliente desenhava CSD
+        // mesmo assim = 2 titlebars.
+        let chosen = decide_decoration_mode(mode);
         toplevel.with_pending_state(|state| {
-            state.decoration_mode = Some(Mode::ServerSide);
+            state.decoration_mode = Some(chosen);
         });
         toplevel.send_configure();
         let surf = toplevel.wl_surface().clone();
-        self.ssd_windows.insert(surf);
+        if chosen == Mode::ServerSide {
+            self.ssd_windows.insert(surf);
+        } else {
+            self.ssd_windows.remove(&surf);
+        }
         tracing::debug!(
-            "xdg_decoration: request_mode -> forced ServerSide (was {:?})",
-            mode
+            "xdg_decoration: request_mode {:?} -> chosen {:?}",
+            mode,
+            chosen
         );
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
+        // Cliente "desliga" preferencia -> volta pro default ServerSide.
         toplevel.with_pending_state(|state| {
             state.decoration_mode = Some(Mode::ServerSide);
         });
@@ -889,6 +909,23 @@ impl XdgDecorationHandler for LumoState {
 }
 
 smithay::delegate_xdg_decoration!(LumoState);
+
+#[cfg(test)]
+mod decoration_decision_tests {
+    use super::decide_decoration_mode;
+    use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode;
+
+    #[test]
+    fn w37_8_client_side_respeitado() {
+        // GTK3/Xfce4 que insistem em CSD nao tem 2 titlebars.
+        assert_eq!(decide_decoration_mode(Mode::ClientSide), Mode::ClientSide);
+    }
+
+    #[test]
+    fn w37_8_server_side_default() {
+        assert_eq!(decide_decoration_mode(Mode::ServerSide), Mode::ServerSide);
+    }
+}
 // W13.C: delegate fifo + commit_timing
 smithay::delegate_fifo!(LumoState);
 smithay::delegate_commit_timing!(LumoState);

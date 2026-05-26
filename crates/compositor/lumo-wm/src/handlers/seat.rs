@@ -200,6 +200,18 @@ impl SeatHandler for LumoState {
                 });
             }
             FocusBroadcastDecision::Update => {
+                // W37.8: apps que preferem CSD perdem SSD pra evitar 2 titlebars.
+                if app_prefers_csd(&app_id) {
+                    if let Some(surf) = focused {
+                        let removed = self.ssd_windows.remove(surf);
+                        if removed {
+                            eprintln!(
+                                "[wm] W37.8 app_prefers_csd app_id={:?} -> remove SSD",
+                                app_id
+                            );
+                        }
+                    }
+                }
                 self.last_active_app = Some((app_id.clone(), title.clone(), pid));
                 self.ipc
                     .broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
@@ -217,6 +229,27 @@ impl SeatHandler for LumoState {
 }
 
 smithay::delegate_seat!(LumoState);
+
+/// W37.8: apps cujo app_id matche estes patterns preferem CSD propria
+/// e nao devem receber SSD do Lumo (evita 2 titlebars empilhadas).
+/// Lista pode crescer; idealmente cliente sinaliza via xdg-decoration
+/// set_mode(ClientSide), mas Mousepad/Xfce4 nao chamam (criam interface
+/// e ficam mudos -> Smithay default ServerSide).
+pub fn app_prefers_csd(app_id: &str) -> bool {
+    if app_id.is_empty() {
+        return false;
+    }
+    let lower = app_id.to_ascii_lowercase();
+    // Xfce4 apps (Mousepad, Thunar, etc).
+    if lower.starts_with("org.xfce.") || lower.starts_with("xfce4-") {
+        return true;
+    }
+    // GNOME apps libhandy/libadwaita (header bar CSD).
+    if lower.starts_with("org.gnome.") {
+        return true;
+    }
+    false
+}
 
 /// W37.5: decisao pura de broadcast pra focus_changed.
 /// Recebe (incoming_app_id, incoming_pid, last_active_app) e retorna
@@ -298,6 +331,47 @@ pub fn cursor_icon_to_xcursor_name(icon: smithay::input::pointer::CursorIcon) ->
         CursorIcon::NeswResize => "nesw-resize",
         CursorIcon::NwseResize => "nwse-resize",
         _ => "default",
+    }
+}
+
+#[cfg(test)]
+mod csd_detection_tests {
+    use super::app_prefers_csd;
+
+    #[test]
+    fn w37_8_xfce4_mousepad_prefer_csd() {
+        assert!(app_prefers_csd("org.xfce.Mousepad"));
+        assert!(app_prefers_csd("org.xfce.mousepad"));
+        assert!(app_prefers_csd("xfce4-mousepad"));
+    }
+
+    #[test]
+    fn w37_8_xfce4_thunar_prefer_csd() {
+        assert!(app_prefers_csd("org.xfce.Thunar"));
+    }
+
+    #[test]
+    fn w37_8_gnome_apps_prefer_csd() {
+        assert!(app_prefers_csd("org.gnome.TextEditor"));
+        assert!(app_prefers_csd("org.gnome.Files"));
+    }
+
+    #[test]
+    fn w37_8_lumo_apps_nao_preferem_csd() {
+        // Apps Lumo nativas usam SSD.
+        assert!(!app_prefers_csd("com.lumo.files"));
+        assert!(!app_prefers_csd("com.lumo.editor"));
+    }
+
+    #[test]
+    fn w37_8_app_id_vazio_default_ssd() {
+        assert!(!app_prefers_csd(""));
+    }
+
+    #[test]
+    fn w37_8_qt5_apps_default_ssd() {
+        // Qt5 honra ServerSide via xdg-decoration; nao precisa heuristic.
+        assert!(!app_prefers_csd("org.kde.kate"));
     }
 }
 

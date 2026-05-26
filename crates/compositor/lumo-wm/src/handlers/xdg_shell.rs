@@ -73,6 +73,30 @@ impl XdgShellHandler for LumoState {
         }
     }
 
+    fn app_id_changed(&mut self, surface: ToplevelSurface) {
+        // W37.8: re-avalia decoracao quando cliente define/atualiza app_id.
+        // Apps que preferem CSD (Mousepad/GTK3-Xfce4, GNOME libadwaita) sao
+        // removidas de ssd_windows pra evitar 2 titlebars empilhadas.
+        use smithay::wayland::compositor as wl_compositor;
+        use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
+        let wl_surf = surface.wl_surface().clone();
+        let app_id = wl_compositor::with_states(&wl_surf, |states| {
+            states
+                .data_map
+                .get::<XdgToplevelSurfaceData>()
+                .and_then(|d| d.lock().ok().and_then(|g| g.app_id.clone()))
+                .unwrap_or_default()
+        });
+        if crate::handlers::seat::app_prefers_csd(&app_id) {
+            if self.ssd_windows.remove(&wl_surf) {
+                eprintln!(
+                    "[wm] W37.8 app_id_changed app_id={:?} -> remove SSD",
+                    app_id
+                );
+            }
+        }
+    }
+
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         // W9.A: register closing animation (delayed destroy via close_done check in render tick).
         let a11y = lumo_foundation::A11yTokens::load_from_disk();
