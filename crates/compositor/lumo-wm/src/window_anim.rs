@@ -152,20 +152,19 @@ mod tests {
         assert_eq!(s.visual_progress(), 0.0);
     }
 
+    // W32.4: animacao desativada (instant). Testes atualizados.
     #[test]
-    fn opening_animates_to_idle() {
-        let mut s = WindowAnimState::new_opening(false);
-        assert!(s.is_animating());
-        for _ in 0..300 { s.tick(0.016); }
-        assert!(matches!(s, WindowAnimState::Idle), "expected Idle, got {:?}", s);
+    fn opening_is_instant_idle() {
+        let s = WindowAnimState::new_opening(false);
+        assert!(matches!(s, WindowAnimState::Idle));
+        assert_eq!(s.visual_progress(), 1.0);
     }
 
     #[test]
-    fn closing_animates_to_done() {
-        let mut s = WindowAnimState::new_closing(false);
-        assert!(s.is_animating());
-        for _ in 0..300 { s.tick(0.016); }
+    fn closing_is_instant_done() {
+        let s = WindowAnimState::new_closing(false);
         assert!(s.is_close_done());
+        assert_eq!(s.visual_progress(), 0.0);
     }
 
     #[test]
