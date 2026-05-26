@@ -21,6 +21,15 @@ done
 # GTK env vars (fallback se nocsd nao instalado).
 export GTK_CSD=0
 
+# W37.10: appmenu-gtk-module exporta menu GTK3 via dbusmenu.
+# Bar capta + renderiza como pills (File/Edit/Search/etc).
+# UBUNTU_MENUPROXY=1 ativa o gateway (sem isso o modulo nao publica).
+export GTK_MODULES="${GTK_MODULES:+$GTK_MODULES:}appmenu-gtk-module"
+export UBUNTU_MENUPROXY=1
+
+# Unity em XFCE/Qt para reusar dbusmenu plataforma.
+export QT_QPA_PLATFORMTHEME=appmenu-qt5
+
 # Firefox: pede titulo via WM, nao CSD.
 export MOZ_GTK_TITLEBAR_DECORATION=client
 export MOZ_ENABLE_WAYLAND=1

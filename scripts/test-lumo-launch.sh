@@ -34,6 +34,8 @@ assert_env_contains() {
 
 echo "[test] W37.9 lumo-launch env injection"
 assert_env "GTK_CSD" "0"
+assert_env_contains "GTK_MODULES" "appmenu-gtk-module"
+assert_env "QT_QPA_PLATFORMTHEME" "appmenu-qt5"
 assert_env "MOZ_GTK_TITLEBAR_DECORATION" "client"
 assert_env "MOZ_ENABLE_WAYLAND" "1"
 assert_env "GDK_BACKEND" "wayland"
