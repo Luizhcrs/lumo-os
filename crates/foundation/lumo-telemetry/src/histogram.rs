@@ -26,7 +26,7 @@ impl LumoHistogram {
 
     pub fn record(&mut self, value_us: u64) {
         // Saturate at max instead of panicking on out-of-range.
-        let v = value_us.min(60_000_000).max(1);
+        let v = value_us.clamp(1, 60_000_000);
         let _ = self.inner.record(v);
     }
 
