@@ -26,7 +26,6 @@ use crate::statusbar;
 use crate::tabs as tabs_view;
 use crate::theme::{LumoTheme, ThemeSnapshot};
 use crate::toast::{Toast, ToastKind, ToastQueue};
-use crate::toolbar::ViewMode;
 
 // ---------------------------------------------------------------------------
 // Tab state
@@ -976,7 +975,7 @@ impl App {
     // View
     // -----------------------------------------------------------------------
 
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let th = &self.theme;
         let bg = th.bg;
         let panel = th.bg_subtle;
@@ -1072,7 +1071,7 @@ impl App {
                           is_active: bool,
                           indent: u16,
                           chevron: Option<(bool, PathBuf)>|
-         -> iced::Element<Message> {
+         -> iced::Element<'_, Message> {
             let icon_color = if is_active { accent } else { muted };
             // active_bar (3px left) ja sinaliza item ativo; bg transparent pra menos peso visual.
             let selected_bg = Color::TRANSPARENT;
@@ -1211,7 +1210,7 @@ impl App {
             }
         }
 
-        let group_header = |label: &'static str| -> iced::Element<Message> {
+        let group_header = |label: &'static str| -> iced::Element<'_, Message> {
             container(text(label).size(10).color(muted))
                 .padding([10u16, 12u16])
                 .into()
@@ -1452,7 +1451,7 @@ impl App {
         accent: Color,
         _panel_hi: Color,
         _sep: Color,
-    ) -> Element<Message> {
+    ) -> Element<'_, Message> {
         let entries: Vec<(usize, &PathBuf)> = if self.search_query.is_empty() {
             self.current_tab()
                 .file_list
@@ -1681,7 +1680,7 @@ impl App {
             .into()
         };
 
-        let header_cell = |label: &'static str, col: SortBy, w: Length| -> Element<Message> {
+        let header_cell = |label: &'static str, col: SortBy, w: Length| -> Element<'_, Message> {
             let is_active = self.sort_by == col;
             let color = if is_active { fg } else { muted };
             button(
@@ -1878,7 +1877,7 @@ impl App {
             .into()
     }
 
-    fn view_grid_skeleton(&self) -> Element<Message> {
+    fn view_grid_skeleton(&self) -> Element<'_, Message> {
         let th = &self.theme;
         const COLS: usize = 7;
         const ROWS: usize = 2;
@@ -1917,7 +1916,7 @@ impl App {
             .into()
     }
 
-    fn view_list_skeleton(&self) -> Element<Message> {
+    fn view_list_skeleton(&self) -> Element<'_, Message> {
         let th = &self.theme;
         let mut rows: Vec<Element<Message>> = Vec::new();
         for _ in 0..6 {
@@ -1950,7 +1949,7 @@ impl App {
             .into()
     }
 
-    fn view_empty_state(&self) -> Element<Message> {
+    fn view_empty_state(&self) -> Element<'_, Message> {
         let th = &self.theme;
         let icon = Svg::new(SvgHandle::from_memory(icons::FOLDER_OPEN))
             .width(Length::Fixed(64.0))
@@ -1983,7 +1982,7 @@ impl App {
             .into()
     }
 
-    fn view_empty_state_inline(&self) -> Element<Message> {
+    fn view_empty_state_inline(&self) -> Element<'_, Message> {
         let th = &self.theme;
         let icon = Svg::new(SvgHandle::from_memory(icons::FOLDER_OPEN))
             .width(Length::Fixed(64.0))
@@ -2147,7 +2146,7 @@ impl App {
         fg: Color,
         muted: Color,
         _accent: Color,
-    ) -> iced::Element<Message> {
+    ) -> iced::Element<'_, Message> {
         let name = path
             .file_name()
             .unwrap_or_default()
@@ -2250,8 +2249,6 @@ impl App {
     // -----------------------------------------------------------------------
     // Helpers internos
     // -----------------------------------------------------------------------
-
-    fn push_back(&mut self) {}
 
     // -----------------------------------------------------------------------
     // Manual hit-test (workaround: Iced widget handlers nao disparam no
@@ -2404,20 +2401,6 @@ fn container_style(bg: Color) -> iced::widget::container::Style {
         background: Some(iced::Background::Color(bg)),
         ..Default::default()
     }
-}
-
-fn ctx_btn<'a>(
-    label: &'a str,
-    msg: Message,
-    color: Color,
-    panel_hi: Color,
-) -> Element<'a, Message> {
-    button(text(label).size(13).color(color))
-        .on_press(msg)
-        .style(move |_, _| button_style(panel_hi))
-        .padding([6, 14])
-        .width(Length::Fill)
-        .into()
 }
 
 // ---------------------------------------------------------------------------

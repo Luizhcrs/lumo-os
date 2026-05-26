@@ -38,13 +38,15 @@ pub fn run() -> iced::Result {
     // W19 fix: setar application_id para Wayland (xdg_toplevel.set_app_id).
     // Sem isso INSTR.E loga app_id='' e bar/dock nao agrupam por aplicacao.
     // Default Iced eh String::new() -- precisa explicit pra apps Lumo.
-    let mut window_settings = iced::window::Settings {
-        size: Size::new(1024.0, 640.0),
+    let window_settings = iced::window::Settings {
+        size: Size::new(1024.0, 768.0),
         min_size: Some(Size::new(640.0, 400.0)),
         decorations: true,
         position: iced::window::Position::Centered,
         ..Default::default()
     };
+    #[cfg(target_os = "linux")]
+    let mut window_settings = window_settings;
     #[cfg(target_os = "linux")]
     {
         window_settings.platform_specific.application_id = "com.lumo.files".to_string();
