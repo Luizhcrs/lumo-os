@@ -51,55 +51,10 @@ if [[ "$current_tty" =~ pts ]]; then
 fi
 
 # ============================================================
-# Safety 2: detecta Hyprland host e oferece matar.
-# Lumo precisa DRM master; se outro compositor segura, render falha.
-# ============================================================
-HYPRLAND_PID=$(pgrep -x Hyprland || true)
-HYPR_WAS_RUNNING=false
-
-if [[ -n "$HYPRLAND_PID" ]]; then
-    echo ""
-    echo "================================================================"
-    echo " AVISO: Hyprland host detectado (PID $HYPRLAND_PID)."
-    echo " Lumo precisa de DRM master; Hyprland esta segurando."
-    echo " Vou matar Hyprland em 3s pra subir Lumo."
-    echo " Cancele com Ctrl+C agora se nao quiser perder o estado."
-    echo "================================================================"
-    sleep 3
-
-    HYPR_WAS_RUNNING=true
-
-    # Tentativa 1: hyprctl exit (saida limpa, salva estado).
-    if command -v hyprctl >/dev/null && hyprctl dispatch exit 2>/dev/null; then
-        echo "[info] hyprctl exit chamado"
-    else
-        # Tentativa 2: SIGTERM (default graceful shutdown).
-        kill "$HYPRLAND_PID" 2>/dev/null || true
-        echo "[info] SIGTERM enviado pra PID $HYPRLAND_PID"
-    fi
-
-    # Aguarda Hyprland sair (ate 5s).
-    for i in {1..10}; do
-        if ! pgrep -x Hyprland >/dev/null; then
-            echo "[info] Hyprland encerrado"
-            break
-        fi
-        sleep 0.5
-    done
-
-    # Tentativa 3: SIGKILL (forca bruta).
-    if pgrep -x Hyprland >/dev/null; then
-        echo "[warn] Hyprland resistente, SIGKILL"
-        pkill -KILL -x Hyprland || true
-        sleep 1
-    fi
-fi
-
-# ============================================================
 # A11: forca liberacao DRM master.
 #
-# Mesmo apos Hyprland sair, /dev/dri/card0 pode ficar segurado por
-# processos zombies, seatd cache, ou display manager. Lumo precisa
+# Outros compositores ou display managers podem segurar /dev/dri/card0.
+# Lumo precisa de master pra page-flip funcionar.
 # de master pra page-flip funcionar; sem ele = tela preta.
 #
 # Fix: lista quem usa, mata todos os processos com fd aberto, espera.
@@ -239,13 +194,6 @@ post_exit() {
     echo ""
     echo "================================================================"
     echo "lumo-wm saiu com code=$ec"
-    if [[ "$HYPR_WAS_RUNNING" == "true" ]]; then
-        echo ""
-        echo " Hyprland foi morto pra subir Lumo. Pra reabrir:"
-        echo "   1. Ctrl+Alt+F1 + login fresh (recomendado, sessao limpa)"
-        echo "   2. OU rode: nohup Hyprland > /tmp/hypr.log 2>&1 &"
-        echo ""
-    fi
     echo "Log completo: /tmp/lumo-wm-tty.log"
     echo "================================================================"
     exit $ec

@@ -4481,6 +4481,9 @@ version = "0.1.0"
 [[package]]
 name = "lumo-appctl"
 version = "0.1.0"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "lumo-apps"

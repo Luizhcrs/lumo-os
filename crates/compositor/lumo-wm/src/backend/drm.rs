@@ -1195,7 +1195,10 @@ fn render_drm(state: &mut LumoState) {
                         surface.pending_flip = true;
                         surface.frame_durations.push(frame_dur);
                         // W6.D: perf tracker (histograma separado com us precision).
-                        state.perf.record_frame(frame_dur);
+                        // Filtra gaps > 100ms: ociosidade nao eh frame drop.
+                        if frame_dur < Duration::from_millis(100) {
+                            state.perf.record_frame(frame_dur);
+                        }
                         if trace {
                             tracing::debug!(
                                 frame = frame_counter,
