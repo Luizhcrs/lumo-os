@@ -129,13 +129,7 @@ cd "$(dirname "$0")/.."
 # ============================================================
 # W34.24: skip rebuild se binaries fresh (Iced cold start nao precisa re-compile cada login).
 # Verifica tambem se binarios sao executaveis.
-NEED_BUILD=false
-for bin in ./target/release/lumo-wm ./target/release/lumo-bar ./target/release/lumo-desktop; do
-    if [[ ! -x "$bin" ]]; then
-        NEED_BUILD=true
-        break
-    fi
-done
+NEED_BUILD=true
 
 if [[ "$NEED_BUILD" == true ]]; then
     echo "[1/3] Build lumo-wm (feature drm-backend) + lumo-bar..."
