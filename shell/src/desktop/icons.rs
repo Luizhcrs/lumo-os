@@ -130,30 +130,25 @@ pub fn desktop_dir() -> PathBuf {
 // Context menu
 // ============================================================
 
-pub const CTX_ITEMS: &[&str] = &["Abrir", "Renomear", "Mover pra Lixeira"];
-pub const CTX_ITEM_H: f32 = 28.0;
-pub const CTX_MENU_W: f32 = 160.0;
-pub const CTX_PADDING: f32 = 6.0;
+// W37.3: items via crate::menu::MenuItem para identidade visual UNICA
+// com bar dropdowns + desktop menu (mesmo bg, border, font, hover, radius
+// via crate::menu::draw_menu + LumoColors tokens).
+use crate::menu;
+
+pub const CTX_MENU_W: f32 = menu::MENU_W_DESKTOP;
+
+pub const CTX_ITEMS: &[menu::MenuItem] = &[
+    menu::MenuItem::action("Abrir"),
+    menu::MenuItem::action("Renomear"),
+    menu::MenuItem::action("Mover pra Lixeira"),
+];
 
 pub fn ctx_menu_h() -> f32 {
-    CTX_ITEMS.len() as f32 * CTX_ITEM_H + CTX_PADDING * 2.0
+    menu::menu_height(CTX_ITEMS)
 }
 
 pub fn ctx_menu_hit(mx: f32, my: f32, menu_x: f32, menu_y: f32) -> Option<usize> {
-    let h = ctx_menu_h();
-    if mx < menu_x || mx > menu_x + CTX_MENU_W || my < menu_y || my > menu_y + h {
-        return None;
-    }
-    let rel_y = my - menu_y - CTX_PADDING;
-    if rel_y < 0.0 {
-        return None;
-    }
-    let item = (rel_y / CTX_ITEM_H) as usize;
-    if item < CTX_ITEMS.len() {
-        Some(item)
-    } else {
-        None
-    }
+    menu::hit_test(CTX_ITEMS, menu_x, menu_y, CTX_MENU_W, mx, my)
 }
 
 // ============================================================
@@ -498,48 +493,26 @@ fn truncate_label(name: &str, max_chars: usize) -> String {
     }
 }
 
+/// W37.3: render via crate::menu::draw_menu para identidade unica com
+/// bar dropdowns + desktop menu (bg/border/font/hover sao do palette).
 pub fn paint_ctx_menu(
     canvas: &mut PixmapMut,
     menu_x: f32,
     menu_y: f32,
     hover_idx: usize,
-    accent_hex: u32,
+    palette: &lumo_foundation::LumoColors,
 ) {
-    let h = ctx_menu_h();
-    let bg = Color::from_rgba8(0x28, 0x28, 0x2C, 0xFF);  // W37: alpha solido (0xF2 deixava icons vazarem por baixo)
-    fill_rrect(canvas, menu_x, menu_y, CTX_MENU_W, h, 8.0, bg);
-
-    let border_color = Color::from_rgba8(0x60, 0x60, 0x68, 0x80);
-    if let Some(path) = rrect_stroke_path(menu_x, menu_y, CTX_MENU_W, h, 8.0) {
-        let mut stroke = Stroke::default();
-        stroke.width = 1.0;
-        let mut p = Paint::default();
-        p.set_color(border_color);
-        canvas.stroke_path(&path, &p, &stroke, Transform::identity(), None);
-    }
-
-    for (i, &label) in CTX_ITEMS.iter().enumerate() {
-        let item_y = menu_y + CTX_PADDING + i as f32 * CTX_ITEM_H;
-
-        if i == hover_idx {
-            let r = ((accent_hex >> 16) & 0xFF) as u8;
-            let g = ((accent_hex >> 8) & 0xFF) as u8;
-            let b = (accent_hex & 0xFF) as u8;
-            let accent = Color::from_rgba8(r, g, b, 0xFF);
-            fill_rrect(
-                canvas,
-                menu_x + 4.0,
-                item_y,
-                CTX_MENU_W - 8.0,
-                CTX_ITEM_H,
-                4.0,
-                accent,
-            );
-        }
-
-        let text_color = Color::from_rgba8(0xF5, 0xF5, 0xF7, 0xFF);
-        draw_text(canvas, menu_x + 12.0, item_y + 7.0, label, 12.0, text_color);
-    }
+    menu::draw_menu(
+        canvas,
+        menu_x,
+        menu_y,
+        CTX_MENU_W,
+        CTX_ITEMS,
+        hover_idx,
+        palette,
+        fill_rrect,
+        draw_text,
+    );
 }
 
 fn rrect_stroke_path(x: f32, y: f32, w: f32, h: f32, r: f32) -> Option<tiny_skia::Path> {
@@ -700,12 +673,31 @@ mod tests {
         assert!(result.is_none());
     }
 
+    // W37.3: identidade visual unica - ctx menu usa MenuItem do shell/menu.rs.
+    #[test]
+    fn w37_3_ctx_menu_usa_menu_item_unificado() {
+        // CTX_ITEMS deve ser slice de menu::MenuItem (mesma familia do bar
+        // dropdowns + desktop menu via menu::draw_menu).
+        assert!(!CTX_ITEMS.is_empty());
+        assert_eq!(CTX_ITEMS.len(), 3);
+        // Todos actions, sem separators (ctx de icone tem so acoes diretas).
+        for item in CTX_ITEMS {
+            assert!(item.is_clickable());
+        }
+    }
+
+    #[test]
+    fn w37_3_ctx_menu_width_igual_menu_w_desktop() {
+        // Mesma largura do desktop menu pra identidade visual.
+        assert_eq!(CTX_MENU_W, crate::menu::MENU_W_DESKTOP);
+    }
+
     // T13: ctx_menu_hit returns first item index.
     #[test]
     fn ctx_menu_hit_first_item() {
         let menu_x = 100.0;
         let menu_y = 100.0;
-        let click_y = menu_y + CTX_PADDING + CTX_ITEM_H * 0.5;
+        let click_y = menu_y + crate::menu::MENU_PAD_Y + crate::menu::MENU_ROW_H * 0.5;
         let result = ctx_menu_hit(menu_x + 10.0, click_y, menu_x, menu_y);
         assert_eq!(result, Some(0));
     }

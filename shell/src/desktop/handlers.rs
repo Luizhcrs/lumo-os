@@ -55,7 +55,7 @@ impl LumoDesktop {
                 paint_icons(&mut canvas_mut, &self.icons, accent_hex);
                 // A33: context menu de icon.
                 if let Some((_, cx, cy)) = ctx_snap {
-                    paint_ctx_menu(&mut canvas_mut, cx, cy, ctx_hover, accent_hex);
+                    paint_ctx_menu(&mut canvas_mut, cx, cy, ctx_hover, &palette);
                 }
                 // A27: desktop menu.
                 if menu_snap.visible {

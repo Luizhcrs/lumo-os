@@ -136,6 +136,8 @@ pub fn view<'a>(
         }
     }
 
+    // W37.3: radius 14 (MENU_RADIUS do shell/menu.rs) para identidade
+    // visual unica com bar dropdowns + desktop menus.
     container(col)
         .width(Length::Fixed(240.0))
         .style({
@@ -146,7 +148,7 @@ pub fn view<'a>(
                 border: Border {
                     color: bd,
                     width: 1.0,
-                    radius: 10.0.into(),
+                    radius: 14.0.into(),
                 },
                 shadow: iced::Shadow {
                     color: Color::from_rgba(0.0, 0.0, 0.0, 0.35),
@@ -182,25 +184,26 @@ fn menu_btn<'a>(th: &ThemeSnapshot, item: ItemRow) -> Element<'a, Message> {
     .spacing(12)
     .align_y(Alignment::Center);
 
-    let fg = label_color;
-    let hover = th.bg_subtle;
+    // W37.3: hover accent solido + texto branco (identidade desktop menu).
+    // Radius 6 = MENU_ROW_HOVER_RADIUS shell/menu.rs.
+    let normal_fg = label_color;
+    let hover_bg = th.accent;
+    let hover_fg = Color::WHITE;
     let enabled = item.enabled;
     let mut btn = button(container(row_el).padding([6, 14]).width(Length::Fill))
         .padding(0)
         .width(Length::Fill)
         .style(move |_, status| {
-            let bg = if enabled && status == iced::widget::button::Status::Hovered {
-                hover
-            } else {
-                Color::TRANSPARENT
-            };
+            let hovered = enabled && status == iced::widget::button::Status::Hovered;
+            let bg = if hovered { hover_bg } else { Color::TRANSPARENT };
+            let txt = if hovered { hover_fg } else { normal_fg };
             iced::widget::button::Style {
                 background: Some(iced::Background::Color(bg)),
                 border: Border {
                     radius: 6.0.into(),
                     ..Default::default()
                 },
-                text_color: fg,
+                text_color: txt,
                 ..Default::default()
             }
         });
