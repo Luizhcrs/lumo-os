@@ -36,29 +36,23 @@ pub fn remove_pkg(pkg: &str) -> Result<(), String> {
 /// Lista pacotes instalados via `pacman -Q`.
 /// Retorna vetor de nomes de pacotes.
 pub fn list_installed() -> Vec<String> {
-    let out = Command::new("pacman")
-        .args(["-Q", "--noconfirm"])
-        .output();
+    let out = Command::new("pacman").args(["-Q", "--noconfirm"]).output();
 
     match out {
-        Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .filter_map(|line| {
-                    let pkg = line.split_whitespace().next()?;
-                    Some(pkg.to_string())
-                })
-                .collect()
-        }
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter_map(|line| {
+                let pkg = line.split_whitespace().next()?;
+                Some(pkg.to_string())
+            })
+            .collect(),
         _ => Vec::new(),
     }
 }
 
 /// Verifica se pacote esta instalado (busca exata).
 pub fn is_installed(pkg: &str) -> bool {
-    let out = Command::new("pacman")
-        .args(["-Q", pkg])
-        .output();
+    let out = Command::new("pacman").args(["-Q", pkg]).output();
 
     matches!(out, Ok(o) if o.status.success())
 }

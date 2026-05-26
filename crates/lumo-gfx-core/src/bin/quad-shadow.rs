@@ -15,8 +15,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use lumo_gfx_core::{
-    color, px_center_to_ndc, px_offset_to_ndc, px_size_to_ndc, px_to_ndc_radius,
-    GlobalUniforms, QuadInstance, QuadRenderer, PEARL_CLEAR,
+    color, px_center_to_ndc, px_offset_to_ndc, px_size_to_ndc, px_to_ndc_radius, GlobalUniforms,
+    QuadInstance, QuadRenderer, PEARL_CLEAR,
 };
 use winit::{
     application::ApplicationHandler,
@@ -55,7 +55,6 @@ fn build_scene() -> Vec<QuadInstance> {
             r,
         )
         .with_shadow([0.0, 0.0, 0.0, 0.15], off(0.0, 4.0), rpx(12.0)),
-
         // [2] panel-hi card flutuante + shadow forte.
         QuadInstance::new(
             center(568.0, 230.0),
@@ -66,7 +65,6 @@ fn build_scene() -> Vec<QuadInstance> {
             r,
         )
         .with_shadow([0.0, 0.0, 0.0, 0.20], off(0.0, 8.0), rpx(20.0)),
-
         // [3] pearl bg + border emerald-500 + shadow black leve (outlined).
         QuadInstance::new(
             center(232.0, 370.0),
@@ -77,7 +75,6 @@ fn build_scene() -> Vec<QuadInstance> {
             r,
         )
         .with_shadow([0.0, 0.0, 0.0, 0.10], off(0.0, 4.0), rpx(10.0)),
-
         // [4] emerald-500 + shadow accent (colored).
         QuadInstance::new(
             center(568.0, 370.0),
@@ -248,25 +245,14 @@ impl ApplicationHandler for App {
         let attrs = Window::default_attributes()
             .with_title("lumo-gfx-core quad-shadow")
             .with_inner_size(LogicalSize::new(CANVAS_W, CANVAS_H));
-        let window = Arc::new(
-            event_loop
-                .create_window(attrs)
-                .expect("create_window"),
-        );
+        let window = Arc::new(event_loop.create_window(attrs).expect("create_window"));
         let renderer = pollster::block_on(ShadowRenderer::new(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _id: WindowId,
-        event: WindowEvent,
-    ) {
-        let (Some(renderer), Some(window)) =
-            (self.renderer.as_mut(), self.window.as_ref())
-        else {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        let (Some(renderer), Some(window)) = (self.renderer.as_mut(), self.window.as_ref()) else {
             return;
         };
         match event {
@@ -295,10 +281,7 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info"),
-    )
-    .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let event_loop = EventLoop::new().expect("event_loop");
     event_loop.set_control_flow(ControlFlow::Wait);
     let mut app = App {

@@ -69,7 +69,9 @@ pub fn paint_rubber_band(canvas: &mut PixmapMut, rb: &RubberBand, accent_hex: u3
     if !rb.active {
         return;
     }
-    let Some((x, y, w, h)) = rb.normalized_rect() else { return };
+    let Some((x, y, w, h)) = rb.normalized_rect() else {
+        return;
+    };
     if w < 1.0 || h < 1.0 {
         return;
     }
@@ -90,7 +92,13 @@ pub fn paint_rubber_band(canvas: &mut PixmapMut, rb: &RubberBand, accent_hex: u3
         let mut p = Paint::default();
         p.set_color(fill_color);
         p.anti_alias = false;
-        canvas.fill_path(&path, &p, tiny_skia::FillRule::Winding, Transform::identity(), None);
+        canvas.fill_path(
+            &path,
+            &p,
+            tiny_skia::FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
     }
 
     // Stroke: 1px accent alpha 0x80.

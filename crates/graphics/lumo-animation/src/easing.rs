@@ -140,7 +140,10 @@ mod extended_tests {
         let c = LACurve::ease_out_cubic();
         let early = c.eval(0.1);
         // ease-out: fast start -> value at 0.1 should be > 0.1 (linear)
-        assert!(early > 0.1, "ease-out should be above linear at start: {early}");
+        assert!(
+            early > 0.1,
+            "ease-out should be above linear at start: {early}"
+        );
     }
 
     #[test]

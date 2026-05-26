@@ -5,12 +5,12 @@
 //! Render: scale 0.9->1.0 + alpha 0->1 on open; reverse on close.
 //! A11y: reduced_motion=true -> instant (skip spring, jump to done).
 
-use std::collections::HashMap;
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
+use std::collections::HashMap;
 
-const SPRING_MASS: f32      = 1.0;
+const SPRING_MASS: f32 = 1.0;
 const SPRING_STIFFNESS: f32 = 400.0;
-const SPRING_DAMPING: f32   = 38.0;
+const SPRING_DAMPING: f32 = 38.0;
 
 /// Per-window animation state.
 #[derive(Debug, Clone)]
@@ -65,11 +65,20 @@ impl WindowAnimState {
     }
 
     /// Scale lerp 0.9..1.0
-    pub fn scale(&self) -> f32 { 0.9 + 0.1 * self.visual_progress() }
-    pub fn alpha(&self) -> f32 { self.visual_progress() }
-    pub fn is_close_done(&self) -> bool { matches!(self, WindowAnimState::CloseDone) }
+    pub fn scale(&self) -> f32 {
+        0.9 + 0.1 * self.visual_progress()
+    }
+    pub fn alpha(&self) -> f32 {
+        self.visual_progress()
+    }
+    pub fn is_close_done(&self) -> bool {
+        matches!(self, WindowAnimState::CloseDone)
+    }
     pub fn is_animating(&self) -> bool {
-        matches!(self, WindowAnimState::Opening { .. } | WindowAnimState::Closing { .. })
+        matches!(
+            self,
+            WindowAnimState::Opening { .. } | WindowAnimState::Closing { .. }
+        )
     }
 }
 
@@ -89,7 +98,9 @@ pub struct WindowAnimRegistry {
 }
 
 impl WindowAnimRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     fn key(surface: &WlSurface) -> u32 {
         use smithay::reexports::wayland_server::Resource;
@@ -97,11 +108,17 @@ impl WindowAnimRegistry {
     }
 
     pub fn insert_opening(&mut self, surface: &WlSurface, reduced_motion: bool) {
-        self.states.insert(Self::key(surface), WindowAnimState::new_opening(reduced_motion));
+        self.states.insert(
+            Self::key(surface),
+            WindowAnimState::new_opening(reduced_motion),
+        );
     }
 
     pub fn insert_closing(&mut self, surface: &WlSurface, reduced_motion: bool) {
-        self.states.insert(Self::key(surface), WindowAnimState::new_closing(reduced_motion));
+        self.states.insert(
+            Self::key(surface),
+            WindowAnimState::new_closing(reduced_motion),
+        );
     }
 
     pub fn get(&self, surface: &WlSurface) -> Option<&WindowAnimState> {
@@ -116,18 +133,23 @@ impl WindowAnimRegistry {
         for state in self.states.values_mut() {
             state.tick(dt);
         }
-        self.states.iter()
+        self.states
+            .iter()
             .filter(|(_, s)| s.is_close_done())
             .map(|(k, _)| *k)
             .collect()
     }
 
     pub fn drain_close_done(&mut self) -> Vec<u32> {
-        let done: Vec<u32> = self.states.iter()
+        let done: Vec<u32> = self
+            .states
+            .iter()
             .filter(|(_, s)| s.is_close_done())
             .map(|(k, _)| *k)
             .collect();
-        for k in &done { self.states.remove(k); }
+        for k in &done {
+            self.states.remove(k);
+        }
         done
     }
 }
@@ -172,7 +194,9 @@ mod tests {
         let mut s = WindowAnimState::new_opening(false);
         let init = s.scale();
         assert!(init >= 0.9 && init <= 1.0, "scale={init}");
-        for _ in 0..300 { s.tick(0.016); }
+        for _ in 0..300 {
+            s.tick(0.016);
+        }
         assert!((s.scale() - 1.0).abs() < 0.01);
     }
 
@@ -180,7 +204,9 @@ mod tests {
     fn spring_converges_to_target() {
         let mut pos = 0.0f32;
         let mut vel = 0.0f32;
-        for _ in 0..500 { spring_step(&mut pos, &mut vel, 1.0, 0.016); }
+        for _ in 0..500 {
+            spring_step(&mut pos, &mut vel, 1.0, 0.016);
+        }
         assert!((pos - 1.0).abs() < 0.01, "pos={pos}");
     }
 

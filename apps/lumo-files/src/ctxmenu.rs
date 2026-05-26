@@ -29,36 +29,77 @@ fn sep() -> Element<'static, Message> {
 
 pub fn items_for_item(rename_msg: Message) -> Vec<Vec<ItemRow>> {
     vec![
+        vec![ItemRow {
+            label: "Abrir",
+            shortcut: Some("Enter"),
+            msg: Message::OpenSelected,
+            destructive: false,
+        }],
         vec![
-            ItemRow { label: "Abrir", shortcut: Some("Enter"), msg: Message::OpenSelected, destructive: false },
+            ItemRow {
+                label: "Renomear",
+                shortcut: Some("F2"),
+                msg: rename_msg,
+                destructive: false,
+            },
+            ItemRow {
+                label: "Copiar",
+                shortcut: Some("Ctrl+C"),
+                msg: Message::CopySelected,
+                destructive: false,
+            },
+            ItemRow {
+                label: "Recortar",
+                shortcut: Some("Ctrl+X"),
+                msg: Message::CutSelected,
+                destructive: false,
+            },
         ],
-        vec![
-            ItemRow { label: "Renomear", shortcut: Some("F2"), msg: rename_msg, destructive: false },
-            ItemRow { label: "Copiar", shortcut: Some("Ctrl+C"), msg: Message::CopySelected, destructive: false },
-            ItemRow { label: "Recortar", shortcut: Some("Ctrl+X"), msg: Message::CutSelected, destructive: false },
-        ],
-        vec![
-            ItemRow { label: "Mover para Lixeira", shortcut: Some("Del"), msg: Message::DeleteSelected, destructive: true },
-        ],
-        vec![
-            ItemRow { label: "Propriedades", shortcut: Some("Ctrl+I"), msg: Message::OpenProperties, destructive: false },
-        ],
+        vec![ItemRow {
+            label: "Mover para Lixeira",
+            shortcut: Some("Del"),
+            msg: Message::DeleteSelected,
+            destructive: true,
+        }],
+        vec![ItemRow {
+            label: "Propriedades",
+            shortcut: Some("Ctrl+I"),
+            msg: Message::OpenProperties,
+            destructive: false,
+        }],
     ]
 }
 
 pub fn items_for_area() -> Vec<Vec<ItemRow>> {
     vec![
         vec![
-            ItemRow { label: "Nova pasta", shortcut: Some("Ctrl+N"), msg: Message::NewFolder, destructive: false },
-            ItemRow { label: "Colar", shortcut: Some("Ctrl+V"), msg: Message::Paste, destructive: false },
+            ItemRow {
+                label: "Nova pasta",
+                shortcut: Some("Ctrl+N"),
+                msg: Message::NewFolder,
+                destructive: false,
+            },
+            ItemRow {
+                label: "Colar",
+                shortcut: Some("Ctrl+V"),
+                msg: Message::Paste,
+                destructive: false,
+            },
         ],
-        vec![
-            ItemRow { label: "Atualizar", shortcut: Some("F5"), msg: Message::Refresh, destructive: false },
-        ],
+        vec![ItemRow {
+            label: "Atualizar",
+            shortcut: Some("F5"),
+            msg: Message::Refresh,
+            destructive: false,
+        }],
     ]
 }
 
-pub fn view<'a>(th: &ThemeSnapshot, ctx: &ContextMenu, rename_msg: Message) -> Element<'a, Message> {
+pub fn view<'a>(
+    th: &ThemeSnapshot,
+    ctx: &ContextMenu,
+    rename_msg: Message,
+) -> Element<'a, Message> {
     let groups = match ctx {
         ContextMenu::Item { .. } => items_for_item(rename_msg),
         ContextMenu::Area { .. } => items_for_area(),
@@ -82,7 +123,11 @@ pub fn view<'a>(th: &ThemeSnapshot, ctx: &ContextMenu, rename_msg: Message) -> E
             let bd = th.border;
             move |_| iced::widget::container::Style {
                 background: Some(iced::Background::Color(bg)),
-                border: Border { color: bd, width: 1.0, radius: 10.0.into() },
+                border: Border {
+                    color: bd,
+                    width: 1.0,
+                    radius: 10.0.into(),
+                },
                 shadow: iced::Shadow {
                     color: Color::from_rgba(0.0, 0.0, 0.0, 0.35),
                     offset: iced::Vector { x: 0.0, y: 4.0 },
@@ -97,7 +142,10 @@ pub fn view<'a>(th: &ThemeSnapshot, ctx: &ContextMenu, rename_msg: Message) -> E
 fn menu_btn<'a>(th: &ThemeSnapshot, item: ItemRow) -> Element<'a, Message> {
     let label_color = if item.destructive { th.danger } else { th.fg };
     let row_el = row![
-        text(item.label).size(13).color(label_color).width(Length::Fill),
+        text(item.label)
+            .size(13)
+            .color(label_color)
+            .width(Length::Fill),
         match item.shortcut {
             Some(s) => text(s).size(11).color(th.fg_subtle).into(),
             None => Element::from(iced::widget::horizontal_space()),
@@ -120,7 +168,10 @@ fn menu_btn<'a>(th: &ThemeSnapshot, item: ItemRow) -> Element<'a, Message> {
             };
             iced::widget::button::Style {
                 background: Some(iced::Background::Color(bg)),
-                border: Border { radius: 6.0.into(), ..Default::default() },
+                border: Border {
+                    radius: 6.0.into(),
+                    ..Default::default()
+                },
                 text_color: fg,
                 ..Default::default()
             }
@@ -151,7 +202,11 @@ mod tests {
     #[test]
     fn items_for_item_tem_atalhos() {
         let groups = items_for_item(Message::ContextMenuClose);
-        let with_shortcut: Vec<_> = groups.iter().flatten().filter(|i| i.shortcut.is_some()).collect();
+        let with_shortcut: Vec<_> = groups
+            .iter()
+            .flatten()
+            .filter(|i| i.shortcut.is_some())
+            .collect();
         assert!(with_shortcut.len() >= 4);
     }
 }

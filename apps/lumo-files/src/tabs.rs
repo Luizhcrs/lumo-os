@@ -30,10 +30,13 @@ pub fn handle_new_tab(app: &mut App) -> Task<Message> {
     app.active_tab = app.tabs.len() - 1;
     let idx = app.active_tab;
     let show_hidden = app.show_hidden;
-    Task::perform(crate::app::load_dir(dir.clone(), show_hidden), move |r| match r {
-        Ok(entries) => Message::TabDirLoaded(idx, dir.clone(), entries),
-        Err(e) => Message::OpError(e),
-    })
+    Task::perform(
+        crate::app::load_dir(dir.clone(), show_hidden),
+        move |r| match r {
+            Ok(entries) => Message::TabDirLoaded(idx, dir.clone(), entries),
+            Err(e) => Message::OpError(e),
+        },
+    )
 }
 
 pub fn handle_close_tab(app: &mut App, idx: usize) -> Task<Message> {
@@ -73,9 +76,15 @@ pub fn handle_tab_navigate(app: &mut App, idx: usize, path: PathBuf) -> Task<Mes
     Task::none()
 }
 
-pub fn handle_tab_dir_loaded(app: &mut App, idx: usize, path: PathBuf, entries: Vec<PathBuf>) -> Task<Message> {
+pub fn handle_tab_dir_loaded(
+    app: &mut App,
+    idx: usize,
+    path: PathBuf,
+    entries: Vec<PathBuf>,
+) -> Task<Message> {
     if let Some(tab) = app.tabs.get_mut(idx) {
-        tab.label = path.file_name()
+        tab.label = path
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "/".to_string());
         tab.current_dir = path;
@@ -118,7 +127,12 @@ pub fn view<'a>(th: &ThemeSnapshot, tabs: &'a [Tab], active: usize) -> Element<'
         .into()
 }
 
-fn tab_pill<'a>(th: &ThemeSnapshot, idx: usize, label: &'a str, active: bool) -> Element<'a, Message> {
+fn tab_pill<'a>(
+    th: &ThemeSnapshot,
+    idx: usize,
+    label: &'a str,
+    active: bool,
+) -> Element<'a, Message> {
     let label_color = if active { th.fg } else { th.fg_subtle };
     let bg = if active { th.bg } else { Color::TRANSPARENT };
 
@@ -131,7 +145,10 @@ fn tab_pill<'a>(th: &ThemeSnapshot, idx: usize, label: &'a str, active: bool) ->
             let fg = th.fg;
             move |_, _| iced::widget::button::Style {
                 background: Some(iced::Background::Color(Color::TRANSPARENT)),
-                border: Border { radius: 4.0.into(), ..Default::default() },
+                border: Border {
+                    radius: 4.0.into(),
+                    ..Default::default()
+                },
                 text_color: fg,
                 ..Default::default()
             }
@@ -165,7 +182,11 @@ fn tab_pill<'a>(th: &ThemeSnapshot, idx: usize, label: &'a str, active: bool) ->
             }
         });
 
-    let underline_color = if active { th.accent } else { Color::TRANSPARENT };
+    let underline_color = if active {
+        th.accent
+    } else {
+        Color::TRANSPARENT
+    };
     let underline = container(iced::widget::horizontal_space())
         .height(Length::Fixed(2.0))
         .width(Length::Fill)
@@ -182,18 +203,27 @@ fn new_tab_btn<'a>(th: &ThemeSnapshot) -> Element<'a, Message> {
     let icon = Svg::new(Handle::from_memory(icons::PLUS))
         .width(Length::Fixed(12.0))
         .height(Length::Fixed(12.0))
-        .style(move |_, _| iced::widget::svg::Style { color: Some(icon_color) });
-    button(container(icon).width(Length::Fixed(12.0)).height(Length::Fixed(12.0)))
-        .on_press(Message::NewTab)
-        .padding([6, 10])
-        .style({
-            let fg = th.fg;
-            move |_, _| iced::widget::button::Style {
-                background: Some(iced::Background::Color(Color::TRANSPARENT)),
-                border: Border { radius: 8.0.into(), ..Default::default() },
-                text_color: fg,
+        .style(move |_, _| iced::widget::svg::Style {
+            color: Some(icon_color),
+        });
+    button(
+        container(icon)
+            .width(Length::Fixed(12.0))
+            .height(Length::Fixed(12.0)),
+    )
+    .on_press(Message::NewTab)
+    .padding([6, 10])
+    .style({
+        let fg = th.fg;
+        move |_, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(Color::TRANSPARENT)),
+            border: Border {
+                radius: 8.0.into(),
                 ..Default::default()
-            }
-        })
-        .into()
+            },
+            text_color: fg,
+            ..Default::default()
+        }
+    })
+    .into()
 }

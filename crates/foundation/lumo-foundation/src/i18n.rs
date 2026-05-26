@@ -102,7 +102,11 @@ impl I18nState {
             parse_toml_flat(LOCALE_EN_US)
         };
         let fallback = parse_toml_flat(LOCALE_EN_US);
-        Self { locale: locale.to_string(), strings, fallback }
+        Self {
+            locale: locale.to_string(),
+            strings,
+            fallback,
+        }
     }
 
     fn get(&self, key: &str) -> String {
@@ -149,7 +153,10 @@ impl I18n {
             }
         }
         let fallback = parse_toml_flat(LOCALE_EN_US);
-        fallback.get(key).cloned().unwrap_or_else(|| key.to_string())
+        fallback
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| key.to_string())
     }
 
     /// Retorna locale ativo.

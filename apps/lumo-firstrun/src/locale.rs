@@ -10,7 +10,9 @@ pub struct LocaleConfig {
 
 impl LocaleConfig {
     pub fn new(code: &str) -> Self {
-        LocaleConfig { locale: code.to_string() }
+        LocaleConfig {
+            locale: code.to_string(),
+        }
     }
 
     /// Persiste em `~/.config/lumo/locale.toml`.
@@ -23,8 +25,8 @@ impl LocaleConfig {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let content = toml::to_string(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let content =
+            toml::to_string(self).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
         std::fs::write(path, content)
     }
 

@@ -41,8 +41,8 @@ fn try_connect(path: &PathBuf) -> Option<UnixStream> {
 }
 
 fn spawn_daemon() -> std::io::Result<()> {
-    use std::process::Stdio;
     use std::os::unix::process::CommandExt;
+    use std::process::Stdio;
     let bin = resolve_appsd_bin();
     eprintln!("[appctl] spawning daemon: {}", bin);
     let mut cmd = Command::new(&bin);
@@ -92,7 +92,9 @@ fn main() -> ExitCode {
             let deadline = std::time::Instant::now() + Duration::from_secs(10);
             loop {
                 std::thread::sleep(Duration::from_millis(100));
-                if let Some(s) = try_connect(&path) { break s; }
+                if let Some(s) = try_connect(&path) {
+                    break s;
+                }
                 if std::time::Instant::now() > deadline {
                     eprintln!("lumo-appctl: daemon nao subiu em 10s");
                     return ExitCode::from(1);

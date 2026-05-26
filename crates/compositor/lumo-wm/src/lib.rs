@@ -13,19 +13,19 @@
 //! - [[project-lumo-os]]
 
 pub mod backend;
-pub mod focus;
-pub mod perf;
-pub mod hardware;
 pub mod cursor;
+pub mod focus;
 pub mod handlers;
+pub mod hardware;
 pub mod input;
 pub mod ipc;
-pub mod workspace;
+pub mod perf;
 pub mod state;
+pub mod workspace;
 
 pub use state::{init_socket, ClientState, LumoState};
-pub mod window_anim;
 pub mod multi_monitor;
-pub mod tiling;
 pub mod overview;
 pub mod stack_picker;
+pub mod tiling;
+pub mod window_anim;

@@ -121,7 +121,11 @@ impl ButtonHandle {
         self.state = next;
         self.last_state_change = Instant::now();
         // Spring target: 1.0 quando Pressed, 0.0 caso contrario.
-        let target = if next == WidgetState::Pressed { 1.0 } else { 0.0 };
+        let target = if next == WidgetState::Pressed {
+            1.0
+        } else {
+            0.0
+        };
         self.spring.set_target(target);
     }
 
@@ -389,10 +393,7 @@ impl Button {
             }
             h_px = h_px.max(run.line_height);
         }
-        [
-            w_px + self.padding[0] * 2.0,
-            h_px + self.padding[1] * 2.0,
-        ]
+        [w_px + self.padding[0] * 2.0, h_px + self.padding[1] * 2.0]
     }
 
     // -- render ---------------------------------------------------------------
@@ -603,7 +604,6 @@ fn visual_for_state(
 
 // ============================================================================
 // Tests
-
 
 // ----------------------------------------------------------------------------
 // LK* aliases (A9-rename) -- widget primitives.

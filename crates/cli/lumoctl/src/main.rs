@@ -25,7 +25,7 @@ fn main() {
     }
 
     match args[0].as_str() {
-        "theme"  => cmd_theme(&args[1..]),
+        "theme" => cmd_theme(&args[1..]),
         "layout" => cmd_layout(&args[1..]),
         other => {
             eprintln!("subcomando desconhecido: {other}");

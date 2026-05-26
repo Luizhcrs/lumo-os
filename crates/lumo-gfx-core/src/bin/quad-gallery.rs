@@ -9,9 +9,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use lumo_gfx_core::{
-    color, GlobalUniforms, QuadInstance, QuadRenderer, INK_DEEP,
-};
+use lumo_gfx_core::{color, GlobalUniforms, QuadInstance, QuadRenderer, INK_DEEP};
 use winit::{
     application::ApplicationHandler,
     dpi::{LogicalSize, PhysicalSize},
@@ -33,28 +31,32 @@ use winit::{
 fn build_scene() -> Vec<QuadInstance> {
     vec![
         QuadInstance::new(
-            [-0.5,  0.5], [0.4, 0.4],
+            [-0.5, 0.5],
+            [0.4, 0.4],
             color::EMERALD_600,
             color::TRANSPARENT,
             0.0,
             0.0,
         ),
         QuadInstance::new(
-            [ 0.5,  0.5], [0.4, 0.4],
+            [0.5, 0.5],
+            [0.4, 0.4],
             color::EMERALD_600,
             color::PEARL,
             0.008,
             0.05,
         ),
         QuadInstance::new(
-            [-0.5, -0.5], [0.4, 0.4],
+            [-0.5, -0.5],
+            [0.4, 0.4],
             color::PANEL_HI,
             color::EMERALD_600,
             0.004,
             0.10,
         ),
         QuadInstance::new(
-            [ 0.5, -0.5], [0.4, 0.4],
+            [0.5, -0.5],
+            [0.4, 0.4],
             color::INK_DEEP,
             color::EMERALD_500,
             0.008,
@@ -221,25 +223,14 @@ impl ApplicationHandler for App {
         let attrs = Window::default_attributes()
             .with_title("lumo-gfx-core quad-gallery")
             .with_inner_size(LogicalSize::new(800, 600));
-        let window = Arc::new(
-            event_loop
-                .create_window(attrs)
-                .expect("create_window"),
-        );
+        let window = Arc::new(event_loop.create_window(attrs).expect("create_window"));
         let renderer = pollster::block_on(GalleryRenderer::new(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _id: WindowId,
-        event: WindowEvent,
-    ) {
-        let (Some(renderer), Some(window)) =
-            (self.renderer.as_mut(), self.window.as_ref())
-        else {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        let (Some(renderer), Some(window)) = (self.renderer.as_mut(), self.window.as_ref()) else {
             return;
         };
         match event {
@@ -268,10 +259,7 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info"),
-    )
-    .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let event_loop = EventLoop::new().expect("event_loop");
     event_loop.set_control_flow(ControlFlow::Wait);
     let mut app = App {

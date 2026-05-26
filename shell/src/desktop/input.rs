@@ -87,14 +87,23 @@ impl PointerHandler for LumoDesktop {
                             need_redraw = true;
                         } else {
                             send_close_dropdowns(&mut self.ipc_stream);
-                            self.menu = MenuActive { visible: true, x: px, y: py, hover_idx: usize::MAX };
+                            self.menu = MenuActive {
+                                visible: true,
+                                x: px,
+                                y: py,
+                                hover_idx: usize::MAX,
+                            };
                             need_redraw = true;
                         }
                     } else if button == BTN_LEFT {
                         let mut closed_ctx = false;
                         if let Some((_, cx, cy)) = self.icons.ctx_menu {
                             if let Some(item_idx) = ctx_menu_hit(px, py, cx, cy) {
-                                let icon_idx = self.icons.ctx_menu.map(|(i, _, _)| i).expect("ctx_menu garantido pelo if-let acima");
+                                let icon_idx = self
+                                    .icons
+                                    .ctx_menu
+                                    .map(|(i, _, _)| i)
+                                    .expect("ctx_menu garantido pelo if-let acima");
                                 handle_ctx_item(&mut self.icons, icon_idx, item_idx);
                                 self.icons.ctx_menu = None;
                                 self.icons.scan();
@@ -122,8 +131,11 @@ impl PointerHandler for LumoDesktop {
                             self.icons.icons[idx].selected = true;
                             need_redraw = true;
                             let is_dbl = if let Some((last_idx, last_t)) = self.icons.last_click {
-                                last_idx == idx && now.duration_since(last_t).as_millis() < DBLCLICK_MS
-                            } else { false };
+                                last_idx == idx
+                                    && now.duration_since(last_t).as_millis() < DBLCLICK_MS
+                            } else {
+                                false
+                            };
                             if is_dbl {
                                 self.icons.open_icon(idx);
                                 self.icons.last_click = None;
@@ -143,7 +155,9 @@ impl PointerHandler for LumoDesktop {
                 PointerEventKind::Release { button, .. } => {
                     if button == BTN_LEFT {
                         let dragged = self.icons.release_drag();
-                        if dragged { need_redraw = true; }
+                        if dragged {
+                            need_redraw = true;
+                        }
                         if self.rubber_band.active {
                             if let Some((rx, ry, rw, rh)) = self.rubber_band.finish() {
                                 self.icons.select_by_rect(rx, ry, rw, rh);
@@ -157,13 +171,21 @@ impl PointerHandler for LumoDesktop {
                 _ => {}
             }
         }
-        if need_redraw { self.redraw(qh); }
+        if need_redraw {
+            self.redraw(qh);
+        }
     }
 }
 
-fn handle_ctx_item(icons: &mut crate::desktop::icons::IconsState, icon_idx: usize, item_idx: usize) {
+fn handle_ctx_item(
+    icons: &mut crate::desktop::icons::IconsState,
+    icon_idx: usize,
+    item_idx: usize,
+) {
     match item_idx {
-        0 => { icons.open_icon(icon_idx); }
+        0 => {
+            icons.open_icon(icon_idx);
+        }
         1 => {
             if let Some(ic) = icons.icons.get(icon_idx) {
                 eprintln!("[lumo-desktop] renomear stub: {}", ic.name);

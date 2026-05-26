@@ -40,8 +40,8 @@ pub fn init(
     loop_handle: LoopHandle<'static, LumoState>,
     state: &mut LumoState,
 ) -> Result<WinitData> {
-    let (mut backend, winit_loop) = winit::init::<GlesRenderer>()
-        .map_err(|e| anyhow!("falha init winit backend: {e:?}"))?;
+    let (mut backend, winit_loop) =
+        winit::init::<GlesRenderer>().map_err(|e| anyhow!("falha init winit backend: {e:?}"))?;
 
     backend.window().set_cursor_visible(false);
 
@@ -82,7 +82,11 @@ pub fn init(
 
         let renderer = backend.renderer();
         let egl_context = renderer.egl_context();
-        let render_formats: Vec<_> = egl_context.dmabuf_render_formats().iter().copied().collect();
+        let render_formats: Vec<_> = egl_context
+            .dmabuf_render_formats()
+            .iter()
+            .copied()
+            .collect();
         let egl_display = egl_context.display();
 
         // Sem feature backend_drm aqui, usamos drm_device_path + stat
@@ -102,10 +106,12 @@ pub fn init(
                 let formats_count = render_formats.len();
                 match DmabufFeedbackBuilder::new(dev_id, render_formats).build() {
                     Ok(feedback) => {
-                        let global = state.dmabuf_state.create_global_with_default_feedback::<LumoState>(
-                            &state.display_handle,
-                            &feedback,
-                        );
+                        let global = state
+                            .dmabuf_state
+                            .create_global_with_default_feedback::<LumoState>(
+                                &state.display_handle,
+                                &feedback,
+                            );
                         state.dmabuf_global = Some(global);
                         tracing::info!(
                             dev_id,
@@ -131,18 +137,30 @@ pub fn init(
     let wallpaper = LumoWallpaper::try_load(backend.renderer());
     state.wallpaper = wallpaper;
     // A38: compila shader SDF corner radius.
-    state.corner_shader = match crate::backend::corner_shader::CornerShader::compile(backend.renderer()) {
-        Ok(cs) => Some(cs),
-        Err(e) => { tracing::warn!("corner_shader compile falhou: {:?}", e); None }
-    };
-    state.corner_mask_shader = match crate::backend::corner_shader::CornerMaskShader::compile(backend.renderer()) {
-        Ok(cs) => Some(cs),
-        Err(e) => { tracing::warn!("corner_mask_shader compile falhou: {:?}", e); None }
-    };
-    state.titlebar_bg_shader = match crate::backend::corner_shader::TitlebarBgShader::compile(backend.renderer()) {
-        Ok(cs) => Some(cs),
-        Err(e) => { tracing::warn!("titlebar_bg_shader compile falhou: {:?}", e); None }
-    };
+    state.corner_shader =
+        match crate::backend::corner_shader::CornerShader::compile(backend.renderer()) {
+            Ok(cs) => Some(cs),
+            Err(e) => {
+                tracing::warn!("corner_shader compile falhou: {:?}", e);
+                None
+            }
+        };
+    state.corner_mask_shader =
+        match crate::backend::corner_shader::CornerMaskShader::compile(backend.renderer()) {
+            Ok(cs) => Some(cs),
+            Err(e) => {
+                tracing::warn!("corner_mask_shader compile falhou: {:?}", e);
+                None
+            }
+        };
+    state.titlebar_bg_shader =
+        match crate::backend::corner_shader::TitlebarBgShader::compile(backend.renderer()) {
+            Ok(cs) => Some(cs),
+            Err(e) => {
+                tracing::warn!("titlebar_bg_shader compile falhou: {:?}", e);
+                None
+            }
+        };
 
     let backend = Rc::new(RefCell::new(backend));
     let damage_tracker = Rc::new(RefCell::new(damage_tracker));
@@ -251,7 +269,12 @@ fn redraw(
         if let Some(ov) = state.overview.as_mut() {
             ov.tick(dt);
         }
-        if state.overview.as_ref().map(|o| o.is_closed()).unwrap_or(false) {
+        if state
+            .overview
+            .as_ref()
+            .map(|o| o.is_closed())
+            .unwrap_or(false)
+        {
             state.overview = None;
         }
     }
@@ -270,14 +293,21 @@ fn redraw(
         output_h: oh,
         corner_shader: state.corner_shader.as_ref(),
         ssd_windows: &state.ssd_windows,
-        titlebar_menu: state.titlebar_menu.as_ref().map(|(_, pos, hover)| (*pos, *hover)),
+        titlebar_menu: state
+            .titlebar_menu
+            .as_ref()
+            .map(|(_, pos, hover)| (*pos, *hover)),
         snap_preview: state.snap_preview,
         corner_mask_shader: state.corner_mask_shader.as_ref(),
         titlebar_bg_shader: state.titlebar_bg_shader.as_ref(),
-        overview_elements: state.overview.as_ref()
+        overview_elements: state
+            .overview
+            .as_ref()
             .map(|ov| crate::overview::overview_elements(ov, ow, oh))
             .unwrap_or_default(),
-        picker_elements: state.stack_picker.as_ref()
+        picker_elements: state
+            .stack_picker
+            .as_ref()
             .map(|p| crate::stack_picker::picker_elements(p, ow, oh))
             .unwrap_or_default(),
     };

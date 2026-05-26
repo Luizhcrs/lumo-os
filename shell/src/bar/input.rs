@@ -30,7 +30,10 @@ impl PointerHandler for LumoBar {
         for ev in events {
             // DBG B4: log press/release kinds explicitly. Mantido pra investigar
             // missing dropdowns reportado pelo Luiz. Remover se virar ruido.
-            if matches!(ev.kind, PointerEventKind::Press { .. } | PointerEventKind::Release { .. }) {
+            if matches!(
+                ev.kind,
+                PointerEventKind::Press { .. } | PointerEventKind::Release { .. }
+            ) {
                 eprintln!("[lumo-bar] pointer evt {:?} pos={:?}", ev.kind, ev.position);
             }
             match ev.kind {
@@ -58,7 +61,8 @@ impl PointerHandler for LumoBar {
                         self.brightness_drag_last_y = py_now;
                         if dy.abs() >= 1.0 {
                             let delta = (dy * 0.5).round() as i16;
-                            let new_pct = (self.brightness_info.pct as i16 + delta).clamp(5, 100) as u8;
+                            let new_pct =
+                                (self.brightness_info.pct as i16 + delta).clamp(5, 100) as u8;
                             if new_pct != self.brightness_info.pct {
                                 crate::bar::system_info::set_brightness_pct(new_pct);
                                 self.brightness_info.pct = new_pct;
@@ -68,10 +72,9 @@ impl PointerHandler for LumoBar {
                     }
                     // A27: hover tracking dentro do menu Lumo aberto.
                     if self.dropdown == DropdownActive::LumoMenu {
-                        let new_idx = self.lumo_menu_hit_test(
-                            ev.position.0 as f32,
-                            ev.position.1 as f32,
-                        ).unwrap_or(usize::MAX);
+                        let new_idx = self
+                            .lumo_menu_hit_test(ev.position.0 as f32, ev.position.1 as f32)
+                            .unwrap_or(usize::MAX);
                         if new_idx != self.lumo_menu_hover_idx {
                             self.lumo_menu_hover_idx = new_idx;
                             self.update_size_and_redraw(qh);
@@ -87,7 +90,11 @@ impl PointerHandler for LumoBar {
                         self.update_size_and_redraw(qh);
                     }
                 }
-                PointerEventKind::Press { button, serial, time } => {
+                PointerEventKind::Press {
+                    button,
+                    serial,
+                    time,
+                } => {
                     eprintln!("[lumo-bar] Press button={} serial={} time={} pos={:?} bat_rect={:?} wifi_rect={:?}", button, serial, time, ev.position, self.bat_hit_rect, self.wifi_hit_rect);
 
                     // A26: right-click em qualquer lugar da bar = fecha tudo
@@ -102,7 +109,9 @@ impl PointerHandler for LumoBar {
                         continue;
                     }
 
-                    if button != BTN_LEFT { continue; }
+                    if button != BTN_LEFT {
+                        continue;
+                    }
                     // A20.10: debounce 200ms (re-size surface multipla = bug visual).
                     // C3 fix: skip debounce quando dropdown ja aberto -- clicks internos
                     // (rede wifi, dia calendario) nao mudam tamanho da surface.
@@ -214,28 +223,31 @@ impl PointerHandler for LumoBar {
                     }
                     if !handled {
                         // L5: clique em dropdown aberto -> fecha se for clique externo (A31.6).
-                    if !handled && self.dropdown != DropdownActive::None {
-                        if let Some((rx, ry, rw, rh)) = self.dropdown_rect {
-                            if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
-                                // Clique INTERNO: processa items
-                                eprintln!("[lumo-bar] clique interno no dropdown");
-                            } else {
-                                // Clique EXTERNO: fecha.
-                                eprintln!("[lumo-bar] clique externo -> fechando dropdown {:?}", self.dropdown);
-                                self.start_close_anim(self.dropdown);
-                                self.update_size_and_redraw(qh);
-                                handled = true;
+                        if !handled && self.dropdown != DropdownActive::None {
+                            if let Some((rx, ry, rw, rh)) = self.dropdown_rect {
+                                if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
+                                    // Clique INTERNO: processa items
+                                    eprintln!("[lumo-bar] clique interno no dropdown");
+                                } else {
+                                    // Clique EXTERNO: fecha.
+                                    eprintln!(
+                                        "[lumo-bar] clique externo -> fechando dropdown {:?}",
+                                        self.dropdown
+                                    );
+                                    self.start_close_anim(self.dropdown);
+                                    self.update_size_and_redraw(qh);
+                                    handled = true;
+                                }
                             }
                         }
-                    }
 
-                    // L5: brilho pill -> abre dropdown Brightness + inicia drag.
+                        // L5: brilho pill -> abre dropdown Brightness + inicia drag.
                         if let Some((rx, ry, rw, rh)) = self.brightness_hit_rect {
                             if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
                                 // Q4: iniciar drag brilho (permite ajuste movendo mouse sem dropdown aberto).
                                 self.brightness_dragging = true;
                                 self.brightness_drag_last_y = py;
-                                
+
                                 if self.dropdown == DropdownActive::Brightness {
                                     self.start_close_anim(DropdownActive::Brightness);
                                 } else {
@@ -313,14 +325,17 @@ impl PointerHandler for LumoBar {
                                 if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
                                     let rel = ((px - rx) / rw).clamp(0.0, 1.0);
                                     let new_pct = (rel * 100.0).round() as u8;
-                                    eprintln!("[lumo-bar] L5 brightness slider start drag -> {}%", new_pct);
+                                    eprintln!(
+                                        "[lumo-bar] L5 brightness slider start drag -> {}%",
+                                        new_pct
+                                    );
                                     crate::bar::system_info::set_brightness_pct(new_pct);
                                     self.brightness_info.pct = new_pct;
-                                    
+
                                     // Q4: Inicia arrasto no slider interno.
                                     self.brightness_dragging = true;
                                     self.brightness_dragging_slider = true; // Flag nova pra saber que eh o slider horizontal
-                                    
+
                                     self.update_size_and_redraw(qh);
                                     handled = true;
                                 }
@@ -334,16 +349,20 @@ impl PointerHandler for LumoBar {
                                 // A31.5 fix: toggle real 80 <-> 100.
                                 let current_limit = self.battery_info.charge_limit.unwrap_or(100);
                                 let new_limit: u8 = if current_limit == 80 { 100 } else { 80 };
-                                
-                                eprintln!("[lumo-bar] L5 charge limit toggle: {} -> {}", current_limit, new_limit);
-                                
+
+                                eprintln!(
+                                    "[lumo-bar] L5 charge limit toggle: {} -> {}",
+                                    current_limit, new_limit
+                                );
+
                                 let path = std::path::PathBuf::from(
-                                    "/sys/class/power_supply/BAT1/charge_control_end_threshold");
+                                    "/sys/class/power_supply/BAT1/charge_control_end_threshold",
+                                );
                                 // Tenta escrever. Se falhar (falta sudo no runtime), loga.
                                 if let Err(e) = std::fs::write(&path, new_limit.to_string()) {
                                     eprintln!("[lumo-bar] Erro ao escrever charge_limit: {:?}", e);
                                 }
-                                
+
                                 self.battery_info.charge_limit = Some(new_limit);
                                 self.update_size_and_redraw(qh);
                                 handled = true;
@@ -352,7 +371,8 @@ impl PointerHandler for LumoBar {
                         if !handled {
                             if let Some((rx, ry, rw, rh)) = self.bat_profile_cycle_rect {
                                 if px >= rx && px <= rx + rw && py >= ry && py <= ry + rh {
-                                    let next = crate::bar::system_info::platform_profile_cycle_next();
+                                    let next =
+                                        crate::bar::system_info::platform_profile_cycle_next();
                                     eprintln!("[lumo-bar] L5 profile cycle -> {:?}", next);
                                     if let Some(p) = next {
                                         self.battery_info.platform_profile = Some(p);
@@ -372,7 +392,8 @@ impl PointerHandler for LumoBar {
                                 eprintln!("[lumo-bar] A31.2 toggle wifi -> {}", want_on);
                                 crate::bar::system_info::nm_set_radio(want_on);
                                 // Bug Luiz v4: optimistic update removido. UI atualiza pos nmcli confirmar.
-                                self.wifi_refresh_due = Some(Instant::now() + Duration::from_millis(1500));
+                                self.wifi_refresh_due =
+                                    Some(Instant::now() + Duration::from_millis(1500));
                                 self.update_size_and_redraw(qh);
                                 handled = true;
                             }
@@ -389,19 +410,22 @@ impl PointerHandler for LumoBar {
                         }
                         // Click linha rede outras -> connect.
                         if !handled {
-                            let hit_ssid = self.wifi_connect_rects.iter().find_map(|(ssid, (rx, ry, rw, rh))| {
-                                if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
-                                    Some(ssid.clone())
-                                } else {
-                                    None
-                                }
-                            });
+                            let hit_ssid = self.wifi_connect_rects.iter().find_map(
+                                |(ssid, (rx, ry, rw, rh))| {
+                                    if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
+                                        Some(ssid.clone())
+                                    } else {
+                                        None
+                                    }
+                                },
+                            );
                             if let Some(ssid) = hit_ssid {
                                 eprintln!("[lumo-bar] A31.2 connect ssid={}", ssid);
                                 // A31.3: guarda receiver pra checar NeedPassword no main loop.
                                 let rx_chan = crate::bar::system_info::nm_connect(ssid);
                                 self.nm_connect_rx = Some(rx_chan);
-                                self.wifi_refresh_due = Some(Instant::now() + Duration::from_millis(2500));
+                                self.wifi_refresh_due =
+                                    Some(Instant::now() + Duration::from_millis(2500));
                                 handled = true;
                             }
                         }
@@ -417,16 +441,31 @@ impl PointerHandler for LumoBar {
                                 cmd.args(args);
                                 match cmd.spawn() {
                                     Ok(_) => eprintln!("[lumo-bar] menu spawn {} {:?}", bin, args),
-                                    Err(e) => eprintln!("[lumo-bar] ERR menu spawn {} {:?}: {}", bin, args, e),
+                                    Err(e) => eprintln!(
+                                        "[lumo-bar] ERR menu spawn {} {:?}: {}",
+                                        bin, args, e
+                                    ),
                                 }
                             };
                             match idx {
-                                0 => { spawn_log("lumo-appctl", &["about"]); }
-                                2 => { spawn_log("lumo-appctl", &["store"]); }
-                                4 => { spawn_log("lumo-appctl", &["settings"]); }
-                                6 => { spawn_log("lumo-lock", &[]); }
-                                8 => { spawn_log("reboot", &[]); }
-                                9 => { spawn_log("poweroff", &[]); }
+                                0 => {
+                                    spawn_log("lumo-appctl", &["about"]);
+                                }
+                                2 => {
+                                    spawn_log("lumo-appctl", &["store"]);
+                                }
+                                4 => {
+                                    spawn_log("lumo-appctl", &["settings"]);
+                                }
+                                6 => {
+                                    spawn_log("lumo-lock", &[]);
+                                }
+                                8 => {
+                                    spawn_log("reboot", &[]);
+                                }
+                                9 => {
+                                    spawn_log("poweroff", &[]);
+                                }
                                 _ => {}
                             }
                             self.dropdown = DropdownActive::None;
@@ -452,13 +491,15 @@ impl PointerHandler for LumoBar {
                     }
                     // T1.2: click em item do dropdown AppFallback.
                     if !handled && self.dropdown == DropdownActive::AppFallback {
-                        let hit = self.appmenu_fallback_dropdown_rects.iter().find_map(|(idx, (rx, ry, rw, rh))| {
-                            if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
-                                Some(*idx)
-                            } else {
-                                None
-                            }
-                        });
+                        let hit = self.appmenu_fallback_dropdown_rects.iter().find_map(
+                            |(idx, (rx, ry, rw, rh))| {
+                                if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
+                                    Some(*idx)
+                                } else {
+                                    None
+                                }
+                            },
+                        );
                         if let Some(idx) = hit {
                             match idx {
                                 4 => {
@@ -477,22 +518,35 @@ impl PointerHandler for LumoBar {
                     }
                     // C5: click em pill appmenu top-level -> abre submenu.
                     if !handled {
-                        let hit = self.appmenu_pill_rects.iter().find_map(|(idx, (rx, ry, rw, rh))| {
-                            if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
-                                Some(*idx)
-                            } else {
-                                None
-                            }
-                        });
+                        let hit =
+                            self.appmenu_pill_rects
+                                .iter()
+                                .find_map(|(idx, (rx, ry, rw, rh))| {
+                                    if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
+                                        Some(*idx)
+                                    } else {
+                                        None
+                                    }
+                                });
                         if let Some(idx) = hit {
-                            eprintln!("[lumo-bar] W34.12 pill click idx={} app_id={:?} items={}", idx, self.appmenu.app_id, self.appmenu.items.len());
+                            eprintln!(
+                                "[lumo-bar] W34.12 pill click idx={} app_id={:?} items={}",
+                                idx,
+                                self.appmenu.app_id,
+                                self.appmenu.items.len()
+                            );
                             if self.appmenu_open_idx == Some(idx) {
                                 self.appmenu_open_idx = None;
                                 self.appmenu_submenu.clear();
                             } else {
-                                let item_id = self.appmenu.items.get(idx).map(|it| it.id).unwrap_or(0);
+                                let item_id =
+                                    self.appmenu.items.get(idx).map(|it| it.id).unwrap_or(0);
                                 let submenu = self.appmenu.fetch_submenu(item_id);
-                                eprintln!("[lumo-bar] W34.12 fetch_submenu item_id={} -> {} items", item_id, submenu.len());
+                                eprintln!(
+                                    "[lumo-bar] W34.12 fetch_submenu item_id={} -> {} items",
+                                    item_id,
+                                    submenu.len()
+                                );
                                 self.appmenu_open_idx = Some(idx);
                                 self.appmenu_submenu = submenu;
                             }
@@ -502,13 +556,15 @@ impl PointerHandler for LumoBar {
                     }
                     // C5: click em subitem do submenu appmenu aberto -> activate + fecha.
                     if !handled && self.appmenu_open_idx.is_some() {
-                        let hit = self.appmenu_submenu_rects.iter().find_map(|(sidx, (rx, ry, rw, rh))| {
-                            if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
-                                Some(*sidx)
-                            } else {
-                                None
-                            }
-                        });
+                        let hit = self.appmenu_submenu_rects.iter().find_map(
+                            |(sidx, (rx, ry, rw, rh))| {
+                                if px >= *rx && px <= rx + rw && py >= *ry && py <= ry + rh {
+                                    Some(*sidx)
+                                } else {
+                                    None
+                                }
+                            },
+                        );
                         if let Some(sidx) = hit {
                             if let Some(item) = self.appmenu_submenu.get(sidx) {
                                 self.appmenu.activate(item.id);
@@ -542,9 +598,13 @@ impl PointerHandler for LumoBar {
                                         (-vertical.discrete as i16) * 5
                                     };
                                     let new_pct = (self.brightness_info.pct as i16 + delta_pct)
-                                        .clamp(5, 100) as u8;
+                                        .clamp(5, 100)
+                                        as u8;
                                     if new_pct != self.brightness_info.pct {
-                                        eprintln!("[lumo-bar] N2 scroll brilho {} -> {}", self.brightness_info.pct, new_pct);
+                                        eprintln!(
+                                            "[lumo-bar] N2 scroll brilho {} -> {}",
+                                            self.brightness_info.pct, new_pct
+                                        );
                                         crate::bar::system_info::set_brightness_pct(new_pct);
                                         self.brightness_info.pct = new_pct;
                                         self.update_size_and_redraw(qh);

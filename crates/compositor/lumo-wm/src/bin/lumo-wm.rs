@@ -77,8 +77,7 @@ fn spawn_autostart(socket_name: &str) {
     let bar_path = exe_dir.join("lumo-bar");
     let desktop_path = exe_dir.join("lumo-desktop");
     let home = std::env::var("HOME").unwrap_or_default();
-    let xdg = std::env::var("XDG_CONFIG_HOME")
-        .unwrap_or_else(|_| format!("{home}/.config"));
+    let xdg = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{home}/.config"));
     let xdg_runtime = std::env::var("XDG_RUNTIME_DIR").unwrap_or_default();
 
     // A21: lumo-desktop ANTES de lumo-bar.
@@ -98,7 +97,9 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("GTK_MODULES", "appmenu-gtk-module");
         cmd.env("QT_QPA_PLATFORMTHEME", "appmenu-qt5");
         cmd.env("UBUNTU_MENUPROXY", "1");
-        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        cmd.stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
         match cmd.spawn() {
             Ok(child) => tracing::info!(
                 pid = child.id(),
@@ -125,7 +126,9 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("GTK_MODULES", "appmenu-gtk-module");
         cmd.env("QT_QPA_PLATFORMTHEME", "appmenu-qt5");
         cmd.env("UBUNTU_MENUPROXY", "1");
-        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        cmd.stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
         match cmd.spawn() {
             Ok(child) => tracing::info!(
                 pid = child.id(),
@@ -149,7 +152,9 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("HOME", &home);
         cmd.env("XDG_CONFIG_HOME", &xdg);
         cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
-        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        cmd.stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
         match cmd.spawn() {
             Ok(child) => tracing::info!(pid = child.id(), osd = ?osd_path, "autostart lumo-osd"),
             Err(err) => tracing::warn!(?err, "autostart lumo-osd falhou"),
@@ -168,9 +173,13 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("HOME", &home);
         cmd.env("XDG_CONFIG_HOME", &xdg);
         cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
-        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        cmd.stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
         match cmd.spawn() {
-            Ok(child) => tracing::info!(pid = child.id(), power = ?power_path, "autostart lumo-power"),
+            Ok(child) => {
+                tracing::info!(pid = child.id(), power = ?power_path, "autostart lumo-power")
+            }
             Err(err) => tracing::warn!(?err, "autostart lumo-power falhou"),
         }
     } else {
@@ -185,7 +194,9 @@ fn spawn_autostart(socket_name: &str) {
         cmd.env("HOME", &home);
         cmd.env("XDG_CONFIG_HOME", &xdg);
         cmd.env("XDG_RUNTIME_DIR", &xdg_runtime);
-        cmd.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+        cmd.stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
         match cmd.spawn() {
             Ok(child) => tracing::info!(pid = child.id(), "autostart foot"),
             Err(err) => tracing::warn!(?err, "autostart foot falhou"),
@@ -229,7 +240,9 @@ fn main() -> Result<()> {
     lumo_wm::state::init_xdg_decoration(&mut state);
 
     // W8.A: screencopy global.
-    state.screencopy = Some(lumo_wm::handlers::screencopy::ScreencopyState::new(&state.display_handle.clone()));
+    state.screencopy = Some(lumo_wm::handlers::screencopy::ScreencopyState::new(
+        &state.display_handle.clone(),
+    ));
     tracing::info!("W8.A: zwlr-screencopy-v1 global registrado");
 
     // L5: lid watcher (Galaxy Book 4) - best-effort, no-op on other HW.
@@ -277,11 +290,11 @@ fn main() -> Result<()> {
                 // run() bloqueia tudo; em DRM o proprio backend
                 // orquestra o event loop. Saimos aqui depois.
                 let hw = lumo_wm::hardware::HardwareTarget::detect();
-    tracing::info!(hardware = ?hw, "Hardware detectado: {}", hw.label());
-    if hw == lumo_wm::hardware::HardwareTarget::GenericLinux {
-        tracing::warn!("Lumo otimizado pra Samsung Galaxy Book 4. Outro hardware: defaults genericos, alguns visuais podem diferir.");
-    }
-    tracing::info!("Lumo WM saiu do backend DRM");
+                tracing::info!(hardware = ?hw, "Hardware detectado: {}", hw.label());
+                if hw == lumo_wm::hardware::HardwareTarget::GenericLinux {
+                    tracing::warn!("Lumo otimizado pra Samsung Galaxy Book 4. Outro hardware: defaults genericos, alguns visuais podem diferir.");
+                }
+                tracing::info!("Lumo WM saiu do backend DRM");
                 if let Some(path) = state.ipc.socket_path.take() {
                     let _ = std::fs::remove_file(path);
                 }

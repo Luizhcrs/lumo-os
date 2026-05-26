@@ -14,9 +14,11 @@ pub struct DesktopEntry {
 
 impl DesktopEntry {
     pub fn clean_exec(&self) -> String {
-        self.exec.split_whitespace()
+        self.exec
+            .split_whitespace()
             .filter(|t| !t.starts_with('%'))
-            .collect::<Vec<_>>().join(" ")
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
@@ -28,13 +30,21 @@ pub fn load_desktop_entries() -> Vec<DesktopEntry> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut entries = Vec::new();
     for dir in &dirs {
-        let Ok(read) = fs::read_dir(dir) else { continue };
+        let Ok(read) = fs::read_dir(dir) else {
+            continue;
+        };
         for entry in read.flatten() {
             let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("desktop") { continue; }
-            let Ok(content) = fs::read_to_string(&path) else { continue };
+            if path.extension().and_then(|e| e.to_str()) != Some("desktop") {
+                continue;
+            }
+            let Ok(content) = fs::read_to_string(&path) else {
+                continue;
+            };
             if let Some(de) = parse_desktop(&content) {
-                if seen.insert(de.name.clone()) { entries.push(de); }
+                if seen.insert(de.name.clone()) {
+                    entries.push(de);
+                }
             }
         }
     }
@@ -52,18 +62,48 @@ fn parse_desktop(content: &str) -> Option<DesktopEntry> {
     let mut hidden = false;
     for line in content.lines() {
         let line = line.trim();
-        if line == "[Desktop Entry]" { in_desktop = true; continue; }
-        if line.starts_with('[') { in_desktop = false; continue; }
-        if !in_desktop { continue; }
-        if let Some(v) = strip_key(line, "Name") { if name.is_empty() { name = v.to_string(); } }
-        else if let Some(v) = strip_key(line, "Exec") { if exec.is_empty() { exec = v.to_string(); } }
-        else if let Some(v) = strip_key(line, "Comment") { if comment.is_empty() { comment = v.to_string(); } }
-        else if let Some(v) = strip_key(line, "Categories") { if categories.is_empty() { categories = v.to_string(); } }
-        else if let Some(v) = strip_key(line, "NoDisplay") { no_display = v.eq_ignore_ascii_case("true"); }
-        else if let Some(v) = strip_key(line, "Hidden") { hidden = v.eq_ignore_ascii_case("true"); }
+        if line == "[Desktop Entry]" {
+            in_desktop = true;
+            continue;
+        }
+        if line.starts_with('[') {
+            in_desktop = false;
+            continue;
+        }
+        if !in_desktop {
+            continue;
+        }
+        if let Some(v) = strip_key(line, "Name") {
+            if name.is_empty() {
+                name = v.to_string();
+            }
+        } else if let Some(v) = strip_key(line, "Exec") {
+            if exec.is_empty() {
+                exec = v.to_string();
+            }
+        } else if let Some(v) = strip_key(line, "Comment") {
+            if comment.is_empty() {
+                comment = v.to_string();
+            }
+        } else if let Some(v) = strip_key(line, "Categories") {
+            if categories.is_empty() {
+                categories = v.to_string();
+            }
+        } else if let Some(v) = strip_key(line, "NoDisplay") {
+            no_display = v.eq_ignore_ascii_case("true");
+        } else if let Some(v) = strip_key(line, "Hidden") {
+            hidden = v.eq_ignore_ascii_case("true");
+        }
     }
-    if no_display || hidden || name.is_empty() || exec.is_empty() { return None; }
-    Some(DesktopEntry { name, exec, comment, categories })
+    if no_display || hidden || name.is_empty() || exec.is_empty() {
+        return None;
+    }
+    Some(DesktopEntry {
+        name,
+        exec,
+        comment,
+        categories,
+    })
 }
 
 fn strip_key<'a>(line: &'a str, key: &str) -> Option<&'a str> {

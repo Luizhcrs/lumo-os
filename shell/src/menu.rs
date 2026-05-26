@@ -69,14 +69,23 @@ pub struct MenuItem {
 
 impl MenuItem {
     pub const fn action(label: &'static str) -> Self {
-        Self { label, kind: MenuItemKind::Action }
+        Self {
+            label,
+            kind: MenuItemKind::Action,
+        }
     }
     pub const fn separator() -> Self {
-        Self { label: "", kind: MenuItemKind::Separator }
+        Self {
+            label: "",
+            kind: MenuItemKind::Separator,
+        }
     }
     #[allow(dead_code)]
     pub const fn toggle(label: &'static str, on: bool) -> Self {
-        Self { label, kind: MenuItemKind::Toggle(on) }
+        Self {
+            label,
+            kind: MenuItemKind::Toggle(on),
+        }
     }
 
     pub fn is_clickable(&self) -> bool {
@@ -119,14 +128,7 @@ pub fn item_y_offset(items: &[MenuItem], idx: usize) -> f32 {
 
 /// Hit-test: pra (px, py) absolutos e origem (mx, my) + width w, retorna
 /// indice do item clicavel sob o cursor, ou None se fora ou em separator.
-pub fn hit_test(
-    items: &[MenuItem],
-    mx: f32,
-    my: f32,
-    w: f32,
-    px: f32,
-    py: f32,
-) -> Option<usize> {
+pub fn hit_test(items: &[MenuItem], mx: f32, my: f32, w: f32, px: f32, py: f32) -> Option<usize> {
     let h = menu_height(items);
     if px < mx || px > mx + w || py < my || py > my + h {
         return None;
@@ -270,7 +272,14 @@ pub fn draw_menu<TextFn, RrectFn>(
                 } else {
                     it.label.to_string()
                 };
-                draw_text_fn(canvas, mx + MENU_PAD_X, text_y, &label_owned, FONT_MENU, text_color);
+                draw_text_fn(
+                    canvas,
+                    mx + MENU_PAD_X,
+                    text_y,
+                    &label_owned,
+                    FONT_MENU,
+                    text_color,
+                );
                 cur_y += MENU_ROW_H;
             }
         }

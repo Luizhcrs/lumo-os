@@ -25,7 +25,10 @@ pub struct PerfHistogram {
 
 impl PerfHistogram {
     pub fn new(label: &'static str) -> Self {
-        Self { samples: Vec::with_capacity(4096), _label: label }
+        Self {
+            samples: Vec::with_capacity(4096),
+            _label: label,
+        }
     }
 
     pub fn record(&mut self, d: Duration) {
@@ -97,11 +100,7 @@ fn read_rss_kb() -> Option<u64> {
     for line in s.lines() {
         if line.starts_with("VmRSS:") {
             // "VmRSS:   12345 kB"
-            let val: u64 = line
-                .split_whitespace()
-                .nth(1)?
-                .parse()
-                .ok()?;
+            let val: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
             return Some(val);
         }
     }
@@ -138,7 +137,9 @@ impl PerfSampler {
         #[cfg(target_os = "linux")]
         unsafe {
             let v = libc::sysconf(libc::_SC_CLK_TCK);
-            if v > 0 { return v as u64; }
+            if v > 0 {
+                return v as u64;
+            }
         }
         100
     }
@@ -161,8 +162,7 @@ impl PerfSampler {
                 let tps = self.ticks_per_sec as f64;
                 // CPU% = (delta_ticks / ticks_per_sec) / elapsed_secs * 100
                 if elapsed_secs > 0.0 {
-                    self.cpu_usage_pct =
-                        ((delta_ticks as f64 / tps) / elapsed_secs * 100.0) as f32;
+                    self.cpu_usage_pct = ((delta_ticks as f64 / tps) / elapsed_secs * 100.0) as f32;
                 }
             }
             self.last_stat = Some(stat);
@@ -360,7 +360,8 @@ mod tests {
         if std::path::Path::new("/proc/self/stat").exists() {
             let stat = ProcStat::read();
             assert!(stat.is_some());
-            let s = stat.unwrap(); assert!(s.utime + s.stime == s.total());
+            let s = stat.unwrap();
+            assert!(s.utime + s.stime == s.total());
         }
     }
 

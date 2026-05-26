@@ -7,32 +7,31 @@
 use std::sync::atomic::Ordering;
 
 use chrono::{Local, Timelike};
+use smithay_client_toolkit::reexports::client::{
+    protocol::{wl_output, wl_seat, wl_shm, wl_surface},
+    Connection, QueueHandle,
+};
 use smithay_client_toolkit::{
     compositor::CompositorHandler,
     output::{OutputHandler, OutputState},
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
-    seat::{
-        keyboard::KeyboardData,
-        pointer::ThemeSpec,
-        Capability, SeatHandler, SeatState,
-    },
+    seat::{keyboard::KeyboardData, pointer::ThemeSpec, Capability, SeatHandler, SeatState},
     shell::wlr_layer::{LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
     shell::WaylandSurface,
     shm::{Shm, ShmHandler},
 };
-use smithay_client_toolkit::reexports::client::{
-    protocol::{wl_output, wl_seat, wl_shm, wl_surface},
-    Connection, QueueHandle,
-};
 use tiny_skia::Pixmap;
 
 use crate::bar::dropdowns::DropdownActive;
-use lumo_animation::{AnimCurve, LAAnimator, LACurve};
 use crate::bar::state::{paint_frame, BarSnapshot, LumoBar};
-use crate::bar::system_info::{format_date_pt, read_battery_info, read_brightness_info, read_datetime_info, read_wifi, read_wifi_info};
+use crate::bar::system_info::{
+    format_date_pt, read_battery_info, read_brightness_info, read_datetime_info, read_wifi,
+    read_wifi_info,
+};
 use crate::bar::tokens::*;
 use crate::menu;
+use lumo_animation::{AnimCurve, LAAnimator, LACurve};
 
 impl LumoBar {
     pub fn refresh(&mut self) {
@@ -50,8 +49,12 @@ impl LumoBar {
         self.dropdown_closing = false;
         // Scale: arranca de 0.85, curva rapida ~280ms.
         self.dropdown_scale_anim = LAAnimator::new(
-            0.85f32, 1.0f32,
-            AnimCurve::Bezier { curve: LACurve::ease_in_out(), duration: 0.28 },
+            0.85f32,
+            1.0f32,
+            AnimCurve::Bezier {
+                curve: LACurve::ease_in_out(),
+                duration: 0.28,
+            },
         );
         // Alpha: fade-in mais curto ~220ms. from=0.05 em vez de 0.0
         // garante dropdown visivel no PRIMEIRO frame apos open (review HIGH
@@ -59,8 +62,12 @@ impl LumoBar {
         // painel 120Hz Galaxy Book 4. start em 5% opaco eh imperceptivel
         // visualmente mas elimina race com main_loop.anim_block.
         self.dropdown_alpha_anim = LAAnimator::new(
-            0.05f32, 1.0f32,
-            AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.22 },
+            0.05f32,
+            1.0f32,
+            AnimCurve::Bezier {
+                curve: LACurve::ease_out_cubic(),
+                duration: 0.22,
+            },
         );
     }
 
@@ -70,12 +77,20 @@ impl LumoBar {
         self.dropdown_closing = true;
         self.dropdown_closing_which = which;
         self.dropdown_scale_anim = LAAnimator::new(
-            1.0f32, 0.85f32,
-            AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.18 },
+            1.0f32,
+            0.85f32,
+            AnimCurve::Bezier {
+                curve: LACurve::ease_out_cubic(),
+                duration: 0.18,
+            },
         );
         self.dropdown_alpha_anim = LAAnimator::new(
-            1.0f32, 0.0f32,
-            AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.15 },
+            1.0f32,
+            0.0f32,
+            AnimCurve::Bezier {
+                curve: LACurve::ease_out_cubic(),
+                duration: 0.15,
+            },
         );
     }
 
@@ -96,18 +111,12 @@ impl LumoBar {
             .max(lumo_menu_h as f32) as u32; // A24+A27
         match self.dropdown {
             DropdownActive::None => BAR_HEIGHT,
-            DropdownActive::Battery => {
-                BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H as u32 + 8
-            }
-            DropdownActive::Wifi => {
-                BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_WIFI_H as u32 + 8
-            }
+            DropdownActive::Battery => BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H as u32 + 8,
+            DropdownActive::Wifi => BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_WIFI_H as u32 + 8,
             DropdownActive::DateTime => {
                 BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_DATETIME_H as u32 + 8
             }
-            DropdownActive::LumoMenu => {
-                BAR_HEIGHT + DROPDOWN_GAP as u32 + lumo_menu_h + 8
-            }
+            DropdownActive::LumoMenu => BAR_HEIGHT + DROPDOWN_GAP as u32 + lumo_menu_h + 8,
             DropdownActive::Brightness => {
                 BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_BRIGHTNESS_H as u32 + 8
             }
@@ -142,9 +151,13 @@ impl LumoBar {
             date_str: format_date_pt(&now),
             dropdown: self.dropdown,
             battery_info: self.battery_info.clone(),
-            wifi_info: self.wifi_info.clone(),  // A23
+            wifi_info: self.wifi_info.clone(),             // A23
             brightness_info: self.brightness_info.clone(), // L5
-            datetime_info: read_datetime_info(self.viewed_year, self.viewed_month, self.selected_day), // A24+A26
+            datetime_info: read_datetime_info(
+                self.viewed_year,
+                self.viewed_month,
+                self.selected_day,
+            ), // A24+A26
             lumo_menu_hover_idx: self.lumo_menu_hover_idx, // A27
             // C5: appmenu do app em foco.
             appmenu_items: self.appmenu.items.clone(),
@@ -197,10 +210,10 @@ impl LumoBar {
         if let Some(mut px) = Pixmap::new(self.width, self.height) {
             let paint_result = paint_frame(&mut px, &snap);
             self.bat_hit_rect = paint_result.bat_hit_rect;
-            self.wifi_hit_rect = paint_result.wifi_hit_rect;     // A23
+            self.wifi_hit_rect = paint_result.wifi_hit_rect; // A23
             self.datetime_hit_rect = paint_result.datetime_hit_rect; // A24
-            self.lumo_hit_rect = paint_result.lumo_hit_rect;     // A27
-            // A26: calendar hit-tests salvos pra pointer_frame consumir.
+            self.lumo_hit_rect = paint_result.lumo_hit_rect; // A27
+                                                             // A26: calendar hit-tests salvos pra pointer_frame consumir.
             self.cal_prev_rect = paint_result.cal_prev_rect;
             self.cal_next_rect = paint_result.cal_next_rect;
             self.cal_today_rect = paint_result.cal_today_rect;
@@ -236,14 +249,14 @@ impl LumoBar {
                 let o = i * 4;
                 if o + 3 < dst.len() && o + 3 < src.len() {
                     if bar_alpha_u8 < 255 {
-                        dst[o]     = ((src[o + 2] as u32 * bar_alpha_u8) / 255) as u8;
+                        dst[o] = ((src[o + 2] as u32 * bar_alpha_u8) / 255) as u8;
                         dst[o + 1] = ((src[o + 1] as u32 * bar_alpha_u8) / 255) as u8;
-                        dst[o + 2] = ((src[o]     as u32 * bar_alpha_u8) / 255) as u8;
+                        dst[o + 2] = ((src[o] as u32 * bar_alpha_u8) / 255) as u8;
                         dst[o + 3] = ((src[o + 3] as u32 * bar_alpha_u8) / 255) as u8;
                     } else {
-                        dst[o]     = src[o + 2]; // B
+                        dst[o] = src[o + 2]; // B
                         dst[o + 1] = src[o + 1]; // G
-                        dst[o + 2] = src[o];     // R
+                        dst[o + 2] = src[o]; // R
                         dst[o + 3] = src[o + 3]; // A
                     }
                 }
@@ -281,13 +294,7 @@ impl CompositorHandler for LumoBar {
         _: wl_output::Transform,
     ) {
     }
-    fn frame(
-        &mut self,
-        _: &Connection,
-        qh: &QueueHandle<Self>,
-        _: &wl_surface::WlSurface,
-        _: u32,
-    ) {
+    fn frame(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: u32) {
         self.redraw(qh);
     }
     fn surface_enter(
@@ -314,8 +321,7 @@ impl OutputHandler for LumoBar {
     }
     fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
-    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {
-    }
+    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 }
 
 impl LayerShellHandler for LumoBar {
@@ -336,12 +342,13 @@ impl LayerShellHandler for LumoBar {
         self.width = 1920;
         // A20.11 + A24 + A27: altura max cobre maior dropdown.
         let lumo_menu_h = menu::menu_height(MENU_LUMO_ITEMS) as u32;
-        let max_drop = DROPDOWN_H
-            .max(DROPDOWN_DATETIME_H)
-            .max(lumo_menu_h as f32) as u32;
+        let max_drop = DROPDOWN_H.max(DROPDOWN_DATETIME_H).max(lumo_menu_h as f32) as u32;
         self.height = BAR_HEIGHT + DROPDOWN_GAP as u32 + max_drop + 8;
         self.first_configured = true;
-        eprintln!("[lumo-bar] configured cfg_size=({},{}) FORCED width=1920 height={}", w, h, self.height);
+        eprintln!(
+            "[lumo-bar] configured cfg_size=({},{}) FORCED width=1920 height={}",
+            w, h, self.height
+        );
         self.refresh();
         self.redraw(qh);
     }

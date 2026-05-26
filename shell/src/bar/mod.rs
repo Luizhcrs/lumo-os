@@ -18,9 +18,6 @@
 //! -> ipc -> main_loop (entry).
 
 pub mod appmenu;
-pub mod keyboard_handler;
-pub mod password_modal;
-pub mod registrar;
 pub mod dropdowns;
 pub mod fonts;
 pub mod handlers;
@@ -28,8 +25,11 @@ pub mod icons;
 pub mod input;
 pub mod input_region;
 pub mod ipc;
+pub mod keyboard_handler;
 pub mod main_loop;
+pub mod password_modal;
 pub mod pills;
+pub mod registrar;
 pub mod state;
 pub mod system_info;
 pub mod tokens;

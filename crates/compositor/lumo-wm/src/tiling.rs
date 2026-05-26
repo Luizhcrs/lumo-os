@@ -24,19 +24,19 @@ pub enum TilingMode {
 impl TilingMode {
     pub fn next(self) -> Self {
         match self {
-            TilingMode::Floating    => TilingMode::MasterStack,
+            TilingMode::Floating => TilingMode::MasterStack,
             TilingMode::MasterStack => TilingMode::Spiral,
-            TilingMode::Spiral      => TilingMode::Columns,
-            TilingMode::Columns     => TilingMode::Floating,
+            TilingMode::Spiral => TilingMode::Columns,
+            TilingMode::Columns => TilingMode::Floating,
         }
     }
 
     pub fn name(self) -> &'static str {
         match self {
-            TilingMode::Floating    => "floating",
+            TilingMode::Floating => "floating",
             TilingMode::MasterStack => "master-stack",
-            TilingMode::Spiral      => "spiral",
-            TilingMode::Columns     => "columns",
+            TilingMode::Spiral => "spiral",
+            TilingMode::Columns => "columns",
         }
     }
 }
@@ -51,22 +51,17 @@ pub struct Tile {
 }
 
 /// Pure layout computation -- no smithay mutation, fully unit-testable.
-pub fn compute_tiles(
-    count: usize,
-    output_w: i32,
-    output_h: i32,
-    mode: TilingMode,
-) -> Vec<Tile> {
+pub fn compute_tiles(count: usize, output_w: i32, output_h: i32, mode: TilingMode) -> Vec<Tile> {
     if count == 0 {
         return Vec::new();
     }
     let usable_y = BAR_HEIGHT;
     let usable_h = output_h - BAR_HEIGHT;
     match mode {
-        TilingMode::Floating    => Vec::new(),
+        TilingMode::Floating => Vec::new(),
         TilingMode::MasterStack => compute_master_stack(count, output_w, usable_y, usable_h),
-        TilingMode::Spiral      => compute_spiral(count, output_w, usable_y, usable_h),
-        TilingMode::Columns     => compute_columns(count, output_w, usable_y, usable_h),
+        TilingMode::Spiral => compute_spiral(count, output_w, usable_y, usable_h),
+        TilingMode::Columns => compute_columns(count, output_w, usable_y, usable_h),
     }
 }
 
@@ -80,10 +75,10 @@ fn compute_master_stack(count: usize, out_w: i32, usable_y: i32, usable_h: i32) 
         }];
     }
     let master_w = ((out_w as f64 * MASTER_RATIO) as i32) - TILE_GAP - TILE_GAP / 2;
-    let slave_x  = TILE_GAP / 2 + master_w + TILE_GAP;
-    let slave_w  = out_w - slave_x - TILE_GAP;
-    let slaves   = count - 1;
-    let slave_h  = (usable_h - 2 * TILE_GAP - (slaves as i32 - 1) * TILE_GAP) / slaves as i32;
+    let slave_x = TILE_GAP / 2 + master_w + TILE_GAP;
+    let slave_w = out_w - slave_x - TILE_GAP;
+    let slaves = count - 1;
+    let slave_h = (usable_h - 2 * TILE_GAP - (slaves as i32 - 1) * TILE_GAP) / slaves as i32;
 
     let mut tiles = Vec::with_capacity(count);
     tiles.push(Tile {
@@ -128,17 +123,32 @@ fn compute_spiral(count: usize, out_w: i32, usable_y: i32, usable_h: i32) -> Vec
 
     for i in 0..count {
         if i == count - 1 {
-            tiles.push(Tile { x: rx, y: ry, w: rw, h: rh });
+            tiles.push(Tile {
+                x: rx,
+                y: ry,
+                w: rw,
+                h: rh,
+            });
         } else if i % 2 == 0 {
             // Horizontal split: place in top half, recurse bottom.
             let half_h = (rh - TILE_GAP) / 2;
-            tiles.push(Tile { x: rx, y: ry, w: rw, h: half_h });
+            tiles.push(Tile {
+                x: rx,
+                y: ry,
+                w: rw,
+                h: half_h,
+            });
             ry += half_h + TILE_GAP;
             rh -= half_h + TILE_GAP;
         } else {
             // Vertical split: place in left half, recurse right.
             let half_w = (rw - TILE_GAP) / 2;
-            tiles.push(Tile { x: rx, y: ry, w: half_w, h: rh });
+            tiles.push(Tile {
+                x: rx,
+                y: ry,
+                w: half_w,
+                h: rh,
+            });
             rx += half_w + TILE_GAP;
             rw -= half_w + TILE_GAP;
         }
@@ -147,12 +157,7 @@ fn compute_spiral(count: usize, out_w: i32, usable_y: i32, usable_h: i32) -> Vec
 }
 
 /// Apply tiling to all elements in space. Noop for Floating.
-pub fn apply_tiling(
-    space: &mut Space<Window>,
-    mode: TilingMode,
-    output_w: i32,
-    output_h: i32,
-) {
+pub fn apply_tiling(space: &mut Space<Window>, mode: TilingMode, output_w: i32, output_h: i32) {
     if mode == TilingMode::Floating {
         return;
     }
@@ -212,7 +217,7 @@ pub fn focus_next<'a>(
     });
     let next_idx = match idx {
         Some(i) => (i + 1) % windows.len(),
-        None    => 0,
+        None => 0,
     };
     windows.get(next_idx)
 }
@@ -279,7 +284,11 @@ mod tests {
 
     #[test]
     fn all_tiles_positive_dimensions() {
-        for mode in [TilingMode::MasterStack, TilingMode::Spiral, TilingMode::Columns] {
+        for mode in [
+            TilingMode::MasterStack,
+            TilingMode::Spiral,
+            TilingMode::Columns,
+        ] {
             for n in 1..=5 {
                 for t in compute_tiles(n, W, H, mode) {
                     assert!(t.w > 0, "mode={:?} n={n} w={}", mode, t.w);
@@ -291,15 +300,19 @@ mod tests {
 
     #[test]
     fn tiling_mode_cycle_full() {
-        assert_eq!(TilingMode::Floating.next(),    TilingMode::MasterStack);
+        assert_eq!(TilingMode::Floating.next(), TilingMode::MasterStack);
         assert_eq!(TilingMode::MasterStack.next(), TilingMode::Spiral);
-        assert_eq!(TilingMode::Spiral.next(),      TilingMode::Columns);
-        assert_eq!(TilingMode::Columns.next(),     TilingMode::Floating);
+        assert_eq!(TilingMode::Spiral.next(), TilingMode::Columns);
+        assert_eq!(TilingMode::Columns.next(), TilingMode::Floating);
     }
 
     #[test]
     fn tiles_respect_bar_height() {
-        for mode in [TilingMode::MasterStack, TilingMode::Spiral, TilingMode::Columns] {
+        for mode in [
+            TilingMode::MasterStack,
+            TilingMode::Spiral,
+            TilingMode::Columns,
+        ] {
             for t in compute_tiles(2, W, H, mode) {
                 assert!(t.y >= BAR_HEIGHT, "y={} < BAR_HEIGHT={}", t.y, BAR_HEIGHT);
             }

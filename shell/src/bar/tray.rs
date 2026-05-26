@@ -18,7 +18,6 @@ use std::sync::{Arc, Mutex};
 
 use zbus::blocking::{Connection, Proxy};
 
-
 // ============================================================
 // Types
 // ============================================================
@@ -66,12 +65,17 @@ pub struct TrayState {
 
 impl Default for TrayState {
     fn default() -> Self {
-        Self { items: Vec::new(), watcher_registered: false }
+        Self {
+            items: Vec::new(),
+            watcher_registered: false,
+        }
     }
 }
 
 impl TrayState {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Refresh the item list from the watcher.
     /// Blocking call — should be called from a background thread or on a timer.
@@ -119,7 +123,8 @@ impl TrayState {
                 // Type: a(iiay)
                 if let Ok(pixmaps) = proxy.get_property::<Vec<(i32, i32, Vec<u8>)>>("IconPixmap") {
                     // Pick the smallest pixmap >= 16px or first available.
-                    if let Some((w, h, px)) = pixmaps.iter()
+                    if let Some((w, h, px)) = pixmaps
+                        .iter()
                         .filter(|(w, h, _)| *w >= 16 && *h >= 16)
                         .min_by_key(|(w, _, _)| *w)
                         .or_else(|| pixmaps.first())
@@ -181,12 +186,23 @@ pub fn render_tray(
         let icon_y = cy - icon_size / 2.0;
         if item.icon_pixels.len() == (item.icon_w * item.icon_h * 4) as usize && item.icon_w > 0 {
             // Blit icon pixels (RGBA) into the pixmap. Scale to 16x16 if needed.
-            blit_icon_rgba(canvas, &item.icon_pixels, item.icon_w, item.icon_h, x, icon_y, icon_size as u32);
+            blit_icon_rgba(
+                canvas,
+                &item.icon_pixels,
+                item.icon_w,
+                item.icon_h,
+                x,
+                icon_y,
+                icon_size as u32,
+            );
         } else {
             // Fallback: draw a small filled square with a subtle tint.
             draw_fallback_icon(canvas, x, icon_y, icon_size);
         }
-        hit_rects.push((item.service.clone(), (x, cy - pill_h / 2.0, icon_size + pad, pill_h)));
+        hit_rects.push((
+            item.service.clone(),
+            (x, cy - pill_h / 2.0, icon_size + pad, pill_h),
+        ));
         x += icon_size + gap;
     }
     hit_rects
@@ -223,16 +239,22 @@ fn blit_icon_rgba(
             let src_px = (px * src_w / target_size) as usize;
             let src_py = (py * src_h / target_size) as usize;
             let src_idx = (src_py * src_w as usize + src_px) * 4;
-            if src_idx + 3 >= pixels.len() { continue; }
+            if src_idx + 3 >= pixels.len() {
+                continue;
+            }
             let r = pixels[src_idx];
             let g = pixels[src_idx + 1];
             let b = pixels[src_idx + 2];
             let a = pixels[src_idx + 3];
             let dst_gx = dx + px as i32;
             let dst_gy = dy + py as i32;
-            if dst_gx < 0 || dst_gy < 0 || dst_gx >= cw as i32 || dst_gy >= ch as i32 { continue; }
+            if dst_gx < 0 || dst_gy < 0 || dst_gx >= cw as i32 || dst_gy >= ch as i32 {
+                continue;
+            }
             let dst_idx = (dst_gy as usize * cw as usize + dst_gx as usize);
-            if dst_idx >= pixel_data.len() { continue; }
+            if dst_idx >= pixel_data.len() {
+                continue;
+            }
             // Write premultiplied RGBA to tiny-skia's PremultipliedColorU8 layout.
             // Tiny-skia pixel layout: [r, g, b, a] premultiplied.
             let alpha = a as u32;

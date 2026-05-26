@@ -149,7 +149,11 @@ pub fn ctx_menu_hit(mx: f32, my: f32, menu_x: f32, menu_y: f32) -> Option<usize>
         return None;
     }
     let item = (rel_y / CTX_ITEM_H) as usize;
-    if item < CTX_ITEMS.len() { Some(item) } else { None }
+    if item < CTX_ITEMS.len() {
+        Some(item)
+    } else {
+        None
+    }
 }
 
 // ============================================================
@@ -209,8 +213,11 @@ impl IconsState {
 
         names.sort_by(|a, b| a.0.cmp(&b.0));
 
-        let old_selected: HashMap<String, bool> =
-            self.icons.iter().map(|i| (i.name.clone(), i.selected)).collect();
+        let old_selected: HashMap<String, bool> = self
+            .icons
+            .iter()
+            .map(|i| (i.name.clone(), i.selected))
+            .collect();
 
         self.icons = names
             .into_iter()
@@ -519,7 +526,15 @@ pub fn paint_ctx_menu(
             let g = ((accent_hex >> 8) & 0xFF) as u8;
             let b = (accent_hex & 0xFF) as u8;
             let accent = Color::from_rgba8(r, g, b, 0xFF);
-            fill_rrect(canvas, menu_x + 4.0, item_y, CTX_MENU_W - 8.0, CTX_ITEM_H, 4.0, accent);
+            fill_rrect(
+                canvas,
+                menu_x + 4.0,
+                item_y,
+                CTX_MENU_W - 8.0,
+                CTX_ITEM_H,
+                4.0,
+                accent,
+            );
         }
 
         let text_color = Color::from_rgba8(0xF5, 0xF5, 0xF7, 0xFF);
@@ -543,10 +558,7 @@ fn rrect_stroke_path(x: f32, y: f32, w: f32, h: f32, r: f32) -> Option<tiny_skia
     pb.finish()
 }
 
-fn rects_intersect(
-    ax: f32, ay: f32, aw: f32, ah: f32,
-    bx: f32, by: f32, bw: f32, bh: f32,
-) -> bool {
+fn rects_intersect(ax: f32, ay: f32, aw: f32, ah: f32, bx: f32, by: f32, bw: f32, bh: f32) -> bool {
     ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by
 }
 

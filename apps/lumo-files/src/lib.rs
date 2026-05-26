@@ -19,7 +19,6 @@ use app::App;
 use iced::{Settings, Size};
 
 pub fn run() -> iced::Result {
-
     let _launch_t0 = std::time::Instant::now();
     lumo_telemetry::init();
     {

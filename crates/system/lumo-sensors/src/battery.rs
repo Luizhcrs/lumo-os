@@ -197,9 +197,14 @@ impl Battery {
     /// Begin a balance cycle: temporarily raises the charge limit to
     /// policy.balance_target. Returns the duration the caller should wait
     /// before calling end_balance_cycle.
-    pub fn begin_balance_cycle(&self, policy: &ChargePolicy) -> Result<std::time::Duration, SensorError> {
+    pub fn begin_balance_cycle(
+        &self,
+        policy: &ChargePolicy,
+    ) -> Result<std::time::Duration, SensorError> {
         self.set_charge_limit(policy.balance_target)?;
-        Ok(std::time::Duration::from_secs(policy.balance_duration_hours as u64 * 3600))
+        Ok(std::time::Duration::from_secs(
+            policy.balance_duration_hours as u64 * 3600,
+        ))
     }
 
     /// End a balance cycle: restores the charge limit to policy.limit_percent.

@@ -27,6 +27,12 @@ pub fn card_style() -> container::Style {
     }
 }
 
-pub fn text_color()   -> Color { c(LFTokens::PEARL_SRGB) }
-pub fn muted_color()  -> Color { c(LFTokens::MUTED_SRGB) }
-pub fn accent_color() -> Color { c(LFTokens::EMERALD_600_SRGB) }
+pub fn text_color() -> Color {
+    c(LFTokens::PEARL_SRGB)
+}
+pub fn muted_color() -> Color {
+    c(LFTokens::MUTED_SRGB)
+}
+pub fn accent_color() -> Color {
+    c(LFTokens::EMERALD_600_SRGB)
+}

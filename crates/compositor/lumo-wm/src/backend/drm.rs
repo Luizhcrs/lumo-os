@@ -74,10 +74,13 @@ use smithay::reexports::rustix;
 use smithay::reexports::wayland_server::Display;
 use smithay::utils::DeviceFd;
 
-use crate::state::LumoState;
 use crate::backend::vrr::{DisplayConfig, VrrSetupResult};
+use crate::state::LumoState;
 
-use super::render_common::{clear_color_linear, collect_cursor_only_elements, collect_drm_elements, DrmCollectInputs, LumoCustomElement};
+use super::render_common::{
+    clear_color_linear, collect_cursor_only_elements, collect_drm_elements, DrmCollectInputs,
+    LumoCustomElement,
+};
 
 /// Watchdog: sem dispatch da event loop em 5s -> assumir DRM stall
 /// e exit code 2. Recovery: kernel ja garante VT switch via Ctrl+Alt+F1.
@@ -102,10 +105,7 @@ const SUPPORTED_FORMATS: &[Fourcc] = &[Fourcc::Argb8888, Fourcc::Xrgb8888];
 /// W13.B: Tenta habilitar VRR no DrmSurfaceData se config e connector suportarem.
 /// Chamado apos initialize_output. Atualiza surface.vrr_active.
 #[cfg(feature = "drm-backend")]
-pub fn try_enable_vrr_drm(
-    surface: &mut DrmSurfaceData,
-    conn: connector::Handle,
-) {
+pub fn try_enable_vrr_drm(surface: &mut DrmSurfaceData, conn: connector::Handle) {
     let cfg = DisplayConfig::load();
     if !cfg.vrr_enabled {
         tracing::debug!("W13.B: VRR desabilitado por config (vrr_enabled=false)");
@@ -113,9 +113,9 @@ pub fn try_enable_vrr_drm(
     }
 
     use smithay::backend::drm::VrrSupport;
-    let support = surface.drm_output.with_compositor(|compositor| {
-        compositor.vrr_supported(conn)
-    });
+    let support = surface
+        .drm_output
+        .with_compositor(|compositor| compositor.vrr_supported(conn));
 
     match support {
         Err(err) => {
@@ -128,9 +128,9 @@ pub fn try_enable_vrr_drm(
             tracing::info!("W13.B: VRR capable mas requer modeset (HDMI). Skip.");
         }
         Ok(VrrSupport::Supported) => {
-            let result = surface.drm_output.with_compositor(|compositor| {
-                compositor.use_vrr(true)
-            });
+            let result = surface
+                .drm_output
+                .with_compositor(|compositor| compositor.use_vrr(true));
             match result {
                 Ok(()) => {
                     surface.vrr_active = true;
@@ -146,8 +146,12 @@ pub fn try_enable_vrr_drm(
 
 /// Tipo concreto do DrmOutputManager que usamos. Single-GPU, sem
 /// user_data (= ()), file descriptor sob DrmDeviceFd.
-type LumoDrmOutputManager =
-    DrmOutputManager<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
+type LumoDrmOutputManager = DrmOutputManager<
+    GbmAllocator<DrmDeviceFd>,
+    GbmFramebufferExporter<DrmDeviceFd>,
+    (),
+    DrmDeviceFd,
+>;
 type LumoDrmOutput =
     DrmOutput<GbmAllocator<DrmDeviceFd>, GbmFramebufferExporter<DrmDeviceFd>, (), DrmDeviceFd>;
 
@@ -274,7 +278,9 @@ fn _set_broadcast_rgb_full(
             Ok(())
         }
         None => {
-            tracing::warn!("Broadcast RGB property nao encontrada no connector (driver nao expoe — skip)");
+            tracing::warn!(
+                "Broadcast RGB property nao encontrada no connector (driver nao expoe — skip)"
+            );
             Ok(())
         }
     }
@@ -288,13 +294,9 @@ fn _set_broadcast_rgb_full(
 /// Modifier esperado em Intel: I915_y_tiled (Mesa escolhe automatico se
 /// disponivel pra Argb8888 + SCANOUT). Se for LINEAR, dither hardware
 /// alinha visualmente em padrao Bayer.
-fn log_drm_pipeline_state(
-    drm_output: &LumoDrmOutput,
-    renderer: &mut GlesRenderer,
-) {
+fn log_drm_pipeline_state(drm_output: &LumoDrmOutput, renderer: &mut GlesRenderer) {
     let format = drm_output.format();
-    let modifiers: Vec<_> = drm_output
-        .with_compositor(|c| c.modifiers().to_vec());
+    let modifiers: Vec<_> = drm_output.with_compositor(|c| c.modifiers().to_vec());
 
     tracing::info!(
         ?format,
@@ -389,9 +391,7 @@ pub fn run(
     let fd = session
         .open(
             &gpu_path,
-            rustix::fs::OFlags::RDWR
-                | rustix::fs::OFlags::CLOEXEC
-                | rustix::fs::OFlags::NONBLOCK,
+            rustix::fs::OFlags::RDWR | rustix::fs::OFlags::CLOEXEC | rustix::fs::OFlags::NONBLOCK,
         )
         .map_err(|e| anyhow!("session.open({}) falhou: {e:?}", gpu_path.display()))?;
     let drm_fd = DrmDeviceFd::new(DeviceFd::from(fd));
@@ -430,8 +430,8 @@ pub fn run(
     }
     tracing::info!("DRM master adquirido (privileged)");
 
-    let (drm_device, drm_notifier) = DrmDevice::new(drm_fd.clone(), true)
-        .map_err(|e| anyhow!("DrmDevice::new falhou: {e}"))?;
+    let (drm_device, drm_notifier) =
+        DrmDevice::new(drm_fd.clone(), true).map_err(|e| anyhow!("DrmDevice::new falhou: {e}"))?;
 
     tracing::info!(atomic = drm_device.is_atomic(), "DrmDevice aberto");
 
@@ -441,8 +441,8 @@ pub fn run(
     let gbm = GbmDevice::new(drm_fd.clone()).map_err(|e| anyhow!("GbmDevice::new: {e}"))?;
     tracing::info!("GbmDevice aberto");
 
-    let egl_display = unsafe { EGLDisplay::new(gbm.clone()) }
-        .map_err(|e| anyhow!("EGLDisplay::new: {e:?}"))?;
+    let egl_display =
+        unsafe { EGLDisplay::new(gbm.clone()) }.map_err(|e| anyhow!("EGLDisplay::new: {e:?}"))?;
     let egl_context =
         EGLContext::new(&egl_display).map_err(|e| anyhow!("EGLContext::new: {e:?}"))?;
     let render_formats = egl_context
@@ -469,18 +469,30 @@ pub fn run(
     let wallpaper = crate::backend::wallpaper::LumoWallpaper::try_load(&mut renderer);
     state.wallpaper = wallpaper;
     // A38: compila shader SDF corner radius (igual winit.rs).
-    state.corner_shader = match crate::backend::corner_shader::CornerShader::compile(&mut renderer) {
+    state.corner_shader = match crate::backend::corner_shader::CornerShader::compile(&mut renderer)
+    {
         Ok(cs) => Some(cs),
-        Err(e) => { tracing::warn!("corner_shader compile falhou: {:?}", e); None }
+        Err(e) => {
+            tracing::warn!("corner_shader compile falhou: {:?}", e);
+            None
+        }
     };
-    state.corner_mask_shader = match crate::backend::corner_shader::CornerMaskShader::compile(&mut renderer) {
-        Ok(cs) => Some(cs),
-        Err(e) => { tracing::warn!("corner_mask_shader compile falhou: {:?}", e); None }
-    };
-    state.titlebar_bg_shader = match crate::backend::corner_shader::TitlebarBgShader::compile(&mut renderer) {
-        Ok(cs) => Some(cs),
-        Err(e) => { tracing::warn!("titlebar_bg_shader compile falhou: {:?}", e); None }
-    };
+    state.corner_mask_shader =
+        match crate::backend::corner_shader::CornerMaskShader::compile(&mut renderer) {
+            Ok(cs) => Some(cs),
+            Err(e) => {
+                tracing::warn!("corner_mask_shader compile falhou: {:?}", e);
+                None
+            }
+        };
+    state.titlebar_bg_shader =
+        match crate::backend::corner_shader::TitlebarBgShader::compile(&mut renderer) {
+            Ok(cs) => Some(cs),
+            Err(e) => {
+                tracing::warn!("titlebar_bg_shader compile falhou: {:?}", e);
+                None
+            }
+        };
 
     // A10 frente 1: dmabuf-v1 global. Galaxy U300 = Intel i915 render
     // node /dev/dri/renderD128. EGLContext.dmabuf_render_formats() ja
@@ -585,8 +597,10 @@ pub fn run(
     // ============================================================
     // 6. DrmOutputManager: monta exporter+allocator+device.
     // ============================================================
-    let allocator =
-        GbmAllocator::new(gbm.clone(), GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT);
+    let allocator = GbmAllocator::new(
+        gbm.clone(),
+        GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
+    );
     let exporter = GbmFramebufferExporter::new(gbm.clone(), None);
 
     let mut output_manager = DrmOutputManager::new(
@@ -618,12 +632,12 @@ pub fn run(
     output.change_current_state(Some(wl_mode), None, None, Some((0, 0).into()));
 
     // Centraliza cursor no output real detectado
-    state.pointer_location = (
-        wl_mode.size.w as f64 / 2.0,
-        wl_mode.size.h as f64 / 2.0,
-    )
-        .into();
-    tracing::info!(x = state.pointer_location.x, y = state.pointer_location.y, "cursor centralizado");
+    state.pointer_location = (wl_mode.size.w as f64 / 2.0, wl_mode.size.h as f64 / 2.0).into();
+    tracing::info!(
+        x = state.pointer_location.x,
+        y = state.pointer_location.y,
+        "cursor centralizado"
+    );
     state.space.map_output(&output, (0, 0));
 
     // ============================================================
@@ -700,38 +714,43 @@ pub fn run(
     // ============================================================
     event_loop
         .handle()
-        .insert_source(drm_notifier, |event, metadata, state: &mut LumoState| match event {
-            DrmEvent::VBlank(crtc_h) => {
-                if let Some(backend) = state.drm_backend.as_mut() {
-                    if let Some(surf) = backend.surface.as_mut() {
-                        if surf.crtc == crtc_h {
-                            // Marca frame submetido -> libera swapchain slot.
-                            if let Err(err) = surf.drm_output.frame_submitted() {
-                                tracing::warn!(?err, "frame_submitted falhou");
-                            }
-                            surf.pending_flip = false;
-                            // W3.P1: captura timestamp monotonic do VBlank para
-                            // calcular render_deadline do proximo frame.
-                            if let Some(meta) = metadata {
-                                if let smithay::backend::drm::DrmEventTime::Monotonic(ts) = meta.time {
-                                    surf.last_vblank_ts = Some(ts);
+        .insert_source(
+            drm_notifier,
+            |event, metadata, state: &mut LumoState| match event {
+                DrmEvent::VBlank(crtc_h) => {
+                    if let Some(backend) = state.drm_backend.as_mut() {
+                        if let Some(surf) = backend.surface.as_mut() {
+                            if surf.crtc == crtc_h {
+                                // Marca frame submetido -> libera swapchain slot.
+                                if let Err(err) = surf.drm_output.frame_submitted() {
+                                    tracing::warn!(?err, "frame_submitted falhou");
+                                }
+                                surf.pending_flip = false;
+                                // W3.P1: captura timestamp monotonic do VBlank para
+                                // calcular render_deadline do proximo frame.
+                                if let Some(meta) = metadata {
+                                    if let smithay::backend::drm::DrmEventTime::Monotonic(ts) =
+                                        meta.time
+                                    {
+                                        surf.last_vblank_ts = Some(ts);
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            DrmEvent::Error(err) => {
-                tracing::warn!(?err, "DrmEvent::Error");
-            }
-        })
+                DrmEvent::Error(err) => {
+                    tracing::warn!(?err, "DrmEvent::Error");
+                }
+            },
+        )
         .map_err(|e| anyhow!("insert drm event source: {e}"))?;
 
     // ============================================================
     // 10. UdevBackend pra hot-plug futuro (so loga por agora).
     // ============================================================
-    let udev_backend = UdevBackend::new(&seat_name)
-        .map_err(|e| anyhow!("UdevBackend::new: {e}"))?;
+    let udev_backend =
+        UdevBackend::new(&seat_name).map_err(|e| anyhow!("UdevBackend::new: {e}"))?;
     event_loop
         .handle()
         .insert_source(udev_backend, |event, _, _state| match event {
@@ -787,37 +806,35 @@ pub fn run(
     // ============================================================
     event_loop
         .handle()
-        .insert_source(
-            Timer::immediate(),
-            |_, _, state: &mut LumoState| {
-                // W3.P1: late-render scheduler.
-                // Calcula render_deadline = last_vblank + frame_interval - max_render_time.
-                // Se now < render_deadline, dorme ate deadline para capturar inputs mais
-                // frescos e cortar latencia p95 em ~8ms.
-                let next_timeout = compute_render_timeout(state);
-                if let Some(sleep_for) = next_timeout {
-                    // Reagenda timer para o deadline sem render agora.
-                    return TimeoutAction::ToDuration(sleep_for);
-                }
-                render_drm(state);
-                // W23: adaptive timer pra sub-1% CPU idle.
-                // - Active (should_render OR force_repaint OR anim ativa): 16ms (60Hz vblank)
-                // - Idle (nada mudou ultimo frame): 100ms (~10Hz wake-up)
-                // - Bridge IPC + commit handler set should_render=true = volta active
-                // W23.5: sticky active 500ms apos pointer motion — mouse 60fps durante drag.
-                let recent_input = state.cursor_last_motion_ts
-                    .map(|t| t.elapsed() < Duration::from_millis(500))
-                    .unwrap_or(false);
-                let active = state.should_render
-                    || state.drm_force_repaint
-                    || state.boot_curtain_alpha > 0.001
-                    || state.splash_alpha > 0.001
-                    || state.overview.is_some()
-                    || recent_input;
-                let timeout_ms = if active { 16 } else { 33 };
-                TimeoutAction::ToDuration(Duration::from_millis(timeout_ms))
-            },
-        )
+        .insert_source(Timer::immediate(), |_, _, state: &mut LumoState| {
+            // W3.P1: late-render scheduler.
+            // Calcula render_deadline = last_vblank + frame_interval - max_render_time.
+            // Se now < render_deadline, dorme ate deadline para capturar inputs mais
+            // frescos e cortar latencia p95 em ~8ms.
+            let next_timeout = compute_render_timeout(state);
+            if let Some(sleep_for) = next_timeout {
+                // Reagenda timer para o deadline sem render agora.
+                return TimeoutAction::ToDuration(sleep_for);
+            }
+            render_drm(state);
+            // W23: adaptive timer pra sub-1% CPU idle.
+            // - Active (should_render OR force_repaint OR anim ativa): 16ms (60Hz vblank)
+            // - Idle (nada mudou ultimo frame): 100ms (~10Hz wake-up)
+            // - Bridge IPC + commit handler set should_render=true = volta active
+            // W23.5: sticky active 500ms apos pointer motion — mouse 60fps durante drag.
+            let recent_input = state
+                .cursor_last_motion_ts
+                .map(|t| t.elapsed() < Duration::from_millis(500))
+                .unwrap_or(false);
+            let active = state.should_render
+                || state.drm_force_repaint
+                || state.boot_curtain_alpha > 0.001
+                || state.splash_alpha > 0.001
+                || state.overview.is_some()
+                || recent_input;
+            let timeout_ms = if active { 16 } else { 33 };
+            TimeoutAction::ToDuration(Duration::from_millis(timeout_ms))
+        })
         .map_err(|e| anyhow!("insert frame timer: {e}"))?;
 
     // ============================================================
@@ -830,37 +847,35 @@ pub fn run(
     let display_for_dispatch = display.clone();
     event_loop
         .handle()
-        .insert_source(
-            Timer::immediate(),
-            move |_, _, state: &mut LumoState| {
-                if !state.running {
-                    return TimeoutAction::Drop;
-                }
-                let mut d = display_for_dispatch.borrow_mut();
-                if let Err(err) = d.dispatch_clients(state) {
-                    tracing::warn!(?err, "DRM dispatch_clients falhou");
-                }
-                let _ = d.flush_clients();
-                drop(d);
-                // Tick IPC pra workspaces (broadcast pra lumo-bar quando
-                // Super+1..9 chega via libinput).
-                crate::ipc::tick(state);
-                // W23.2: adaptive dispatch_clients. 4ms active vs 20ms idle.
-                // 4ms = 250Hz era residual maior fonte ctxt switches. Idle
-                // 20ms = 50Hz suficiente pra latencia client perceivel.
-                let recent_input = state.cursor_last_motion_ts
-                    .map(|t| t.elapsed() < Duration::from_millis(500))
-                    .unwrap_or(false);
-                let active = state.should_render
-                    || state.drm_force_repaint
-                    || state.boot_curtain_alpha > 0.001
-                    || state.splash_alpha > 0.001
-                    || state.overview.is_some()
-                    || recent_input;
-                let dispatch_ms = if active { 4 } else { 8 };
-                TimeoutAction::ToDuration(Duration::from_millis(dispatch_ms))
-            },
-        )
+        .insert_source(Timer::immediate(), move |_, _, state: &mut LumoState| {
+            if !state.running {
+                return TimeoutAction::Drop;
+            }
+            let mut d = display_for_dispatch.borrow_mut();
+            if let Err(err) = d.dispatch_clients(state) {
+                tracing::warn!(?err, "DRM dispatch_clients falhou");
+            }
+            let _ = d.flush_clients();
+            drop(d);
+            // Tick IPC pra workspaces (broadcast pra lumo-bar quando
+            // Super+1..9 chega via libinput).
+            crate::ipc::tick(state);
+            // W23.2: adaptive dispatch_clients. 4ms active vs 20ms idle.
+            // 4ms = 250Hz era residual maior fonte ctxt switches. Idle
+            // 20ms = 50Hz suficiente pra latencia client perceivel.
+            let recent_input = state
+                .cursor_last_motion_ts
+                .map(|t| t.elapsed() < Duration::from_millis(500))
+                .unwrap_or(false);
+            let active = state.should_render
+                || state.drm_force_repaint
+                || state.boot_curtain_alpha > 0.001
+                || state.splash_alpha > 0.001
+                || state.overview.is_some()
+                || recent_input;
+            let dispatch_ms = if active { 4 } else { 8 };
+            TimeoutAction::ToDuration(Duration::from_millis(dispatch_ms))
+        })
         .map_err(|e| anyhow!("insert DRM dispatch timer: {e}"))?;
 
     // ============================================================
@@ -875,8 +890,7 @@ pub fn run(
         // por handlers (ex: configure events em xdg_shell) vao pro wire
         // antes do proximo tick.
         let _ = display.borrow_mut().flush_clients();
-        state.watchdog_deadline =
-            Some(Instant::now() + Duration::from_millis(WATCHDOG_MS));
+        state.watchdog_deadline = Some(Instant::now() + Duration::from_millis(WATCHDOG_MS));
     }
 
     tracing::info!(exit_code = state.exit_code, "DRM backend saindo");
@@ -905,7 +919,9 @@ fn pick_crtc_for_connector(
     }
     // 2. Varre encoders possiveis.
     for &enc_h in connector_info.encoders() {
-        let Ok(enc_info) = device.get_encoder(enc_h) else { continue };
+        let Ok(enc_info) = device.get_encoder(enc_h) else {
+            continue;
+        };
         let crtcs = resource_handles.filter_crtcs(enc_info.possible_crtcs());
         if let Some(&first) = crtcs.first() {
             return Some(first);
@@ -969,7 +985,9 @@ fn render_drm(state: &mut LumoState) {
 
     // L2: lid fechado -> skip render (economiza GPU + bateria).
     {
-        let lid_closed = state.lid_handler.lock()
+        let lid_closed = state
+            .lid_handler
+            .lock()
             .map(|l| l.closed_at.is_some())
             .unwrap_or(false);
         if lid_closed {
@@ -1006,8 +1024,15 @@ fn render_drm(state: &mut LumoState) {
         // W6.C: tick splash logo animation.
         crate::state::tick_splash(state, dt);
         // W12.B: tick overview.
-        if let Some(ov) = state.overview.as_mut() { ov.tick(dt); }
-        if state.overview.as_ref().map(|o| o.is_closed()).unwrap_or(false) {
+        if let Some(ov) = state.overview.as_mut() {
+            ov.tick(dt);
+        }
+        if state
+            .overview
+            .as_ref()
+            .map(|o| o.is_closed())
+            .unwrap_or(false)
+        {
             state.overview = None;
         }
     }
@@ -1060,7 +1085,10 @@ fn render_drm(state: &mut LumoState) {
     let pointer_location = *pointer_location;
     let start_time_elapsed = start_time.elapsed();
     if std::env::var("LUMO_TRACE_POINTER").as_deref() == Ok("1") {
-        eprintln!("[trace] render cursor pos=({:.1},{:.1})", pointer_location.x, pointer_location.y);
+        eprintln!(
+            "[trace] render cursor pos=({:.1},{:.1})",
+            pointer_location.x, pointer_location.y
+        );
     }
 
     // Output size pra mascara de cantos.
@@ -1074,7 +1102,10 @@ fn render_drm(state: &mut LumoState) {
     // layer-shell) em uma lista unica. collect_drm_elements ja respeita
     // ordem de stack -- cursor primeiro (front), cantos, sombras, depois
     // SpaceRenderElements vindos do smithay com z-order interno correto.
-    let titlebar_menu_opt = state.titlebar_menu.as_ref().map(|(_, pos, hover)| (*pos, *hover));
+    let titlebar_menu_opt = state
+        .titlebar_menu
+        .as_ref()
+        .map(|(_, pos, hover)| (*pos, *hover));
     let collect_inputs = DrmCollectInputs {
         boot_curtain_alpha,
         splash_alpha: splash_alpha_val,
@@ -1086,10 +1117,14 @@ fn render_drm(state: &mut LumoState) {
         snap_preview: state.snap_preview,
         corner_mask_shader: state.corner_mask_shader.as_ref(),
         titlebar_bg_shader: state.titlebar_bg_shader.as_ref(),
-        overview_elements: state.overview.as_ref()
+        overview_elements: state
+            .overview
+            .as_ref()
             .map(|ov| crate::overview::overview_elements(ov, ow, oh))
             .unwrap_or_default(),
-        picker_elements: state.stack_picker.as_ref()
+        picker_elements: state
+            .stack_picker
+            .as_ref()
             .map(|p| crate::stack_picker::picker_elements(p, ow, oh))
             .unwrap_or_default(),
         space,
@@ -1115,11 +1150,18 @@ fn render_drm(state: &mut LumoState) {
         let output_w = ow;
         let output_h = oh;
         let mut elem_damage: Vec<smithay::utils::Rectangle<i32, smithay::utils::Physical>> =
-            all_elements.iter().filter_map(|el| {
-                use smithay::backend::renderer::element::Element;
-                let geo = el.geometry(smithay::utils::Scale::from(1.0));
-                if geo.size.w > 0 && geo.size.h > 0 { Some(geo) } else { None }
-            }).collect();
+            all_elements
+                .iter()
+                .filter_map(|el| {
+                    use smithay::backend::renderer::element::Element;
+                    let geo = el.geometry(smithay::utils::Scale::from(1.0));
+                    if geo.size.w > 0 && geo.size.h > 0 {
+                        Some(geo)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
         crate::backend::damage::merge_if_complex_default(&mut elem_damage, output_w, output_h);
         // Resultado logado via tracing::trace dentro de merge_if_complex.
     }
@@ -1161,14 +1203,16 @@ fn render_drm(state: &mut LumoState) {
             // screencopy ativo (lazy: cache so renderiza apos primeiro pedido).
             // Path c do plano: render manual em shadow buffer, evita ler primary
             // plane post-scanout (dmabuf pode estar em uso pelo display engine).
-            if backend.screencopy_cache.as_ref().map(|c| c.is_armed()).unwrap_or(false) {
+            if backend
+                .screencopy_cache
+                .as_ref()
+                .map(|c| c.is_armed())
+                .unwrap_or(false)
+            {
                 if let Some(cache) = backend.screencopy_cache.as_mut() {
-                    if let Err(err) = cache.refresh(
-                        &mut backend.renderer,
-                        &surface.output,
-                        &all_elements,
-                        clear,
-                    ) {
+                    if let Err(err) =
+                        cache.refresh(&mut backend.renderer, &surface.output, &all_elements, clear)
+                    {
                         tracing::warn!(?err, "W8.A: screencopy cache refresh falhou");
                     }
                 }
@@ -1254,7 +1298,6 @@ fn render_drm(state: &mut LumoState) {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1278,7 +1321,11 @@ mod tests {
         // Sem last_vblank_ts -> timeout = None (render imediato).
         // Testa a logica de guard diretamente.
         let last_vblank: Option<Duration> = None;
-        let result = if last_vblank.is_none() { None } else { Some(Duration::from_millis(1)) };
+        let result = if last_vblank.is_none() {
+            None
+        } else {
+            Some(Duration::from_millis(1))
+        };
         assert!(result.is_none());
     }
 

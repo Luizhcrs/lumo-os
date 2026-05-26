@@ -14,7 +14,7 @@
 //!   - Footer: Uptime + Build hash
 
 use iced::widget::{column, container, row, text, Space};
-use iced::{Alignment, Element, Length, Task, Theme, Color, Background};
+use iced::{Alignment, Background, Color, Element, Length, Task, Theme};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -56,14 +56,14 @@ impl App {
                 color: Some(Color::from_rgb8(0x4f, 0xd1, 0xa1)),
             });
 
-        let model = text("Galaxy Book 4")
-            .size(24);
+        let model = text("Galaxy Book 4").size(24);
 
-        let model_sub = text("NP750XGJ-KG7BR")
-            .size(13)
-            .style(|_t: &Theme| iced::widget::text::Style {
-                color: Some(Color::from_rgb8(0x9a, 0x9a, 0xa0)),
-            });
+        let model_sub =
+            text("NP750XGJ-KG7BR")
+                .size(13)
+                .style(|_t: &Theme| iced::widget::text::Style {
+                    color: Some(Color::from_rgb8(0x9a, 0x9a, 0xa0)),
+                });
 
         let version = text(format!("Lumo OS 0.1.0  -  Linux {}", self.kernel))
             .size(13)
@@ -76,12 +76,12 @@ impl App {
             .spacing(2);
 
         let hw = column![
-            spec_row_owned("Processador",  self.cpu_model.clone()),
-            spec_row_owned("Memoria",      self.mem_total.clone()),
-            spec_row("Grafica",            "Intel UHD Graphics Xe-LP (48 EU)"),
-            spec_row("Display",            "15.6\" IPS, 60 Hz"),
-            spec_row_owned("Armazenamento",self.disk_used.clone()),
-            spec_row_owned("Bateria",      self.battery.clone()),
+            spec_row_owned("Processador", self.cpu_model.clone()),
+            spec_row_owned("Memoria", self.mem_total.clone()),
+            spec_row("Grafica", "Intel UHD Graphics Xe-LP (48 EU)"),
+            spec_row("Display", "15.6\" IPS, 60 Hz"),
+            spec_row_owned("Armazenamento", self.disk_used.clone()),
+            spec_row_owned("Bateria", self.battery.clone()),
         ]
         .spacing(10);
 
@@ -136,10 +136,9 @@ fn spec_row<'a>(label: &'a str, value: &'a str) -> Element<'a, Message> {
             .style(|_t: &Theme| iced::widget::text::Style {
                 color: Some(Color::from_rgb8(0x8a, 0x8a, 0x90)),
             }),
-        text(value)
-            .style(|_t: &Theme| iced::widget::text::Style {
-                color: Some(Color::from_rgb8(0xe6, 0xe6, 0xea)),
-            }),
+        text(value).style(|_t: &Theme| iced::widget::text::Style {
+            color: Some(Color::from_rgb8(0xe6, 0xe6, 0xea)),
+        }),
     ]
     .spacing(10)
     .into()
@@ -152,10 +151,9 @@ fn spec_row_owned<'a>(label: &'a str, value: String) -> Element<'a, Message> {
             .style(|_t: &Theme| iced::widget::text::Style {
                 color: Some(Color::from_rgb8(0x8a, 0x8a, 0x90)),
             }),
-        text(value)
-            .style(|_t: &Theme| iced::widget::text::Style {
-                color: Some(Color::from_rgb8(0xe6, 0xe6, 0xea)),
-            }),
+        text(value).style(|_t: &Theme| iced::widget::text::Style {
+            color: Some(Color::from_rgb8(0xe6, 0xe6, 0xea)),
+        }),
     ]
     .spacing(10)
     .into()
@@ -215,9 +213,10 @@ fn read_battery() -> String {
     let cap = std::fs::read_to_string("/sys/class/power_supply/BAT0/capacity")
         .ok()
         .map(|s| s.trim().to_string());
-    let limit = std::fs::read_to_string("/sys/class/power_supply/BAT0/charge_control_end_threshold")
-        .ok()
-        .map(|s| s.trim().to_string());
+    let limit =
+        std::fs::read_to_string("/sys/class/power_supply/BAT0/charge_control_end_threshold")
+            .ok()
+            .map(|s| s.trim().to_string());
     match (cap, limit) {
         (Some(c), Some(l)) => format!("{}% atual - charge end {}%", c, l),
         (Some(c), None) => format!("{}% atual", c),

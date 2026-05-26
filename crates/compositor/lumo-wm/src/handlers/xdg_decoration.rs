@@ -57,7 +57,7 @@ mod tests {
         let mut ssd: HashSet<FakeSurf> = HashSet::new();
         let s = FakeSurf(3);
         ssd.insert(s.clone()); // estado default new_toplevel
-        // Re-insert (idempotente).
+                               // Re-insert (idempotente).
         ssd.insert(s.clone());
         assert!(ssd.contains(&s), "unset_mode deve manter SSD (fallback)");
     }

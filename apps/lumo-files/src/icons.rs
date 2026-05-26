@@ -49,9 +49,9 @@ pub fn icon_for_path(path: &Path) -> IconKind {
         }
         Some("zip") | Some("tar") | Some("gz") | Some("bz2") | Some("xz") | Some("7z")
         | Some("rar") | Some("zst") => IconKind::Archive,
-        Some("rs") | Some("py") | Some("js") | Some("ts") | Some("c") | Some("cpp")
-        | Some("h") | Some("go") | Some("java") | Some("sh") | Some("toml") | Some("yaml")
-        | Some("json") | Some("xml") | Some("html") | Some("css") => IconKind::Code,
+        Some("rs") | Some("py") | Some("js") | Some("ts") | Some("c") | Some("cpp") | Some("h")
+        | Some("go") | Some("java") | Some("sh") | Some("toml") | Some("yaml") | Some("json")
+        | Some("xml") | Some("html") | Some("css") => IconKind::Code,
         Some("exe") | Some("bin") | Some("appimage") | Some("deb") | Some("rpm") => {
             IconKind::Executable
         }
@@ -160,10 +160,18 @@ mod tests {
     #[test]
     fn svg_bytes_existem_para_todos_kinds() {
         for kind in [
-            IconKind::Folder, IconKind::Home, IconKind::Trash,
-            IconKind::Image, IconKind::Video, IconKind::Audio,
-            IconKind::Document, IconKind::Archive, IconKind::Code,
-            IconKind::Executable, IconKind::Pdf, IconKind::Generic,
+            IconKind::Folder,
+            IconKind::Home,
+            IconKind::Trash,
+            IconKind::Image,
+            IconKind::Video,
+            IconKind::Audio,
+            IconKind::Document,
+            IconKind::Archive,
+            IconKind::Code,
+            IconKind::Executable,
+            IconKind::Pdf,
+            IconKind::Generic,
         ] {
             let bytes = svg_bytes_for_kind(&kind);
             assert!(bytes.len() > 16, "SVG vazio para {:?}", kind);

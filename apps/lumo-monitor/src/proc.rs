@@ -20,7 +20,14 @@ pub struct CpuStat {
 
 impl CpuStat {
     pub fn total(&self) -> u64 {
-        self.user + self.nice + self.system + self.idle + self.iowait + self.irq + self.softirq + self.steal
+        self.user
+            + self.nice
+            + self.system
+            + self.idle
+            + self.iowait
+            + self.irq
+            + self.softirq
+            + self.steal
     }
 
     pub fn active(&self) -> u64 {
@@ -29,20 +36,25 @@ impl CpuStat {
 }
 
 pub fn read_cpu_stat() -> CpuStat {
-    let Ok(content) = std::fs::read_to_string("/proc/stat") else { return CpuStat::default() };
+    let Ok(content) = std::fs::read_to_string("/proc/stat") else {
+        return CpuStat::default();
+    };
     for line in content.lines() {
         if line.starts_with("cpu ") {
-            let fields: Vec<u64> = line.split_whitespace().skip(1)
-                .filter_map(|s| s.parse().ok()).collect();
+            let fields: Vec<u64> = line
+                .split_whitespace()
+                .skip(1)
+                .filter_map(|s| s.parse().ok())
+                .collect();
             return CpuStat {
-                user:    fields.get(0).copied().unwrap_or(0),
-                nice:    fields.get(1).copied().unwrap_or(0),
-                system:  fields.get(2).copied().unwrap_or(0),
-                idle:    fields.get(3).copied().unwrap_or(0),
-                iowait:  fields.get(4).copied().unwrap_or(0),
-                irq:     fields.get(5).copied().unwrap_or(0),
+                user: fields.get(0).copied().unwrap_or(0),
+                nice: fields.get(1).copied().unwrap_or(0),
+                system: fields.get(2).copied().unwrap_or(0),
+                idle: fields.get(3).copied().unwrap_or(0),
+                iowait: fields.get(4).copied().unwrap_or(0),
+                irq: fields.get(5).copied().unwrap_or(0),
                 softirq: fields.get(6).copied().unwrap_or(0),
-                steal:   fields.get(7).copied().unwrap_or(0),
+                steal: fields.get(7).copied().unwrap_or(0),
             };
         }
     }
@@ -53,7 +65,9 @@ pub fn read_cpu_stat() -> CpuStat {
 pub fn cpu_percent(prev: &CpuStat, curr: &CpuStat) -> f32 {
     let total_diff = curr.total().saturating_sub(prev.total());
     let active_diff = curr.active().saturating_sub(prev.active());
-    if total_diff == 0 { return 0.0; }
+    if total_diff == 0 {
+        return 0.0;
+    }
     (active_diff as f32 / total_diff as f32 * 100.0).clamp(0.0, 100.0)
 }
 
@@ -76,13 +90,17 @@ impl MemInfo {
     }
 
     pub fn used_percent(&self) -> f32 {
-        if self.total_kb == 0 { return 0.0; }
+        if self.total_kb == 0 {
+            return 0.0;
+        }
         (self.used_kb() as f32 / self.total_kb as f32 * 100.0).clamp(0.0, 100.0)
     }
 }
 
 pub fn read_meminfo() -> MemInfo {
-    let Ok(content) = std::fs::read_to_string("/proc/meminfo") else { return MemInfo::default() };
+    let Ok(content) = std::fs::read_to_string("/proc/meminfo") else {
+        return MemInfo::default();
+    };
     let mut m: HashMap<String, u64> = HashMap::new();
     for line in content.lines() {
         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -94,11 +112,11 @@ pub fn read_meminfo() -> MemInfo {
         }
     }
     MemInfo {
-        total_kb:     *m.get("MemTotal").unwrap_or(&0),
-        free_kb:      *m.get("MemFree").unwrap_or(&0),
+        total_kb: *m.get("MemTotal").unwrap_or(&0),
+        free_kb: *m.get("MemFree").unwrap_or(&0),
         available_kb: *m.get("MemAvailable").unwrap_or(&0),
-        buffers_kb:   *m.get("Buffers").unwrap_or(&0),
-        cached_kb:    *m.get("Cached").unwrap_or(&0),
+        buffers_kb: *m.get("Buffers").unwrap_or(&0),
+        cached_kb: *m.get("Cached").unwrap_or(&0),
     }
 }
 
@@ -118,29 +136,37 @@ pub struct DiskMount {
 
 impl DiskMount {
     pub fn used_percent(&self) -> f32 {
-        if self.total_kb == 0 { return 0.0; }
+        if self.total_kb == 0 {
+            return 0.0;
+        }
         (self.used_kb as f32 / self.total_kb as f32 * 100.0).clamp(0.0, 100.0)
     }
 }
 
 pub fn read_mounts() -> Vec<DiskMount> {
-    let Ok(content) = std::fs::read_to_string("/proc/mounts") else { return Vec::new() };
+    let Ok(content) = std::fs::read_to_string("/proc/mounts") else {
+        return Vec::new();
+    };
     let mut mounts = Vec::new();
     for line in content.lines() {
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 3 { continue; }
+        if parts.len() < 3 {
+            continue;
+        }
         let device = parts[0];
-        let mount  = parts[1];
+        let mount = parts[1];
         let fstype = parts[2];
-        if !["ext4", "btrfs", "xfs", "vfat", "tmpfs", "overlay"].contains(&fstype) { continue; }
+        if !["ext4", "btrfs", "xfs", "vfat", "tmpfs", "overlay"].contains(&fstype) {
+            continue;
+        }
         if let Some(stat) = statvfs(mount) {
             mounts.push(DiskMount {
                 device: device.to_string(),
-                mount:  mount.to_string(),
+                mount: mount.to_string(),
                 fstype: fstype.to_string(),
                 total_kb: stat.0 / 1024,
-                free_kb:  stat.1 / 1024,
-                used_kb:  stat.0.saturating_sub(stat.1) / 1024,
+                free_kb: stat.1 / 1024,
+                used_kb: stat.0.saturating_sub(stat.1) / 1024,
             });
         }
     }
@@ -159,12 +185,17 @@ fn statvfs(path: &str) -> Option<(u64, u64)> {
         let ret = unsafe { libc::statvfs64(cpath.as_ptr(), &mut stat) };
         if ret == 0 {
             let total = stat.f_blocks * stat.f_frsize;
-            let free  = stat.f_bavail * stat.f_frsize;
+            let free = stat.f_bavail * stat.f_frsize;
             Some((total, free))
-        } else { None }
+        } else {
+            None
+        }
     }
     #[cfg(not(target_os = "linux"))]
-    { let _ = path; None }
+    {
+        let _ = path;
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -181,17 +212,30 @@ pub struct NetIface {
 }
 
 pub fn read_net_dev() -> Vec<NetIface> {
-    let Ok(content) = std::fs::read_to_string("/proc/net/dev") else { return Vec::new() };
+    let Ok(content) = std::fs::read_to_string("/proc/net/dev") else {
+        return Vec::new();
+    };
     let mut ifaces = Vec::new();
     for line in content.lines().skip(2) {
         let trimmed = line.trim();
-        let colon_pos = match trimmed.find(':') { Some(p) => p, None => continue };
+        let colon_pos = match trimmed.find(':') {
+            Some(p) => p,
+            None => continue,
+        };
         let name = trimmed[..colon_pos].trim().to_string();
-        let fields: Vec<u64> = trimmed[colon_pos+1..].split_whitespace()
-            .filter_map(|s| s.parse().ok()).collect();
+        let fields: Vec<u64> = trimmed[colon_pos + 1..]
+            .split_whitespace()
+            .filter_map(|s| s.parse().ok())
+            .collect();
         let rx = fields.get(0).copied().unwrap_or(0);
         let tx = fields.get(8).copied().unwrap_or(0);
-        ifaces.push(NetIface { name, rx_bytes: rx, tx_bytes: tx, rx_rate: 0, tx_rate: 0 });
+        ifaces.push(NetIface {
+            name,
+            rx_bytes: rx,
+            tx_bytes: tx,
+            rx_rate: 0,
+            tx_rate: 0,
+        });
     }
     ifaces
 }
@@ -221,43 +265,76 @@ pub struct ProcEntry {
 }
 
 pub fn read_processes(cpu_total_diff: u64, ticks_per_sec: u64) -> Vec<ProcEntry> {
-    let Ok(dirs) = std::fs::read_dir("/proc") else { return Vec::new() };
+    let Ok(dirs) = std::fs::read_dir("/proc") else {
+        return Vec::new();
+    };
     let mut entries = Vec::new();
     for entry in dirs.flatten() {
         let fname = entry.file_name();
         let fname_str = fname.to_string_lossy();
-        let Ok(pid) = fname_str.parse::<u32>() else { continue };
+        let Ok(pid) = fname_str.parse::<u32>() else {
+            continue;
+        };
         let stat_path = format!("/proc/{}/stat", pid);
-        let stat_str  = std::fs::read_to_string(&stat_path).unwrap_or_default();
+        let stat_str = std::fs::read_to_string(&stat_path).unwrap_or_default();
         let status_path = format!("/proc/{}/status", pid);
-        let status_str  = std::fs::read_to_string(&status_path).unwrap_or_default();
-        let cmd_path  = format!("/proc/{}/cmdline", pid);
-        let cmd_raw   = std::fs::read(cmd_path).unwrap_or_default();
-        let cmd = String::from_utf8_lossy(&cmd_raw).replace('\0', " ").trim().to_string();
+        let status_str = std::fs::read_to_string(&status_path).unwrap_or_default();
+        let cmd_path = format!("/proc/{}/cmdline", pid);
+        let cmd_raw = std::fs::read(cmd_path).unwrap_or_default();
+        let cmd = String::from_utf8_lossy(&cmd_raw)
+            .replace('\0', " ")
+            .trim()
+            .to_string();
 
         // parse name from stat: second field is (name)
-        let name = stat_str.find('(').and_then(|start| stat_str.find(')').map(|end| stat_str[start+1..end].to_string())).unwrap_or_default();
+        let name = stat_str
+            .find('(')
+            .and_then(|start| {
+                stat_str
+                    .find(')')
+                    .map(|end| stat_str[start + 1..end].to_string())
+            })
+            .unwrap_or_default();
 
         // utime+stime fields (14th and 15th) in stat
         let stat_fields: Vec<&str> = stat_str.split_whitespace().collect();
-        let utime: u64 = stat_fields.get(13).and_then(|s| s.parse().ok()).unwrap_or(0);
-        let stime: u64 = stat_fields.get(14).and_then(|s| s.parse().ok()).unwrap_or(0);
+        let utime: u64 = stat_fields
+            .get(13)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        let stime: u64 = stat_fields
+            .get(14)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
         let proc_ticks = utime + stime;
 
         let cpu_pct = if cpu_total_diff > 0 && ticks_per_sec > 0 {
             (proc_ticks as f32 / cpu_total_diff as f32 * ticks_per_sec as f32).clamp(0.0, 100.0)
-        } else { 0.0 };
+        } else {
+            0.0
+        };
 
         // VmRSS from /proc/pid/status
-        let rss_kb = status_str.lines()
+        let rss_kb = status_str
+            .lines()
             .find(|l| l.starts_with("VmRSS:"))
             .and_then(|l| l.split_whitespace().nth(1))
             .and_then(|v| v.parse().ok())
             .unwrap_or(0u64);
 
-        entries.push(ProcEntry { pid, name, cpu_pct, rss_kb, cmd });
+        entries.push(ProcEntry {
+            pid,
+            name,
+            cpu_pct,
+            rss_kb,
+            cmd,
+        });
     }
-    entries.sort_by(|a, b| b.cpu_pct.partial_cmp(&a.cpu_pct).unwrap_or(std::cmp::Ordering::Equal));
+    entries.sort_by(|a, b| {
+        b.cpu_pct
+            .partial_cmp(&a.cpu_pct)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     entries.truncate(30);
     entries
 }
@@ -278,37 +355,83 @@ mod tests {
 
     #[test]
     fn test_cpu_percent_max_100() {
-        let prev = CpuStat { user: 0, nice: 0, system: 0, idle: 0, iowait: 0, irq: 0, softirq: 0, steal: 0 };
-        let curr = CpuStat { user: 100, nice: 0, system: 0, idle: 0, iowait: 0, irq: 0, softirq: 0, steal: 0 };
+        let prev = CpuStat {
+            user: 0,
+            nice: 0,
+            system: 0,
+            idle: 0,
+            iowait: 0,
+            irq: 0,
+            softirq: 0,
+            steal: 0,
+        };
+        let curr = CpuStat {
+            user: 100,
+            nice: 0,
+            system: 0,
+            idle: 0,
+            iowait: 0,
+            irq: 0,
+            softirq: 0,
+            steal: 0,
+        };
         assert!(cpu_percent(&prev, &curr) <= 100.0);
     }
 
     #[test]
     fn test_meminfo_used_percent_range() {
-        let m = MemInfo { total_kb: 8_000_000, free_kb: 2_000_000, available_kb: 3_000_000, buffers_kb: 500_000, cached_kb: 1_000_000 };
+        let m = MemInfo {
+            total_kb: 8_000_000,
+            free_kb: 2_000_000,
+            available_kb: 3_000_000,
+            buffers_kb: 500_000,
+            cached_kb: 1_000_000,
+        };
         let pct = m.used_percent();
         assert!(pct >= 0.0 && pct <= 100.0);
     }
 
     #[test]
     fn test_meminfo_used_kb() {
-        let m = MemInfo { total_kb: 10_000, free_kb: 2_000, available_kb: 4_000, buffers_kb: 0, cached_kb: 0 };
+        let m = MemInfo {
+            total_kb: 10_000,
+            free_kb: 2_000,
+            available_kb: 4_000,
+            buffers_kb: 0,
+            cached_kb: 0,
+        };
         assert_eq!(m.used_kb(), 6_000);
     }
 
     #[test]
     fn test_disk_used_percent() {
         let d = DiskMount {
-            device: "sda".into(), mount: "/".into(), fstype: "ext4".into(),
-            total_kb: 100_000, used_kb: 40_000, free_kb: 60_000,
+            device: "sda".into(),
+            mount: "/".into(),
+            fstype: "ext4".into(),
+            total_kb: 100_000,
+            used_kb: 40_000,
+            free_kb: 60_000,
         };
         assert!((d.used_percent() - 40.0).abs() < 0.01);
     }
 
     #[test]
     fn test_net_rates_computed() {
-        let prev = vec![NetIface { name: "eth0".into(), rx_bytes: 1000, tx_bytes: 500, rx_rate: 0, tx_rate: 0 }];
-        let mut curr = vec![NetIface { name: "eth0".into(), rx_bytes: 3000, tx_bytes: 1500, rx_rate: 0, tx_rate: 0 }];
+        let prev = vec![NetIface {
+            name: "eth0".into(),
+            rx_bytes: 1000,
+            tx_bytes: 500,
+            rx_rate: 0,
+            tx_rate: 0,
+        }];
+        let mut curr = vec![NetIface {
+            name: "eth0".into(),
+            rx_bytes: 3000,
+            tx_bytes: 1500,
+            rx_rate: 0,
+            tx_rate: 0,
+        }];
         compute_net_rates(&prev, &mut curr, 2.0);
         assert_eq!(curr[0].rx_rate, 1000); // 2000 bytes / 2s = 1000 B/s
         assert_eq!(curr[0].tx_rate, 500);

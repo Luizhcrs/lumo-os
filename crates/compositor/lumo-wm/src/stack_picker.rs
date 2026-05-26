@@ -27,10 +27,10 @@ const CELL_PADDING: i32 = 16;
 const _PICKER_RADIUS: i32 = 8;
 
 // Colors.
-const BG_COLOR:       [f32; 4] = [0.08, 0.08, 0.10, 0.92];
-const CELL_NORMAL:    [f32; 4] = [0.18, 0.18, 0.20, 1.0];
-const CELL_SELECTED:  [f32; 4] = [0.30, 0.30, 0.35, 1.0];
-const LABEL_LINE:     [f32; 4] = [0.50, 0.50, 0.55, 1.0];
+const BG_COLOR: [f32; 4] = [0.08, 0.08, 0.10, 0.92];
+const CELL_NORMAL: [f32; 4] = [0.18, 0.18, 0.20, 1.0];
+const CELL_SELECTED: [f32; 4] = [0.30, 0.30, 0.35, 1.0];
+const LABEL_LINE: [f32; 4] = [0.50, 0.50, 0.55, 1.0];
 
 /// Active window stack picker state.
 pub struct StackPickerState {
@@ -57,7 +57,7 @@ impl StackPickerState {
         });
         let selected = match focused_idx {
             Some(i) => (i + 1) % windows.len().max(1),
-            None    => 0,
+            None => 0,
         };
         Self { windows, selected }
     }
@@ -68,13 +68,17 @@ impl StackPickerState {
 
     /// Cycle selection right (Tab).
     pub fn cycle_next(&mut self) {
-        if self.windows.is_empty() { return; }
+        if self.windows.is_empty() {
+            return;
+        }
         self.selected = (self.selected + 1) % self.windows.len();
     }
 
     /// Cycle selection left (Shift+Tab).
     pub fn cycle_prev(&mut self) {
-        if self.windows.is_empty() { return; }
+        if self.windows.is_empty() {
+            return;
+        }
         self.selected = if self.selected == 0 {
             self.windows.len() - 1
         } else {
@@ -158,7 +162,11 @@ pub fn picker_elements(
 
     for cell in &cells {
         let is_selected = cell.index == state.selected;
-        let color = if is_selected { CELL_SELECTED } else { CELL_NORMAL };
+        let color = if is_selected {
+            CELL_SELECTED
+        } else {
+            CELL_NORMAL
+        };
 
         // Cell quad.
         let cell_phys: Rectangle<i32, Physical> = Rectangle::new(
@@ -259,7 +267,10 @@ mod tests {
     #[test]
     fn cycle_wraps_correctly() {
         // Manually set up picker without smithay types.
-        let mut picker = StackPickerState { windows: vec![], selected: 2 };
+        let mut picker = StackPickerState {
+            windows: vec![],
+            selected: 2,
+        };
         // Simulate 3 windows by overriding the vec len via direct mutation:
         // We just test the index logic with empty vec (len=0), which no-ops.
         // Full integration test would need a real smithay space.
@@ -271,14 +282,20 @@ mod tests {
 
     #[test]
     fn cycle_prev_empty_noop() {
-        let mut picker = StackPickerState { windows: vec![], selected: 0 };
+        let mut picker = StackPickerState {
+            windows: vec![],
+            selected: 0,
+        };
         picker.cycle_prev();
         assert_eq!(picker.selected, 0);
     }
 
     #[test]
     fn picker_elements_empty_for_empty_state() {
-        let state = StackPickerState { windows: vec![], selected: 0 };
+        let state = StackPickerState {
+            windows: vec![],
+            selected: 0,
+        };
         assert!(picker_elements(&state, W, H).is_empty());
     }
 
@@ -286,10 +303,10 @@ mod tests {
     fn cells_centered_horizontally() {
         let cells = compute_picker_cells(3, W, H);
         let first_x = cells[0].rect.loc.x;
-        let last   = cells.last().unwrap();
+        let last = cells.last().unwrap();
         let last_x_end = last.rect.loc.x + last.rect.size.w;
         // Both margins from output edge should be roughly equal.
-        let margin_left  = first_x;
+        let margin_left = first_x;
         let margin_right = W - last_x_end;
         let diff = (margin_left - margin_right).abs();
         assert!(diff <= 2, "margins differ by {diff}px");

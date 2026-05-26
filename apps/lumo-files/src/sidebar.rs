@@ -98,7 +98,11 @@ pub fn build_sidebar(username: &str) -> Vec<SidebarItem> {
         for entry in entries.flatten() {
             let p = entry.path();
             if p.is_dir() {
-                let label = p.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let label = p
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
                 items.push(SidebarItem {
                     label,
                     path: p,
@@ -118,9 +122,15 @@ mod tests {
     #[test]
     fn sidebar_kind_svg_bytes_nao_vazios() {
         for kind in [
-            SidebarKind::Home, SidebarKind::Documents, SidebarKind::Downloads,
-            SidebarKind::Pictures, SidebarKind::Videos, SidebarKind::Music,
-            SidebarKind::Desktop, SidebarKind::Trash, SidebarKind::Drive,
+            SidebarKind::Home,
+            SidebarKind::Documents,
+            SidebarKind::Downloads,
+            SidebarKind::Pictures,
+            SidebarKind::Videos,
+            SidebarKind::Music,
+            SidebarKind::Desktop,
+            SidebarKind::Trash,
+            SidebarKind::Drive,
         ] {
             let bytes = kind.svg_bytes();
             assert!(bytes.len() > 16, "SVG vazio para {:?}", kind);

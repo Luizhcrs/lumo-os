@@ -37,7 +37,10 @@ pub fn bounding_box(rects: &[Rectangle<i32, Physical>]) -> Option<Rectangle<i32,
 /// Area total coberta pelos rects (soma de areas individuais, sem deduplicar
 /// sobreposicoes). Conservador: subestima coverage real mas eh O(n).
 fn coverage_area(rects: &[Rectangle<i32, Physical>]) -> i64 {
-    rects.iter().map(|r| r.size.w as i64 * r.size.h as i64).sum()
+    rects
+        .iter()
+        .map(|r| r.size.w as i64 * r.size.h as i64)
+        .sum()
 }
 
 /// Merge rects quando a lista eh complexa demais.
@@ -121,9 +124,8 @@ mod tests {
     #[test]
     fn merge_too_many_rects() {
         // 9 rects -> acima de max_rects=8 -> merge pra bbox
-        let mut damage: Vec<Rectangle<i32, Physical>> = (0..9)
-            .map(|i| rect(i * 10, 0, 8, 8))
-            .collect();
+        let mut damage: Vec<Rectangle<i32, Physical>> =
+            (0..9).map(|i| rect(i * 10, 0, 8, 8)).collect();
         merge_if_complex_default(&mut damage, 1920, 1080);
         assert_eq!(damage.len(), 1);
         let bb = damage[0];
@@ -137,10 +139,7 @@ mod tests {
     #[test]
     fn merge_low_coverage() {
         // 2 rects minusculos em output grande -> coverage baixo -> merge
-        let mut damage = vec![
-            rect(0, 0, 10, 10),
-            rect(1910, 1070, 10, 10),
-        ];
+        let mut damage = vec![rect(0, 0, 10, 10), rect(1910, 1070, 10, 10)];
         merge_if_complex_default(&mut damage, 1920, 1080);
         assert_eq!(damage.len(), 1);
         let bb = damage[0];
@@ -171,10 +170,7 @@ mod tests {
         // rect A: (10,10) size (20,20) -> spans x[10..30], y[10..30]
         // rect B: (50, 5) size (30,40) -> spans x[50..80], y[5..45]
         // bbox: x[10..80] w=70, y[5..45] h=40
-        let rects = vec![
-            rect(10, 10, 20, 20),
-            rect(50, 5, 30, 40),
-        ];
+        let rects = vec![rect(10, 10, 20, 20), rect(50, 5, 30, 40)];
         let bb = bounding_box(&rects).unwrap();
         assert_eq!(bb.loc.x, 10);
         assert_eq!(bb.loc.y, 5);

@@ -8,7 +8,6 @@ use app::App;
 use iced::{Settings, Size};
 
 pub fn run() -> iced::Result {
-
     let tx = appmenu::init_channel();
     std::thread::Builder::new()
         .name("lumo-calc-appmenu".into())

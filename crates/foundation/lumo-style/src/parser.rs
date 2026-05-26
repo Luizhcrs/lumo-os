@@ -1,7 +1,9 @@
 //! Parser CSS subset usando cssparser.
 
+use crate::model::{
+    parse_color_literal, parse_px_literal, PropertyValue, Rule, Selector, Stylesheet,
+};
 use cssparser::{Parser, ParserInput};
-use crate::model::{Stylesheet, Rule, Selector, PropertyValue, parse_color_literal, parse_px_literal};
 
 pub fn parse(src: &str) -> Result<Stylesheet, String> {
     let mut input = ParserInput::new(src);
@@ -11,16 +13,22 @@ pub fn parse(src: &str) -> Result<Stylesheet, String> {
     // Manually consume top-level rules. Each rule = selector { decl-list } OR :root.
     loop {
         parser.skip_whitespace();
-        if parser.is_exhausted() { break; }
+        if parser.is_exhausted() {
+            break;
+        }
         // Parse until "{".
         let start = parser.position();
         let mut prelude_tokens: Vec<String> = Vec::new();
         loop {
-            if parser.is_exhausted() { return Err("EOF antes de `{`".into()); }
+            if parser.is_exhausted() {
+                return Err("EOF antes de `{`".into());
+            }
             let tok_pos = parser.position();
             match parser.next_including_whitespace() {
                 Ok(t) => {
-                    if matches!(t, cssparser::Token::CurlyBracketBlock) { break; }
+                    if matches!(t, cssparser::Token::CurlyBracketBlock) {
+                        break;
+                    }
                     let s = parser.slice_from(tok_pos).to_string();
                     prelude_tokens.push(s);
                 }
@@ -31,19 +39,23 @@ pub fn parse(src: &str) -> Result<Stylesheet, String> {
         let prelude_str: String = prelude_tokens.concat();
         let selector_str = prelude_str.trim();
         // {} block reads via parse_nested_block.
-        let result = parser.parse_nested_block(|inner| -> Result<(), cssparser::ParseError<'_, ()>> {
-            if selector_str == ":root" {
-                parse_root_decls(inner, &mut sheet)?;
-            } else {
-                let sel = match parse_selector(selector_str) {
-                    Some(s) => s,
-                    None => return Ok(()),
-                };
-                let props = parse_decls(inner)?;
-                sheet.rules.push(Rule { selector: sel, props });
-            }
-            Ok(())
-        });
+        let result =
+            parser.parse_nested_block(|inner| -> Result<(), cssparser::ParseError<'_, ()>> {
+                if selector_str == ":root" {
+                    parse_root_decls(inner, &mut sheet)?;
+                } else {
+                    let sel = match parse_selector(selector_str) {
+                        Some(s) => s,
+                        None => return Ok(()),
+                    };
+                    let props = parse_decls(inner)?;
+                    sheet.rules.push(Rule {
+                        selector: sel,
+                        props,
+                    });
+                }
+                Ok(())
+            });
         if let Err(e) = result {
             return Err(format!("block @ {:?}: {:?}", start, e));
         }
@@ -54,12 +66,17 @@ pub fn parse(src: &str) -> Result<Stylesheet, String> {
 fn parse_selector(s: &str) -> Option<Selector> {
     let s = s.trim();
     // Multi-class only: ".pill.lumo" or ".pill"
-    if !s.starts_with('.') { return None; }
-    let classes: Vec<String> = s.split('.')
+    if !s.starts_with('.') {
+        return None;
+    }
+    let classes: Vec<String> = s
+        .split('.')
         .filter(|c| !c.is_empty())
         .map(|c| c.trim().to_string())
         .collect();
-    if classes.is_empty() { return None; }
+    if classes.is_empty() {
+        return None;
+    }
     Some(Selector { classes })
 }
 
@@ -69,7 +86,9 @@ fn parse_root_decls<'i>(
 ) -> Result<(), cssparser::ParseError<'i, ()>> {
     loop {
         parser.skip_whitespace();
-        if parser.is_exhausted() { break; }
+        if parser.is_exhausted() {
+            break;
+        }
         // Read token; expect Ident OR Delim('-') (cssparser pode split `--name`).
         let state = parser.state();
         let tok = match parser.next_including_whitespace_and_comments() {
@@ -86,8 +105,14 @@ fn parse_root_decls<'i>(
                 while !parser.is_exhausted() {
                     let p = parser.state();
                     match parser.next_including_whitespace() {
-                        Ok(cssparser::Token::Colon) => { parser.reset(&p); break; }
-                        Ok(cssparser::Token::Semicolon) => { parser.reset(&p); break; }
+                        Ok(cssparser::Token::Colon) => {
+                            parser.reset(&p);
+                            break;
+                        }
+                        Ok(cssparser::Token::Semicolon) => {
+                            parser.reset(&p);
+                            break;
+                        }
                         Ok(_) => continue,
                         Err(_) => break,
                     }
@@ -99,10 +124,14 @@ fn parse_root_decls<'i>(
             let _ = consume_until_semi(parser);
             continue;
         }
-        if parser.expect_colon().is_err() { break; }
+        if parser.expect_colon().is_err() {
+            break;
+        }
         let value = read_value_text(parser);
         let _ = parser.expect_semicolon();
-        sheet.vars.insert(name.trim_start_matches("--").to_string(), value);
+        sheet
+            .vars
+            .insert(name.trim_start_matches("--").to_string(), value);
     }
     Ok(())
 }
@@ -113,12 +142,16 @@ fn parse_decls<'i>(
     let mut out = Vec::new();
     loop {
         parser.skip_whitespace();
-        if parser.is_exhausted() { break; }
+        if parser.is_exhausted() {
+            break;
+        }
         let name = match parser.expect_ident_cloned() {
             Ok(n) => n.to_string(),
             Err(_) => break,
         };
-        if parser.expect_colon().is_err() { break; }
+        if parser.expect_colon().is_err() {
+            break;
+        }
         let value = read_value_text(parser);
         let _ = parser.expect_semicolon();
         let parsed = classify_value(&value);
@@ -130,7 +163,9 @@ fn parse_decls<'i>(
 fn read_value_text<'i>(parser: &mut Parser<'i, '_>) -> String {
     let start = parser.position();
     loop {
-        if parser.is_exhausted() { break; }
+        if parser.is_exhausted() {
+            break;
+        }
         let state = parser.state();
         match parser.next_including_whitespace() {
             Ok(cssparser::Token::Semicolon) => {
@@ -143,13 +178,17 @@ fn read_value_text<'i>(parser: &mut Parser<'i, '_>) -> String {
             }
             Ok(cssparser::Token::Function(_)) | Ok(cssparser::Token::ParenthesisBlock) => {
                 // Consume nested block (e.g. var(--pad), rgba(...)).
-                let _ = parser.parse_nested_block(|_p: &mut Parser<'_, '_>| -> Result<(), cssparser::ParseError<'_, ()>> {
-                    // Consume tudo dentro do block.
-                    while !_p.is_exhausted() {
-                        if _p.next_including_whitespace().is_err() { break; }
-                    }
-                    Ok(())
-                });
+                let _ = parser.parse_nested_block(
+                    |_p: &mut Parser<'_, '_>| -> Result<(), cssparser::ParseError<'_, ()>> {
+                        // Consume tudo dentro do block.
+                        while !_p.is_exhausted() {
+                            if _p.next_including_whitespace().is_err() {
+                                break;
+                            }
+                        }
+                        Ok(())
+                    },
+                );
                 continue;
             }
             Ok(_) => continue,
@@ -159,9 +198,13 @@ fn read_value_text<'i>(parser: &mut Parser<'i, '_>) -> String {
     parser.slice_from(start).trim().to_string()
 }
 
-fn consume_until_semi<'i>(parser: &mut Parser<'i, '_>) -> Result<(), cssparser::ParseError<'i, ()>> {
+fn consume_until_semi<'i>(
+    parser: &mut Parser<'i, '_>,
+) -> Result<(), cssparser::ParseError<'i, ()>> {
     loop {
-        if parser.is_exhausted() { return Ok(()); }
+        if parser.is_exhausted() {
+            return Ok(());
+        }
         let tok = parser.next();
         match tok {
             Ok(cssparser::Token::Semicolon) => return Ok(()),
@@ -194,7 +237,10 @@ mod tests {
     fn parses_root_vars() {
         let sheet = parse(":root { --pill-h: 28px; --accent: #00C896; }").unwrap();
         assert_eq!(sheet.vars.get("pill-h").map(|s| s.as_str()), Some("28px"));
-        assert_eq!(sheet.vars.get("accent").map(|s| s.as_str()), Some("#00C896"));
+        assert_eq!(
+            sheet.vars.get("accent").map(|s| s.as_str()),
+            Some("#00C896")
+        );
     }
 
     #[test]

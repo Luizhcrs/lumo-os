@@ -55,13 +55,15 @@ pub fn socket_path() -> Option<PathBuf> {
 
 /// Envia um LumoCommand pra um path explicito. Util pra testes.
 pub fn send_command_to(path: &std::path::Path, cmd: &LumoCommand) -> Result<(), IpcError> {
-    let mut stream = UnixStream::connect(path)
-        .map_err(|e| IpcError::Connect(e, path.to_path_buf()))?;
+    let mut stream =
+        UnixStream::connect(path).map_err(|e| IpcError::Connect(e, path.to_path_buf()))?;
     // Timeouts curtos -- compositor processa em <1ms o tick de calloop.
     let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
     let mut payload = serde_json::to_string(cmd).map_err(IpcError::Serialize)?;
     payload.push('\n');
-    stream.write_all(payload.as_bytes()).map_err(IpcError::Write)?;
+    stream
+        .write_all(payload.as_bytes())
+        .map_err(IpcError::Write)?;
     let _ = stream.flush();
     // Compositor calloop ticks a ~16ms; aguardar garante leitura antes do close.
     std::thread::sleep(std::time::Duration::from_millis(25));
@@ -86,7 +88,10 @@ pub async fn send_command_async(cmd: LumoCommand) -> Result<(), IpcError> {
 
 /// SI.1: true se a env LUMO_BRIDGE_FALLBACK_YDOTOOL=1.
 pub fn ydotool_fallback_enabled() -> bool {
-    std::env::var("LUMO_BRIDGE_FALLBACK_YDOTOOL").ok().as_deref() == Some("1")
+    std::env::var("LUMO_BRIDGE_FALLBACK_YDOTOOL")
+        .ok()
+        .as_deref()
+        == Some("1")
 }
 
 #[cfg(test)]

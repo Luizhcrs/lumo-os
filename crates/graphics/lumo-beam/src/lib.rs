@@ -3,12 +3,12 @@
 //! Proposito: wgpu device/surface/queue wrapper. Primitivo triangle e uniforms globais.
 //!
 //! ## Invariantes
-//! - LBDevice e o unico dono do wgpu Device/Queue — nunca clonar Arc pra escopo mais longo que o renderer.
-//! - LBGlobalUniforms e updated a cada frame antes de qualquer draw call.
+//!     - LBDevice e o unico dono do wgpu Device/Queue — nunca clonar Arc pra escopo mais longo que o renderer.
+//!     - LBGlobalUniforms e updated a cada frame antes de qualquer draw call.
 //!
 //! ## Memory refs
-//! - [[feedback-design-lapidado]]
-//! - [[project-lumo-os]]
+//!     - [[feedback-design-lapidado]]
+//!     - [[project-lumo-os]]
 
 use bytemuck::{Pod, Zeroable};
 use std::sync::Arc;
@@ -68,9 +68,18 @@ impl LBVertex {
 pub type Vertex = LBVertex;
 
 pub const TRIANGLE_VERTICES: &[LBVertex] = &[
-    LBVertex { position: [0.0, 0.5], color: EMERALD_600 },
-    LBVertex { position: [-0.5, -0.5], color: EMERALD_600 },
-    LBVertex { position: [0.5, -0.5], color: EMERALD_600 },
+    LBVertex {
+        position: [0.0, 0.5],
+        color: EMERALD_600,
+    },
+    LBVertex {
+        position: [-0.5, -0.5],
+        color: EMERALD_600,
+    },
+    LBVertex {
+        position: [0.5, -0.5],
+        color: EMERALD_600,
+    },
 ];
 
 const TRIANGLE_SHADER_SRC: &str = r#"
@@ -279,7 +288,9 @@ impl LBDevice {
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let frame = self.surface.get_current_texture()?;
-        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {

@@ -12,17 +12,17 @@
 //! color-management; somente fifo e commit_timing foram integrados).
 //! Seguimos o mesmo padrao de screencopy.rs: Dispatch manual + GlobalDispatch.
 
+use smithay::reexports::wayland_protocols::wp::color_management::v1::server::{
+    wp_color_management_output_v1::{self, WpColorManagementOutputV1},
+    wp_color_management_surface_feedback_v1::{self, WpColorManagementSurfaceFeedbackV1},
+    wp_color_management_surface_v1::{self, WpColorManagementSurfaceV1},
+    wp_color_manager_v1::{self, WpColorManagerV1},
+    wp_image_description_creator_icc_v1::{self, WpImageDescriptionCreatorIccV1},
+    wp_image_description_creator_params_v1::{self, WpImageDescriptionCreatorParamsV1},
+    wp_image_description_v1::{self, WpImageDescriptionV1},
+};
 use smithay::reexports::wayland_server::{
     Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, New,
-};
-use smithay::reexports::wayland_protocols::wp::color_management::v1::server::{
-    wp_color_manager_v1::{self, WpColorManagerV1},
-    wp_color_management_output_v1::{self, WpColorManagementOutputV1},
-    wp_color_management_surface_v1::{self, WpColorManagementSurfaceV1},
-    wp_color_management_surface_feedback_v1::{self, WpColorManagementSurfaceFeedbackV1},
-    wp_image_description_v1::{self, WpImageDescriptionV1},
-    wp_image_description_creator_params_v1::{self, WpImageDescriptionCreatorParamsV1},
-    wp_image_description_creator_icc_v1::{self, WpImageDescriptionCreatorIccV1},
 };
 
 use crate::state::LumoState;
@@ -155,12 +155,16 @@ impl Dispatch<WpColorManagementSurfaceFeedbackV1, ()> for LumoState {
         data_init: &mut DataInit<'_, LumoState>,
     ) {
         match request {
-            wp_color_management_surface_feedback_v1::Request::GetPreferred { image_description } => {
+            wp_color_management_surface_feedback_v1::Request::GetPreferred {
+                image_description,
+            } => {
                 let desc = data_init.init(image_description, ImageDescriptionKind::Srgb);
                 desc.ready(0);
                 tracing::debug!("W13.A: surface_feedback get_preferred -> sRGB");
             }
-            wp_color_management_surface_feedback_v1::Request::GetPreferredParametric { image_description } => {
+            wp_color_management_surface_feedback_v1::Request::GetPreferredParametric {
+                image_description,
+            } => {
                 let desc = data_init.init(image_description, ImageDescriptionKind::Srgb);
                 desc.ready(0);
             }
@@ -213,7 +217,8 @@ impl Dispatch<WpImageDescriptionCreatorParamsV1, ()> for LumoState {
     ) {
         match request {
             wp_image_description_creator_params_v1::Request::Create { image_description } => {
-                let desc = data_init.init(image_description, ImageDescriptionKind::ClientParametric);
+                let desc =
+                    data_init.init(image_description, ImageDescriptionKind::ClientParametric);
                 desc.ready(0);
                 tracing::debug!("W13.A: parametric creator: create -> ClientParametric ready");
             }
@@ -222,7 +227,9 @@ impl Dispatch<WpImageDescriptionCreatorParamsV1, ()> for LumoState {
             | wp_image_description_creator_params_v1::Request::SetPrimariesNamed { .. }
             | wp_image_description_creator_params_v1::Request::SetPrimaries { .. }
             | wp_image_description_creator_params_v1::Request::SetLuminances { .. }
-            | wp_image_description_creator_params_v1::Request::SetMasteringDisplayPrimaries { .. }
+            | wp_image_description_creator_params_v1::Request::SetMasteringDisplayPrimaries {
+                ..
+            }
             | wp_image_description_creator_params_v1::Request::SetMasteringLuminance { .. }
             | wp_image_description_creator_params_v1::Request::SetMaxCll { .. }
             | wp_image_description_creator_params_v1::Request::SetMaxFall { .. } => {
@@ -269,7 +276,10 @@ mod tests {
 
     #[test]
     fn image_description_kind_not_supported_differs_from_srgb() {
-        assert_ne!(ImageDescriptionKind::Srgb, ImageDescriptionKind::NotSupported);
+        assert_ne!(
+            ImageDescriptionKind::Srgb,
+            ImageDescriptionKind::NotSupported
+        );
     }
 
     #[test]

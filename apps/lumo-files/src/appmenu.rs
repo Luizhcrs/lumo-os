@@ -51,25 +51,120 @@ struct MenuItem {
 
 fn build_menu() -> Vec<MenuItem> {
     vec![
-        MenuItem { id: 0,  label: "",                 parent_id: -1, kind: ItemKind::Submenu   },
-        MenuItem { id: 1,  label: "Arquivo",          parent_id: 0,  kind: ItemKind::Submenu   },
-        MenuItem { id: 10, label: "Nova janela",      parent_id: 1,  kind: ItemKind::Action    },
-        MenuItem { id: 11, label: "Nova pasta",       parent_id: 1,  kind: ItemKind::Action    },
-        MenuItem { id: 12, label: "",                 parent_id: 1,  kind: ItemKind::Separator },
-        MenuItem { id: 13, label: "Sair",             parent_id: 1,  kind: ItemKind::Action    },
-        MenuItem { id: 2,  label: "Editar",           parent_id: 0,  kind: ItemKind::Submenu   },
-        MenuItem { id: 20, label: "Recortar",         parent_id: 2,  kind: ItemKind::Action    },
-        MenuItem { id: 21, label: "Copiar",           parent_id: 2,  kind: ItemKind::Action    },
-        MenuItem { id: 22, label: "Colar",            parent_id: 2,  kind: ItemKind::Action    },
-        MenuItem { id: 23, label: "",                 parent_id: 2,  kind: ItemKind::Separator },
-        MenuItem { id: 24, label: "Selecionar tudo",  parent_id: 2,  kind: ItemKind::Action    },
-        MenuItem { id: 3,  label: "Exibir",           parent_id: 0,  kind: ItemKind::Submenu   },
-        MenuItem { id: 30, label: "Atualizar",        parent_id: 3,  kind: ItemKind::Action    },
-        MenuItem { id: 31, label: "",                 parent_id: 3,  kind: ItemKind::Separator },
-        MenuItem { id: 32, label: "Mostrar ocultos",  parent_id: 3,  kind: ItemKind::Action    },
-        MenuItem { id: 4,  label: "Ajuda",            parent_id: 0,  kind: ItemKind::Submenu   },
-        MenuItem { id: 40, label: "Sobre lumo-files", parent_id: 4,  kind: ItemKind::Action    },
-        MenuItem { id: 41, label: "Atalhos teclado",  parent_id: 4,  kind: ItemKind::Action    },
+        MenuItem {
+            id: 0,
+            label: "",
+            parent_id: -1,
+            kind: ItemKind::Submenu,
+        },
+        MenuItem {
+            id: 1,
+            label: "Arquivo",
+            parent_id: 0,
+            kind: ItemKind::Submenu,
+        },
+        MenuItem {
+            id: 10,
+            label: "Nova janela",
+            parent_id: 1,
+            kind: ItemKind::Action,
+        },
+        MenuItem {
+            id: 11,
+            label: "Nova pasta",
+            parent_id: 1,
+            kind: ItemKind::Action,
+        },
+        MenuItem {
+            id: 12,
+            label: "",
+            parent_id: 1,
+            kind: ItemKind::Separator,
+        },
+        MenuItem {
+            id: 13,
+            label: "Sair",
+            parent_id: 1,
+            kind: ItemKind::Action,
+        },
+        MenuItem {
+            id: 2,
+            label: "Editar",
+            parent_id: 0,
+            kind: ItemKind::Submenu,
+        },
+        MenuItem {
+            id: 20,
+            label: "Recortar",
+            parent_id: 2,
+            kind: ItemKind::Action,
+        },
+        MenuItem {
+            id: 21,
+            label: "Copiar",
+            parent_id: 2,
+            kind: ItemKind::Action,
+        },
+        MenuItem {
+            id: 22,
+            label: "Colar",
+            parent_id: 2,
+            kind: ItemKind::Action,
+        },
+        MenuItem {
+            id: 23,
+            label: "",
+            parent_id: 2,
+            kind: ItemKind::Separator,
+        },
+        MenuItem {
+            id: 24,
+            label: "Selecionar tudo",
+            parent_id: 2,
+            kind: ItemKind::Action,
+        },
+        MenuItem {
+            id: 3,
+            label: "Exibir",
+            parent_id: 0,
+            kind: ItemKind::Submenu,
+        },
+        MenuItem {
+            id: 30,
+            label: "Atualizar",
+            parent_id: 3,
+            kind: ItemKind::Action,
+        },
+        MenuItem {
+            id: 31,
+            label: "",
+            parent_id: 3,
+            kind: ItemKind::Separator,
+        },
+        MenuItem {
+            id: 32,
+            label: "Mostrar ocultos",
+            parent_id: 3,
+            kind: ItemKind::Action,
+        },
+        MenuItem {
+            id: 4,
+            label: "Ajuda",
+            parent_id: 0,
+            kind: ItemKind::Submenu,
+        },
+        MenuItem {
+            id: 40,
+            label: "Sobre lumo-files",
+            parent_id: 4,
+            kind: ItemKind::Action,
+        },
+        MenuItem {
+            id: 41,
+            label: "Atalhos teclado",
+            parent_id: 4,
+            kind: ItemKind::Action,
+        },
     ]
 }
 
@@ -86,7 +181,7 @@ fn id_to_action(id: i32) -> Option<MenuAction> {
         32 => Some(MenuAction::ToggleHidden),
         40 => Some(MenuAction::ShowAbout),
         41 => Some(MenuAction::ShowShortcuts),
-        _  => None,
+        _ => None,
     }
 }
 
@@ -102,7 +197,11 @@ struct LumoFilesMenu {
 
 impl LumoFilesMenu {
     fn new(tx: std::sync::mpsc::Sender<MenuAction>) -> Self {
-        Self { items: build_menu(), revision: std::sync::atomic::AtomicU32::new(1), tx }
+        Self {
+            items: build_menu(),
+            revision: std::sync::atomic::AtomicU32::new(1),
+            tx,
+        }
     }
 
     /// Build layout node for `id` up to `depth` levels deep.
@@ -207,7 +306,10 @@ impl LumoFilesMenu {
         _property_names: Vec<String>,
     ) -> zbus::fdo::Result<(u32, (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>))> {
         let node = self.layout_node(parent_id, recursion_depth);
-        Ok((self.revision.load(std::sync::atomic::Ordering::Relaxed), node))
+        Ok((
+            self.revision.load(std::sync::atomic::Ordering::Relaxed),
+            node,
+        ))
     }
 
     fn get_group_properties(
@@ -215,7 +317,10 @@ impl LumoFilesMenu {
         ids: Vec<i32>,
         _property_names: Vec<String>,
     ) -> zbus::fdo::Result<Vec<(i32, HashMap<String, OwnedValue>)>> {
-        Ok(ids.into_iter().map(|id| (id, self.item_props(id))).collect())
+        Ok(ids
+            .into_iter()
+            .map(|id| (id, self.item_props(id)))
+            .collect())
     }
 
     fn event(
@@ -249,14 +354,14 @@ impl LumoFilesMenu {
 
     fn about_to_show(&self, id: i32) -> zbus::fdo::Result<bool> {
         // Return true for submenus so clients refetch when menu becomes dynamic.
-        let is_submenu = self.items.iter().any(|it| it.id == id && matches!(it.kind, ItemKind::Submenu));
+        let is_submenu = self
+            .items
+            .iter()
+            .any(|it| it.id == id && matches!(it.kind, ItemKind::Submenu));
         Ok(is_submenu)
     }
 
-    fn about_to_show_group(
-        &self,
-        ids: Vec<i32>,
-    ) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
+    fn about_to_show_group(&self, ids: Vec<i32>) -> zbus::fdo::Result<(Vec<i32>, Vec<i32>)> {
         let _ = ids;
         Ok((Vec::new(), Vec::new()))
     }
@@ -279,16 +384,17 @@ fn serve_inner(tx: std::sync::mpsc::Sender<MenuAction>) -> Result<(), Box<dyn st
     let pid = std::process::id();
     let iface = LumoFilesMenu::new(tx);
 
-    let conn = Builder::session()?
-        .serve_at(MENU_PATH, iface)?
-        .build()?;
+    let conn = Builder::session()?.serve_at(MENU_PATH, iface)?.build()?;
 
     let service_name = conn
         .unique_name()
         .map(|n| n.to_string())
         .unwrap_or_default();
 
-    eprintln!("[appmenu] dbusmenu ativo em {} service={}", MENU_PATH, service_name);
+    eprintln!(
+        "[appmenu] dbusmenu ativo em {} service={}",
+        MENU_PATH, service_name
+    );
 
     {
         let registrar = zbus::blocking::Proxy::new(
@@ -314,16 +420,19 @@ fn serve_inner(tx: std::sync::mpsc::Sender<MenuAction>) -> Result<(), Box<dyn st
 static MENU_RX: OnceLock<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<MenuAction>>> =
     OnceLock::new();
 
-static MENU_TOK_TX: OnceLock<tokio::sync::mpsc::UnboundedSender<MenuAction>> =
-    OnceLock::new();
+static MENU_TOK_TX: OnceLock<tokio::sync::mpsc::UnboundedSender<MenuAction>> = OnceLock::new();
 
 /// Init channel. Returns std Sender for the zbus blocking thread.
 /// Bridges to tokio UnboundedSender for zero-polling iced subscription.
 pub fn init_channel() -> std::sync::mpsc::Sender<MenuAction> {
     let (std_tx, std_rx) = std::sync::mpsc::channel::<MenuAction>();
     let (tok_tx, tok_rx) = tokio::sync::mpsc::unbounded_channel::<MenuAction>();
-    MENU_RX.set(tokio::sync::Mutex::new(tok_rx)).expect("init_channel called twice");
-    MENU_TOK_TX.set(tok_tx).expect("init_channel tx called twice");
+    MENU_RX
+        .set(tokio::sync::Mutex::new(tok_rx))
+        .expect("init_channel called twice");
+    MENU_TOK_TX
+        .set(tok_tx)
+        .expect("init_channel tx called twice");
     // Bridge: forward std mpsc -> tokio unbounded
     std::thread::Builder::new()
         .name("appmenu-bridge".into())
@@ -354,16 +463,16 @@ pub fn appmenu_subscription() -> iced::Subscription<Message> {
         })
         .filter_map(|opt| async move { opt })
         .map(|action| match action {
-            MenuAction::NewWindow     => Message::AppMenuNewWindow,
-            MenuAction::NewFolder     => Message::NewFolder,
-            MenuAction::Quit          => Message::AppMenuQuit,
-            MenuAction::Cut           => Message::CutSelected,
-            MenuAction::Copy          => Message::CopySelected,
-            MenuAction::Paste         => Message::Paste,
-            MenuAction::SelectAll     => Message::AppMenuSelectAll,
-            MenuAction::Refresh       => Message::Refresh,
-            MenuAction::ToggleHidden  => Message::AppMenuToggleHidden,
-            MenuAction::ShowAbout     => Message::AppMenuShowAbout,
+            MenuAction::NewWindow => Message::AppMenuNewWindow,
+            MenuAction::NewFolder => Message::NewFolder,
+            MenuAction::Quit => Message::AppMenuQuit,
+            MenuAction::Cut => Message::CutSelected,
+            MenuAction::Copy => Message::CopySelected,
+            MenuAction::Paste => Message::Paste,
+            MenuAction::SelectAll => Message::AppMenuSelectAll,
+            MenuAction::Refresh => Message::Refresh,
+            MenuAction::ToggleHidden => Message::AppMenuToggleHidden,
+            MenuAction::ShowAbout => Message::AppMenuShowAbout,
             MenuAction::ShowShortcuts => Message::AppMenuShowShortcuts,
         }),
     )

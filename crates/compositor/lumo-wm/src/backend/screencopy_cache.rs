@@ -100,8 +100,7 @@ impl ScreencopyCache {
         // 2. Render full-damage (queremos buffer completo todo frame). Como
         // o cache eh consumido raramente (grim 1x), reaproveitar damage
         // tracker daria parcial damage que truncaria conteudo. Reset damage.
-        let size_phys: Size<i32, Physical> =
-            (self.width as i32, self.height as i32).into();
+        let size_phys: Size<i32, Physical> = (self.width as i32, self.height as i32).into();
         self.damage = OutputDamageTracker::new(size_phys, 1.0, Transform::Normal);
 
         let _result = self
@@ -125,13 +124,14 @@ impl ScreencopyCache {
         // Drop fb (release bind) ANTES de map_texture: map_texture muda bind state.
         drop(fb);
 
-        let bytes = renderer
-            .map_texture(&mapping)
-            .map_err(CacheError::Map)?;
+        let bytes = renderer.map_texture(&mapping).map_err(CacheError::Map)?;
 
         let need = (self.width * self.height * 4) as usize;
         if bytes.len() < need {
-            return Err(CacheError::ShortRead { got: bytes.len(), need });
+            return Err(CacheError::ShortRead {
+                got: bytes.len(),
+                need,
+            });
         }
         if self.pixels.len() != need {
             self.pixels.resize(need, 0);
@@ -178,11 +178,18 @@ mod tests {
         assert!(c.is_armed());
     }
 
-    struct StubArmed { until: Option<Instant> }
+    struct StubArmed {
+        until: Option<Instant>,
+    }
     impl StubArmed {
-        fn arm(&mut self) { self.until = Some(Instant::now() + ARM_TTL); }
+        fn arm(&mut self) {
+            self.until = Some(Instant::now() + ARM_TTL);
+        }
         fn is_armed(&self) -> bool {
-            match self.until { Some(u) => Instant::now() < u, None => false }
+            match self.until {
+                Some(u) => Instant::now() < u,
+                None => false,
+            }
         }
     }
 

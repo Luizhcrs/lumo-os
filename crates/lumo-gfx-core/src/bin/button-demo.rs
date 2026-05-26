@@ -134,8 +134,7 @@ impl ButtonDemo {
 
         // Layout: 3 botoes empilhados, centro horizontal, gap 16px.
         let buttons = [&primary, &ghost, &danger];
-        let measured: Vec<[f32; 2]> =
-            buttons.iter().map(|b| b.measure(&mut self.text)).collect();
+        let measured: Vec<[f32; 2]> = buttons.iter().map(|b| b.measure(&mut self.text)).collect();
         let total_h: f32 = measured.iter().map(|s| s[1]).sum::<f32>() + 16.0 * 2.0;
         let start_y = (viewport[1] - total_h) * 0.5;
 
@@ -223,25 +222,14 @@ impl ApplicationHandler for App {
         let attrs = Window::default_attributes()
             .with_title("lumo-gfx-core button-demo")
             .with_inner_size(LogicalSize::new(CANVAS_W, CANVAS_H));
-        let window = Arc::new(
-            event_loop
-                .create_window(attrs)
-                .expect("create_window"),
-        );
+        let window = Arc::new(event_loop.create_window(attrs).expect("create_window"));
         let renderer = pollster::block_on(ButtonDemo::new(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _id: WindowId,
-        event: WindowEvent,
-    ) {
-        let (Some(renderer), Some(window)) =
-            (self.renderer.as_mut(), self.window.as_ref())
-        else {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        let (Some(renderer), Some(window)) = (self.renderer.as_mut(), self.window.as_ref()) else {
             return;
         };
         match event {
@@ -270,10 +258,7 @@ impl ApplicationHandler for App {
 }
 
 fn main() {
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info"),
-    )
-    .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let event_loop = EventLoop::new().expect("event_loop");
     event_loop.set_control_flow(ControlFlow::Wait);
     let mut app = App {

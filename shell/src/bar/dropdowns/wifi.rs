@@ -23,10 +23,12 @@
 //! vertical = aria de click confortavel sem inflar dropdown. Max 6 redes
 //! visiveis (truncate apos sort por signal desc).
 
-use lumo_foundation::{LumoColors, i18n::I18n};
+use lumo_foundation::{i18n::I18n, LumoColors};
 use tiny_skia::{Paint, PixmapMut, Rect, Transform};
 
-use crate::bar::fonts::{draw_text, draw_text_mono, measure_text, measure_text_mono, opaque, rgba_hex};
+use crate::bar::fonts::{
+    draw_text, draw_text_mono, measure_text, measure_text_mono, opaque, rgba_hex,
+};
 use crate::bar::icons::{fill_rrect, stroke_rrect};
 use crate::bar::tokens::*;
 
@@ -78,8 +80,7 @@ pub fn find_wifi_iface() -> Option<String> {
         if !name.starts_with("wl") {
             continue;
         }
-        let op = std::fs::read_to_string(e.path().join("operstate"))
-            .unwrap_or_default();
+        let op = std::fs::read_to_string(e.path().join("operstate")).unwrap_or_default();
         if op.trim() == "up" {
             return Some(name);
         }
@@ -132,7 +133,15 @@ pub fn draw_wifi_dropdown(
     // Header: "Wi-Fi" + toggle pill direita (A31 - MVP visual so).
     // ============================================================
     let mut cy = y + pad;
-    draw_text(canvas, cx, cy, &I18n::get("wifi.title"), FONT_DROPDOWN_TITLE, fg, true);
+    draw_text(
+        canvas,
+        cx,
+        cy,
+        &I18n::get("wifi.title"),
+        FONT_DROPDOWN_TITLE,
+        fg,
+        true,
+    );
 
     // Toggle pill: 36x18 (capsule switch), arredondamento total = capsule.
     // Estado: on = wifi up, off = down. Visual only (TODO A31 hookup nmcli radio).
@@ -149,7 +158,15 @@ pub fn draw_wifi_dropdown(
     } else {
         rgba_hex(palette.pill_sep, 0xC0)
     };
-    fill_rrect(canvas, toggle_x, toggle_y, toggle_w, toggle_h, toggle_h / 2.0, trail_color);
+    fill_rrect(
+        canvas,
+        toggle_x,
+        toggle_y,
+        toggle_w,
+        toggle_h,
+        toggle_h / 2.0,
+        trail_color,
+    );
     // A31.2: hit-area do toggle (toda capsule inclui knob).
     hits.toggle_rect = Some((toggle_x, toggle_y, toggle_w, toggle_h));
 
@@ -168,7 +185,15 @@ pub fn draw_wifi_dropdown(
     // Conteudo: depende de up/down.
     // ============================================================
     if !info.up {
-        draw_text(canvas, cx, cy, "Wi-Fi desligado", FONT_DROPDOWN_BODY, fg_subtle, false);
+        draw_text(
+            canvas,
+            cx,
+            cy,
+            "Wi-Fi desligado",
+            FONT_DROPDOWN_BODY,
+            fg_subtle,
+            false,
+        );
         return hits;
     }
 
@@ -198,10 +223,26 @@ pub fn draw_wifi_dropdown(
             .unwrap_or(0);
         let pct_str = format!("{}%", pct);
         let vw = measure_text_mono(&pct_str, FONT_DROPDOWN_BODY, false);
-        draw_text_mono(canvas, value_x - vw, cy, &pct_str, FONT_DROPDOWN_BODY, fg, false);
+        draw_text_mono(
+            canvas,
+            value_x - vw,
+            cy,
+            &pct_str,
+            FONT_DROPDOWN_BODY,
+            fg,
+            false,
+        );
         cy += DROPDOWN_WIFI_ROW_H;
     } else {
-        draw_text(canvas, cx, cy, &I18n::get("wifi.disconnected"), FONT_DROPDOWN_BODY, fg_subtle, false);
+        draw_text(
+            canvas,
+            cx,
+            cy,
+            &I18n::get("wifi.disconnected"),
+            FONT_DROPDOWN_BODY,
+            fg_subtle,
+            false,
+        );
         cy += DROPDOWN_WIFI_ROW_H;
     }
 
@@ -219,7 +260,15 @@ pub fn draw_wifi_dropdown(
         .collect();
 
     if !others.is_empty() {
-        draw_text(canvas, cx, cy, "Outras redes", FONT_DROPDOWN_BODY, fg_dim, false);
+        draw_text(
+            canvas,
+            cx,
+            cy,
+            "Outras redes",
+            FONT_DROPDOWN_BODY,
+            fg_dim,
+            false,
+        );
         cy += FONT_DROPDOWN_BODY * 1.5;
 
         for net in &others {
@@ -234,11 +283,27 @@ pub fn draw_wifi_dropdown(
             let prefix_w = measure_text(prefix, FONT_DROPDOWN_BODY, false);
 
             let s = truncate_ssid(&net.ssid, 22);
-            draw_text(canvas, cx + prefix_w, cy, &s, FONT_DROPDOWN_BODY, fg_subtle, false);
+            draw_text(
+                canvas,
+                cx + prefix_w,
+                cy,
+                &s,
+                FONT_DROPDOWN_BODY,
+                fg_subtle,
+                false,
+            );
 
             let pct_str = format!("{}%", net.signal_pct);
             let vw = measure_text_mono(&pct_str, FONT_DROPDOWN_BODY, false);
-            draw_text_mono(canvas, value_x - vw, cy, &pct_str, FONT_DROPDOWN_BODY, fg_subtle, false);
+            draw_text_mono(
+                canvas,
+                value_x - vw,
+                cy,
+                &pct_str,
+                FONT_DROPDOWN_BODY,
+                fg_subtle,
+                false,
+            );
             cy += DROPDOWN_WIFI_ROW_H;
         }
     }

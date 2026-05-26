@@ -26,12 +26,20 @@ impl ClipEntry {
                 }
             }
             ClipEntry::ImageHash { hash, size_bytes } => {
-                format!("[imagem {} bytes hash={}]", size_bytes, &hash[..8.min(hash.len())])
+                format!(
+                    "[imagem {} bytes hash={}]",
+                    size_bytes,
+                    &hash[..8.min(hash.len())]
+                )
             }
             ClipEntry::Files { paths } => {
                 let names: Vec<_> = paths
                     .iter()
-                    .map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+                    .map(|p| {
+                        p.file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default()
+                    })
                     .take(3)
                     .collect();
                 format!("[arquivos: {}]", names.join(", "))
@@ -87,25 +95,42 @@ mod tests {
     #[test]
     fn push_deduplicates_consecutive() {
         let mut h = ClipHistory::default();
-        h.entries.push(ClipEntry::Text { content: "ola".into() });
-        h.push(ClipEntry::Text { content: "ola".into() });
+        h.entries.push(ClipEntry::Text {
+            content: "ola".into(),
+        });
+        h.push(ClipEntry::Text {
+            content: "ola".into(),
+        });
         assert_eq!(h.entries.len(), 1);
     }
 
     #[test]
     fn push_moves_duplicate_to_front() {
         let mut h = ClipHistory::default();
-        h.entries.push(ClipEntry::Text { content: "a".into() });
-        h.entries.push(ClipEntry::Text { content: "b".into() });
-        h.push(ClipEntry::Text { content: "a".into() });
-        assert_eq!(h.entries[0], ClipEntry::Text { content: "a".into() });
+        h.entries.push(ClipEntry::Text {
+            content: "a".into(),
+        });
+        h.entries.push(ClipEntry::Text {
+            content: "b".into(),
+        });
+        h.push(ClipEntry::Text {
+            content: "a".into(),
+        });
+        assert_eq!(
+            h.entries[0],
+            ClipEntry::Text {
+                content: "a".into()
+            }
+        );
     }
 
     #[test]
     fn push_rotates_at_max() {
         let mut h = ClipHistory::default();
         for i in 0..MAX_ENTRIES + 5 {
-            h.entries.push(ClipEntry::Text { content: format!("{i}") });
+            h.entries.push(ClipEntry::Text {
+                content: format!("{i}"),
+            });
         }
         h.entries.truncate(MAX_ENTRIES);
         assert_eq!(h.entries.len(), MAX_ENTRIES);
@@ -113,26 +138,35 @@ mod tests {
 
     #[test]
     fn text_preview_truncates() {
-        let e = ClipEntry::Text { content: "abcdefghij".into() };
+        let e = ClipEntry::Text {
+            content: "abcdefghij".into(),
+        };
         assert_eq!(e.preview(5), "abcde...");
     }
 
     #[test]
     fn text_preview_exact_len() {
-        let e = ClipEntry::Text { content: "hi".into() };
+        let e = ClipEntry::Text {
+            content: "hi".into(),
+        };
         assert_eq!(e.preview(10), "hi");
     }
 
     #[test]
     fn image_hash_preview() {
-        let e = ClipEntry::ImageHash { hash: "abcd1234ef".into(), size_bytes: 1024 };
+        let e = ClipEntry::ImageHash {
+            hash: "abcd1234ef".into(),
+            size_bytes: 1024,
+        };
         let p = e.preview(100);
         assert!(p.contains("imagem"));
     }
 
     #[test]
     fn files_preview() {
-        let e = ClipEntry::Files { paths: vec![std::path::PathBuf::from("/tmp/foo.txt")] };
+        let e = ClipEntry::Files {
+            paths: vec![std::path::PathBuf::from("/tmp/foo.txt")],
+        };
         let p = e.preview(100);
         assert!(p.contains("foo.txt"));
     }

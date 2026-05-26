@@ -32,20 +32,31 @@ pub async fn get_screenshot(Extension(state): Extension<AppState>) -> Response {
         Ok(o) => o,
         Err(e) => {
             tracing::warn!("grim failed: {}", e);
-            return (StatusCode::SERVICE_UNAVAILABLE, format!("grim error: {}", e)).into_response();
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!("grim error: {}", e),
+            )
+                .into_response();
         }
     };
     if out.status != 0 {
         let err = String::from_utf8_lossy(&out.stderr).to_string();
         tracing::warn!("grim exit {}: {}", out.status, err);
-        return (StatusCode::SERVICE_UNAVAILABLE, format!("grim exit {}: {}", out.status, err))
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            format!("grim exit {}: {}", out.status, err),
+        )
             .into_response();
     }
 
     let data = match std::fs::read(&path) {
         Ok(d) => d,
         Err(e) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, format!("read png: {}", e)).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("read png: {}", e),
+            )
+                .into_response();
         }
     };
     let _ = std::fs::remove_file(&path);
@@ -59,10 +70,5 @@ pub async fn get_screenshot(Extension(state): Extension<AppState>) -> Response {
 }
 
 fn png_response(bytes: Bytes) -> Response {
-    (
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, "image/png")],
-        bytes,
-    )
-        .into_response()
+    (StatusCode::OK, [(header::CONTENT_TYPE, "image/png")], bytes).into_response()
 }

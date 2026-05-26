@@ -28,7 +28,7 @@ pub fn draw_pill_bg(
     let base = shadow_alpha as f32;
     let layers: [(f32, f32, f32); 4] = [
         // (dy, dx_expand, alpha_factor)
-        (1.0, 0.0, 1.0),   // mais perto, mais opaco
+        (1.0, 0.0, 1.0), // mais perto, mais opaco
         (2.0, 0.5, 0.65),
         (3.0, 1.0, 0.35),
         (4.0, 1.5, 0.15),

@@ -12,8 +12,8 @@ use smithay_client_toolkit::{
     seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RepeatInfo},
 };
 
-use smithay_client_toolkit::shell::WaylandSurface;
 use crate::bar::state::LumoBar;
+use smithay_client_toolkit::shell::WaylandSurface;
 
 impl KeyboardHandler for LumoBar {
     fn enter(
@@ -65,9 +65,11 @@ impl KeyboardHandler for LumoBar {
                 eprintln!("[lumo-bar] A31.3 modal Enter -> conectar ssid={:?}", ssid);
                 crate::bar::system_info::nm_connect_with_password(ssid, pwd);
                 self.password_modal.close();
-                self.wifi_refresh_due = Some(std::time::Instant::now() + std::time::Duration::from_millis(3000));
+                self.wifi_refresh_due =
+                    Some(std::time::Instant::now() + std::time::Duration::from_millis(3000));
                 self.layer.set_keyboard_interactivity(
-                    smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity::None);
+                    smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity::None,
+                );
                 self.layer.wl_surface().commit();
                 self.update_size_and_redraw(qh);
             }
@@ -75,7 +77,8 @@ impl KeyboardHandler for LumoBar {
                 eprintln!("[lumo-bar] A31.3 modal Escape -> cancelar");
                 self.password_modal.close();
                 self.layer.set_keyboard_interactivity(
-                    smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity::None);
+                    smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity::None,
+                );
                 self.layer.wl_surface().commit();
                 self.update_size_and_redraw(qh);
             }

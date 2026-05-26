@@ -39,13 +39,23 @@ pub struct IdleConfig {
     pub suspend_at: u64,
 }
 
-fn def_dim() -> u64 { 120 }
-fn def_lock() -> u64 { 300 }
-fn def_suspend() -> u64 { 600 }
+fn def_dim() -> u64 {
+    120
+}
+fn def_lock() -> u64 {
+    300
+}
+fn def_suspend() -> u64 {
+    600
+}
 
 impl Default for IdleConfig {
     fn default() -> Self {
-        Self { dim_at: def_dim(), lock_at: def_lock(), suspend_at: def_suspend() }
+        Self {
+            dim_at: def_dim(),
+            lock_at: def_lock(),
+            suspend_at: def_suspend(),
+        }
     }
 }
 
@@ -181,7 +191,9 @@ impl LumoIdleManager {
 // ============================================================
 
 impl IdleNotifierHandler for LumoState {
-    fn idle_notifier_state(&mut self) -> &mut smithay::wayland::idle_notify::IdleNotifierState<Self> {
+    fn idle_notifier_state(
+        &mut self,
+    ) -> &mut smithay::wayland::idle_notify::IdleNotifierState<Self> {
         &mut self.idle_notifier_state
     }
 }
@@ -199,7 +211,11 @@ mod tests {
 
     fn make_manager_with(dim: u64, lock: u64, suspend: u64) -> LumoIdleManager {
         LumoIdleManager {
-            config: IdleConfig { dim_at: dim, lock_at: lock, suspend_at: suspend },
+            config: IdleConfig {
+                dim_at: dim,
+                lock_at: lock,
+                suspend_at: suspend,
+            },
             last_input: Instant::now(),
             stage: IdleStage::Active,
             saved_brightness: None,
@@ -256,7 +272,8 @@ mod tests {
     fn idle_config_toml_parse() {
         let toml_str = "[stages]\ndim_at = 60\nlock_at = 120\nsuspend_at = 300";
         // Direct fields (not nested) — test default parse path.
-        let cfg: IdleConfig = toml::from_str("dim_at = 60\nlock_at = 120\nsuspend_at = 300").unwrap();
+        let cfg: IdleConfig =
+            toml::from_str("dim_at = 60\nlock_at = 120\nsuspend_at = 300").unwrap();
         assert_eq!(cfg.dim_at, 60);
         assert_eq!(cfg.lock_at, 120);
         assert_eq!(cfg.suspend_at, 300);

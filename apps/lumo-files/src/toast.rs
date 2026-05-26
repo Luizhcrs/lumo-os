@@ -30,7 +30,11 @@ pub struct Toast {
 
 impl Toast {
     pub fn new(kind: ToastKind, message: impl Into<String>) -> Self {
-        Self { kind, message: message.into(), created: Instant::now() }
+        Self {
+            kind,
+            message: message.into(),
+            created: Instant::now(),
+        }
     }
 
     pub fn is_expired(&self, now: Instant, ttl: Duration) -> bool {
@@ -46,7 +50,10 @@ pub struct ToastQueue {
 
 impl ToastQueue {
     pub fn new() -> Self {
-        Self { items: Vec::new(), max_visible: 3 }
+        Self {
+            items: Vec::new(),
+            max_visible: 3,
+        }
     }
 
     pub fn push(&mut self, toast: Toast) {
@@ -100,7 +107,10 @@ fn toast_card<'a>(th: &ThemeSnapshot, toast: &'a Toast) -> Element<'a, Message> 
         .height(Length::Fixed(28.0))
         .style(move |_| iced::widget::container::Style {
             background: Some(iced::Background::Color(accent)),
-            border: Border { radius: 2.0.into(), ..Default::default() },
+            border: Border {
+                radius: 2.0.into(),
+                ..Default::default()
+            },
             ..Default::default()
         });
 
@@ -119,7 +129,11 @@ fn toast_card<'a>(th: &ThemeSnapshot, toast: &'a Toast) -> Element<'a, Message> 
             let bd = th.border;
             move |_| iced::widget::container::Style {
                 background: Some(iced::Background::Color(bg)),
-                border: Border { color: bd, width: 1.0, radius: 10.0.into() },
+                border: Border {
+                    color: bd,
+                    width: 1.0,
+                    radius: 10.0.into(),
+                },
                 shadow: iced::Shadow {
                     color: Color::from_rgba(0.0, 0.0, 0.0, 0.30),
                     offset: iced::Vector { x: 0.0, y: 6.0 },

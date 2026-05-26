@@ -154,7 +154,11 @@ impl Element for RoundedSurfaceElement {
     fn geometry(&self, scale: Scale<f64>) -> Rectangle<i32, Physical> {
         self.inner.geometry(scale)
     }
-    fn damage_since(&self, scale: Scale<f64>, commit: Option<CommitCounter>) -> DamageSet<i32, Physical> {
+    fn damage_since(
+        &self,
+        scale: Scale<f64>,
+        commit: Option<CommitCounter>,
+    ) -> DamageSet<i32, Physical> {
         self.inner.damage_since(scale, commit)
     }
     fn opaque_regions(&self, _scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
@@ -185,8 +189,10 @@ impl RenderElement<GlesRenderer> for RoundedSurfaceElement {
         let w = dst.size.w as f32;
         let h = dst.size.h as f32;
         tracing::debug!(
-            dst_w = w, dst_g_w = self.surf_w,
-            dst_h = h, dst_g_h = self.surf_h,
+            dst_w = w,
+            dst_g_w = self.surf_w,
+            dst_h = h,
+            dst_g_h = self.surf_h,
             "R3 RoundedSurfaceElement draw"
         );
         let uniforms = vec![
@@ -206,7 +212,6 @@ impl RenderElement<GlesRenderer> for RoundedSurfaceElement {
         res
     }
 }
-
 
 // W28.8: pixel shader que renderiza alpha=1 fora curva, alpha=0 inside.
 // Cor preto solido. Usado pra mascarar wallpaper atras dos cantos round

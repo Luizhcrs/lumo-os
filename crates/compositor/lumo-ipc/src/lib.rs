@@ -36,49 +36,86 @@ pub enum OsdIcon {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LumoEvent {
-    Workspaces { active: u8, total: u8 },
+    Workspaces {
+        active: u8,
+        total: u8,
+    },
     CloseDropdowns,
     CloseDesktopMenu,
     DesktopOpenSelected,
-    ActiveApp { app_id: String, title: String, pid: u32 },
+    ActiveApp {
+        app_id: String,
+        title: String,
+        pid: u32,
+    },
     /// W34.11: explicit clear (todas janelas fecharam). Bar reseta pills.
     /// Diferente de ActiveApp{app_id:""} que e transient focus_changed.
     ActiveAppCleared,
-    ShowOsd { text: String, icon: OsdIcon, duration_ms: u32 },
-    ThemeReloaded { mode: ThemeMode },
+    ShowOsd {
+        text: String,
+        icon: OsdIcon,
+        duration_ms: u32,
+    },
+    ThemeReloaded {
+        mode: ThemeMode,
+    },
     /// W9.C: novo output conectado ou adicionado em hot-plug.
     /// name = connector name (ex: "eDP-1", "HDMI-A-1").
     /// index = indice do output no compositor (0-based).
-    OutputAdded { name: String, index: u32, width: u32, height: u32 },
+    OutputAdded {
+        name: String,
+        index: u32,
+        width: u32,
+        height: u32,
+    },
     /// W9.C: output removido (hot-unplug ou shutdown).
-    OutputRemoved { name: String, index: u32 },
+    OutputRemoved {
+        name: String,
+        index: u32,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum LumoCommand {
-    Switch { to: u8 },
+    Switch {
+        to: u8,
+    },
     CloseDropdowns,
     CloseDesktopMenu,
     ReloadTheme,
     CloseFocusedToplevel,
     /// SI.1: input sintetico -- ponteiro absoluto em pixels logicos.
     /// Bridge HTTP usa pra remotar input sem libinput/ydotool.
-    SyntheticPointerMove { x: f64, y: f64 },
+    SyntheticPointerMove {
+        x: f64,
+        y: f64,
+    },
     /// SI.1: input sintetico -- botao do ponteiro.
     /// `button` = codigo linux/input-event-codes (BTN_LEFT=0x110, BTN_RIGHT=0x111, BTN_MIDDLE=0x112).
-    SyntheticPointerButton { button: u32, pressed: bool },
+    SyntheticPointerButton {
+        button: u32,
+        pressed: bool,
+    },
     /// SI.1: input sintetico -- scroll/axis.
     /// `dx` = eixo horizontal, `dy` = eixo vertical (positivo = down/right).
-    SyntheticPointerScroll { dx: f64, dy: f64 },
+    SyntheticPointerScroll {
+        dx: f64,
+        dy: f64,
+    },
     /// SI.1: input sintetico -- tecla individual.
     /// `keycode` = evdev KEY_* (mesma tabela do bridge/ydotool).
     /// O compositor traduz pra xkb Keycode internamente (evdev + 8).
     /// Conhecido: nao usa keysym; layout atual aplicado pelo xkb state do compositor.
-    SyntheticKey { keycode: u32, pressed: bool },
+    SyntheticKey {
+        keycode: u32,
+        pressed: bool,
+    },
     /// SI.1: input sintetico -- atalho. Pressiona `keys` em ordem,
     /// pequena pausa, libera em ordem reversa. Codigos evdev KEY_*.
-    SyntheticKeyCombo { keys: Vec<u32> },
+    SyntheticKeyCombo {
+        keys: Vec<u32>,
+    },
     /// W17.1: toggle maximize/fullscreen no toplevel com foco.
     /// Sem identifier de surface: usa focused toplevel (mesma logica de
     /// `CloseFocusedToplevel`). Bridge HTTP usa pra remotar a acao.
@@ -89,7 +126,11 @@ pub enum LumoCommand {
     /// W34.10: lumo-appsd notifica WM que abriu janela com app_id conhecido.
     /// WM faz broadcast LumoEvent::ActiveApp com esses dados pro bar popular pills.
     /// Bypass Iced 0.13 que nao emite xdg_toplevel.set_app_id antes do focus_changed.
-    AppActivated { app_id: String, title: String, pid: u32 },
+    AppActivated {
+        app_id: String,
+        title: String,
+        pid: u32,
+    },
     /// W34.11: lumo-appsd notifica WM que fechou todas janelas. Limpar pills bar.
     AppDeactivated,
 }
@@ -121,7 +162,10 @@ mod tests {
 
     #[test]
     fn event_roundtrip() {
-        let ev = LumoEvent::Workspaces { active: 3, total: 5 };
+        let ev = LumoEvent::Workspaces {
+            active: 3,
+            total: 5,
+        };
         let line = encode_event(&ev);
         assert!(line.ends_with('\n'));
         let parsed: LumoEvent = serde_json::from_str(line.trim()).unwrap();
@@ -143,7 +187,9 @@ mod tests {
 
     #[test]
     fn theme_reloaded_roundtrip() {
-        let ev = LumoEvent::ThemeReloaded { mode: ThemeMode::Dark };
+        let ev = LumoEvent::ThemeReloaded {
+            mode: ThemeMode::Dark,
+        };
         let line = encode_event(&ev);
         let parsed: LumoEvent = serde_json::from_str(line.trim()).unwrap();
         assert_eq!(parsed, ev);
@@ -187,7 +233,10 @@ mod tests {
     /// vai em snake_case (`synthetic_pointer_move`).
     #[test]
     fn synthetic_pointer_move_roundtrip() {
-        let cmd = LumoCommand::SyntheticPointerMove { x: 960.5, y: 540.25 };
+        let cmd = LumoCommand::SyntheticPointerMove {
+            x: 960.5,
+            y: 540.25,
+        };
         let json = serde_json::to_string(&cmd).unwrap();
         assert!(json.contains("synthetic_pointer_move"), "json={json}");
         let parsed: LumoCommand = serde_json::from_str(&json).unwrap();
@@ -203,7 +252,10 @@ mod tests {
         let cmd = parse_command(raw).unwrap().unwrap();
         assert_eq!(
             cmd,
-            LumoCommand::SyntheticPointerButton { button: 272, pressed: true }
+            LumoCommand::SyntheticPointerButton {
+                button: 272,
+                pressed: true
+            }
         );
 
         // scroll
@@ -213,13 +265,18 @@ mod tests {
         assert_eq!(back, scroll);
 
         // single key
-        let key = LumoCommand::SyntheticKey { keycode: 28, pressed: false };
+        let key = LumoCommand::SyntheticKey {
+            keycode: 28,
+            pressed: false,
+        };
         let back: LumoCommand =
             serde_json::from_str(&serde_json::to_string(&key).unwrap()).unwrap();
         assert_eq!(back, key);
 
         // combo
-        let combo = LumoCommand::SyntheticKeyCombo { keys: vec![29, 56, 20] };
+        let combo = LumoCommand::SyntheticKeyCombo {
+            keys: vec![29, 56, 20],
+        };
         let back: LumoCommand =
             serde_json::from_str(&serde_json::to_string(&combo).unwrap()).unwrap();
         assert_eq!(back, combo);

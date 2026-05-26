@@ -24,7 +24,8 @@ pub fn tile_output_position(idx: usize, width_per_output: i32) -> (i32, i32) {
 /// Selects the primary connector index from a list of connector names.
 /// Prefers eDP/LVDS (laptop internal panel). Falls back to index 0.
 pub fn pick_primary_connector(names: &[String]) -> usize {
-    names.iter()
+    names
+        .iter()
         .position(|n| {
             let upper = n.to_uppercase();
             upper.starts_with("EDP") || upper.starts_with("LVDS")
@@ -72,28 +73,19 @@ mod tests {
 
     #[test]
     fn pick_primary_lvds_preferred() {
-        let names = vec![
-            "HDMI-A-1".to_string(),
-            "LVDS-1".to_string(),
-        ];
+        let names = vec!["HDMI-A-1".to_string(), "LVDS-1".to_string()];
         assert_eq!(pick_primary_connector(&names), 1);
     }
 
     #[test]
     fn pick_primary_fallback_to_zero() {
-        let names = vec![
-            "HDMI-A-1".to_string(),
-            "DP-1".to_string(),
-        ];
+        let names = vec!["HDMI-A-1".to_string(), "DP-1".to_string()];
         assert_eq!(pick_primary_connector(&names), 0);
     }
 
     #[test]
     fn pick_primary_edp_uppercase() {
-        let names = vec![
-            "DP-1".to_string(),
-            "EDP-1".to_string(),
-        ];
+        let names = vec!["DP-1".to_string(), "EDP-1".to_string()];
         assert_eq!(pick_primary_connector(&names), 1);
     }
 

@@ -24,16 +24,16 @@ const CELL_BORDER: i32 = 2;
 const HEADER_H: i32 = 40;
 
 // Colors (no neon/glow per memory feedback_zero_neon_glow).
-const BG_COLOR:       [f32; 4] = [0.05, 0.05, 0.06, 0.90];
-const CELL_COLOR:     [f32; 4] = [0.15, 0.15, 0.17, 1.0];
-const CELL_FOCUS:     [f32; 4] = [0.22, 0.22, 0.25, 1.0];
-const CELL_BORDER_C:  [f32; 4] = [0.35, 0.35, 0.40, 1.0];
+const BG_COLOR: [f32; 4] = [0.05, 0.05, 0.06, 0.90];
+const CELL_COLOR: [f32; 4] = [0.15, 0.15, 0.17, 1.0];
+const CELL_FOCUS: [f32; 4] = [0.22, 0.22, 0.25, 1.0];
+const CELL_BORDER_C: [f32; 4] = [0.35, 0.35, 0.40, 1.0];
 
 /// Animation state for overview zoom-out/in.
 #[derive(Debug, Clone)]
 pub enum OverviewAnim {
     /// Animating in (progress 0..1).
-    In  { progress: f32, velocity: f32 },
+    In { progress: f32, velocity: f32 },
     /// Fully visible.
     Visible,
     /// Animating out (progress 1..0).
@@ -44,20 +44,26 @@ pub enum OverviewAnim {
 
 impl OverviewAnim {
     const STIFFNESS: f32 = 180.0;
-    const DAMPING:   f32 = 22.0;
+    const DAMPING: f32 = 22.0;
 
     pub fn new_in(reduced_motion: bool) -> Self {
         if reduced_motion {
             return OverviewAnim::Visible;
         }
-        OverviewAnim::In { progress: 0.0, velocity: 0.0 }
+        OverviewAnim::In {
+            progress: 0.0,
+            velocity: 0.0,
+        }
     }
 
     pub fn new_out(reduced_motion: bool) -> Self {
         if reduced_motion {
             return OverviewAnim::Closed;
         }
-        OverviewAnim::Out { progress: 1.0, velocity: 0.0 }
+        OverviewAnim::Out {
+            progress: 1.0,
+            velocity: 0.0,
+        }
     }
 
     /// Advance spring by dt seconds. Returns true when animation is done.
@@ -84,10 +90,10 @@ impl OverviewAnim {
 
     pub fn visual_progress(&self) -> f32 {
         match self {
-            OverviewAnim::In  { progress, .. } => *progress,
+            OverviewAnim::In { progress, .. } => *progress,
             OverviewAnim::Out { progress, .. } => *progress,
             OverviewAnim::Visible => 1.0,
-            OverviewAnim::Closed  => 0.0,
+            OverviewAnim::Closed => 0.0,
         }
     }
 
@@ -244,14 +250,22 @@ pub fn overview_elements(
 
     let cells = compute_overview_cells(state.windows.len(), output_w, output_h);
     for cell in &cells {
-        let is_focused  = state.focused_idx == Some(cell.window_idx);
-        let is_hovered  = state.hovered    == Some(cell.window_idx);
-        let base_color  = if is_focused || is_hovered { CELL_FOCUS } else { CELL_COLOR };
+        let is_focused = state.focused_idx == Some(cell.window_idx);
+        let is_hovered = state.hovered == Some(cell.window_idx);
+        let base_color = if is_focused || is_hovered {
+            CELL_FOCUS
+        } else {
+            CELL_COLOR
+        };
 
         // Border quad.
         let border_rect: Rectangle<i32, Physical> = Rectangle::new(
             Point::from((cell.rect.loc.x, cell.rect.loc.y)).to_physical_precise_round(1.0),
-            (cell.rect.size.w + CELL_BORDER * 2, cell.rect.size.h + CELL_BORDER * 2).into(),
+            (
+                cell.rect.size.w + CELL_BORDER * 2,
+                cell.rect.size.h + CELL_BORDER * 2,
+            )
+                .into(),
         );
         out.push(SolidColorRenderElement::new(
             Id::new(),
@@ -350,14 +364,18 @@ mod tests {
     #[test]
     fn anim_in_converges() {
         let mut a = OverviewAnim::new_in(false);
-        for _ in 0..300 { a.tick(0.016); }
+        for _ in 0..300 {
+            a.tick(0.016);
+        }
         assert!(matches!(a, OverviewAnim::Visible));
     }
 
     #[test]
     fn anim_out_converges() {
         let mut a = OverviewAnim::new_out(false);
-        for _ in 0..300 { a.tick(0.016); }
+        for _ in 0..300 {
+            a.tick(0.016);
+        }
         assert!(a.is_closed());
     }
 

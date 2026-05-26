@@ -9,7 +9,6 @@ use app::StoreApp;
 use iced::{Settings, Size};
 
 pub fn run() -> iced::Result {
-
     iced::application("Lumo Store", StoreApp::update, StoreApp::view)
         .settings(Settings {
             default_text_size: 14.0.into(),

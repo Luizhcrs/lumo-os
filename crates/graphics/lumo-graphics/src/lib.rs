@@ -51,10 +51,22 @@ pub type QuadVertex = LGQuadVertex;
 /// Quad unitario em torno da origem. O bounding e expandido no vertex shader
 /// para acomodar a sombra (offset + radius), entao mantemos 4 vertices puros.
 pub const QUAD_VERTICES: &[LGQuadVertex] = &[
-    LGQuadVertex { local_pos: [-0.5, -0.5], uv: [0.0, 1.0] },
-    LGQuadVertex { local_pos: [ 0.5, -0.5], uv: [1.0, 1.0] },
-    LGQuadVertex { local_pos: [ 0.5,  0.5], uv: [1.0, 0.0] },
-    LGQuadVertex { local_pos: [-0.5,  0.5], uv: [0.0, 0.0] },
+    LGQuadVertex {
+        local_pos: [-0.5, -0.5],
+        uv: [0.0, 1.0],
+    },
+    LGQuadVertex {
+        local_pos: [0.5, -0.5],
+        uv: [1.0, 1.0],
+    },
+    LGQuadVertex {
+        local_pos: [0.5, 0.5],
+        uv: [1.0, 0.0],
+    },
+    LGQuadVertex {
+        local_pos: [-0.5, 0.5],
+        uv: [0.0, 0.0],
+    },
 ];
 
 /// Indices triangle-list para o quad unitario (2 tris).
@@ -161,12 +173,7 @@ impl LGQuadInstance {
     }
 
     /// Builder: adiciona drop shadow sobre uma instancia existente.
-    pub fn with_shadow(
-        mut self,
-        color: [f32; 4],
-        offset: [f32; 2],
-        radius: f32,
-    ) -> Self {
+    pub fn with_shadow(mut self, color: [f32; 4], offset: [f32; 2], radius: f32) -> Self {
         self.shadow_color = color;
         self.shadow_offset = offset;
         self.shadow_radius = radius;

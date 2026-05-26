@@ -9,7 +9,9 @@
 use lumo_foundation::LumoColors;
 use tiny_skia::{Paint, PixmapMut, Rect, Transform};
 
-use crate::bar::fonts::{draw_text, draw_text_mono, measure_text, measure_text_mono, opaque, rgba_hex};
+use crate::bar::fonts::{
+    draw_text, draw_text_mono, measure_text, measure_text_mono, opaque, rgba_hex,
+};
 use crate::bar::icons::fill_rrect;
 use crate::bar::tokens::*;
 

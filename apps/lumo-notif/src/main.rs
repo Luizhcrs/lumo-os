@@ -1,10 +1,10 @@
 //! lumo-notif - daemon DBus org.freedesktop.Notifications + toast overlay.
 
+mod center;
 mod dbus;
 mod history;
 mod paint;
 mod state;
-mod center;
 
 use tokio::sync::mpsc;
 

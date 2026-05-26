@@ -33,7 +33,9 @@ impl From<io::Error> for OpsError {
 /// Renomeia um item (arquivo ou pasta). `new_name` e apenas o nome, sem path.
 pub fn rename(path: &Path, new_name: &str) -> Result<PathBuf, OpsError> {
     if new_name.is_empty() || new_name.contains('/') || new_name.contains('\0') {
-        return Err(OpsError::InvalidPath(format!("nome invalido: {new_name:?}")));
+        return Err(OpsError::InvalidPath(format!(
+            "nome invalido: {new_name:?}"
+        )));
     }
     let parent = path
         .parent()
@@ -150,13 +152,19 @@ mod tests {
     #[test]
     fn mkdir_nome_vazio_falha() {
         let dir = tmp();
-        assert!(matches!(mkdir(dir.path(), ""), Err(OpsError::InvalidPath(_))));
+        assert!(matches!(
+            mkdir(dir.path(), ""),
+            Err(OpsError::InvalidPath(_))
+        ));
     }
 
     #[test]
     fn mkdir_nome_com_barra_falha() {
         let dir = tmp();
-        assert!(matches!(mkdir(dir.path(), "a/b"), Err(OpsError::InvalidPath(_))));
+        assert!(matches!(
+            mkdir(dir.path(), "a/b"),
+            Err(OpsError::InvalidPath(_))
+        ));
     }
 
     #[test]

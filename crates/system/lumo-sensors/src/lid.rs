@@ -5,8 +5,6 @@
 
 use std::path::PathBuf;
 
-
-
 const ACPI_LID_GLOB: &str = "/proc/acpi/button/lid";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

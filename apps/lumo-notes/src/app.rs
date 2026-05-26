@@ -59,7 +59,9 @@ impl App {
         match msg {
             Message::NotesLoaded(notes) => {
                 self.notes = notes;
-                if !self.notes.is_empty() { self.selected = Some(0); }
+                if !self.notes.is_empty() {
+                    self.selected = Some(0);
+                }
                 Task::none()
             }
 
@@ -128,7 +130,11 @@ impl App {
                     if let Some(note) = self.notes.get(idx) {
                         let path = note.path.clone();
                         self.notes.remove(idx);
-                        self.selected = if self.notes.is_empty() { None } else { Some(idx.saturating_sub(1)) };
+                        self.selected = if self.notes.is_empty() {
+                            None
+                        } else {
+                            Some(idx.saturating_sub(1))
+                        };
                         return Task::perform(delete_note(path), Message::DeleteDone);
                     }
                 }
@@ -166,7 +172,10 @@ impl App {
                 Task::none()
             }
 
-            Message::ShowAbout => { self.status = "lumo-notes 0.1.0".into(); Task::none() }
+            Message::ShowAbout => {
+                self.status = "lumo-notes 0.1.0".into();
+                Task::none()
+            }
             Message::Quit => std::process::exit(0),
             Message::Nop => Task::none(),
         }
@@ -174,7 +183,7 @@ impl App {
 
     pub fn view(&self) -> Element<Message> {
         let sidebar = self.view_sidebar();
-        let editor  = self.view_editor();
+        let editor = self.view_editor();
 
         let content = row![
             container(sidebar)
@@ -200,49 +209,49 @@ impl App {
             .size(13)
             .padding([6, 10]);
 
-        let toolbar = row![
-            button(text("+ Nova").size(11).color(LumoTheme::bg()))
-                .on_press(Message::NewNote)
-                .style(|_, _| ButtonStyle::Primary.style())
-                .padding([5, 10]),
-        ];
+        let toolbar = row![button(text("+ Nova").size(11).color(LumoTheme::bg()))
+            .on_press(Message::NewNote)
+            .style(|_, _| ButtonStyle::Primary.style())
+            .padding([5, 10]),];
 
-        let filtered: Vec<(usize, &Note)> = self.notes.iter().enumerate()
+        let filtered: Vec<(usize, &Note)> = self
+            .notes
+            .iter()
+            .enumerate()
             .filter(|(_, n)| n.matches_query(&self.search))
             .collect();
 
-        let items: Vec<Element<Message>> = filtered.iter().map(|(orig_idx, note)| {
-            let active = self.selected == Some(*orig_idx);
-            let title_color = if active { LumoTheme::accent() } else { LumoTheme::fg() };
-            let preview = note.preview();
-            let date = note.modified.format("%d/%m %H:%M").to_string();
-            let idx = *orig_idx;
+        let items: Vec<Element<Message>> = filtered
+            .iter()
+            .map(|(orig_idx, note)| {
+                let active = self.selected == Some(*orig_idx);
+                let title_color = if active {
+                    LumoTheme::accent()
+                } else {
+                    LumoTheme::fg()
+                };
+                let preview = note.preview();
+                let date = note.modified.format("%d/%m %H:%M").to_string();
+                let idx = *orig_idx;
 
-            button(
-                column![
-                    text(note.title.clone()).size(13).color(title_color),
-                    text(preview).size(11).color(LumoTheme::muted()),
-                    text(date).size(10).color(LumoTheme::muted()),
-                ]
-                .spacing(2)
-            )
-            .on_press(Message::NoteSelected(idx))
-            .style(move |_, _| ButtonStyle::NoteItem { active }.style())
-            .width(Length::Fill)
-            .padding([8, 10])
-            .into()
-        }).collect();
+                button(
+                    column![
+                        text(note.title.clone()).size(13).color(title_color),
+                        text(preview).size(11).color(LumoTheme::muted()),
+                        text(date).size(10).color(LumoTheme::muted()),
+                    ]
+                    .spacing(2),
+                )
+                .on_press(Message::NoteSelected(idx))
+                .style(move |_, _| ButtonStyle::NoteItem { active }.style())
+                .width(Length::Fill)
+                .padding([8, 10])
+                .into()
+            })
+            .collect();
 
         column![
-            container(
-                column![
-                    search,
-                    Space::with_height(6),
-                    toolbar,
-                ]
-                .spacing(0)
-            )
-            .padding([8, 8]),
+            container(column![search, Space::with_height(6), toolbar,].spacing(0)).padding([8, 8]),
             scrollable(column(items).spacing(2).padding([0, 8])),
         ]
         .spacing(0)
@@ -255,7 +264,9 @@ impl App {
                 let modified_marker = if self.modified { " *" } else { "" };
                 let header = container(
                     row![
-                        text(format!("{}{}", note.title, modified_marker)).size(16).color(LumoTheme::fg()),
+                        text(format!("{}{}", note.title, modified_marker))
+                            .size(16)
+                            .color(LumoTheme::fg()),
                         Space::with_width(Length::Fill),
                         button(text("Salvar").size(11).color(LumoTheme::bg()))
                             .on_press(Message::Save)
@@ -267,7 +278,7 @@ impl App {
                             .style(|_, _| ButtonStyle::Secondary.style())
                             .padding([5, 12]),
                     ]
-                    .align_y(Alignment::Center)
+                    .align_y(Alignment::Center),
                 )
                 .padding([10, 16]);
 
@@ -277,7 +288,9 @@ impl App {
                     .width(Length::Fill);
 
                 let status = if !self.status.is_empty() {
-                    text(self.status.clone()).size(11).color(LumoTheme::accent())
+                    text(self.status.clone())
+                        .size(11)
+                        .color(LumoTheme::accent())
                 } else {
                     text("").size(11).color(LumoTheme::muted())
                 };
@@ -285,11 +298,9 @@ impl App {
                 return column![
                     header,
                     container(
-                        scrollable(
-                            container(editor).width(Length::Fill).padding(16)
-                        )
-                        .width(Length::Fill)
-                        .height(Length::Fill)
+                        scrollable(container(editor).width(Length::Fill).padding(16))
+                            .width(Length::Fill)
+                            .height(Length::Fill)
                     )
                     .width(Length::Fill)
                     .height(Length::Fill),
@@ -301,7 +312,9 @@ impl App {
         }
 
         container(
-            text("Selecione ou crie uma nota.").size(14).color(LumoTheme::muted())
+            text("Selecione ou crie uma nota.")
+                .size(14)
+                .color(LumoTheme::muted()),
         )
         .width(Length::Fill)
         .height(Length::Fill)
@@ -313,7 +326,11 @@ impl App {
     pub fn subscription(&self) -> Subscription<Message> {
         use iced::event::listen_with;
         let kbd = listen_with(|ev, _, _| {
-            if let iced::Event::Keyboard(k) = ev { Some(Message::KeyboardEvent(k)) } else { None }
+            if let iced::Event::Keyboard(k) = ev {
+                Some(Message::KeyboardEvent(k))
+            } else {
+                None
+            }
         });
         Subscription::batch([appmenu_subscription(), kbd])
     }
@@ -331,8 +348,20 @@ mod tests {
 
     fn make_app_with_notes() -> App {
         let notes = vec![
-            Note { id: 0, title: "Alpha".into(), content: "conteudo alpha".into(), modified: chrono::Local::now(), path: PathBuf::from("/tmp/alpha.md") },
-            Note { id: 1, title: "Beta".into(),  content: "conteudo beta".into(),  modified: chrono::Local::now(), path: PathBuf::from("/tmp/beta.md") },
+            Note {
+                id: 0,
+                title: "Alpha".into(),
+                content: "conteudo alpha".into(),
+                modified: chrono::Local::now(),
+                path: PathBuf::from("/tmp/alpha.md"),
+            },
+            Note {
+                id: 1,
+                title: "Beta".into(),
+                content: "conteudo beta".into(),
+                modified: chrono::Local::now(),
+                path: PathBuf::from("/tmp/beta.md"),
+            },
         ];
         App {
             notes,
@@ -346,7 +375,11 @@ mod tests {
     #[test]
     fn test_search_filter() {
         let app = make_app_with_notes();
-        let filtered: Vec<_> = app.notes.iter().filter(|n| n.matches_query("alpha")).collect();
+        let filtered: Vec<_> = app
+            .notes
+            .iter()
+            .filter(|n| n.matches_query("alpha"))
+            .collect();
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].title, "Alpha");
     }

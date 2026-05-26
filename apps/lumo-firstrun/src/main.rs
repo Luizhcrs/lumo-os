@@ -5,10 +5,10 @@
 //! O servico `lumo-firstrun.service` chama este binario antes do lumo-wm.
 
 mod app;
-mod steps;
-mod theme;
 mod locale;
+mod steps;
 mod system;
+mod theme;
 
 #[cfg(test)]
 mod tests;

@@ -94,7 +94,11 @@ impl PlatformProfile for SysfsPlatformProfile {
                     .split_whitespace()
                     .filter_map(Profile::from_sysfs)
                     .collect();
-                if v.is_empty() { fallback } else { v }
+                if v.is_empty() {
+                    fallback
+                } else {
+                    v
+                }
             }
             Err(_) => fallback,
         }

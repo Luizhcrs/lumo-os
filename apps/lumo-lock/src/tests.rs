@@ -26,9 +26,13 @@ mod tests {
 
     impl LumoLockStub {
         fn shake_offset(&self) -> f32 {
-            let Some(start) = self.shake_start else { return 0.0; };
+            let Some(start) = self.shake_start else {
+                return 0.0;
+            };
             let elapsed = start.elapsed().as_secs_f32();
-            if elapsed > 0.5 { return 0.0; }
+            if elapsed > 0.5 {
+                return 0.0;
+            }
             let amplitude = 8.0f32;
             let freq = 40.0f32;
             let decay = 10.0f32;

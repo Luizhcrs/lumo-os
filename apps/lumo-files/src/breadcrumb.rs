@@ -45,10 +45,16 @@ pub fn truncate_label(label: &str, max: usize) -> String {
 pub fn smart_truncate(segs: &[(String, PathBuf)], max_total: usize) -> Vec<BreadcrumbEntry> {
     let total: usize = segs.iter().map(|(l, _)| l.chars().count() + 3).sum();
     if total <= max_total || segs.len() <= 4 {
-        return segs.iter().map(|(l, p)| BreadcrumbEntry::Segment(l.clone(), p.clone())).collect();
+        return segs
+            .iter()
+            .map(|(l, p)| BreadcrumbEntry::Segment(l.clone(), p.clone()))
+            .collect();
     }
     let mut out: Vec<BreadcrumbEntry> = Vec::new();
-    out.push(BreadcrumbEntry::Segment(segs[0].0.clone(), segs[0].1.clone()));
+    out.push(BreadcrumbEntry::Segment(
+        segs[0].0.clone(),
+        segs[0].1.clone(),
+    ));
     out.push(BreadcrumbEntry::Ellipsis);
     let tail_start = segs.len().saturating_sub(2);
     for (l, p) in &segs[tail_start..] {

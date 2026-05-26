@@ -3,9 +3,9 @@
 //! Gerencia vault de windows por workspace e animacao de slide.
 //! LumoState usa WorkspaceVault para hide/show toplevels ao trocar workspace.
 
-use std::collections::HashMap;
 use smithay::desktop::Window;
 use smithay::utils::{Logical, Point};
+use std::collections::HashMap;
 
 /// Posicao cached de uma janela ao ser ocultada.
 #[derive(Debug, Clone)]
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn workspace_slide_offset_direction() {
         let tr_right = WorkspaceTransition::new(1, 2, 0.25);
-        let tr_left  = WorkspaceTransition::new(2, 1, 0.25);
+        let tr_left = WorkspaceTransition::new(2, 1, 0.25);
         // progress=0: offset deveria ser +/- output_width respectivamente.
         let off_r = tr_right.slide_offset(1920);
         let off_l = tr_left.slide_offset(1920);

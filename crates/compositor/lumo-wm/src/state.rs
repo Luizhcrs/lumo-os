@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use smithay::desktop::{layer_map_for_output, PopupManager, Space, Window, WindowSurfaceType};
 use smithay::input::keyboard::KeyboardHandle;
+use smithay::input::pointer::CursorIcon;
 use smithay::input::pointer::PointerHandle;
 use smithay::input::{Seat, SeatState};
 use smithay::reexports::calloop::LoopHandle;
@@ -28,31 +29,30 @@ use smithay::reexports::wayland_server::DisplayHandle;
 use smithay::utils::{Clock, Logical, Monotonic, Point};
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
 use smithay::wayland::cursor_shape::CursorShapeManagerState;
+use smithay::wayland::dmabuf::{DmabufGlobal, DmabufState};
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
+use smithay::wayland::idle_notify::IdleNotifierState;
 use smithay::wayland::output::OutputManagerState;
 use smithay::wayland::selection::data_device::DataDeviceState;
 use smithay::wayland::selection::primary_selection::PrimarySelectionState;
 use smithay::wayland::shell::wlr_layer::{Layer as WlrLayer, WlrLayerShellState};
-use smithay::wayland::shell::xdg::{ToplevelSurface, XdgShellState};
 use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
+use smithay::wayland::shell::xdg::{ToplevelSurface, XdgShellState};
 use smithay::wayland::shm::ShmState;
 use smithay::wayland::socket::ListeningSocketSource;
 use smithay::wayland::xdg_activation::XdgActivationState;
-use smithay::wayland::dmabuf::{DmabufGlobal, DmabufState};
-use smithay::wayland::idle_notify::IdleNotifierState;
-use smithay::input::pointer::CursorIcon;
 use smithay::wayland::xdg_toplevel_icon::XdgToplevelIconManager;
 
 use lumo_ipc::{LumoCommand, LumoEvent, MAX_WORKSPACES};
 
-use crate::ipc::IpcServer;
-use crate::handlers::idle::LumoIdleManager;
-use crate::input::keyboard::KeyboardConfig;
-use crate::handlers::screencopy::ScreencopyState;
-use crate::workspace::{WorkspaceVault, WorkspaceTransition};
-use smithay::wayland::fifo::FifoManagerState;
-use smithay::wayland::commit_timing::CommitTimingManagerState;
 use crate::handlers::color_management::ColorManagerState;
+use crate::handlers::idle::LumoIdleManager;
+use crate::handlers::screencopy::ScreencopyState;
+use crate::input::keyboard::KeyboardConfig;
+use crate::ipc::IpcServer;
+use crate::workspace::{WorkspaceTransition, WorkspaceVault};
+use smithay::wayland::commit_timing::CommitTimingManagerState;
+use smithay::wayland::fifo::FifoManagerState;
 
 /// Estado raiz do Lumo WM.
 pub struct LumoState {
@@ -94,10 +94,15 @@ pub struct LumoState {
     /// Handle ao backend winit em Rc<RefCell<...>>. Setado pelo
     /// init de backend::winit; necessario pro DmabufHandler conseguir
     /// importar via GlesRenderer mantido la dentro. None no path DRM.
-    pub winit_backend: Option<std::rc::Rc<std::cell::RefCell<
-        smithay::backend::winit::WinitGraphicsBackend<
-            smithay::backend::renderer::gles::GlesRenderer
-        >>>>,
+    pub winit_backend: Option<
+        std::rc::Rc<
+            std::cell::RefCell<
+                smithay::backend::winit::WinitGraphicsBackend<
+                    smithay::backend::renderer::gles::GlesRenderer,
+                >,
+            >,
+        >,
+    >,
 
     // Input
     pub seat: Seat<Self>,
@@ -114,8 +119,7 @@ pub struct LumoState {
 
     // Cursor xcursor real (fase 5.4).
     pub cursor: Option<crate::cursor::LoadedCursor>,
-    pub cursor_buffer:
-        Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
+    pub cursor_buffer: Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer>,
 
     // Fase 5.5 (A8): IPC + workspaces.
     pub ipc: IpcServer,
@@ -134,7 +138,6 @@ pub struct LumoState {
     /// xkb led mapping nao funcionou via SeatHandler — fallback direto.
     pub caps_lock_on: bool,
     pub num_lock_on: bool,
-
 
     // Fase 5.6 (A9): DRM session + watchdog.
     /// Sessao libseat (so existe no backend DRM). winit deixa None.
@@ -197,7 +200,11 @@ pub struct LumoState {
     pub ssd_windows: HashSet<WlSurface>,
     /// T1.1: menu popup de titlebar SSD ativo.
     /// None = sem menu. Some((window, cursor_pos, hover_idx)).
-    pub titlebar_menu: Option<(smithay::desktop::Window, smithay::utils::Point<i32, smithay::utils::Logical>, usize)>,
+    pub titlebar_menu: Option<(
+        smithay::desktop::Window,
+        smithay::utils::Point<i32, smithay::utils::Logical>,
+        usize,
+    )>,
     /// B1: gesture state acumulado (swipe + pinch).
     pub gesture: crate::input::TouchpadGestureState,
     /// W9.A: per-window open/close spring animation registry.
@@ -261,19 +268,16 @@ impl LumoState {
         let compositor_state = CompositorState::new::<Self>(&display_handle);
         let xdg_shell_state = XdgShellState::new::<Self>(&display_handle);
         let shm_state = ShmState::new::<Self>(&display_handle, vec![]);
-        let output_manager_state =
-            OutputManagerState::new_with_xdg_output::<Self>(&display_handle);
+        let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&display_handle);
         let mut seat_state = SeatState::new();
         let data_device_state = DataDeviceState::new::<Self>(&display_handle);
 
         let layer_shell_state = WlrLayerShellState::new::<Self>(&display_handle);
         let primary_selection_state = PrimarySelectionState::new::<Self>(&display_handle);
         let xdg_activation_state = XdgActivationState::new::<Self>(&display_handle);
-        let fractional_scale_state =
-            FractionalScaleManagerState::new::<Self>(&display_handle);
+        let fractional_scale_state = FractionalScaleManagerState::new::<Self>(&display_handle);
         let cursor_shape_state = CursorShapeManagerState::new::<Self>(&display_handle);
-        let xdg_toplevel_icon_manager =
-            XdgToplevelIconManager::new::<Self>(&display_handle);
+        let xdg_toplevel_icon_manager = XdgToplevelIconManager::new::<Self>(&display_handle);
 
         // DmabufState criado vazio. Global so registrado quando renderer
         // GPU sobe (winit::init OU drm::run).
@@ -401,10 +405,7 @@ impl LumoState {
     /// Salva sessao libseat no state. So chamado pelo backend DRM.
     /// Necessario pra handlers/input.rs intercept Ctrl+Alt+Fn -> change_vt.
     #[cfg(feature = "drm-backend")]
-    pub fn set_session(
-        &mut self,
-        session: smithay::backend::session::libseat::LibSeatSession,
-    ) {
+    pub fn set_session(&mut self, session: smithay::backend::session::libseat::LibSeatSession) {
         self.session = Some(session);
     }
 
@@ -414,25 +415,40 @@ impl LumoState {
         pos: Point<f64, Logical>,
     ) -> Option<(WlSurface, Point<i32, Logical>)> {
         let trace = std::env::var("LUMO_TRACE_POINTER").as_deref() == Ok("1");
-        if trace { eprintln!("[trace] surface_under pos=({:.1},{:.1})", pos.x, pos.y); }
+        if trace {
+            eprintln!("[trace] surface_under pos=({:.1},{:.1})", pos.x, pos.y);
+        }
         // A20.2: layer-shell PRIMEIRO (bar/dock/notif).
         // Z-order: Overlay > Top > Window > Bottom > Background.
         let outputs: Vec<_> = self.space.outputs().cloned().collect();
         for output in outputs.iter() {
             let map = layer_map_for_output(output);
-            for layer in map.layers_on(WlrLayer::Overlay).chain(map.layers_on(WlrLayer::Top)) {
+            for layer in map
+                .layers_on(WlrLayer::Overlay)
+                .chain(map.layers_on(WlrLayer::Top))
+            {
                 let geo = map.layer_geometry(layer).unwrap_or_default();
-                if trace { eprintln!("[trace] layer Top geo={:?} contains={}", geo, geo.to_f64().contains(pos)); }
+                if trace {
+                    eprintln!(
+                        "[trace] layer Top geo={:?} contains={}",
+                        geo,
+                        geo.to_f64().contains(pos)
+                    );
+                }
                 if geo.to_f64().contains(pos) {
                     let rel = pos - geo.loc.to_f64();
                     if let Some((surface, surf_off)) =
                         layer.surface_under(rel, WindowSurfaceType::ALL)
                     {
                         // INSTR.D: log input_region status quando layer surface eh hit.
-                        let region_status = smithay::wayland::compositor::with_states(&surface, |states| {
-                            let mut cs = states.cached_state.get::<smithay::wayland::compositor::SurfaceAttributes>();
-                            cs.current().input_region.is_some()
-                        });
+                        let region_status =
+                            smithay::wayland::compositor::with_states(&surface, |states| {
+                                let mut cs = states
+                                    .cached_state
+                                    .get::<smithay::wayland::compositor::SurfaceAttributes>(
+                                );
+                                cs.current().input_region.is_some()
+                            });
                         tracing::info!(
                             namespace = %layer.namespace(),
                             pos = ?(pos.x as i32, pos.y as i32),
@@ -440,7 +456,13 @@ impl LumoState {
                             input_region_set = region_status,
                             "INSTR.D layer surface_under hit"
                         );
-                        if trace { eprintln!("[trace] FOUND layer namespace={:?} surface_alive={}", layer.namespace(), true); }
+                        if trace {
+                            eprintln!(
+                                "[trace] FOUND layer namespace={:?} surface_alive={}",
+                                layer.namespace(),
+                                true
+                            );
+                        }
                         return Some((surface, geo.loc + surf_off));
                     } else if trace {
                         eprintln!("[trace] layer Top contains pos mas surface_under retornou None namespace={:?}", layer.namespace());
@@ -482,7 +504,10 @@ impl LumoState {
         // Layer-shell Bottom/Background (atras dos toplevels)
         for output in outputs.iter() {
             let map = layer_map_for_output(output);
-            for layer in map.layers_on(WlrLayer::Bottom).chain(map.layers_on(WlrLayer::Background)) {
+            for layer in map
+                .layers_on(WlrLayer::Bottom)
+                .chain(map.layers_on(WlrLayer::Background))
+            {
                 let geo = map.layer_geometry(layer).unwrap_or_default();
                 if geo.to_f64().contains(pos) {
                     let rel = pos - geo.loc.to_f64();
@@ -530,8 +555,14 @@ impl LumoState {
         let cascade = (n_open % 6) * CASCADE_STEP;
         let mut x = cx - DEFAULT_W / 2 + cascade;
         let mut y = cy - DEFAULT_H / 2 + cascade;
-        x = x.clamp(usable.loc.x + 8, usable.loc.x + usable.size.w - DEFAULT_W - 8);
-        y = y.clamp(usable.loc.y + SSD_TITLEBAR_H + 8, usable.loc.y + usable.size.h - DEFAULT_H - 8);
+        x = x.clamp(
+            usable.loc.x + 8,
+            usable.loc.x + usable.size.w - DEFAULT_W - 8,
+        );
+        y = y.clamp(
+            usable.loc.y + SSD_TITLEBAR_H + 8,
+            usable.loc.y + usable.size.h - DEFAULT_H - 8,
+        );
         (x, y).into()
     }
 
@@ -566,14 +597,16 @@ impl LumoState {
                 tracing::info!(?mode, "L6: ThemeReloaded broadcast");
                 self.ipc.broadcast(&LumoEvent::ThemeReloaded { mode });
             }
-            LumoCommand::CloseFocusedToplevel => { eprintln!("[wm] CloseFocusedToplevel recv");
+            LumoCommand::CloseFocusedToplevel => {
+                eprintln!("[wm] CloseFocusedToplevel recv");
                 // W32.6: snap close instantaneo (igual btn X).
                 // W34.20: fallback last xdg_toplevel se kb sem focus (click via bar layer-shell
                 // pode shiftar keyboard focus pra bar surface, quebrando current_focus()).
                 use smithay::wayland::seat::WaylandFocus;
                 let kb = self.keyboard.clone();
                 let win = if let Some(focused) = kb.current_focus() {
-                    self.space.elements()
+                    self.space
+                        .elements()
                         .find(|w| w.wl_surface().map(|s| *s == focused).unwrap_or(false))
                         .cloned()
                 } else {
@@ -611,19 +644,24 @@ impl LumoState {
             }
             LumoCommand::ToggleMaximize => {
                 // W17.1: toggle fullscreen no toplevel focado.
-                use smithay::wayland::seat::WaylandFocus;
                 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
+                use smithay::wayland::seat::WaylandFocus;
                 let kb = self.keyboard.clone();
                 if let Some(focused) = kb.current_focus() {
-                    let win = self.space.elements()
+                    let win = self
+                        .space
+                        .elements()
                         .find(|w| w.wl_surface().map(|s| *s == focused).unwrap_or(false))
                         .cloned();
                     if let Some(w) = win {
                         if let Some(tl) = w.toplevel() {
                             let is_fs = tl.current_state().states.contains(XdgState::Fullscreen);
                             tl.with_pending_state(|st| {
-                                if is_fs { st.states.unset(XdgState::Fullscreen); }
-                                else { st.states.set(XdgState::Fullscreen); }
+                                if is_fs {
+                                    st.states.unset(XdgState::Fullscreen);
+                                } else {
+                                    st.states.set(XdgState::Fullscreen);
+                                }
                             });
                             tl.send_configure();
                             tracing::info!(was_fs = is_fs, "W17.1: ToggleMaximize IPC");
@@ -640,13 +678,18 @@ impl LumoState {
                 // propaga xdg_toplevel.set_app_id a tempo do focus_changed; este
                 // path bypassa e seta cache + broadcast pro bar render pills.
                 tracing::info!(%app_id, %title, pid, "W34.10: AppActivated IPC");
-                eprintln!("[wm] W34.10 AppActivated app_id={:?} title={:?} pid={}", app_id, title, pid);
+                eprintln!(
+                    "[wm] W34.10 AppActivated app_id={:?} title={:?} pid={}",
+                    app_id, title, pid
+                );
                 if !app_id.is_empty() {
                     self.last_active_app = Some((app_id.clone(), title.clone(), pid));
                     // W34.13: cache pid -> app_id pra resolver focus_changed empty later.
-                    self.pid_app_cache.insert(pid, (app_id.clone(), title.clone()));
+                    self.pid_app_cache
+                        .insert(pid, (app_id.clone(), title.clone()));
                 }
-                self.ipc.broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
+                self.ipc
+                    .broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
             }
             LumoCommand::AppDeactivated => {
                 // W34.11: appsd fechou todas janelas. Bar limpa pills.
@@ -720,7 +763,10 @@ impl LumoState {
             .elements()
             .map(|w| {
                 let pos = self.space.element_location(w).unwrap_or_default();
-                WindowEntry { window: w.clone(), cached_pos: pos }
+                WindowEntry {
+                    window: w.clone(),
+                    cached_pos: pos,
+                }
             })
             .collect();
         for entry in &current_windows {
@@ -731,16 +777,17 @@ impl LumoState {
         // Restaura toplevels do workspace destino.
         let to_restore = self.workspace_vault.show_workspace(to);
         for entry in to_restore {
-            self.space.map_element(entry.window, entry.cached_pos, false);
+            self.space
+                .map_element(entry.window, entry.cached_pos, false);
         }
 
         self.active_workspace = to;
         tracing::info!(prev, current = to, "switch workspace W8.B");
 
         // Inicia animacao de slide (W8.B).
-        self.workspace_transition = Some(
-            crate::workspace::WorkspaceTransition::new(prev, to, duration)
-        );
+        self.workspace_transition = Some(crate::workspace::WorkspaceTransition::new(
+            prev, to, duration,
+        ));
 
         let ev = IpcServer::workspaces_event(self.active_workspace, MAX_WORKSPACES);
         self.ipc.broadcast(&ev);
@@ -749,7 +796,9 @@ impl LumoState {
     /// W12.A: returns output dimensions (w, h) in logical pixels.
     /// Falls back to 1920x1080 if no output is registered.
     pub fn output_dimensions(&self) -> (i32, i32) {
-        self.space.outputs().next()
+        self.space
+            .outputs()
+            .next()
             .and_then(|o| {
                 let mode = o.current_mode()?;
                 Some((mode.size.w, mode.size.h))
@@ -778,7 +827,10 @@ impl LumoState {
         let pos = self.space.element_location(&window).unwrap_or_default();
         self.space.unmap_elem(&window);
         use crate::workspace::WindowEntry;
-        let entry = WindowEntry { window, cached_pos: pos };
+        let entry = WindowEntry {
+            window,
+            cached_pos: pos,
+        };
         self.workspace_vault
             .vault
             .entry(to)
@@ -809,7 +861,10 @@ impl XdgDecorationHandler for LumoState {
         toplevel.send_configure();
         let surf = toplevel.wl_surface().clone();
         self.ssd_windows.insert(surf);
-        tracing::debug!("xdg_decoration: request_mode -> forced ServerSide (was {:?})", mode);
+        tracing::debug!(
+            "xdg_decoration: request_mode -> forced ServerSide (was {:?})",
+            mode
+        );
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {
@@ -821,7 +876,6 @@ impl XdgDecorationHandler for LumoState {
         tracing::debug!("xdg_decoration: unset_mode -> ServerSide");
     }
 }
-
 
 smithay::delegate_xdg_decoration!(LumoState);
 // W13.C: delegate fifo + commit_timing
@@ -874,7 +928,6 @@ pub fn init_socket(
 
     Ok(socket_name)
 }
-
 
 // ============================================================
 // W6.C: splash boot animation

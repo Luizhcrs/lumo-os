@@ -25,18 +25,51 @@ pub struct DockConfig {
 
 fn default_slots() -> Vec<SlotConfig> {
     vec![
-        SlotConfig { label: "Home".into(),          exec: "lumo-files".into(),   process: "lumo-files".into(),   icon: "home".into() },
-        SlotConfig { label: "Calculator".into(),     exec: "galculator".into(),   process: "galculator".into(),   icon: "calc".into() },
-        SlotConfig { label: "Settings".into(),       exec: "lumo-settings".into(),process: "lumo-settings".into(),icon: "settings".into() },
-        SlotConfig { label: "Browser".into(),        exec: "firefox".into(),      process: "firefox".into(),      icon: "browser".into() },
-        SlotConfig { label: "Terminal".into(),       exec: "lumo-term".into(),    process: "alacritty".into(),    icon: "term".into() },
-        SlotConfig { label: "Calendar".into(),       exec: "lumo-calendar".into(),process: "lumo-calendar".into(),icon: "calendar".into() },
+        SlotConfig {
+            label: "Home".into(),
+            exec: "lumo-files".into(),
+            process: "lumo-files".into(),
+            icon: "home".into(),
+        },
+        SlotConfig {
+            label: "Calculator".into(),
+            exec: "galculator".into(),
+            process: "galculator".into(),
+            icon: "calc".into(),
+        },
+        SlotConfig {
+            label: "Settings".into(),
+            exec: "lumo-settings".into(),
+            process: "lumo-settings".into(),
+            icon: "settings".into(),
+        },
+        SlotConfig {
+            label: "Browser".into(),
+            exec: "firefox".into(),
+            process: "firefox".into(),
+            icon: "browser".into(),
+        },
+        SlotConfig {
+            label: "Terminal".into(),
+            exec: "lumo-term".into(),
+            process: "alacritty".into(),
+            icon: "term".into(),
+        },
+        SlotConfig {
+            label: "Calendar".into(),
+            exec: "lumo-calendar".into(),
+            process: "lumo-calendar".into(),
+            icon: "calendar".into(),
+        },
     ]
 }
 
 impl Default for DockConfig {
     fn default() -> Self {
-        Self { slots: default_slots(), autohide: false }
+        Self {
+            slots: default_slots(),
+            autohide: false,
+        }
     }
 }
 

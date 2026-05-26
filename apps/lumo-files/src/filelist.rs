@@ -37,7 +37,11 @@ pub struct FileList {
 
 impl FileList {
     pub fn new(entries: Vec<PathBuf>) -> Self {
-        let mut s = Self { all_entries: entries.clone(), entries, ..Default::default() };
+        let mut s = Self {
+            all_entries: entries.clone(),
+            entries,
+            ..Default::default()
+        };
         s.sort(SortBy::Name, true);
         s
     }
@@ -63,27 +67,46 @@ impl FileList {
                 return dir_ord;
             }
             let ord = match by {
-                SortBy::Name => {
-                    a.file_name().unwrap_or_default().to_ascii_lowercase()
-                        .cmp(&b.file_name().unwrap_or_default().to_ascii_lowercase())
-                }
+                SortBy::Name => a
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_ascii_lowercase()
+                    .cmp(&b.file_name().unwrap_or_default().to_ascii_lowercase()),
                 SortBy::Size => {
                     let sa = a.metadata().map(|m| m.len()).unwrap_or(0);
                     let sb = b.metadata().map(|m| m.len()).unwrap_or(0);
                     sa.cmp(&sb)
                 }
                 SortBy::ModifiedDate => {
-                    let ta = a.metadata().and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
-                    let tb = b.metadata().and_then(|m| m.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
+                    let ta = a
+                        .metadata()
+                        .and_then(|m| m.modified())
+                        .unwrap_or(SystemTime::UNIX_EPOCH);
+                    let tb = b
+                        .metadata()
+                        .and_then(|m| m.modified())
+                        .unwrap_or(SystemTime::UNIX_EPOCH);
                     ta.cmp(&tb)
                 }
                 SortBy::Type => {
-                    let ea = a.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-                    let eb = b.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
+                    let ea = a
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_ascii_lowercase();
+                    let eb = b
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_ascii_lowercase();
                     ea.cmp(&eb)
                 }
             };
-            if ascending { ord } else { ord.reverse() }
+            if ascending {
+                ord
+            } else {
+                ord.reverse()
+            }
         });
         self.selected.clear();
         self.last_clicked = None;
@@ -95,7 +118,8 @@ impl FileList {
             self.entries = self.all_entries.clone();
         } else {
             let q = query.to_ascii_lowercase();
-            self.entries = self.all_entries
+            self.entries = self
+                .all_entries
                 .iter()
                 .filter(|p| {
                     p.file_name()
@@ -130,7 +154,11 @@ impl FileList {
     /// Shift+click: seleciona range do last_clicked ate idx.
     pub fn shift_click(&mut self, idx: usize) {
         let from = self.last_clicked.unwrap_or(idx);
-        let (lo, hi) = if from <= idx { (from, idx) } else { (idx, from) };
+        let (lo, hi) = if from <= idx {
+            (from, idx)
+        } else {
+            (idx, from)
+        };
         for i in lo..=hi {
             self.selected.insert(i);
         }
@@ -204,7 +232,8 @@ impl FileList {
     /// Retorna data modificada formatada (YYYY-MM-DD HH:MM) usando chrono.
     pub fn human_modified(path: &PathBuf) -> String {
         use std::time::UNIX_EPOCH;
-        let unix_secs = path.metadata()
+        let unix_secs = path
+            .metadata()
             .and_then(|m| m.modified())
             .ok()
             .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
@@ -239,11 +268,19 @@ impl FileList {
         }
         if secs < 86_400 {
             let h = secs / 3600;
-            return if h == 1 { "1 hora atras".into() } else { format!("{h} horas atras") };
+            return if h == 1 {
+                "1 hora atras".into()
+            } else {
+                format!("{h} horas atras")
+            };
         }
         if secs < 86_400 * 7 {
             let d = secs / 86_400;
-            return if d == 1 { "ontem".into() } else { format!("{d} dias atras") };
+            return if d == 1 {
+                "ontem".into()
+            } else {
+                format!("{d} dias atras")
+            };
         }
         let unix_secs = modified
             .duration_since(UNIX_EPOCH)
@@ -272,7 +309,9 @@ mod tests {
     use std::path::PathBuf;
 
     fn make_list(n: usize) -> FileList {
-        let entries: Vec<PathBuf> = (0..n).map(|i| PathBuf::from(format!("/tmp/file{}.txt", i))).collect();
+        let entries: Vec<PathBuf> = (0..n)
+            .map(|i| PathBuf::from(format!("/tmp/file{}.txt", i)))
+            .collect();
         let mut fl = FileList::default();
         fl.entries = entries.clone();
         fl.all_entries = entries;

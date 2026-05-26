@@ -140,11 +140,9 @@ impl FocusManager {
         }
         let current = kb.current_focus();
         let current_idx = current.as_ref().and_then(|focused| {
-            windows.iter().position(|w| {
-                w.wl_surface()
-                    .map(|s| *s == *focused)
-                    .unwrap_or(false)
-            })
+            windows
+                .iter()
+                .position(|w| w.wl_surface().map(|s| *s == *focused).unwrap_or(false))
         });
         let len = windows.len() as isize;
         let next_idx = match current_idx {

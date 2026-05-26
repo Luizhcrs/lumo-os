@@ -18,31 +18,31 @@ impl Step {
 
     pub fn index(self) -> usize {
         match self {
-            Step::Welcome  => 0,
+            Step::Welcome => 0,
             Step::Language => 1,
-            Step::Account  => 2,
-            Step::Wifi     => 3,
-            Step::Done     => 4,
+            Step::Account => 2,
+            Step::Wifi => 3,
+            Step::Done => 4,
         }
     }
 
     pub fn next(self) -> Self {
         match self {
-            Step::Welcome  => Step::Language,
+            Step::Welcome => Step::Language,
             Step::Language => Step::Account,
-            Step::Account  => Step::Wifi,
-            Step::Wifi     => Step::Done,
-            Step::Done     => Step::Done,
+            Step::Account => Step::Wifi,
+            Step::Wifi => Step::Done,
+            Step::Done => Step::Done,
         }
     }
 
     pub fn label(self) -> &'static str {
         match self {
-            Step::Welcome  => "Bem-vindo",
+            Step::Welcome => "Bem-vindo",
             Step::Language => "Idioma",
-            Step::Account  => "Conta",
-            Step::Wifi     => "Wi-Fi",
-            Step::Done     => "Pronto",
+            Step::Account => "Conta",
+            Step::Wifi => "Wi-Fi",
+            Step::Done => "Pronto",
         }
     }
 }
@@ -75,9 +75,9 @@ impl Locale {
 /// Rede Wi-Fi descoberta via nmcli.
 #[derive(Debug, Clone)]
 pub struct WifiNetwork {
-    pub ssid:      String,
-    pub signal:    u8,
-    pub secured:   bool,
+    pub ssid: String,
+    pub signal: u8,
+    pub secured: bool,
     pub connected: bool,
 }
 
@@ -111,7 +111,11 @@ impl AccountState {
         if self.username.len() < 3 {
             return Err("Nome de usuario precisa ter pelo menos 3 caracteres.".into());
         }
-        if !self.username.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        if !self
+            .username
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
             return Err("Nome de usuario: apenas letras, numeros, _ e -.".into());
         }
         if self.password.len() < 6 {

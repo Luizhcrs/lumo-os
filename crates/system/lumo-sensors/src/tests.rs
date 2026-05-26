@@ -51,7 +51,9 @@ mod battery_tests {
         use crate::SensorError;
         let pct: u8 = 0;
         let result: Result<(), SensorError> = if !(1..=100).contains(&pct) {
-            Err(SensorError::OutOfRange(format!("charge limit {pct} out of 1-100")))
+            Err(SensorError::OutOfRange(format!(
+                "charge limit {pct} out of 1-100"
+            )))
         } else {
             Ok(())
         };
@@ -64,7 +66,9 @@ mod battery_tests {
         let pct: u8 = 101; // saturates to 100 due to u8, so test with OutOfRange logic inline
         let pct_u32: u32 = 200; // simulate if it were u32
         let result: Result<(), SensorError> = if !(1..=100).contains(&pct_u32) {
-            Err(SensorError::OutOfRange(format!("charge limit {pct_u32} out of 1-100")))
+            Err(SensorError::OutOfRange(format!(
+                "charge limit {pct_u32} out of 1-100"
+            )))
         } else {
             Ok(())
         };
@@ -82,7 +86,10 @@ mod platform_tests {
         assert_eq!(Profile::from_sysfs("low-power"), Some(Profile::LowPower));
         assert_eq!(Profile::from_sysfs("quiet"), Some(Profile::Quiet));
         assert_eq!(Profile::from_sysfs("balanced"), Some(Profile::Balanced));
-        assert_eq!(Profile::from_sysfs("performance"), Some(Profile::Performance));
+        assert_eq!(
+            Profile::from_sysfs("performance"),
+            Some(Profile::Performance)
+        );
         assert_eq!(Profile::from_sysfs("unknown-mode"), None);
     }
 
@@ -107,7 +114,12 @@ mod platform_tests {
 
     #[test]
     fn cycle_wraps_from_last() {
-        let avail = vec![Profile::LowPower, Profile::Quiet, Profile::Balanced, Profile::Performance];
+        let avail = vec![
+            Profile::LowPower,
+            Profile::Quiet,
+            Profile::Balanced,
+            Profile::Performance,
+        ];
         let last = Profile::Performance;
         let idx = avail.iter().position(|p| *p == last).unwrap();
         let next = avail[(idx + 1) % avail.len()];
@@ -116,7 +128,12 @@ mod platform_tests {
 
     #[test]
     fn profile_sysfs_roundtrip() {
-        for p in [Profile::LowPower, Profile::Quiet, Profile::Balanced, Profile::Performance] {
+        for p in [
+            Profile::LowPower,
+            Profile::Quiet,
+            Profile::Balanced,
+            Profile::Performance,
+        ] {
             let s = p.as_sysfs_str();
             let parsed = Profile::from_sysfs(s).expect("roundtrip failed");
             assert_eq!(parsed, p);
@@ -126,7 +143,7 @@ mod platform_tests {
 
 #[cfg(test)]
 mod thermal_tests {
-    use crate::thermal::{ThermalKind};
+    use crate::thermal::ThermalKind;
 
     fn kind_from(s: &str) -> ThermalKind {
         let lower = s.to_ascii_lowercase();
@@ -312,8 +329,8 @@ mod extra_thermal_tests {
 #[cfg(test)]
 mod charge_policy_tests {
     use crate::battery::ChargePolicy;
-    use tempfile::TempDir;
     use std::path::PathBuf;
+    use tempfile::TempDir;
 
     fn write_file(dir: &TempDir, name: &str, value: &str) -> PathBuf {
         let p = dir.path().join(name);
@@ -335,7 +352,9 @@ mod charge_policy_tests {
         use crate::SensorError;
         let pct: u8 = 80;
         let result: Result<(), SensorError> = if !(1..=100).contains(&pct) {
-            Err(SensorError::OutOfRange(format!("charge limit {pct} out of 1-100")))
+            Err(SensorError::OutOfRange(format!(
+                "charge limit {pct} out of 1-100"
+            )))
         } else {
             Ok(())
         };
@@ -345,7 +364,10 @@ mod charge_policy_tests {
     #[test]
     fn apply_policy_100_is_valid() {
         let pct: u8 = 100;
-        assert!((1..=100).contains(&pct), "balance_target=100 must be in valid range");
+        assert!(
+            (1..=100).contains(&pct),
+            "balance_target=100 must be in valid range"
+        );
     }
 
     #[test]
@@ -371,16 +393,27 @@ mod charge_policy_tests {
     #[test]
     fn apply_policy_writes_correct_value_to_sysfs() {
         let dir = TempDir::new().unwrap();
-        let threshold_path = write_file(&dir, "charge_control_end_threshold", "100
-");
+        let threshold_path = write_file(
+            &dir,
+            "charge_control_end_threshold",
+            "100
+",
+        );
         std::fs::write(&threshold_path, "80").unwrap();
         let written = std::fs::read_to_string(&threshold_path).unwrap();
-        assert_eq!(written.trim(), "80", "apply_policy(80) must write 80 to sysfs");
+        assert_eq!(
+            written.trim(),
+            "80",
+            "apply_policy(80) must write 80 to sysfs"
+        );
     }
 
     #[test]
     fn schedule_balance_returns_correct_duration() {
-        let policy = ChargePolicy { balance_duration_hours: 12, ..ChargePolicy::default() };
+        let policy = ChargePolicy {
+            balance_duration_hours: 12,
+            ..ChargePolicy::default()
+        };
         let expected_secs = 12u64 * 3600;
         let duration = std::time::Duration::from_secs(policy.balance_duration_hours as u64 * 3600);
         assert_eq!(duration.as_secs(), expected_secs);
@@ -389,8 +422,11 @@ mod charge_policy_tests {
     #[test]
     fn balance_cycle_target_above_limit() {
         let policy = ChargePolicy::default();
-        assert!(policy.balance_target > policy.limit_percent,
+        assert!(
+            policy.balance_target > policy.limit_percent,
             "balance_target ({}) must be > limit_percent ({})",
-            policy.balance_target, policy.limit_percent);
+            policy.balance_target,
+            policy.limit_percent
+        );
     }
 }

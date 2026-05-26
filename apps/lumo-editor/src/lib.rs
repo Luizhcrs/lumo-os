@@ -8,7 +8,6 @@ use app::App;
 use iced::{Settings, Size};
 
 pub fn run() -> iced::Result {
-
     let args: Vec<String> = std::env::args().collect();
     let initial_path = args.get(1).cloned();
 

@@ -12,8 +12,8 @@
 //! wl_keyboard.key events no handler de teclado.
 //! Buffer de texto acumulado aqui.
 
-use tiny_skia::PixmapMut;
 use lumo_foundation::LumoColors;
+use tiny_skia::PixmapMut;
 
 use crate::bar::fonts::{draw_text, measure_text, opaque, rgba_hex};
 use crate::bar::icons::fill_rrect;
@@ -82,8 +82,15 @@ pub fn draw_password_modal(
     }
 
     // Backdrop semi-transparente (60% preto sobre toda surface).
-    fill_rrect(canvas, 0.0, 0.0, surface_w, surface_h, 0.0,
-        tiny_skia::Color::from_rgba8(0, 0, 0, 153));
+    fill_rrect(
+        canvas,
+        0.0,
+        0.0,
+        surface_w,
+        surface_h,
+        0.0,
+        tiny_skia::Color::from_rgba8(0, 0, 0, 153),
+    );
 
     // Caixa modal centrada.
     let mx = ((surface_w - MODAL_W) / 2.0).round();
@@ -145,18 +152,39 @@ pub fn draw_password_modal(
     let masked: String = "*".repeat(state.buffer.len().min(40));
     if state.buffer.is_empty() {
         let placeholder_color = rgba_hex(palette.pill_fg, 0x50);
-        draw_text(canvas, mx + pad + 8.0, text_y,
-            "Senha Wi-Fi", FONT_DROPDOWN_BODY, placeholder_color, false);
+        draw_text(
+            canvas,
+            mx + pad + 8.0,
+            text_y,
+            "Senha Wi-Fi",
+            FONT_DROPDOWN_BODY,
+            placeholder_color,
+            false,
+        );
     } else {
-        draw_text(canvas, mx + pad + 8.0, text_y,
-            &masked, FONT_DROPDOWN_BODY, fg, false);
+        draw_text(
+            canvas,
+            mx + pad + 8.0,
+            text_y,
+            &masked,
+            FONT_DROPDOWN_BODY,
+            fg,
+            false,
+        );
     }
 
     // Cursor de texto (linha vertical, sempre visivel neste frame).
     let cursor_base_x = mx + pad + 8.0;
     let cursor_offset = measure_text(&masked, FONT_DROPDOWN_BODY, false);
-    fill_rrect(canvas, cursor_base_x + cursor_offset + 2.0, cy + 4.0,
-        1.5, input_h - 8.0, 0.0, accent);
+    fill_rrect(
+        canvas,
+        cursor_base_x + cursor_offset + 2.0,
+        cy + 4.0,
+        1.5,
+        input_h - 8.0,
+        0.0,
+        accent,
+    );
 
     cy += input_h + 12.0;
 
@@ -170,9 +198,15 @@ pub fn draw_password_modal(
     fill_rrect(canvas, btn_connect_x, cy, btn_w, btn_h, 8.0, accent);
     let lbl = "Conectar";
     let lw = measure_text(lbl, FONT_DROPDOWN_BODY, true);
-    draw_text(canvas, btn_connect_x + (btn_w - lw) / 2.0,
+    draw_text(
+        canvas,
+        btn_connect_x + (btn_w - lw) / 2.0,
         cy + (btn_h - FONT_DROPDOWN_BODY * 1.2) / 2.0,
-        lbl, FONT_DROPDOWN_BODY, opaque(0xFFFFFF), true);
+        lbl,
+        FONT_DROPDOWN_BODY,
+        opaque(0xFFFFFF),
+        true,
+    );
     hits.confirm_rect = Some((btn_connect_x, cy, btn_w, btn_h));
 
     // [Cancelar] (sep color).
@@ -180,9 +214,15 @@ pub fn draw_password_modal(
     fill_rrect(canvas, btn_cancel_x, cy, btn_w, btn_h, 8.0, sep);
     let lbl2 = "Cancelar";
     let lw2 = measure_text(lbl2, FONT_DROPDOWN_BODY, false);
-    draw_text(canvas, btn_cancel_x + (btn_w - lw2) / 2.0,
+    draw_text(
+        canvas,
+        btn_cancel_x + (btn_w - lw2) / 2.0,
         cy + (btn_h - FONT_DROPDOWN_BODY * 1.2) / 2.0,
-        lbl2, FONT_DROPDOWN_BODY, fg_dim, false);
+        lbl2,
+        FONT_DROPDOWN_BODY,
+        fg_dim,
+        false,
+    );
     hits.cancel_rect = Some((btn_cancel_x, cy, btn_w, btn_h));
 
     hits

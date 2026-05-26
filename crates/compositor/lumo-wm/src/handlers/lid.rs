@@ -70,7 +70,11 @@ pub struct LidHandlerState {
     pub suspended: bool,
 }
 
-fn handle_lid_event(event: LidEvent, _state: &mut LumoState, lid: &Arc<std::sync::Mutex<LidHandlerState>>) {
+fn handle_lid_event(
+    event: LidEvent,
+    _state: &mut LumoState,
+    lid: &Arc<std::sync::Mutex<LidHandlerState>>,
+) {
     let mut s = match lid.lock() {
         Ok(g) => g,
         Err(_) => return,
@@ -90,7 +94,10 @@ fn handle_lid_event(event: LidEvent, _state: &mut LumoState, lid: &Arc<std::sync
         }
         LidEvent::Open => {
             if let Some(closed_at) = s.closed_at.take() {
-                tracing::info!("[lid] opened after {}s, cancelling suspend", closed_at.elapsed().as_secs());
+                tracing::info!(
+                    "[lid] opened after {}s, cancelling suspend",
+                    closed_at.elapsed().as_secs()
+                );
                 // Restore brightness.
                 if let Some(saved) = s.saved_brightness.take() {
                     set_brightness_pct(saved.max(10)); // min 10% so screen is visible

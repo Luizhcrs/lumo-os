@@ -5,10 +5,10 @@ use serde::{Deserialize, Serialize};
 /// Entrada de aplicativo no catalogo.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AppEntry {
-    pub name:        String,
-    pub pkg:         String,
-    pub icon:        String,
-    pub category:    String,
+    pub name: String,
+    pub pkg: String,
+    pub icon: String,
+    pub category: String,
     pub description: String,
 }
 
@@ -29,7 +29,9 @@ impl Catalog {
     /// Filtra por categoria. Case-insensitive.
     pub fn by_category<'a>(&'a self, cat: &str) -> impl Iterator<Item = &'a AppEntry> {
         let cat = cat.to_ascii_lowercase();
-        self.apps.iter().filter(move |a| a.category.to_ascii_lowercase() == cat)
+        self.apps
+            .iter()
+            .filter(move |a| a.category.to_ascii_lowercase() == cat)
     }
 
     /// Busca por nome ou descricao. Case-insensitive.

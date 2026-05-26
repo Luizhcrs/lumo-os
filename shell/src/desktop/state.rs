@@ -61,7 +61,9 @@ pub fn swash_cache() -> &'static Mutex<SwashCache> {
 
 fn load_extra_fonts(fs: &mut FontSystem) {
     let candidates = [
-        std::env::var("HOME").ok().map(|h| format!("{}/.local/share/fonts", h)),
+        std::env::var("HOME")
+            .ok()
+            .map(|h| format!("{}/.local/share/fonts", h)),
         std::env::var("HOME").ok().map(|h| format!("{}/.fonts", h)),
         Some("/usr/share/fonts/geist-mono".to_string()),
         Some("/usr/local/share/fonts".to_string()),
@@ -72,7 +74,9 @@ fn load_extra_fonts(fs: &mut FontSystem) {
 }
 
 fn walk_load(fs: &mut FontSystem, dir: &std::path::Path) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let p = entry.path();
         if p.is_dir() {
@@ -99,16 +103,16 @@ fn walk_load(fs: &mut FontSystem, dir: &std::path::Path) {
 
 fn pick_font_family(fs: &FontSystem) -> String {
     // A29: desktop renderiza SO menus (UI). Geist Sans first.
-    let preferred = [
-        "Geist",
-        "Inter",
-        "JetBrainsMono Nerd Font",
-        "sans-serif",
-    ];
+    let preferred = ["Geist", "Inter", "JetBrainsMono Nerd Font", "sans-serif"];
     let faces: Vec<String> = fs
         .db()
         .faces()
-        .flat_map(|f| f.families.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>())
+        .flat_map(|f| {
+            f.families
+                .iter()
+                .map(|(n, _)| n.clone())
+                .collect::<Vec<_>>()
+        })
         .collect();
     for p in preferred {
         if faces.iter().any(|f| f.eq_ignore_ascii_case(p)) {
@@ -126,7 +130,10 @@ fn pick_font_family(fs: &FontSystem) -> String {
 }
 
 pub fn current_family() -> &'static str {
-    FONT_FAMILY.get().map(|s| s.as_str()).unwrap_or("sans-serif")
+    FONT_FAMILY
+        .get()
+        .map(|s| s.as_str())
+        .unwrap_or("sans-serif")
 }
 
 // ============================================================
@@ -170,18 +177,15 @@ pub fn fill_rrect(canvas: &mut PixmapMut, x: f32, y: f32, w: f32, h: f32, r: f32
     }
 }
 
-pub fn draw_text(
-    canvas: &mut PixmapMut,
-    x: f32,
-    y: f32,
-    text: &str,
-    size: f32,
-    color: Color,
-) {
+pub fn draw_text(canvas: &mut PixmapMut, x: f32, y: f32, text: &str, size: f32, color: Color) {
     let fs_mutex = font_system();
     let sc_mutex = swash_cache();
-    let mut fs = fs_mutex.lock().expect("FontSystem mutex: sem poisoning esperado");
-    let mut sc = sc_mutex.lock().expect("SwashCache mutex: sem poisoning esperado");
+    let mut fs = fs_mutex
+        .lock()
+        .expect("FontSystem mutex: sem poisoning esperado");
+    let mut sc = sc_mutex
+        .lock()
+        .expect("SwashCache mutex: sem poisoning esperado");
     let metrics = Metrics::new(size, size * 1.4);
     let mut buffer = CosmicBuffer::new(&mut fs, metrics);
     let family_name = current_family().to_string();
@@ -239,7 +243,10 @@ pub fn connect_ipc() -> Option<UnixStream> {
             Some(s)
         }
         Err(e) => {
-            eprintln!("[lumo-desktop] IPC nao conectou ({}): area de trabalho passiva", e);
+            eprintln!(
+                "[lumo-desktop] IPC nao conectou ({}): area de trabalho passiva",
+                e
+            );
             None
         }
     }
@@ -249,7 +256,10 @@ pub fn send_close_dropdowns(stream: &mut Option<UnixStream>) {
     let Some(s) = stream.as_mut() else { return };
     let mut payload = match serde_json::to_string(&LumoCommand::CloseDropdowns) {
         Ok(s) => s,
-        Err(e) => { eprintln!("[lumo-desktop] serialize CloseDropdowns falhou: {e}"); return; }
+        Err(e) => {
+            eprintln!("[lumo-desktop] serialize CloseDropdowns falhou: {e}");
+            return;
+        }
     };
     payload.push('\n');
     if let Err(e) = s.write_all(payload.as_bytes()) {
@@ -262,7 +272,10 @@ pub fn send_close_dropdowns(stream: &mut Option<UnixStream>) {
 
 /// A40: drena eventos do compositor. Retorna (alive, close_menu, open_selected).
 /// Returns (alive, close_menu, open_selected, theme_reloaded).
-pub fn drain_ipc_events(stream: &mut UnixStream, rx_buf: &mut Vec<u8>) -> (bool, bool, bool, Option<lumo_ipc::ThemeMode>) {
+pub fn drain_ipc_events(
+    stream: &mut UnixStream,
+    rx_buf: &mut Vec<u8>,
+) -> (bool, bool, bool, Option<lumo_ipc::ThemeMode>) {
     let mut tmp = [0u8; 256];
     let mut alive = true;
     let mut close_menu = false;
@@ -270,10 +283,16 @@ pub fn drain_ipc_events(stream: &mut UnixStream, rx_buf: &mut Vec<u8>) -> (bool,
     let mut theme_reloaded: Option<lumo_ipc::ThemeMode> = None;
     loop {
         match stream.read(&mut tmp) {
-            Ok(0) => { alive = false; break; }
+            Ok(0) => {
+                alive = false;
+                break;
+            }
             Ok(n) => rx_buf.extend_from_slice(&tmp[..n]),
             Err(e) if e.kind() == ErrorKind::WouldBlock => break,
-            Err(_) => { alive = false; break; }
+            Err(_) => {
+                alive = false;
+                break;
+            }
         }
     }
     while let Some(nl) = rx_buf.iter().position(|b| *b == b'\n') {

@@ -2,6 +2,8 @@
 
 use std::time::{Duration, Instant};
 
+use smithay_client_toolkit::reexports::client::{globals::registry_queue_init, Connection};
+use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::{
     compositor::CompositorState,
     delegate_compositor, delegate_layer, delegate_output, delegate_pointer, delegate_registry,
@@ -11,11 +13,6 @@ use smithay_client_toolkit::{
     seat::SeatState,
     shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerShell},
     shm::{slot::SlotPool, Shm},
-};
-use smithay_client_toolkit::shell::WaylandSurface;
-use smithay_client_toolkit::reexports::client::{
-    globals::registry_queue_init,
-    Connection,
 };
 
 use lumo_foundation::current_colors;
@@ -41,8 +38,7 @@ pub fn run() {
     let _ = swash_cache();
 
     let conn = Connection::connect_to_env().expect("conectar wayland");
-    let (globals, mut queue) =
-        registry_queue_init::<LumoDesktop>(&conn).expect("registry init");
+    let (globals, mut queue) = registry_queue_init::<LumoDesktop>(&conn).expect("registry init");
     let qh = queue.handle();
 
     let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor nao disponivel");
@@ -63,8 +59,8 @@ pub fn run() {
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
 
-    let pool = SlotPool::new(OUTPUT_W as usize * OUTPUT_H as usize * 4 * 2, &shm)
-        .expect("SlotPool init");
+    let pool =
+        SlotPool::new(OUTPUT_W as usize * OUTPUT_H as usize * 4 * 2, &shm).expect("SlotPool init");
 
     let mut state = LumoDesktop {
         registry: RegistryState::new(&globals),
@@ -79,7 +75,12 @@ pub fn run() {
         first_configured: false,
         pointer: None,
         pointer_pos: None,
-        menu: MenuActive { visible: false, x: 0.0, y: 0.0, hover_idx: usize::MAX },
+        menu: MenuActive {
+            visible: false,
+            x: 0.0,
+            y: 0.0,
+            hover_idx: usize::MAX,
+        },
         ipc_stream: connect_ipc(),
         ipc_rx_buf: Vec::with_capacity(256),
         last_click_at: None,
@@ -98,7 +99,11 @@ pub fn run() {
             use std::os::fd::AsFd;
             let fd = conn.as_fd();
             let mut pfd = [nix::poll::PollFd::new(fd, nix::poll::PollFlags::POLLIN)];
-            let _ = nix::poll::poll(&mut pfd, nix::poll::PollTimeout::try_from(50i32).expect("50 e literal valido para PollTimeout"));
+            let _ = nix::poll::poll(
+                &mut pfd,
+                nix::poll::PollTimeout::try_from(50i32)
+                    .expect("50 e literal valido para PollTimeout"),
+            );
             let _ = guard.read();
         }
         if let Err(e) = queue.dispatch_pending(&mut state) {
@@ -121,7 +126,8 @@ pub fn run() {
         if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
             last_ipc_tick = Instant::now();
             if let Some(mut s) = state.ipc_stream.take() {
-                let (alive, close_menu, open_selected, theme_mode) = drain_ipc_events(&mut s, &mut state.ipc_rx_buf);
+                let (alive, close_menu, open_selected, theme_mode) =
+                    drain_ipc_events(&mut s, &mut state.ipc_rx_buf);
                 if alive {
                     state.ipc_stream = Some(s);
                 } else {

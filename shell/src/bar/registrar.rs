@@ -55,17 +55,15 @@ impl RegistrarImpl {
         #[zbus(header)] hdr: zbus::message::Header<'_>,
         #[zbus(signal_emitter)] emitter: zbus::object_server::SignalEmitter<'_>,
     ) -> zbus::fdo::Result<()> {
-        let sender = hdr
-            .sender()
-            .map(|s| s.to_string())
-            .unwrap_or_default();
+        let sender = hdr.sender().map(|s| s.to_string()).unwrap_or_default();
         let path_str = menu_object_path.to_string();
         eprintln!(
             "[registrar] RegisterWindow: window_id={} sender={} path={}",
             window_id, sender, path_str
         );
         if let Ok(mut st) = self.state.lock() {
-            st.registered.insert(window_id, (sender.clone(), path_str.clone()));
+            st.registered
+                .insert(window_id, (sender.clone(), path_str.clone()));
         }
         emitter
             .window_registered(window_id, &sender, menu_object_path)
@@ -78,9 +76,10 @@ impl RegistrarImpl {
         &self,
         window_id: u32,
     ) -> zbus::fdo::Result<(String, zbus::zvariant::OwnedObjectPath)> {
-        let st = self.state.lock().map_err(|e| {
-            zbus::fdo::Error::Failed(format!("mutex poisoned: {}", e))
-        })?;
+        let st = self
+            .state
+            .lock()
+            .map_err(|e| zbus::fdo::Error::Failed(format!("mutex poisoned: {}", e)))?;
         match st.registered.get(&window_id) {
             Some((svc, path)) => {
                 let opath = zbus::zvariant::OwnedObjectPath::try_from(path.as_str())

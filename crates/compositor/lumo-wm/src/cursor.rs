@@ -86,12 +86,7 @@ pub fn try_load(theme_name: &str, preferred_size: u32) -> Option<LoadedCursor> {
 
 /// Tenta uma sequencia de temas comuns. Primeiro que carregar vence.
 pub fn try_load_first_available(preferred_size: u32) -> Option<LoadedCursor> {
-    let themes = [
-        "default",
-        "Adwaita",
-        "Bibata-Modern-Classic",
-        "Qogir",
-    ];
+    let themes = ["default", "Adwaita", "Bibata-Modern-Classic", "Qogir"];
     for t in themes.iter() {
         if let Some(c) = try_load(t, preferred_size) {
             tracing::info!(
@@ -118,8 +113,11 @@ pub fn try_load_named(name: &str, preferred_size: u32) -> Option<LoadedCursor> {
         if let Some(path) = theme.load_icon(name) {
             let bytes = std::fs::read(&path).ok()?;
             let images = xcursor::parser::parse_xcursor(&bytes)?;
-            if images.is_empty() { continue; }
-            let img = images.iter()
+            if images.is_empty() {
+                continue;
+            }
+            let img = images
+                .iter()
                 .min_by_key(|i| (i.size as i32 - preferred_size as i32).abs())
                 .unwrap_or(&images[0]);
             let mut pixels = img.pixels_rgba.clone();
@@ -136,4 +134,3 @@ pub fn try_load_named(name: &str, preferred_size: u32) -> Option<LoadedCursor> {
     }
     None
 }
-

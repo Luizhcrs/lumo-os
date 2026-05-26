@@ -4,9 +4,9 @@
 mod tokens;
 
 use gpui::{
-    actions, div, prelude::*, px, rgb, rgba, size, Animation, AnimationExt as _, App, Bounds,
-    Context, ElementId, KeyBinding, MouseButton, MouseDownEvent, SharedString, Window,
-    WindowBounds, WindowOptions, ease_in_out,
+    actions, div, ease_in_out, prelude::*, px, rgb, rgba, size, Animation, AnimationExt as _, App,
+    Bounds, Context, ElementId, KeyBinding, MouseButton, MouseDownEvent, SharedString, Window,
+    WindowBounds, WindowOptions,
 };
 use gpui_platform::application;
 use tokens::*;
@@ -64,24 +64,24 @@ impl Demo {
     ];
     fn label(&self) -> &'static str {
         match self {
-            Demo::SpringButton    => "01. Spring button",
-            Demo::GlideToggle     => "02. Glide toggle",
-            Demo::StaggerReveal   => "03. Stagger reveal",
-            Demo::HoverLift       => "04. Hover lift",
-            Demo::ToastStack      => "05. Toast stack",
-            Demo::Modal           => "06. Modal overlay",
-            Demo::BottomSheet     => "07. Bottom sheet",
-            Demo::PageTransition  => "08. Page transition",
-            Demo::Segmented       => "09. Segmented control",
-            Demo::Skeleton        => "10. Skeleton shimmer",
-            Demo::BounceList      => "11. Bounce list",
-            Demo::PinchZoom       => "12. Pinch zoom",
-            Demo::Carousel        => "13. Carousel snap",
-            Demo::SwipeDelete     => "14. Swipe to delete",
-            Demo::ContextMenu     => "15. Context menu",
-            Demo::LongPress       => "16. Press and hold",
-            Demo::TiltCard        => "17. Tilt card",
-            Demo::StretchBanner   => "18. Stretch banner",
+            Demo::SpringButton => "01. Spring button",
+            Demo::GlideToggle => "02. Glide toggle",
+            Demo::StaggerReveal => "03. Stagger reveal",
+            Demo::HoverLift => "04. Hover lift",
+            Demo::ToastStack => "05. Toast stack",
+            Demo::Modal => "06. Modal overlay",
+            Demo::BottomSheet => "07. Bottom sheet",
+            Demo::PageTransition => "08. Page transition",
+            Demo::Segmented => "09. Segmented control",
+            Demo::Skeleton => "10. Skeleton shimmer",
+            Demo::BounceList => "11. Bounce list",
+            Demo::PinchZoom => "12. Pinch zoom",
+            Demo::Carousel => "13. Carousel snap",
+            Demo::SwipeDelete => "14. Swipe to delete",
+            Demo::ContextMenu => "15. Context menu",
+            Demo::LongPress => "16. Press and hold",
+            Demo::TiltCard => "17. Tilt card",
+            Demo::StretchBanner => "18. Stretch banner",
         }
     }
 }
@@ -150,8 +150,18 @@ struct BounceState {
     tick: usize,
 }
 
-struct ZoomState { scale: f32, tick: usize }
-impl Default for ZoomState { fn default() -> Self { Self { scale: 1.0, tick: 0 } } }
+struct ZoomState {
+    scale: f32,
+    tick: usize,
+}
+impl Default for ZoomState {
+    fn default() -> Self {
+        Self {
+            scale: 1.0,
+            tick: 0,
+        }
+    }
+}
 
 #[derive(Default)]
 struct CarouselState {
@@ -217,7 +227,9 @@ struct Gallery {
 }
 
 impl Gallery {
-    fn demo(&self) -> Demo { Demo::ALL[self.current] }
+    fn demo(&self) -> Demo {
+        Demo::ALL[self.current]
+    }
 
     fn next(&mut self) {
         self.current = (self.current + 1) % Demo::ALL.len();
@@ -281,23 +293,34 @@ fn render_spring_button(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElem
 
     let base = div()
         .id("spring-btn")
-        .px_8().py_3()
-        .bg(if pressed { rgb(C_ACCENT_PRESS) } else { rgb(C_ACCENT) })
+        .px_8()
+        .py_3()
+        .bg(if pressed {
+            rgb(C_ACCENT_PRESS)
+        } else {
+            rgb(C_ACCENT)
+        })
         .text_color(rgb(C_ON_ACCENT))
         .text_sm()
         .rounded_lg()
         .shadow_md()
         .child("Pressione")
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.spring.pressed = true;
-            t.spring.press_tick = t.spring.press_tick.wrapping_add(1);
-            cx.notify();
-        }))
-        .on_mouse_up(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.spring.pressed = false;
-            t.spring.release_tick = t.spring.release_tick.wrapping_add(1);
-            cx.notify();
-        }));
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.spring.pressed = true;
+                t.spring.press_tick = t.spring.press_tick.wrapping_add(1);
+                cx.notify();
+            }),
+        )
+        .on_mouse_up(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.spring.pressed = false;
+                t.spring.release_tick = t.spring.release_tick.wrapping_add(1);
+                cx.notify();
+            }),
+        );
 
     if pressed {
         // P1 #11 — press anim 150ms (1.0 -> 0.75 opacity)
@@ -336,35 +359,57 @@ fn render_glide_toggle(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEleme
     let fill_target: f32 = if on { 1.0 } else { 0.0 };
 
     let fill = div()
-        .absolute().top_0().left_0().h_full()
+        .absolute()
+        .top_0()
+        .left_0()
+        .h_full()
         .bg(rgb(C_ACCENT))
         .with_animation(
             ElementId::Name(tick_id),
             Animation::new(DUR_MODAL).with_easing(ease_in_out),
             move |elem, delta| {
-                let progress = if fill_target > 0.5 { delta } else { 1.0 - delta };
+                let progress = if fill_target > 0.5 {
+                    delta
+                } else {
+                    1.0 - delta
+                };
                 elem.w(px(120.0 * progress.clamp(0.0, 1.0)))
             },
         );
 
     let label = div()
-        .absolute().top_0().left_0().w_full().h_full()
-        .flex().items_center().justify_center()
+        .absolute()
+        .top_0()
+        .left_0()
+        .w_full()
+        .h_full()
+        .flex()
+        .items_center()
+        .justify_center()
         .text_xs()
         .text_color(if on { rgb(C_ON_ACCENT) } else { rgb(C_ACCENT) })
         .child(if on { "LIGADO" } else { "DESLIGADO" });
 
     div()
         .id("glide-toggle")
-        .w(px(120.)).h(px(36.))
-        .rounded_md().border_1().border_color(rgb(C_ACCENT))
-        .relative().overflow_hidden().cursor_pointer()
-        .child(fill).child(label)
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.toggle.on = !t.toggle.on;
-            t.toggle.tick = t.toggle.tick.wrapping_add(1);
-            cx.notify();
-        }))
+        .w(px(120.))
+        .h(px(36.))
+        .rounded_md()
+        .border_1()
+        .border_color(rgb(C_ACCENT))
+        .relative()
+        .overflow_hidden()
+        .cursor_pointer()
+        .child(fill)
+        .child(label)
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.toggle.on = !t.toggle.on;
+                t.toggle.tick = t.toggle.tick.wrapping_add(1);
+                cx.notify();
+            }),
+        )
         .into_any_element()
 }
 
@@ -381,10 +426,14 @@ fn render_stagger(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
         let item_id: SharedString = format!("stag-{}-{}", tick, i).into();
 
         let item = div()
-            .px_4().py_2().rounded_md()
+            .px_4()
+            .py_2()
+            .rounded_md()
             .bg(rgb(C_PANEL))
-            .border_1().border_color(rgba(C_BORDER))
-            .text_sm().text_color(rgb(C_TEXT))
+            .border_1()
+            .border_color(rgba(C_BORDER))
+            .text_sm()
+            .text_color(rgb(C_TEXT))
             .child(*txt)
             .with_animation(
                 ElementId::Name(item_id),
@@ -400,15 +449,31 @@ fn render_stagger(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
 
     let replay = div()
         .id("replay")
-        .px_4().py_2().mt_4().rounded_md()
-        .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_xs()
-        .cursor_pointer().child("Reanimar")
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.stagger.tick = t.stagger.tick.wrapping_add(1);
-            cx.notify();
-        }));
+        .px_4()
+        .py_2()
+        .mt_4()
+        .rounded_md()
+        .bg(rgb(C_ACCENT))
+        .text_color(rgb(C_ON_ACCENT))
+        .text_xs()
+        .cursor_pointer()
+        .child("Reanimar")
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.stagger.tick = t.stagger.tick.wrapping_add(1);
+                cx.notify();
+            }),
+        );
 
-    div().flex().flex_col().items_center().gap_2().child(list).child(replay).into_any_element()
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_2()
+        .child(list)
+        .child(replay)
+        .into_any_element()
 }
 
 // ============================================================
@@ -420,16 +485,34 @@ fn render_hover_lift(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement
 
     div()
         .id("lift-card")
-        .w(px(280.)).h(px(160.))
+        .w(px(280.))
+        .h(px(160.))
         .rounded_lg()
-        .bg(if hovered { rgb(C_PANEL_HI) } else { rgb(C_PANEL) })
+        .bg(if hovered {
+            rgb(C_PANEL_HI)
+        } else {
+            rgb(C_PANEL)
+        })
         .border_1()
-        .border_color(if hovered { rgb(C_ACCENT) } else { rgba(C_BORDER) })
-        .flex().flex_col().items_center().justify_center().gap_2()
+        .border_color(if hovered {
+            rgb(C_ACCENT)
+        } else {
+            rgba(C_BORDER)
+        })
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap_2()
         .mt(if hovered { px(-6.) } else { px(0.) })
         .shadow_lg()
         .child(div().text_lg().text_color(rgb(C_TEXT)).child("Hover aqui"))
-        .child(div().text_xs().text_color(rgb(C_MUTED)).child("Border accent + elevacao"))
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(C_MUTED))
+                .child("Border accent + elevacao"),
+        )
         .on_hover(cx.listener(|t, is_hovered: &bool, _, cx| {
             t.tilt.hovered = *is_hovered;
             cx.notify();
@@ -447,10 +530,14 @@ fn render_toast_stack(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElemen
         let msg = TOAST_MSGS[tid % TOAST_MSGS.len()];
         let anim_id: SharedString = format!("toast-{}", tid).into();
         let toast = div()
-            .px_4().py_2().rounded_md()
+            .px_4()
+            .py_2()
+            .rounded_md()
             .bg(rgb(C_PANEL))
-            .border_1().border_color(rgb(C_ACCENT))
-            .text_xs().text_color(rgb(C_TEXT))
+            .border_1()
+            .border_color(rgb(C_ACCENT))
+            .text_xs()
+            .text_color(rgb(C_TEXT))
             .child(msg.to_string())
             .with_animation(
                 ElementId::Name(anim_id),
@@ -462,28 +549,60 @@ fn render_toast_stack(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElemen
 
     let fire = div()
         .id("fire-toast")
-        .px_4().py_2().rounded_md()
-        .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_xs()
-        .cursor_pointer().child("Disparar toast")
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.toast.counter = t.toast.counter.wrapping_add(1);
-            t.toast.items.push(t.toast.counter);
-            if t.toast.items.len() > 5 { t.toast.items.remove(0); }
-            cx.notify();
-        }));
+        .px_4()
+        .py_2()
+        .rounded_md()
+        .bg(rgb(C_ACCENT))
+        .text_color(rgb(C_ON_ACCENT))
+        .text_xs()
+        .cursor_pointer()
+        .child("Disparar toast")
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.toast.counter = t.toast.counter.wrapping_add(1);
+                t.toast.items.push(t.toast.counter);
+                if t.toast.items.len() > 5 {
+                    t.toast.items.remove(0);
+                }
+                cx.notify();
+            }),
+        );
 
     let clear = div()
         .id("clear-toast")
-        .px_4().py_2().ml_2().rounded_md()
-        .border_1().border_color(rgba(C_BORDER))
-        .text_color(rgb(C_TEXT)).text_xs()
-        .cursor_pointer().child("Limpar")
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.toast.items.clear(); cx.notify();
-        }));
+        .px_4()
+        .py_2()
+        .ml_2()
+        .rounded_md()
+        .border_1()
+        .border_color(rgba(C_BORDER))
+        .text_color(rgb(C_TEXT))
+        .text_xs()
+        .cursor_pointer()
+        .child("Limpar")
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.toast.items.clear();
+                cx.notify();
+            }),
+        );
 
-    let controls = div().flex().flex_row().items_center().child(fire).child(clear);
-    div().flex().flex_col().items_center().gap_4().child(controls).child(stack).into_any_element()
+    let controls = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .child(fire)
+        .child(clear);
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_4()
+        .child(controls)
+        .child(stack)
+        .into_any_element()
 }
 
 // ============================================================
@@ -491,19 +610,30 @@ fn render_toast_stack(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElemen
 // ============================================================
 fn render_modal_trigger(_g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
     div()
-        .flex().flex_col().items_center().gap_4()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_4()
         .child(
             div()
                 .id("modal-open")
-                .px_6().py_2().rounded_md()
-                .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_xs()
-                .cursor_pointer().child("Abrir modal")
-                .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-                    t.modal.open = true;
-                    t.modal.tick = t.modal.tick.wrapping_add(1);
-                    cx.stop_propagation();
-                    cx.notify();
-                })),
+                .px_6()
+                .py_2()
+                .rounded_md()
+                .bg(rgb(C_ACCENT))
+                .text_color(rgb(C_ON_ACCENT))
+                .text_xs()
+                .cursor_pointer()
+                .child("Abrir modal")
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|t, _, _, cx| {
+                        t.modal.open = true;
+                        t.modal.tick = t.modal.tick.wrapping_add(1);
+                        cx.stop_propagation();
+                        cx.notify();
+                    }),
+                ),
         )
         .into_any_element()
 }
@@ -513,19 +643,30 @@ fn render_modal_trigger(_g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEle
 // ============================================================
 fn render_sheet_trigger(_g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
     div()
-        .flex().flex_col().items_center().gap_4()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_4()
         .child(
             div()
                 .id("sheet-open")
-                .px_6().py_2().rounded_md()
-                .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_xs()
-                .cursor_pointer().child("Abrir sheet")
-                .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-                    t.sheet.open = true;
-                    t.sheet.tick = t.sheet.tick.wrapping_add(1);
-                    cx.stop_propagation();
-                    cx.notify();
-                })),
+                .px_6()
+                .py_2()
+                .rounded_md()
+                .bg(rgb(C_ACCENT))
+                .text_color(rgb(C_ON_ACCENT))
+                .text_xs()
+                .cursor_pointer()
+                .child("Abrir sheet")
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|t, _, _, cx| {
+                        t.sheet.open = true;
+                        t.sheet.tick = t.sheet.tick.wrapping_add(1);
+                        cx.stop_propagation();
+                        cx.notify();
+                    }),
+                ),
         )
         .into_any_element()
 }
@@ -549,10 +690,16 @@ fn render_page_transition(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEl
     };
 
     let mut card = div()
-        .w(px(360.)).h(px(220.))
-        .rounded_lg().bg(rgb(C_PANEL))
-        .border_1().border_color(rgba(C_BORDER))
-        .p_6().flex().flex_col().gap_2()
+        .w(px(360.))
+        .h(px(220.))
+        .rounded_lg()
+        .bg(rgb(C_PANEL))
+        .border_1()
+        .border_color(rgba(C_BORDER))
+        .p_6()
+        .flex()
+        .flex_col()
+        .gap_2()
         .child(div().text_lg().text_color(rgb(C_TEXT)).child(title))
         .child(div().text_sm().text_color(rgb(C_MUTED)).child(body_text));
 
@@ -560,31 +707,53 @@ fn render_page_transition(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEl
         card = card.child(
             div()
                 .id("page-push")
-                .px_4().py_2().mt_4().rounded_md()
-                .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_xs()
-                .cursor_pointer().child(if depth == 0 { "Abrir Detalhes" } else { "Proxima" })
-                .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-                    t.page.depth += 1;
-                    t.page.tick = t.page.tick.wrapping_add(1);
-                    cx.notify();
-                })),
+                .px_4()
+                .py_2()
+                .mt_4()
+                .rounded_md()
+                .bg(rgb(C_ACCENT))
+                .text_color(rgb(C_ON_ACCENT))
+                .text_xs()
+                .cursor_pointer()
+                .child(if depth == 0 {
+                    "Abrir Detalhes"
+                } else {
+                    "Proxima"
+                })
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|t, _, _, cx| {
+                        t.page.depth += 1;
+                        t.page.tick = t.page.tick.wrapping_add(1);
+                        cx.notify();
+                    }),
+                ),
         );
     }
     if depth > 0 {
         card = card.child(
             div()
                 .id("page-pop")
-                .px_4().py_2().mt_2().rounded_md()
-                .border_1().border_color(rgba(C_BORDER))
-                .text_color(rgb(C_TEXT)).text_xs()
-                .cursor_pointer().child("Voltar")
-                .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-                    if t.page.depth > 0 {
-                        t.page.depth -= 1;
-                        t.page.tick = t.page.tick.wrapping_add(1);
-                        cx.notify();
-                    }
-                })),
+                .px_4()
+                .py_2()
+                .mt_2()
+                .rounded_md()
+                .border_1()
+                .border_color(rgba(C_BORDER))
+                .text_color(rgb(C_TEXT))
+                .text_xs()
+                .cursor_pointer()
+                .child("Voltar")
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|t, _, _, cx| {
+                        if t.page.depth > 0 {
+                            t.page.depth -= 1;
+                            t.page.tick = t.page.tick.wrapping_add(1);
+                            cx.notify();
+                        }
+                    }),
+                ),
         );
     }
 
@@ -594,8 +763,17 @@ fn render_page_transition(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEl
         |elem, delta| elem.opacity(delta.clamp(0.0, 1.0)),
     );
 
-    div().flex().flex_col().items_center().gap_2()
-        .child(div().text_xs().text_color(rgb(C_MUTED)).child(format!("Stack depth: {}", depth)))
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_2()
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(C_MUTED))
+                .child(format!("Stack depth: {}", depth)),
+        )
         .child(animated)
         .into_any_element()
 }
@@ -611,9 +789,12 @@ fn render_segmented(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement 
     let to = idx as f32 * SEG_WIDTH;
 
     let pill = div()
-        .absolute().top_0().h_full()
+        .absolute()
+        .top_0()
+        .h_full()
         .w(px(SEG_WIDTH))
-        .rounded_md().bg(rgb(C_ACCENT))
+        .rounded_md()
+        .bg(rgb(C_ACCENT))
         .with_animation(
             ElementId::Name(tick_id),
             Animation::new(DUR_BASE).with_easing(ease_in_out),
@@ -625,11 +806,13 @@ fn render_segmented(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement 
 
     let mut bar = div()
         .relative()
-        .flex().flex_row()
+        .flex()
+        .flex_row()
         .h(px(36.))
         .w(px(SEG_WIDTH * SEG_OPTS.len() as f32))
         .rounded_md()
-        .border_1().border_color(rgba(C_BORDER))
+        .border_1()
+        .border_color(rgba(C_BORDER))
         .bg(rgb(C_PANEL))
         .child(pill);
 
@@ -638,20 +821,30 @@ fn render_segmented(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement 
         let item_id: SharedString = format!("seg-item-{}", i).into(); // P0 #1 — distinto de pill
         let item = div()
             .id(ElementId::Name(item_id))
-            .w(px(SEG_WIDTH)).h_full()
-            .flex().items_center().justify_center()
+            .w(px(SEG_WIDTH))
+            .h_full()
+            .flex()
+            .items_center()
+            .justify_center()
             .text_xs()
-            .text_color(if active { rgb(C_ON_ACCENT) } else { rgb(C_TEXT) })
+            .text_color(if active {
+                rgb(C_ON_ACCENT)
+            } else {
+                rgb(C_TEXT)
+            })
             .cursor_pointer()
             .child(*opt)
-            .on_mouse_down(MouseButton::Left, cx.listener(move |t, _, _, cx| {
-                if t.seg.idx != i {
-                    t.seg.prev_idx = t.seg.idx;
-                    t.seg.idx = i;
-                    t.seg.tick = t.seg.tick.wrapping_add(1);
-                    cx.notify();
-                }
-            }));
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |t, _, _, cx| {
+                    if t.seg.idx != i {
+                        t.seg.prev_idx = t.seg.idx;
+                        t.seg.idx = i;
+                        t.seg.tick = t.seg.tick.wrapping_add(1);
+                        cx.notify();
+                    }
+                }),
+            );
         bar = bar.child(item);
     }
 
@@ -666,30 +859,45 @@ fn render_skeleton(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
     let tick_id_base = g.skeleton.tick;
 
     // P1 #21 — botão descreve A AÇÃO (não estado atual)
-    let label = if showing { "Mostrar conteudo" } else { "Mostrar skeleton" };
+    let label = if showing {
+        "Mostrar conteudo"
+    } else {
+        "Mostrar skeleton"
+    };
 
     let toggle = div()
         .id("skel-toggle")
-        .px_4().py_2().rounded_md()
-        .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_xs()
+        .px_4()
+        .py_2()
+        .rounded_md()
+        .bg(rgb(C_ACCENT))
+        .text_color(rgb(C_ON_ACCENT))
+        .text_xs()
         .cursor_pointer()
         .child(label)
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.skeleton.showing_skeleton = !t.skeleton.showing_skeleton;
-            t.skeleton.tick = t.skeleton.tick.wrapping_add(1);
-            cx.notify();
-        }));
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.skeleton.showing_skeleton = !t.skeleton.showing_skeleton;
+                t.skeleton.tick = t.skeleton.tick.wrapping_add(1);
+                cx.notify();
+            }),
+        );
 
     let bar = move |width_pct: f32, idx: usize| -> gpui::AnyElement {
         let line_id: SharedString = format!("skel-{}-{}", tick_id_base, idx).into();
         if !showing {
             div()
-                .h(px(12.)).rounded_md().bg(rgb(C_PANEL_HI))
+                .h(px(12.))
+                .rounded_md()
+                .bg(rgb(C_PANEL_HI))
                 .w(px(280.0 * width_pct))
                 .into_any_element()
         } else {
             div()
-                .h(px(12.)).rounded_md().bg(rgb(C_PANEL_HI))
+                .h(px(12.))
+                .rounded_md()
+                .bg(rgb(C_PANEL_HI))
                 .w(px(280.0 * width_pct))
                 .with_animation(
                     ElementId::Name(line_id),
@@ -706,12 +914,22 @@ fn render_skeleton(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
         }
     };
 
-    let lines = div().flex().flex_col().gap_3()
+    let lines = div()
+        .flex()
+        .flex_col()
+        .gap_3()
         .child(bar(1.0, 0))
         .child(bar(0.75, 1))
         .child(bar(0.5, 2));
 
-    div().flex().flex_col().items_center().gap_4().child(toggle).child(lines).into_any_element()
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_4()
+        .child(toggle)
+        .child(lines)
+        .into_any_element()
 }
 
 // ============================================================
@@ -722,20 +940,26 @@ fn render_bounce_list(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElemen
 
     let mut list = div()
         .id("bounce-list")
-        .flex().flex_col().gap_2()
+        .flex()
+        .flex_col()
+        .gap_2()
         .h(px(220.))
         .w(px(280.))
         .p_2()
         .rounded_md()
-        .border_1().border_color(rgba(C_BORDER))
+        .border_1()
+        .border_color(rgba(C_BORDER))
         .bg(rgb(C_PANEL))
         .overflow_y_scroll();
 
     for i in 1..=20 {
         let row = div()
-            .px_3().py_2().rounded_sm()
+            .px_3()
+            .py_2()
+            .rounded_sm()
             .bg(rgb(C_PANEL_HI))
-            .text_xs().text_color(rgb(C_TEXT))
+            .text_xs()
+            .text_color(rgb(C_TEXT))
             .flex_shrink_0()
             .child(format!("Item {}", i));
         list = list.child(row);
@@ -757,9 +981,17 @@ fn render_bounce_list(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElemen
     // Wrapper externo captura wheel — trigger bounce ao tentar overscroll
     let area = div()
         .id("bounce-area")
-        .flex().flex_col().items_center().gap_3()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_3()
         .child(list_with_anim)
-        .child(div().text_xs().text_color(rgb(C_MUTED)).child("Scroll real + bounce no overscroll"))
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(C_MUTED))
+                .child("Scroll real + bounce no overscroll"),
+        )
         .on_scroll_wheel(cx.listener(|t, ev: &gpui::ScrollWheelEvent, _, cx| {
             // delta Y > 0 = scroll down (mouse wheel down)
             let dy = ev.delta.pixel_delta(px(20.0)).y;
@@ -775,8 +1007,10 @@ fn render_bounce_list(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElemen
                     this.update(cx, |g, cx| {
                         g.bounce.bounced = false;
                         cx.notify();
-                    }).ok();
-                }).detach();
+                    })
+                    .ok();
+                })
+                .detach();
             }
         }));
 
@@ -793,7 +1027,8 @@ fn render_pinch_zoom(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement
     let target_size = base_size * scale;
 
     let target = div()
-        .w(px(target_size)).h(px(target_size))
+        .w(px(target_size))
+        .h(px(target_size))
         .rounded_lg()
         .bg(rgb(C_ACCENT))
         .with_animation(
@@ -808,47 +1043,88 @@ fn render_pinch_zoom(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement
 
     let zoom_in = div()
         .id("zoom-in")
-        .px_3().py_1().rounded_md()
-        .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_xs()
-        .cursor_pointer().child("+")
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.zoom.scale = (t.zoom.scale * 1.2).min(3.0);
-            t.zoom.tick = t.zoom.tick.wrapping_add(1);
-            cx.notify();
-        }));
+        .px_3()
+        .py_1()
+        .rounded_md()
+        .bg(rgb(C_ACCENT))
+        .text_color(rgb(C_ON_ACCENT))
+        .text_xs()
+        .cursor_pointer()
+        .child("+")
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.zoom.scale = (t.zoom.scale * 1.2).min(3.0);
+                t.zoom.tick = t.zoom.tick.wrapping_add(1);
+                cx.notify();
+            }),
+        );
 
     let zoom_out = div()
         .id("zoom-out")
-        .px_3().py_1().ml_2().rounded_md()
-        .border_1().border_color(rgba(C_BORDER))
-        .text_color(rgb(C_TEXT)).text_xs()
-        .cursor_pointer().child("-")
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.zoom.scale = (t.zoom.scale / 1.2).max(0.5);
-            t.zoom.tick = t.zoom.tick.wrapping_add(1);
-            cx.notify();
-        }));
+        .px_3()
+        .py_1()
+        .ml_2()
+        .rounded_md()
+        .border_1()
+        .border_color(rgba(C_BORDER))
+        .text_color(rgb(C_TEXT))
+        .text_xs()
+        .cursor_pointer()
+        .child("-")
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.zoom.scale = (t.zoom.scale / 1.2).max(0.5);
+                t.zoom.tick = t.zoom.tick.wrapping_add(1);
+                cx.notify();
+            }),
+        );
 
     let reset = div()
         .id("zoom-reset")
-        .px_3().py_1().ml_2().rounded_md()
-        .border_1().border_color(rgba(C_BORDER))
-        .text_color(rgb(C_TEXT)).text_xs()
-        .cursor_pointer().child("Reset")
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.zoom.scale = 1.0;
-            t.zoom.tick = t.zoom.tick.wrapping_add(1);
-            cx.notify();
-        }));
+        .px_3()
+        .py_1()
+        .ml_2()
+        .rounded_md()
+        .border_1()
+        .border_color(rgba(C_BORDER))
+        .text_color(rgb(C_TEXT))
+        .text_xs()
+        .cursor_pointer()
+        .child("Reset")
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.zoom.scale = 1.0;
+                t.zoom.tick = t.zoom.tick.wrapping_add(1);
+                cx.notify();
+            }),
+        );
 
-    let controls = div().flex().flex_row().items_center().child(zoom_in).child(zoom_out).child(reset);
-    let label = div().text_xs().text_color(rgb(C_MUTED)).child(format!("scale: {:.2}x | trackpad pinch funciona", scale));
+    let controls = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .child(zoom_in)
+        .child(zoom_out)
+        .child(reset);
+    let label = div()
+        .text_xs()
+        .text_color(rgb(C_MUTED))
+        .child(format!("scale: {:.2}x | trackpad pinch funciona", scale));
 
     div()
         .id("pinch-area")
-        .flex().flex_col().items_center().gap_4()
-        .w_full().py_4()
-        .child(target).child(controls).child(label)
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_4()
+        .w_full()
+        .py_4()
+        .child(target)
+        .child(controls)
+        .child(label)
         .on_pinch(cx.listener(|t, ev: &gpui::PinchEvent, _, cx| {
             // ev.delta: positivo zoom in, negativo zoom out (~0.1 = 10%)
             let new_scale = (t.zoom.scale * (1.0 + ev.delta)).clamp(0.5, 3.0);
@@ -873,34 +1149,51 @@ fn render_carousel(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
 
     let mut strip = div()
         .id("car-strip")
-        .flex().flex_row().gap_3()
+        .flex()
+        .flex_row()
+        .gap_3()
         .w(px(420.))
-        .py_2().px_2()
+        .py_2()
+        .px_2()
         .overflow_x_scroll();
     for (i, label) in cards.iter().enumerate() {
         let active = i == idx;
         let item_id: SharedString = format!("car-item-{}", i).into();
         let card = div()
             .id(ElementId::Name(item_id))
-            .w(px(card_w)).h(px(120.))
+            .w(px(card_w))
+            .h(px(120.))
             .flex_shrink_0()
             .rounded_lg()
             .bg(if active { rgb(C_ACCENT) } else { rgb(C_PANEL) })
             .border_1()
-            .border_color(if active { rgb(C_ACCENT) } else { rgba(C_BORDER) })
-            .flex().items_center().justify_center()
+            .border_color(if active {
+                rgb(C_ACCENT)
+            } else {
+                rgba(C_BORDER)
+            })
+            .flex()
+            .items_center()
+            .justify_center()
             .text_sm()
-            .text_color(if active { rgb(C_ON_ACCENT) } else { rgb(C_TEXT) })
+            .text_color(if active {
+                rgb(C_ON_ACCENT)
+            } else {
+                rgb(C_TEXT)
+            })
             .cursor_pointer()
             .child(*label)
-            .on_mouse_down(MouseButton::Left, cx.listener(move |t, _, _, cx| {
-                if t.carousel.idx != i {
-                    t.carousel.prev_idx = t.carousel.idx;
-                    t.carousel.idx = i;
-                    t.carousel.tick = t.carousel.tick.wrapping_add(1);
-                    cx.notify();
-                }
-            }));
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |t, _, _, cx| {
+                    if t.carousel.idx != i {
+                        t.carousel.prev_idx = t.carousel.idx;
+                        t.carousel.idx = i;
+                        t.carousel.tick = t.carousel.tick.wrapping_add(1);
+                        cx.notify();
+                    }
+                }),
+            );
         strip = strip.child(card);
     }
 
@@ -911,9 +1204,12 @@ fn render_carousel(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
     let to = idx as f32 * (pill_w + dot_gap);
 
     let pill = div()
-        .absolute().top_0().h_full()
+        .absolute()
+        .top_0()
+        .h_full()
         .w(px(pill_w))
-        .rounded_full().bg(rgb(C_ACCENT))
+        .rounded_full()
+        .bg(rgb(C_ACCENT))
         .with_animation(
             ElementId::Name(tick_id),
             Animation::new(DUR_BASE).with_easing(ease_in_out),
@@ -925,7 +1221,8 @@ fn render_carousel(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
 
     let dots = div()
         .relative()
-        .flex().flex_row()
+        .flex()
+        .flex_row()
         .gap(px(dot_gap))
         .h(px(8.))
         .w(px(cards.len() as f32 * (pill_w + dot_gap) - dot_gap))
@@ -934,7 +1231,10 @@ fn render_carousel(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement {
     let max_idx = cards.len() - 1;
     div()
         .id("carousel-area")
-        .flex().flex_col().items_center().gap_4()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_4()
         .child(strip)
         .child(dots)
         .on_scroll_wheel(cx.listener(move |t, ev: &gpui::ScrollWheelEvent, _, cx| {
@@ -976,21 +1276,35 @@ fn render_swipe_delete(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEleme
 
         let action_btn = div()
             .id(ElementId::Name(format!("swipe-del-{}", id).into()))
-            .px_3().py_2().rounded_md()
-            .bg(rgb(C_DANGER)).text_color(rgb(C_TEXT)).text_xs()
-            .cursor_pointer().child("Apagar")
-            .on_mouse_down(MouseButton::Left, cx.listener(move |t, _, _, cx| {
-                t.swipe.removing = Some(id);
-                t.swipe.tick = t.swipe.tick.wrapping_add(1);
-                cx.notify();
-            }));
+            .px_3()
+            .py_2()
+            .rounded_md()
+            .bg(rgb(C_DANGER))
+            .text_color(rgb(C_TEXT))
+            .text_xs()
+            .cursor_pointer()
+            .child("Apagar")
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |t, _, _, cx| {
+                    t.swipe.removing = Some(id);
+                    t.swipe.tick = t.swipe.tick.wrapping_add(1);
+                    cx.notify();
+                }),
+            );
 
         let row = div()
             .id(ElementId::Name(format!("swipe-row-{}", id).into()))
-            .flex().flex_row().items_center().justify_between()
-            .px_4().py_3().rounded_md()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .px_4()
+            .py_3()
+            .rounded_md()
             .bg(rgb(C_PANEL))
-            .border_1().border_color(rgba(C_BORDER))
+            .border_1()
+            .border_color(rgba(C_BORDER))
             .child(div().text_sm().text_color(rgb(C_TEXT)).child(label))
             .child(action_btn)
             // Swipe horizontal via wheel deltaX (touchpad 2-finger sideways)
@@ -1011,7 +1325,8 @@ fn render_swipe_delete(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEleme
                     let d = delta.clamp(0.0, 1.0);
                     elem.opacity(1.0 - d).ml(px(d * 320.0))
                 },
-            ).into_any_element()
+            )
+            .into_any_element()
         } else {
             row.into_any_element()
         };
@@ -1021,18 +1336,34 @@ fn render_swipe_delete(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEleme
 
     let restore = div()
         .id("swipe-restore")
-        .px_4().py_2().mt_4().rounded_md()
-        .border_1().border_color(rgba(C_BORDER))
-        .text_color(rgb(C_TEXT)).text_xs()
-        .cursor_pointer().child("Restaurar lista")
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.swipe.items = vec![0, 1, 2, 3];
-            t.swipe.removing = None;
-            t.swipe.tick = t.swipe.tick.wrapping_add(1);
-            cx.notify();
-        }));
+        .px_4()
+        .py_2()
+        .mt_4()
+        .rounded_md()
+        .border_1()
+        .border_color(rgba(C_BORDER))
+        .text_color(rgb(C_TEXT))
+        .text_xs()
+        .cursor_pointer()
+        .child("Restaurar lista")
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.swipe.items = vec![0, 1, 2, 3];
+                t.swipe.removing = None;
+                t.swipe.tick = t.swipe.tick.wrapping_add(1);
+                cx.notify();
+            }),
+        );
 
-    div().flex().flex_col().items_center().gap_2().child(list).child(restore).into_any_element()
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_2()
+        .child(list)
+        .child(restore)
+        .into_any_element()
 }
 
 // ============================================================
@@ -1044,17 +1375,33 @@ fn render_context_menu(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEleme
 
     let trigger = div()
         .id("ctx-trigger")
-        .px_6().py_3().rounded_lg()
-        .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_sm()
+        .px_6()
+        .py_3()
+        .rounded_lg()
+        .bg(rgb(C_ACCENT))
+        .text_color(rgb(C_ON_ACCENT))
+        .text_sm()
         .cursor_pointer()
-        .child(if open { "Menu aberto" } else { "Clique pra menu" })
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.ctx_menu.open = !t.ctx_menu.open;
-            t.ctx_menu.tick = t.ctx_menu.tick.wrapping_add(1);
-            cx.notify();
-        }));
+        .child(if open {
+            "Menu aberto"
+        } else {
+            "Clique pra menu"
+        })
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.ctx_menu.open = !t.ctx_menu.open;
+                t.ctx_menu.tick = t.ctx_menu.tick.wrapping_add(1);
+                cx.notify();
+            }),
+        );
 
-    let mut col = div().flex().flex_col().items_center().gap_2().child(trigger);
+    let mut col = div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_2()
+        .child(trigger);
 
     if open {
         let menu = div()
@@ -1062,9 +1409,11 @@ fn render_context_menu(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEleme
             .w(px(200.))
             .rounded_md()
             .bg(rgb(C_PANEL_HI))
-            .border_1().border_color(rgba(C_BORDER))
+            .border_1()
+            .border_color(rgba(C_BORDER))
             .shadow_lg()
-            .flex().flex_col()
+            .flex()
+            .flex_col()
             .child(menu_item("Editar", cx))
             .child(menu_item("Duplicar", cx))
             .child(menu_item("Compartilhar", cx))
@@ -1087,27 +1436,39 @@ fn render_context_menu(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEleme
 fn menu_item(label: &'static str, cx: &mut Context<Gallery>) -> impl IntoElement {
     div()
         .id(ElementId::Name(label.into()))
-        .px_4().py_2()
-        .text_sm().text_color(rgb(C_TEXT))
+        .px_4()
+        .py_2()
+        .text_sm()
+        .text_color(rgb(C_TEXT))
         .cursor_pointer()
         .hover(|s| s.bg(rgba(C_BORDER)))
         .child(label)
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.ctx_menu.open = false; cx.notify();
-        }))
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.ctx_menu.open = false;
+                cx.notify();
+            }),
+        )
 }
 
 fn menu_item_danger(label: &'static str, cx: &mut Context<Gallery>) -> impl IntoElement {
     div()
         .id(ElementId::Name(format!("danger-{}", label).into()))
-        .px_4().py_2()
-        .text_sm().text_color(rgb(C_DANGER))
+        .px_4()
+        .py_2()
+        .text_sm()
+        .text_color(rgb(C_DANGER))
         .cursor_pointer()
         .hover(|s| s.bg(rgba(C_BORDER)))
         .child(label)
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.ctx_menu.open = false; cx.notify();
-        }))
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.ctx_menu.open = false;
+                cx.notify();
+            }),
+        )
 }
 
 fn menu_divider() -> impl IntoElement {
@@ -1130,7 +1491,11 @@ fn render_long_press(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement
         "Segure 800ms"
     };
 
-    let btn_bg = if completed { rgb(C_ACCENT_PRESS) } else { rgb(C_ACCENT) };
+    let btn_bg = if completed {
+        rgb(C_ACCENT_PRESS)
+    } else {
+        rgb(C_ACCENT)
+    };
 
     // Progress bar fica embaixo do botão, anima width durante hold
     let progress = if holding && !completed {
@@ -1147,7 +1512,7 @@ fn render_long_press(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement
                         elem.w(px(w))
                     },
                 )
-                .into_any_element()
+                .into_any_element(),
         )
     } else {
         None
@@ -1155,58 +1520,81 @@ fn render_long_press(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement
 
     let btn = div()
         .id("long-press-btn")
-        .w(px(280.)).h(px(48.))
+        .w(px(280.))
+        .h(px(48.))
         .rounded_lg()
         .bg(btn_bg)
-        .text_color(rgb(C_ON_ACCENT)).text_sm()
-        .flex().items_center().justify_center()
+        .text_color(rgb(C_ON_ACCENT))
+        .text_sm()
+        .flex()
+        .items_center()
+        .justify_center()
         .cursor_pointer()
         .child(label)
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.long_press.holding = true;
-            t.long_press.completed = false;
-            t.long_press.tick = t.long_press.tick.wrapping_add(1);
-            cx.notify();
-            // Schedule completion after 800ms via spawn
-            cx.spawn(async move |this, cx| {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(800))
-                    .await;
-                this.update(cx, |g, cx| {
-                    if g.long_press.holding {
-                        g.long_press.completed = true;
-                        g.long_press.holding = false;
-                        // Abre context menu ao completar hold
-                        g.ctx_menu.open = true;
-                        g.ctx_menu.tick = g.ctx_menu.tick.wrapping_add(1);
-                        cx.notify();
-                    }
-                }).ok();
-            }).detach();
-        }))
-        .on_mouse_up(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            if t.long_press.holding {
-                t.long_press.holding = false;
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.long_press.holding = true;
+                t.long_press.completed = false;
+                t.long_press.tick = t.long_press.tick.wrapping_add(1);
                 cx.notify();
-            }
-        }));
+                // Schedule completion after 800ms via spawn
+                cx.spawn(async move |this, cx| {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(800))
+                        .await;
+                    this.update(cx, |g, cx| {
+                        if g.long_press.holding {
+                            g.long_press.completed = true;
+                            g.long_press.holding = false;
+                            // Abre context menu ao completar hold
+                            g.ctx_menu.open = true;
+                            g.ctx_menu.tick = g.ctx_menu.tick.wrapping_add(1);
+                            cx.notify();
+                        }
+                    })
+                    .ok();
+                })
+                .detach();
+            }),
+        )
+        .on_mouse_up(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                if t.long_press.holding {
+                    t.long_press.holding = false;
+                    cx.notify();
+                }
+            }),
+        );
 
     let reset = div()
         .id("hold-reset")
-        .px_3().py_1().mt_2().rounded_md()
-        .border_1().border_color(rgba(C_BORDER))
-        .text_color(rgb(C_TEXT)).text_xs()
-        .cursor_pointer().child("Resetar")
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.long_press.holding = false;
-            t.long_press.completed = false;
-            t.long_press.tick = t.long_press.tick.wrapping_add(1);
-            t.ctx_menu.open = false;
-            cx.notify();
-        }));
+        .px_3()
+        .py_1()
+        .mt_2()
+        .rounded_md()
+        .border_1()
+        .border_color(rgba(C_BORDER))
+        .text_color(rgb(C_TEXT))
+        .text_xs()
+        .cursor_pointer()
+        .child("Resetar")
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.long_press.holding = false;
+                t.long_press.completed = false;
+                t.long_press.tick = t.long_press.tick.wrapping_add(1);
+                t.ctx_menu.open = false;
+                cx.notify();
+            }),
+        );
 
     let mut col = div().flex().flex_col().items_center().gap_2().child(btn);
-    if let Some(p) = progress { col = col.child(p); }
+    if let Some(p) = progress {
+        col = col.child(p);
+    }
 
     if completed && g.ctx_menu.open {
         let menu = div()
@@ -1214,9 +1602,11 @@ fn render_long_press(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement
             .w(px(220.))
             .rounded_md()
             .bg(rgb(C_PANEL_HI))
-            .border_1().border_color(rgba(C_BORDER))
+            .border_1()
+            .border_color(rgba(C_BORDER))
             .shadow_lg()
-            .flex().flex_col()
+            .flex()
+            .flex_col()
             .child(menu_item("Acao 1", cx))
             .child(menu_item("Acao 2", cx))
             .child(menu_divider())
@@ -1237,18 +1627,32 @@ fn render_tilt_card(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyElement 
 
     let card_base = div()
         .id("tilt-card")
-        .w(px(320.)).h(px(200.))
+        .w(px(320.))
+        .h(px(200.))
         .rounded_lg()
-        .border_1().border_color(rgba(C_BORDER))
-        .flex().flex_col().items_center().justify_center().gap_2()
+        .border_1()
+        .border_color(rgba(C_BORDER))
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .gap_2()
         .cursor_pointer()
         .child(div().text_lg().text_color(rgb(C_TEXT)).child("Tilt card"))
-        .child(div().text_xs().text_color(rgb(C_MUTED)).child("Hover sente tato"))
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.tilt.hovered = !t.tilt.hovered;
-            t.tilt.tick = t.tilt.tick.wrapping_add(1);
-            cx.notify();
-        }));
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(C_MUTED))
+                .child("Hover sente tato"),
+        )
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.tilt.hovered = !t.tilt.hovered;
+                t.tilt.tick = t.tilt.tick.wrapping_add(1);
+                cx.notify();
+            }),
+        );
 
     if hovered {
         card_base
@@ -1280,10 +1684,17 @@ fn render_stretch_banner(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEle
         .w(px(360.))
         .rounded_lg()
         .bg(rgb(C_ACCENT))
-        .flex().flex_col().items_center().justify_center()
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
         .text_color(rgb(C_ON_ACCENT))
         .child(div().text_lg().child("Banner"))
-        .child(div().text_xs().child(if expanded { "Expandido" } else { "Compacto" }))
+        .child(
+            div()
+                .text_xs()
+                .child(if expanded { "Expandido" } else { "Compacto" }),
+        )
         .with_animation(
             ElementId::Name(tick_id),
             Animation::new(DUR_BOUNCE).with_easing(ease_in_out),
@@ -1297,49 +1708,87 @@ fn render_stretch_banner(g: &Gallery, cx: &mut Context<Gallery>) -> gpui::AnyEle
 
     let toggle = div()
         .id("stretch-toggle")
-        .px_4().py_2().rounded_md()
-        .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_xs()
+        .px_4()
+        .py_2()
+        .rounded_md()
+        .bg(rgb(C_ACCENT))
+        .text_color(rgb(C_ON_ACCENT))
+        .text_xs()
         .cursor_pointer()
         .child(if expanded { "Compactar" } else { "Expandir" })
-        .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-            t.stretch.expanded = !t.stretch.expanded;
-            t.stretch.tick = t.stretch.tick.wrapping_add(1);
-            cx.notify();
-        }));
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(|t, _, _, cx| {
+                t.stretch.expanded = !t.stretch.expanded;
+                t.stretch.tick = t.stretch.tick.wrapping_add(1);
+                cx.notify();
+            }),
+        );
 
-    div().flex().flex_col().items_center().gap_4().child(banner).child(toggle).into_any_element()
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap_4()
+        .child(banner)
+        .child(toggle)
+        .into_any_element()
 }
 
 // ============================================================
 // Overlay renderers (P0 #2, #4 — overlay vive em root, card filho do backdrop)
 // ============================================================
 fn render_modal_overlay(g: &Gallery, cx: &mut Context<Gallery>) -> Option<gpui::AnyElement> {
-    if !g.modal.open { return None; }
+    if !g.modal.open {
+        return None;
+    }
     let tick_id: SharedString = format!("modal-card-{}", g.modal.tick).into();
 
     // Card filho do backdrop, com stop-prop no on_mouse_down do card
     let card = div()
         .id("modal-card")
-        .w(px(320.)).p_6().rounded_lg()
-        .bg(rgb(C_PANEL)).border_1().border_color(rgba(C_BORDER))
+        .w(px(320.))
+        .p_6()
+        .rounded_lg()
+        .bg(rgb(C_PANEL))
+        .border_1()
+        .border_color(rgba(C_BORDER))
         .shadow_lg()
-        .flex().flex_col().gap_3()
+        .flex()
+        .flex_col()
+        .gap_3()
         .child(div().text_lg().text_color(rgb(C_TEXT)).child("Card modal"))
-        .child(div().text_xs().text_color(rgb(C_MUTED)).child("Esc ou clique fora pra fechar"))
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(C_MUTED))
+                .child("Esc ou clique fora pra fechar"),
+        )
         .child(
             div()
                 .id("modal-close")
-                .px_4().py_2().mt_2().rounded_md()
-                .bg(rgb(C_ACCENT)).text_color(rgb(C_ON_ACCENT)).text_xs()
-                .cursor_pointer().child("Fechar")
-                .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-                    t.modal.open = false;
-                    cx.stop_propagation();
-                    cx.notify();
-                })),
+                .px_4()
+                .py_2()
+                .mt_2()
+                .rounded_md()
+                .bg(rgb(C_ACCENT))
+                .text_color(rgb(C_ON_ACCENT))
+                .text_xs()
+                .cursor_pointer()
+                .child("Fechar")
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|t, _, _, cx| {
+                        t.modal.open = false;
+                        cx.stop_propagation();
+                        cx.notify();
+                    }),
+                ),
         )
         // P0 #2 — stop propagation real: clique no card NAO fecha modal
-        .on_mouse_down(MouseButton::Left, |_: &MouseDownEvent, _, cx| { cx.stop_propagation(); })
+        .on_mouse_down(MouseButton::Left, |_: &MouseDownEvent, _, cx| {
+            cx.stop_propagation();
+        })
         .with_animation(
             ElementId::Name(tick_id),
             Animation::new(DUR_MODAL).with_easing(ease_in_out),
@@ -1349,36 +1798,74 @@ fn render_modal_overlay(g: &Gallery, cx: &mut Context<Gallery>) -> Option<gpui::
     Some(
         div()
             .id("modal-backdrop")
-            .absolute().top_0().left_0().w_full().h_full()
+            .absolute()
+            .top_0()
+            .left_0()
+            .w_full()
+            .h_full()
             .bg(rgba(C_BACKDROP))
-            .flex().items_center().justify_center()
+            .flex()
+            .items_center()
+            .justify_center()
             .child(card)
-            .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-                t.modal.open = false; cx.notify();
-            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|t, _, _, cx| {
+                    t.modal.open = false;
+                    cx.notify();
+                }),
+            )
             .into_any_element(),
     )
 }
 
 fn render_sheet_overlay(g: &Gallery, cx: &mut Context<Gallery>) -> Option<gpui::AnyElement> {
-    if !g.sheet.open { return None; }
+    if !g.sheet.open {
+        return None;
+    }
     let tick_id: SharedString = format!("sheet-card-{}", g.sheet.tick).into();
 
     let card = div()
         .id("sheet-card")
-        .absolute().bottom_0().left_0().right_0()
+        .absolute()
+        .bottom_0()
+        .left_0()
+        .right_0()
         .h(px(220.))
-        .px_6().py_5()
+        .px_6()
+        .py_5()
         .bg(rgb(C_PANEL_HI))
-        .border_t_1().border_color(rgba(C_BORDER))
-        .flex().flex_col().justify_start().gap_3()
+        .border_t_1()
+        .border_color(rgba(C_BORDER))
+        .flex()
+        .flex_col()
+        .justify_start()
+        .gap_3()
         .child(
-            div().flex().w_full().justify_center()
-                .child(div().w(px(40.)).h(px(4.)).rounded_full().bg(rgb(C_MUTED)).opacity(0.5))
+            div().flex().w_full().justify_center().child(
+                div()
+                    .w(px(40.))
+                    .h(px(4.))
+                    .rounded_full()
+                    .bg(rgb(C_MUTED))
+                    .opacity(0.5),
+            ),
         )
-        .child(div().text_lg().text_color(rgb(C_TEXT)).child("Bottom sheet"))
-        .child(div().text_xs().text_color(rgb(C_MUTED)).child("Esc ou clique fora pra fechar"))
-        .on_mouse_down(MouseButton::Left, |_: &MouseDownEvent, _, cx| { cx.stop_propagation(); })
+        .child(
+            div()
+                .text_lg()
+                .text_color(rgb(C_TEXT))
+                .child("Bottom sheet"),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(C_MUTED))
+                .child("Esc ou clique fora pra fechar"),
+        )
+        .on_mouse_down(MouseButton::Left, |_: &MouseDownEvent, _, cx| {
+            cx.stop_propagation();
+        })
         .with_animation(
             ElementId::Name(tick_id),
             Animation::new(DUR_BOUNCE).with_easing(ease_in_out),
@@ -1388,12 +1875,20 @@ fn render_sheet_overlay(g: &Gallery, cx: &mut Context<Gallery>) -> Option<gpui::
     Some(
         div()
             .id("sheet-backdrop")
-            .absolute().top_0().left_0().w_full().h_full()
+            .absolute()
+            .top_0()
+            .left_0()
+            .w_full()
+            .h_full()
             .bg(rgba(C_BACKDROP_SOFT))
             .child(card)
-            .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-                t.sheet.open = false; cx.notify();
-            }))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|t, _, _, cx| {
+                    t.sheet.open = false;
+                    cx.notify();
+                }),
+            )
             .into_any_element(),
     )
 }
@@ -1406,90 +1901,151 @@ impl Render for Gallery {
         let demo = self.demo();
 
         let header = div()
-            .flex().flex_row().items_center().justify_between()
-            .w_full().px_8().py_4()
-            .border_b_1().border_color(rgba(C_BORDER))
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .w_full()
+            .px_8()
+            .py_4()
+            .border_b_1()
+            .border_color(rgba(C_BORDER))
             .child(
-                div().flex().flex_row().items_center().gap_3()
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_3()
                     .child(div().size_2().bg(rgb(C_ACCENT)).rounded_full())
                     .child(div().text_sm().text_color(rgb(C_TEXT)).child("luiz-shell")),
             )
-            .child(
-                div().text_xs().text_color(rgb(C_MUTED))
-                    .child(format!("{} / {}", self.current + 1, Demo::ALL.len())),
-            );
+            .child(div().text_xs().text_color(rgb(C_MUTED)).child(format!(
+                "{} / {}",
+                self.current + 1,
+                Demo::ALL.len()
+            )));
 
         let title = div()
-            .px_8().pt_8().pb_2()
-            .text_xl().text_color(rgb(C_TEXT))
+            .px_8()
+            .pt_8()
+            .pb_2()
+            .text_xl()
+            .text_color(rgb(C_TEXT))
             .child(demo.label());
 
         let body_content: gpui::AnyElement = match demo {
-            Demo::SpringButton    => render_spring_button(self, cx),
-            Demo::GlideToggle     => render_glide_toggle(self, cx),
-            Demo::StaggerReveal   => render_stagger(self, cx),
-            Demo::HoverLift       => render_hover_lift(self, cx),
-            Demo::ToastStack      => render_toast_stack(self, cx),
-            Demo::Modal           => render_modal_trigger(self, cx),
-            Demo::BottomSheet     => render_sheet_trigger(self, cx),
-            Demo::PageTransition  => render_page_transition(self, cx),
-            Demo::Segmented       => render_segmented(self, cx),
-            Demo::Skeleton        => render_skeleton(self, cx),
-            Demo::BounceList      => render_bounce_list(self, cx),
-            Demo::PinchZoom       => render_pinch_zoom(self, cx),
-            Demo::Carousel        => render_carousel(self, cx),
-            Demo::SwipeDelete     => render_swipe_delete(self, cx),
-            Demo::ContextMenu     => render_context_menu(self, cx),
-            Demo::LongPress       => render_long_press(self, cx),
-            Demo::TiltCard        => render_tilt_card(self, cx),
-            Demo::StretchBanner   => render_stretch_banner(self, cx),
+            Demo::SpringButton => render_spring_button(self, cx),
+            Demo::GlideToggle => render_glide_toggle(self, cx),
+            Demo::StaggerReveal => render_stagger(self, cx),
+            Demo::HoverLift => render_hover_lift(self, cx),
+            Demo::ToastStack => render_toast_stack(self, cx),
+            Demo::Modal => render_modal_trigger(self, cx),
+            Demo::BottomSheet => render_sheet_trigger(self, cx),
+            Demo::PageTransition => render_page_transition(self, cx),
+            Demo::Segmented => render_segmented(self, cx),
+            Demo::Skeleton => render_skeleton(self, cx),
+            Demo::BounceList => render_bounce_list(self, cx),
+            Demo::PinchZoom => render_pinch_zoom(self, cx),
+            Demo::Carousel => render_carousel(self, cx),
+            Demo::SwipeDelete => render_swipe_delete(self, cx),
+            Demo::ContextMenu => render_context_menu(self, cx),
+            Demo::LongPress => render_long_press(self, cx),
+            Demo::TiltCard => render_tilt_card(self, cx),
+            Demo::StretchBanner => render_stretch_banner(self, cx),
         };
 
-        let body = div().flex().flex_grow().justify_center().items_center().w_full().px_8().py_4()
+        let body = div()
+            .flex()
+            .flex_grow()
+            .justify_center()
+            .items_center()
+            .w_full()
+            .px_8()
+            .py_4()
             .child(body_content);
 
         let nav = div()
-            .flex().flex_row().items_center().justify_between()
-            .w_full().px_8().py_4()
-            .border_t_1().border_color(rgba(C_BORDER))
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .w_full()
+            .px_8()
+            .py_4()
+            .border_t_1()
+            .border_color(rgba(C_BORDER))
             .child(
                 div()
                     .id("prev")
-                    .px_4().py_2().rounded_md()
-                    .border_1().border_color(rgba(C_BORDER))
-                    .text_xs().text_color(rgb(C_TEXT))
-                    .cursor_pointer().child("anterior")
-                    .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-                        t.prev(); cx.notify();
-                    })),
+                    .px_4()
+                    .py_2()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgba(C_BORDER))
+                    .text_xs()
+                    .text_color(rgb(C_TEXT))
+                    .cursor_pointer()
+                    .child("anterior")
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|t, _, _, cx| {
+                            t.prev();
+                            cx.notify();
+                        }),
+                    ),
             )
             .child(
-                div().text_xs().text_color(rgb(C_MUTED))
+                div()
+                    .text_xs()
+                    .text_color(rgb(C_MUTED))
                     .child("←  →  Esc  pra navegar / fechar"),
             )
             .child(
                 div()
                     .id("next")
-                    .px_4().py_2().rounded_md()
+                    .px_4()
+                    .py_2()
+                    .rounded_md()
                     .bg(rgb(C_ACCENT))
-                    .text_xs().text_color(rgb(C_ON_ACCENT))
-                    .cursor_pointer().child("proximo")
-                    .on_mouse_down(MouseButton::Left, cx.listener(|t, _, _, cx| {
-                        t.next(); cx.notify();
-                    })),
+                    .text_xs()
+                    .text_color(rgb(C_ON_ACCENT))
+                    .cursor_pointer()
+                    .child("proximo")
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|t, _, _, cx| {
+                            t.next();
+                            cx.notify();
+                        }),
+                    ),
             );
 
         // P0 #4 — overlay renderiza no root, cobre header+nav
         let mut root = div()
             .key_context("Gallery")
-            .on_action(cx.listener(|t, _: &PrevDemo, _, cx| { t.prev(); cx.notify(); }))
-            .on_action(cx.listener(|t, _: &NextDemo, _, cx| { t.next(); cx.notify(); }))
+            .on_action(cx.listener(|t, _: &PrevDemo, _, cx| {
+                t.prev();
+                cx.notify();
+            }))
+            .on_action(cx.listener(|t, _: &NextDemo, _, cx| {
+                t.next();
+                cx.notify();
+            }))
             .on_action(cx.listener(|t, _: &CloseOverlay, _, cx| {
-                if t.has_overlay() { t.close_overlays(); cx.notify(); }
+                if t.has_overlay() {
+                    t.close_overlays();
+                    cx.notify();
+                }
             }))
             .relative()
-            .flex().flex_col().size_full().bg(rgb(C_BG))
-            .child(header).child(title).child(body).child(nav);
+            .flex()
+            .flex_col()
+            .size_full()
+            .bg(rgb(C_BG))
+            .child(header)
+            .child(title)
+            .child(body)
+            .child(nav);
 
         if let Some(modal) = render_modal_overlay(self, cx) {
             root = root.child(modal);
@@ -1509,8 +2065,8 @@ fn main() {
     application().run(|cx: &mut App| {
         // Keyboard bindings
         cx.bind_keys([
-            KeyBinding::new("left",   PrevDemo,     Some("Gallery")),
-            KeyBinding::new("right",  NextDemo,     Some("Gallery")),
+            KeyBinding::new("left", PrevDemo, Some("Gallery")),
+            KeyBinding::new("right", NextDemo, Some("Gallery")),
             KeyBinding::new("escape", CloseOverlay, Some("Gallery")),
         ]);
 
@@ -1535,7 +2091,11 @@ fn main() {
                     bounce: BounceState::default(),
                     zoom: ZoomState::default(),
                     carousel: CarouselState::default(),
-                    swipe: SwipeState { items: vec![0, 1, 2, 3], removing: None, tick: 0 },
+                    swipe: SwipeState {
+                        items: vec![0, 1, 2, 3],
+                        removing: None,
+                        tick: 0,
+                    },
                     ctx_menu: CtxMenuState::default(),
                     long_press: LongPressState::default(),
                     tilt: TiltState::default(),

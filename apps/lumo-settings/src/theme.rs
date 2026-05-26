@@ -12,14 +12,30 @@ fn c(srgb: [f32; 4]) -> Color {
 pub struct LumoTheme;
 
 impl LumoTheme {
-    pub fn bg() -> Color { c(LFTokens::INK_DEEP_SRGB) }
-    pub fn panel() -> Color { c(LFTokens::PANEL_SRGB) }
-    pub fn panel_hi() -> Color { c(LFTokens::PANEL_HI_SRGB) }
-    pub fn fg() -> Color { c(LFTokens::PEARL_SRGB) }
-    pub fn muted() -> Color { c(LFTokens::MUTED_SRGB) }
-    pub fn accent() -> Color { c(LFTokens::EMERALD_600_SRGB) }
-    pub fn accent_hover() -> Color { c(LFTokens::EMERALD_500_SRGB) }
-    pub fn sep() -> Color { Color::from_rgba(0.2, 0.2, 0.25, 1.0) }
+    pub fn bg() -> Color {
+        c(LFTokens::INK_DEEP_SRGB)
+    }
+    pub fn panel() -> Color {
+        c(LFTokens::PANEL_SRGB)
+    }
+    pub fn panel_hi() -> Color {
+        c(LFTokens::PANEL_HI_SRGB)
+    }
+    pub fn fg() -> Color {
+        c(LFTokens::PEARL_SRGB)
+    }
+    pub fn muted() -> Color {
+        c(LFTokens::MUTED_SRGB)
+    }
+    pub fn accent() -> Color {
+        c(LFTokens::EMERALD_600_SRGB)
+    }
+    pub fn accent_hover() -> Color {
+        c(LFTokens::EMERALD_500_SRGB)
+    }
+    pub fn sep() -> Color {
+        Color::from_rgba(0.2, 0.2, 0.25, 1.0)
+    }
 }
 
 pub enum ButtonStyle {
@@ -34,19 +50,29 @@ impl ButtonStyle {
         match self {
             ButtonStyle::Primary => button::Style {
                 background: Some(Background::Color(LumoTheme::accent())),
-                border: Border { radius: 6.0.into(), ..Default::default() },
+                border: Border {
+                    radius: 6.0.into(),
+                    ..Default::default()
+                },
                 text_color: LumoTheme::bg(),
                 ..Default::default()
             },
             ButtonStyle::Secondary => button::Style {
                 background: Some(Background::Color(LumoTheme::panel_hi())),
-                border: Border { color: LumoTheme::sep(), width: 1.0, radius: 6.0.into() },
+                border: Border {
+                    color: LumoTheme::sep(),
+                    width: 1.0,
+                    radius: 6.0.into(),
+                },
                 text_color: LumoTheme::fg(),
                 ..Default::default()
             },
             ButtonStyle::Ghost => button::Style {
                 background: Some(Background::Color(Color::TRANSPARENT)),
-                border: Border { radius: 4.0.into(), ..Default::default() },
+                border: Border {
+                    radius: 4.0.into(),
+                    ..Default::default()
+                },
                 text_color: LumoTheme::fg(),
                 ..Default::default()
             },
@@ -63,8 +89,15 @@ impl ButtonStyle {
                 };
                 button::Style {
                     background: Some(Background::Color(bg)),
-                    border: Border { radius: 6.0.into(), ..Default::default() },
-                    text_color: if *active { LumoTheme::accent() } else { LumoTheme::fg() },
+                    border: Border {
+                        radius: 6.0.into(),
+                        ..Default::default()
+                    },
+                    text_color: if *active {
+                        LumoTheme::accent()
+                    } else {
+                        LumoTheme::fg()
+                    },
                     ..Default::default()
                 }
             }
@@ -83,7 +116,11 @@ impl ContainerStyle {
         match self {
             ContainerStyle::Sidebar => container::Style {
                 background: Some(Background::Color(LumoTheme::panel())),
-                border: Border { color: LumoTheme::sep(), width: 0.0, ..Default::default() },
+                border: Border {
+                    color: LumoTheme::sep(),
+                    width: 0.0,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             ContainerStyle::Main => container::Style {
@@ -92,7 +129,11 @@ impl ContainerStyle {
             },
             ContainerStyle::Card => container::Style {
                 background: Some(Background::Color(LumoTheme::panel_hi())),
-                border: Border { color: LumoTheme::sep(), width: 1.0, radius: 8.0.into() },
+                border: Border {
+                    color: LumoTheme::sep(),
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
                 ..Default::default()
             },
         }

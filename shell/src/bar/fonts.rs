@@ -69,7 +69,9 @@ pub fn swash_cache() -> &'static Mutex<SwashCache> {
 
 fn load_extra_fonts(fs: &mut FontSystem) {
     let candidates = [
-        std::env::var("HOME").ok().map(|h| format!("{}/.local/share/fonts", h)),
+        std::env::var("HOME")
+            .ok()
+            .map(|h| format!("{}/.local/share/fonts", h)),
         std::env::var("HOME").ok().map(|h| format!("{}/.fonts", h)),
         Some("/usr/share/fonts/geist-mono".to_string()),
         // R4: Inter (ttf-inter pacman) e outros paths comuns.
@@ -84,7 +86,9 @@ fn load_extra_fonts(fs: &mut FontSystem) {
 }
 
 fn walk_load(fs: &mut FontSystem, dir: &std::path::Path) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let p = entry.path();
         if p.is_dir() {
@@ -121,7 +125,12 @@ fn pick_font_family(fs: &FontSystem, prefer_mono: bool, override_name: Option<&s
     let faces: Vec<String> = fs
         .db()
         .faces()
-        .flat_map(|f| f.families.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>())
+        .flat_map(|f| {
+            f.families
+                .iter()
+                .map(|(n, _)| n.clone())
+                .collect::<Vec<_>>()
+        })
         .collect();
 
     // Tenta override configurado primeiro.
@@ -137,7 +146,10 @@ fn pick_font_family(fs: &FontSystem, prefer_mono: bool, override_name: Option<&s
             eprintln!("[lumo-bar] R4 font override fuzzy: {} -> {}", ov, found);
             return found.clone();
         }
-        eprintln!("[lumo-bar] R4 font override {:?} nao encontrada; usando lista padrao", ov);
+        eprintln!(
+            "[lumo-bar] R4 font override {:?} nao encontrada; usando lista padrao",
+            ov
+        );
     }
 
     // R4: lista padrao com Inter em primeiro pra sans.
@@ -150,12 +162,7 @@ fn pick_font_family(fs: &FontSystem, prefer_mono: bool, override_name: Option<&s
             "JetBrains Mono",
         ]
     } else {
-        &[
-            "Inter",
-            "Geist",
-            "Noto Sans",
-            "sans-serif",
-        ]
+        &["Inter", "Geist", "Noto Sans", "sans-serif"]
     };
     for p in preferred {
         if faces.iter().any(|f| f.eq_ignore_ascii_case(p)) {
@@ -179,16 +186,26 @@ fn pick_font_family(fs: &FontSystem, prefer_mono: bool, override_name: Option<&s
 }
 
 fn current_family_ui() -> &'static str {
-    FONT_FAMILY_UI.get().map(|s| s.as_str()).unwrap_or("sans-serif")
+    FONT_FAMILY_UI
+        .get()
+        .map(|s| s.as_str())
+        .unwrap_or("sans-serif")
 }
 
 fn current_family_mono() -> &'static str {
-    FONT_FAMILY_MONO.get().map(|s| s.as_str()).unwrap_or("monospace")
+    FONT_FAMILY_MONO
+        .get()
+        .map(|s| s.as_str())
+        .unwrap_or("monospace")
 }
 
 /// A29: helper pra escolher familia conforme contexto. `mono=true` -> Geist Mono.
 fn family_for(mono: bool) -> &'static str {
-    if mono { current_family_mono() } else { current_family_ui() }
+    if mono {
+        current_family_mono()
+    } else {
+        current_family_ui()
+    }
 }
 
 // ============================================================
@@ -265,33 +282,39 @@ pub fn draw_text_ex(
     let cosmic_color = to_cosmic(color);
     let mut max_w = 0.0f32;
 
-    buffer.draw(&mut fs, &mut cache, cosmic_color, |gx, gy, gw, gh, gcolor| {
-        if gw == 0 || gh == 0 {
-            return;
-        }
-        let a_mask = gcolor.a() as f32 / 255.0;
-        if a_mask < 0.01 {
-            return;
-        }
-        let c = Color::from_rgba(
-            color.red(),
-            color.green(),
-            color.blue(),
-            color.alpha() * a_mask,
-        ).unwrap_or(color);
-        let px = (x + gx as f32).round();
-        let py = (y_top + gy as f32).round();
-        if let Some(rect) = Rect::from_xywh(px, py, gw as f32, gh as f32) {
-            let mut p = Paint::default();
-            p.set_color(c);
-            p.anti_alias = false;
-            canvas.fill_rect(rect, &p, Transform::identity(), None);
-        }
-        let edge = gx as f32 + gw as f32;
-        if edge > max_w {
-            max_w = edge;
-        }
-    });
+    buffer.draw(
+        &mut fs,
+        &mut cache,
+        cosmic_color,
+        |gx, gy, gw, gh, gcolor| {
+            if gw == 0 || gh == 0 {
+                return;
+            }
+            let a_mask = gcolor.a() as f32 / 255.0;
+            if a_mask < 0.01 {
+                return;
+            }
+            let c = Color::from_rgba(
+                color.red(),
+                color.green(),
+                color.blue(),
+                color.alpha() * a_mask,
+            )
+            .unwrap_or(color);
+            let px = (x + gx as f32).round();
+            let py = (y_top + gy as f32).round();
+            if let Some(rect) = Rect::from_xywh(px, py, gw as f32, gh as f32) {
+                let mut p = Paint::default();
+                p.set_color(c);
+                p.anti_alias = false;
+                canvas.fill_rect(rect, &p, Transform::identity(), None);
+            }
+            let edge = gx as f32 + gw as f32;
+            if edge > max_w {
+                max_w = edge;
+            }
+        },
+    );
     max_w
 }
 

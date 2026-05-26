@@ -55,7 +55,10 @@ impl IpcClient {
         let mut eof = false;
         loop {
             match self.stream.read(&mut tmp) {
-                Ok(0) => { eof = true; break; }
+                Ok(0) => {
+                    eof = true;
+                    break;
+                }
                 Ok(n) => self.rx_buf.extend_from_slice(&tmp[..n]),
                 Err(e) if e.kind() == ErrorKind::WouldBlock => break,
                 Err(e) => return Err(e),
@@ -157,8 +160,8 @@ pub fn spawn_theme_watcher() -> Option<mpsc::Receiver<lumo_ipc::ThemeMode>> {
 /// IpcServer fica vivo em LumoState; o tick de drain de clients
 /// roda pelo callback fornecido em `tick()`.
 pub fn init(loop_handle: LoopHandle<'static, LumoState>) -> Result<IpcServer> {
-    let path = default_socket_path()
-        .ok_or_else(|| anyhow!("XDG_RUNTIME_DIR ausente; IPC desativado"))?;
+    let path =
+        default_socket_path().ok_or_else(|| anyhow!("XDG_RUNTIME_DIR ausente; IPC desativado"))?;
 
     if path.exists() {
         if let Err(err) = std::fs::remove_file(&path) {
@@ -166,8 +169,8 @@ pub fn init(loop_handle: LoopHandle<'static, LumoState>) -> Result<IpcServer> {
         }
     }
 
-    let listener = UnixListener::bind(&path)
-        .map_err(|e| anyhow!("bind {}: {e}", path.display()))?;
+    let listener =
+        UnixListener::bind(&path).map_err(|e| anyhow!("bind {}: {e}", path.display()))?;
     listener.set_nonblocking(true)?;
 
     tracing::info!(socket = %path.display(), "lumo-wm IPC listening");

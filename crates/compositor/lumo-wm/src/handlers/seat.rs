@@ -23,7 +23,12 @@ fn write_led(name: &str, on: bool) {
 
 fn glob_simple(pattern: &str) -> Result<Vec<String>, std::io::Error> {
     let dir = std::path::Path::new("/sys/class/leds");
-    let parts: Vec<&str> = pattern.rsplit("/").next().unwrap_or("").splitn(2, "*").collect();
+    let parts: Vec<&str> = pattern
+        .rsplit("/")
+        .next()
+        .unwrap_or("")
+        .splitn(2, "*")
+        .collect();
     let prefix = parts.get(0).copied().unwrap_or("");
     let suffix = parts.get(1).copied().unwrap_or("");
     let mut out = Vec::new();
@@ -72,7 +77,9 @@ impl SeatHandler for LumoState {
                     // W19.4: forca repaint imediato pra cursor icon mudar
                     // no proximo frame (sem esperar vsync pending_flip).
                     #[cfg(feature = "drm-backend")]
-                    { self.drm_force_repaint = true; }
+                    {
+                        self.drm_force_repaint = true;
+                    }
                     tracing::debug!(?icon, "W10.C: cursor shape swapped");
                 } else {
                     tracing::debug!(?icon, "W10.C: xcursor not found for shape, keeping current");
@@ -93,14 +100,16 @@ impl SeatHandler for LumoState {
     fn focus_changed(&mut self, _seat: &Seat<Self>, focused: Option<&WlSurface>) {
         // C5: broadcast ActiveApp a cada troca de foco de teclado.
         // Quando focused=None, envia campos vazios + pid=0 pra bar limpar menubar.
+        use lumo_ipc::LumoEvent;
         use smithay::reexports::wayland_server::Resource;
         use smithay::wayland::compositor as wl_compositor;
         use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
-        use lumo_ipc::LumoEvent;
         let (app_id, title, pid) = if let Some(surf) = focused {
             let (app_id, title) = wl_compositor::with_states(surf, |states| {
                 if let Some(data) = states.data_map.get::<XdgToplevelSurfaceData>() {
-                    let lock = data.lock().expect("XdgToplevelSurfaceData mutex: nao deve envenenar");
+                    let lock = data
+                        .lock()
+                        .expect("XdgToplevelSurfaceData mutex: nao deve envenenar");
                     (
                         lock.app_id.clone().unwrap_or_default(),
                         lock.title.clone().unwrap_or_default(),
@@ -124,18 +133,27 @@ impl SeatHandler for LumoState {
             if let Some((cached_id, cached_title)) = self.pid_app_cache.get(&pid) {
                 app_id = cached_id.clone();
                 title = cached_title.clone();
-                eprintln!("[wm] W34.13 resolved focus app_id={:?} via cache pid={}", app_id, pid);
+                eprintln!(
+                    "[wm] W34.13 resolved focus app_id={:?} via cache pid={}",
+                    app_id, pid
+                );
             }
         }
         tracing::debug!(%app_id, %title, pid, "C5: focus_changed -> ActiveApp broadcast");
-        eprintln!("[wm] focus_changed -> ActiveApp app_id={:?} title={:?} pid={} focused_some={}",
-            app_id, title, pid, focused.is_some());
+        eprintln!(
+            "[wm] focus_changed -> ActiveApp app_id={:?} title={:?} pid={} focused_some={}",
+            app_id,
+            title,
+            pid,
+            focused.is_some()
+        );
         if !app_id.is_empty() {
             self.last_active_app = Some((app_id.clone(), title.clone(), pid));
         } else {
             self.last_active_app = None;
         }
-        self.ipc.broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
+        self.ipc
+            .broadcast(&LumoEvent::ActiveApp { app_id, title, pid });
     }
 
     fn led_state_changed(&mut self, _seat: &Seat<Self>, led_state: LedState) {
@@ -154,35 +172,35 @@ smithay::delegate_seat!(LumoState);
 pub fn cursor_icon_to_xcursor_name(icon: smithay::input::pointer::CursorIcon) -> &'static str {
     use smithay::input::pointer::CursorIcon;
     match icon {
-        CursorIcon::Default    => "default",
-        CursorIcon::Text       => "text",
-        CursorIcon::Pointer    => "pointer",
-        CursorIcon::Move       => "move",
-        CursorIcon::Grab       => "grab",
-        CursorIcon::Grabbing   => "grabbing",
-        CursorIcon::Copy       => "copy",
-        CursorIcon::Alias      => "alias",
-        CursorIcon::NoDrop     => "no-drop",
+        CursorIcon::Default => "default",
+        CursorIcon::Text => "text",
+        CursorIcon::Pointer => "pointer",
+        CursorIcon::Move => "move",
+        CursorIcon::Grab => "grab",
+        CursorIcon::Grabbing => "grabbing",
+        CursorIcon::Copy => "copy",
+        CursorIcon::Alias => "alias",
+        CursorIcon::NoDrop => "no-drop",
         CursorIcon::NotAllowed => "not-allowed",
-        CursorIcon::EResize    => "e-resize",
-        CursorIcon::NResize    => "n-resize",
-        CursorIcon::NeResize   => "ne-resize",
-        CursorIcon::NwResize   => "nw-resize",
-        CursorIcon::SResize    => "s-resize",
-        CursorIcon::SeResize   => "se-resize",
-        CursorIcon::SwResize   => "sw-resize",
-        CursorIcon::WResize    => "w-resize",
-        CursorIcon::EwResize   => "ew-resize",
-        CursorIcon::NsResize   => "ns-resize",
-        CursorIcon::ColResize  => "col-resize",
-        CursorIcon::RowResize  => "row-resize",
-        CursorIcon::AllScroll  => "all-scroll",
-        CursorIcon::ZoomIn     => "zoom-in",
-        CursorIcon::ZoomOut    => "zoom-out",
-        CursorIcon::Crosshair  => "crosshair",
-        CursorIcon::Wait       => "wait",
-        CursorIcon::Progress   => "progress",
-        CursorIcon::Help       => "help",
+        CursorIcon::EResize => "e-resize",
+        CursorIcon::NResize => "n-resize",
+        CursorIcon::NeResize => "ne-resize",
+        CursorIcon::NwResize => "nw-resize",
+        CursorIcon::SResize => "s-resize",
+        CursorIcon::SeResize => "se-resize",
+        CursorIcon::SwResize => "sw-resize",
+        CursorIcon::WResize => "w-resize",
+        CursorIcon::EwResize => "ew-resize",
+        CursorIcon::NsResize => "ns-resize",
+        CursorIcon::ColResize => "col-resize",
+        CursorIcon::RowResize => "row-resize",
+        CursorIcon::AllScroll => "all-scroll",
+        CursorIcon::ZoomIn => "zoom-in",
+        CursorIcon::ZoomOut => "zoom-out",
+        CursorIcon::Crosshair => "crosshair",
+        CursorIcon::Wait => "wait",
+        CursorIcon::Progress => "progress",
+        CursorIcon::Help => "help",
         CursorIcon::ContextMenu => "context-menu",
         CursorIcon::VerticalText => "vertical-text",
         CursorIcon::NeswResize => "nesw-resize",
@@ -213,8 +231,14 @@ mod cursor_shape_tests {
 
     #[test]
     fn resize_icons_map_correctly() {
-        assert_eq!(cursor_icon_to_xcursor_name(CursorIcon::EwResize), "ew-resize");
-        assert_eq!(cursor_icon_to_xcursor_name(CursorIcon::NsResize), "ns-resize");
+        assert_eq!(
+            cursor_icon_to_xcursor_name(CursorIcon::EwResize),
+            "ew-resize"
+        );
+        assert_eq!(
+            cursor_icon_to_xcursor_name(CursorIcon::NsResize),
+            "ns-resize"
+        );
     }
 
     #[test]
@@ -224,4 +248,3 @@ mod cursor_shape_tests {
         assert!(!name.is_empty());
     }
 }
-

@@ -37,11 +37,17 @@ impl DisplayConfig {
     pub fn load() -> Self {
         match Self::try_load() {
             Ok(cfg) => {
-                tracing::info!(vrr_enabled = cfg.vrr_enabled, "W13.B: display.toml carregado");
+                tracing::info!(
+                    vrr_enabled = cfg.vrr_enabled,
+                    "W13.B: display.toml carregado"
+                );
                 cfg
             }
             Err(err) => {
-                tracing::debug!(?err, "W13.B: display.toml ausente/invalido, usando default (vrr=false)");
+                tracing::debug!(
+                    ?err,
+                    "W13.B: display.toml ausente/invalido, usando default (vrr=false)"
+                );
                 Self::default()
             }
         }
@@ -49,8 +55,7 @@ impl DisplayConfig {
 
     fn try_load() -> anyhow::Result<Self> {
         let home = std::env::var("HOME")?;
-        let xdg = std::env::var("XDG_CONFIG_HOME")
-            .unwrap_or_else(|_| format!("{home}/.config"));
+        let xdg = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{home}/.config"));
         let path = format!("{xdg}/lumo/display.toml");
         let raw = std::fs::read_to_string(&path)?;
         let cfg: Self = toml::from_str(&raw)?;
@@ -136,7 +141,10 @@ mod tests {
     fn vrr_setup_result_all_variants_self_eq() {
         assert_eq!(VrrSetupResult::Enabled, VrrSetupResult::Enabled);
         assert_eq!(VrrSetupResult::NotSupported, VrrSetupResult::NotSupported);
-        assert_eq!(VrrSetupResult::RequiresModeset, VrrSetupResult::RequiresModeset);
+        assert_eq!(
+            VrrSetupResult::RequiresModeset,
+            VrrSetupResult::RequiresModeset
+        );
         assert_eq!(VrrSetupResult::Disabled, VrrSetupResult::Disabled);
     }
 }

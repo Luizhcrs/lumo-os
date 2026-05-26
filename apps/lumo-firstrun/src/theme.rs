@@ -11,9 +11,15 @@ fn c(srgb: [f32; 4]) -> Color {
 pub struct LumoFirstrunTheme;
 
 impl LumoFirstrunTheme {
-    pub fn bg()     -> Color { c(LFTokens::INK_DEEP_SRGB) }
-    pub fn panel()  -> Color { c(LFTokens::PANEL_HI_SRGB) }
-    pub fn accent() -> Color { c(LFTokens::EMERALD_600_SRGB) }
+    pub fn bg() -> Color {
+        c(LFTokens::INK_DEEP_SRGB)
+    }
+    pub fn panel() -> Color {
+        c(LFTokens::PANEL_HI_SRGB)
+    }
+    pub fn accent() -> Color {
+        c(LFTokens::EMERALD_600_SRGB)
+    }
 }
 
 pub fn bg_style() -> container::Style {

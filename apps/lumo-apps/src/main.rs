@@ -15,14 +15,14 @@ fn main() -> ExitCode {
     };
 
     let res = match sub.as_str() {
-        "about"    => lumo_about::run(),
-        "calc"     => lumo_calc::run(),
-        "notes"    => lumo_notes::run(),
-        "monitor"  => lumo_monitor::run(),
-        "editor"   => lumo_editor::run(),
-        "files"    => lumo_files::run(),
+        "about" => lumo_about::run(),
+        "calc" => lumo_calc::run(),
+        "notes" => lumo_notes::run(),
+        "monitor" => lumo_monitor::run(),
+        "editor" => lumo_editor::run(),
+        "files" => lumo_files::run(),
         "settings" => lumo_settings::run(),
-        "store"    => lumo_store::run(),
+        "store" => lumo_store::run(),
         "" => {
             eprintln!("lumo-apps: argv[0]={} sem subcommand", basename);
             return ExitCode::from(2);
@@ -35,6 +35,9 @@ fn main() -> ExitCode {
 
     match res {
         Ok(()) => ExitCode::SUCCESS,
-        Err(e) => { eprintln!("lumo-apps {}: {}", sub, e); ExitCode::FAILURE }
+        Err(e) => {
+            eprintln!("lumo-apps {}: {}", sub, e);
+            ExitCode::FAILURE
+        }
     }
 }

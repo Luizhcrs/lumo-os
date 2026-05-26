@@ -6,9 +6,9 @@
 //!
 //! Run: cargo test -p lumo-shell --test snapshot_bar
 
+use lumo_foundation::{LumoColors, LumoTheme};
 use std::path::PathBuf;
 use tiny_skia::{Color, Pixmap, PixmapMut};
-use lumo_foundation::{LumoColors, LumoTheme};
 
 const BAR_W: u32 = 1920;
 const BAR_H: u32 = 32;
@@ -56,7 +56,13 @@ fn fill_rect_simple(canvas: &mut PixmapMut, x: f32, y: f32, w: f32, h: f32, colo
         let mut paint = Paint::default();
         paint.set_color(color);
         paint.anti_alias = false;
-        canvas.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+        canvas.fill_path(
+            &path,
+            &paint,
+            FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
     }
 }
 
@@ -65,7 +71,9 @@ fn pixel_diff_ratio(a: &Pixmap, b: &Pixmap) -> f64 {
     assert_eq!(a.width(), b.width());
     assert_eq!(a.height(), b.height());
     let total = (a.width() * a.height()) as f64;
-    let diff_count = a.data().chunks(4)
+    let diff_count = a
+        .data()
+        .chunks(4)
         .zip(b.data().chunks(4))
         .filter(|(pa, pb)| pa != pb)
         .count() as f64;
@@ -87,7 +95,10 @@ fn run_snapshot(mode_name: &str, palette: LumoColors) {
             eprintln!("[snapshot] baseline saved: {}", path.display());
             return;
         } else {
-            panic!("baseline ausente: {}. Rode com UPDATE_SNAPSHOTS=1 para gerar.", path.display());
+            panic!(
+                "baseline ausente: {}. Rode com UPDATE_SNAPSHOTS=1 para gerar.",
+                path.display()
+            );
         }
     }
     // Regenera baseline se UPDATE_SNAPSHOTS definido (mesmo se ja existe).

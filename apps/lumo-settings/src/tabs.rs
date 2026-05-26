@@ -28,28 +28,28 @@ impl Tab {
 
     pub fn label(self) -> &'static str {
         match self {
-            Tab::Display    => "Display",
-            Tab::Wifi       => "Wi-Fi",
-            Tab::Bluetooth  => "Bluetooth",
-            Tab::Audio      => "Audio",
-            Tab::Battery    => "Bateria",
+            Tab::Display => "Display",
+            Tab::Wifi => "Wi-Fi",
+            Tab::Bluetooth => "Bluetooth",
+            Tab::Audio => "Audio",
+            Tab::Battery => "Bateria",
             Tab::Appearance => "Aparencia",
-            Tab::Keyboard   => "Teclado",
-            Tab::Touchpad   => "Touchpad",
+            Tab::Keyboard => "Teclado",
+            Tab::Touchpad => "Touchpad",
             Tab::Accessibility => "Acessibilidade",
         }
     }
 
     pub fn icon(self) -> &'static str {
         match self {
-            Tab::Display    => "[disp]",
-            Tab::Wifi       => "[wifi]",
-            Tab::Bluetooth  => "[bt]",
-            Tab::Audio      => "[aud]",
-            Tab::Battery    => "[bat]",
+            Tab::Display => "[disp]",
+            Tab::Wifi => "[wifi]",
+            Tab::Bluetooth => "[bt]",
+            Tab::Audio => "[aud]",
+            Tab::Battery => "[bat]",
             Tab::Appearance => "[apar]",
-            Tab::Keyboard   => "[kbd]",
-            Tab::Touchpad   => "[tpad]",
+            Tab::Keyboard => "[kbd]",
+            Tab::Touchpad => "[tpad]",
             Tab::Accessibility => "[a11y]",
         }
     }

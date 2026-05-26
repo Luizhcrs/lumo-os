@@ -15,19 +15,19 @@ use iced::widget::{
 };
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task};
 
+use crate::appmenu;
 use crate::breadcrumb;
 use crate::ctxmenu;
 use crate::filelist::{FileList, SortBy};
 use crate::icons;
 use crate::icons::{icon_for_path, IconKind};
-use crate::toolbar::ViewMode;
-use crate::appmenu;
 use crate::ops;
 use crate::sidebar::{build_sidebar, SidebarItem, SidebarKind};
 use crate::statusbar;
 use crate::tabs as tabs_view;
 use crate::theme::{LumoTheme, ThemeSnapshot};
 use crate::toast::{Toast, ToastKind, ToastQueue};
+use crate::toolbar::ViewMode;
 
 // ---------------------------------------------------------------------------
 // Tab state
@@ -44,7 +44,8 @@ pub struct Tab {
 
 impl Tab {
     pub fn new(dir: std::path::PathBuf) -> Self {
-        let label = dir.file_name()
+        let label = dir
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "/".to_string());
         Self {
@@ -105,7 +106,11 @@ pub enum Message {
     NavigateUp,
 
     // Grid
-    ItemClicked { idx: usize, ctrl: bool, shift: bool },
+    ItemClicked {
+        idx: usize,
+        ctrl: bool,
+        shift: bool,
+    },
     ItemDoubleClicked(usize),
     ClearSelection,
 
@@ -163,7 +168,11 @@ pub enum Message {
     EmptyTrash,
     // Tick para refresh periódico
     Tick,
-    ThumbLoaded { path: PathBuf, key: String, data: Vec<u8> },
+    ThumbLoaded {
+        path: PathBuf,
+        key: String,
+        data: Vec<u8>,
+    },
 
     // Teclado
     KeyPressed(Key, Modifiers),
@@ -314,7 +323,9 @@ impl App {
                 {
                     let cur = self.current_tab().current_dir.clone();
                     self.current_tab_mut().back_stack.push_back(cur);
-                    if self.current_tab().back_stack.len() > 50 { self.current_tab_mut().back_stack.pop_front(); }
+                    if self.current_tab().back_stack.len() > 50 {
+                        self.current_tab_mut().back_stack.pop_front();
+                    }
                 }
                 self.current_tab_mut().forward_stack.clear();
                 let p2 = path.clone();
@@ -342,7 +353,9 @@ impl App {
                 if let Some(next) = self.current_tab_mut().forward_stack.pop_back() {
                     let cur = self.current_tab().current_dir.clone();
                     self.current_tab_mut().back_stack.push_back(cur);
-                    if self.current_tab().back_stack.len() > 50 { self.current_tab_mut().back_stack.pop_front(); }
+                    if self.current_tab().back_stack.len() > 50 {
+                        self.current_tab_mut().back_stack.pop_front();
+                    }
                     let p2 = next.clone();
                     Task::perform(load_dir(next, self.show_hidden), move |r| match r {
                         Ok(entries) => Message::DirLoaded(p2.clone(), entries),
@@ -354,7 +367,12 @@ impl App {
             }
 
             Message::NavigateUp => {
-                if let Some(parent) = self.current_tab().current_dir.parent().map(|p| p.to_path_buf()) {
+                if let Some(parent) = self
+                    .current_tab()
+                    .current_dir
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                {
                     self.update(Message::Navigate(parent))
                 } else {
                     Task::none()
@@ -608,12 +626,14 @@ impl App {
             // -- Async results ---------------------------------------------
             Message::DirLoaded(path, entries) => {
                 eprintln!("[hit] DirLoaded path={:?} entries={}", path, entries.len());
-                let label = path.file_name()
+                let label = path
+                    .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "/".to_string());
                 self.current_tab_mut().current_dir = path.clone();
                 self.current_tab_mut().label = label;
-                let sb = self.sort_by; let sa = self.sort_ascending;
+                let sb = self.sort_by;
+                let sa = self.sort_ascending;
                 self.current_tab_mut().file_list.set_entries(entries);
                 self.current_tab_mut().file_list.sort(sb, sa);
                 self.status.clear();
@@ -624,9 +644,7 @@ impl App {
                 // Polish v2: disk usage refresh (cache 5 s).
                 let needs_disk = match &self.disk_cache {
                     None => true,
-                    Some((p, _, _, when)) => {
-                        p != &path || when.elapsed() > Duration::from_secs(5)
-                    }
+                    Some((p, _, _, when)) => p != &path || when.elapsed() > Duration::from_secs(5),
                 };
                 if needs_disk {
                     let p_path = path.clone();
@@ -642,7 +660,9 @@ impl App {
 
                 // P0.1: pre-render thumbs for image files in background.
                 if self.view_mode == crate::toolbar::ViewMode::Grid {
-                    let image_paths: Vec<_> = self.tabs[self.active_tab].file_list.entries
+                    let image_paths: Vec<_> = self.tabs[self.active_tab]
+                        .file_list
+                        .entries
                         .iter()
                         .filter(|p| crate::thumbs::is_image(p))
                         .cloned()
@@ -651,8 +671,7 @@ impl App {
                         let key = crate::thumbs::cache_key(&p);
                         tasks.push(Task::perform(
                             tokio::task::spawn_blocking(move || {
-                                crate::thumbs::generate_thumb(&p, &key)
-                                    .map(|data| (p, key, data))
+                                crate::thumbs::generate_thumb(&p, &key).map(|data| (p, key, data))
                             }),
                             |r| match r {
                                 Ok(Some((path, key, data))) => {
@@ -709,7 +728,9 @@ impl App {
             Message::AppMenuQuit => iced::exit(),
             Message::AppMenuSelectAll => {
                 let n = self.current_tab().file_list.entries.len();
-                for i in 0..n { self.current_tab_mut().file_list.selected.insert(i); }
+                for i in 0..n {
+                    self.current_tab_mut().file_list.selected.insert(i);
+                }
                 Task::none()
             }
             Message::AppMenuToggleHidden => {
@@ -721,7 +742,9 @@ impl App {
 
             Message::ToggleSearch => {
                 self.search_visible = !self.search_visible;
-                if !self.search_visible { self.search_query.clear(); }
+                if !self.search_visible {
+                    self.search_query.clear();
+                }
                 Task::none()
             }
             Message::SearchChanged(s) => {
@@ -739,13 +762,15 @@ impl App {
                     self.sort_by = s;
                     self.sort_ascending = true;
                 }
-                let sb = self.sort_by; let sa = self.sort_ascending;
+                let sb = self.sort_by;
+                let sa = self.sort_ascending;
                 self.current_tab_mut().file_list.sort(sb, sa);
                 Task::none()
             }
             Message::ToggleSortOrder => {
                 self.sort_ascending = !self.sort_ascending;
-                let sb = self.sort_by; let sa = self.sort_ascending;
+                let sb = self.sort_by;
+                let sa = self.sort_ascending;
                 self.current_tab_mut().file_list.sort(sb, sa);
                 Task::none()
             }
@@ -762,7 +787,8 @@ impl App {
 
             Message::DrivesRefreshed(items) => {
                 // Atualiza drives na sidebar mantendo itens fixos
-                self.sidebar.retain(|it| it.kind != crate::sidebar::SidebarKind::Drive);
+                self.sidebar
+                    .retain(|it| it.kind != crate::sidebar::SidebarKind::Drive);
                 self.sidebar.extend(items);
                 Task::none()
             }
@@ -799,9 +825,15 @@ impl App {
             Message::OpenProperties => {
                 let paths = self.current_tab().file_list.selected_paths();
                 if let Some(path) = paths.into_iter().next() {
-                    let name = path.file_name()
-                        .unwrap_or_default().to_string_lossy().to_string();
-                    self.properties = Some(PropertiesState { path, name_edit: name });
+                    let name = path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
+                    self.properties = Some(PropertiesState {
+                        path,
+                        name_edit: name,
+                    });
                 }
                 Task::none()
             }
@@ -878,7 +910,8 @@ impl App {
 
             Message::TabDirLoaded(idx, path, entries) => {
                 if let Some(tab) = self.tabs.get_mut(idx) {
-                    tab.label = path.file_name()
+                    tab.label = path
+                        .file_name()
                         .map(|n| n.to_string_lossy().to_string())
                         .unwrap_or_else(|| "/".to_string());
                     tab.current_dir = path;
@@ -893,7 +926,8 @@ impl App {
                 Task::perform(
                     async move { crate::sidebar::build_sidebar(&username) },
                     |items| {
-                        let drives: Vec<_> = items.into_iter()
+                        let drives: Vec<_> = items
+                            .into_iter()
                             .filter(|it| it.kind == crate::sidebar::SidebarKind::Drive)
                             .collect();
                         Message::DrivesRefreshed(drives)
@@ -966,30 +1000,29 @@ impl App {
                     let color = if is_last { fg } else { muted };
                     let p = path.clone();
                     let bd_color = th.border;
-                    let btn = button(
-                        text(lbl).size(13).color(color),
-                    )
-                    .on_press(Message::Navigate(p))
-                    .style(move |_, status| {
-                        let bg = if status == iced::widget::button::Status::Hovered {
-                            panel_hi
-                        } else {
-                            Color::TRANSPARENT
-                        };
-                        iced::widget::button::Style {
-                            background: Some(iced::Background::Color(bg)),
-                            border: Border { radius: 6.0.into(), ..Default::default() },
-                            text_color: fg,
-                            ..Default::default()
-                        }
-                    });
+                    let btn = button(text(lbl).size(13).color(color))
+                        .on_press(Message::Navigate(p))
+                        .style(move |_, status| {
+                            let bg = if status == iced::widget::button::Status::Hovered {
+                                panel_hi
+                            } else {
+                                Color::TRANSPARENT
+                            };
+                            iced::widget::button::Style {
+                                background: Some(iced::Background::Color(bg)),
+                                border: Border {
+                                    radius: 6.0.into(),
+                                    ..Default::default()
+                                },
+                                text_color: fg,
+                                ..Default::default()
+                            }
+                        });
                     let _ = bd_color;
                     breadcrumb_row = breadcrumb_row.push(btn);
                 }
                 breadcrumb::BreadcrumbEntry::Ellipsis => {
-                    breadcrumb_row = breadcrumb_row.push(
-                        text("...").size(13).color(muted),
-                    );
+                    breadcrumb_row = breadcrumb_row.push(text("...").size(13).color(muted));
                 }
             }
             if i != last_idx {
@@ -997,9 +1030,7 @@ impl App {
                     .width(Length::Fixed(10.0))
                     .height(Length::Fixed(10.0))
                     .style(move |_, _| iced::widget::svg::Style { color: Some(muted) });
-                breadcrumb_row = breadcrumb_row.push(
-                    container(chev).padding([0, 2]),
-                );
+                breadcrumb_row = breadcrumb_row.push(container(chev).padding([0, 2]));
             }
         }
 
@@ -1023,7 +1054,8 @@ impl App {
         };
 
         // -- Status bar (polish v2: itens / selecionados / disco) ----------
-        let (free, total) = self.disk_cache
+        let (free, total) = self
+            .disk_cache
             .as_ref()
             .map(|(_, f, t, _)| (*f, *t))
             .unwrap_or((0, 0));
@@ -1049,43 +1081,56 @@ impl App {
             let icon = Svg::new(SvgHandle::from_memory(svg_bytes))
                 .width(Length::Fixed(16.0))
                 .height(Length::Fixed(16.0))
-                .style(move |_, _| iced::widget::svg::Style { color: Some(icon_color) });
+                .style(move |_, _| iced::widget::svg::Style {
+                    color: Some(icon_color),
+                });
 
             let active_bar = container(iced::widget::horizontal_space())
                 .width(Length::Fixed(3.0))
                 .height(Length::Fixed(18.0))
                 .style(move |_| iced::widget::container::Style {
-                    background: Some(iced::Background::Color(
-                        if is_active { accent } else { Color::TRANSPARENT },
-                    )),
-                    border: Border { radius: 2.0.into(), ..Default::default() },
+                    background: Some(iced::Background::Color(if is_active {
+                        accent
+                    } else {
+                        Color::TRANSPARENT
+                    })),
+                    border: Border {
+                        radius: 2.0.into(),
+                        ..Default::default()
+                    },
                     ..Default::default()
                 });
 
-            let chevron_elem: iced::Element<Message> = if let Some((expanded, toggle_path)) = chevron {
-                let glyph = if expanded { "v" } else { ">" };
-                button(text(glyph.to_string()).size(11).color(muted))
-                    .on_press(Message::ToggleSidebarExpand(toggle_path))
-                    .style(move |_, _| iced::widget::button::Style {
-                        background: Some(iced::Background::Color(Color::TRANSPARENT)),
-                        border: Border { radius: 4.0.into(), ..Default::default() },
-                        text_color: muted,
-                        ..Default::default()
-                    })
-                    .padding([0u16, 4u16])
-                    .width(Length::Fixed(16.0))
-                    .into()
-            } else {
-                container(iced::widget::horizontal_space())
-                    .width(Length::Fixed(16.0))
-                    .into()
-            };
+            let chevron_elem: iced::Element<Message> =
+                if let Some((expanded, toggle_path)) = chevron {
+                    let glyph = if expanded { "v" } else { ">" };
+                    button(text(glyph.to_string()).size(11).color(muted))
+                        .on_press(Message::ToggleSidebarExpand(toggle_path))
+                        .style(move |_, _| iced::widget::button::Style {
+                            background: Some(iced::Background::Color(Color::TRANSPARENT)),
+                            border: Border {
+                                radius: 4.0.into(),
+                                ..Default::default()
+                            },
+                            text_color: muted,
+                            ..Default::default()
+                        })
+                        .padding([0u16, 4u16])
+                        .width(Length::Fixed(16.0))
+                        .into()
+                } else {
+                    container(iced::widget::horizontal_space())
+                        .width(Length::Fixed(16.0))
+                        .into()
+                };
 
             let btn = button(
                 row![
                     active_bar,
                     chevron_elem,
-                    container(icon).width(Length::Fixed(16.0)).height(Length::Fixed(16.0)),
+                    container(icon)
+                        .width(Length::Fixed(16.0))
+                        .height(Length::Fixed(16.0)),
                     text(label).size(13).color(fg),
                 ]
                 .spacing(8)
@@ -1102,7 +1147,10 @@ impl App {
                 };
                 iced::widget::button::Style {
                     background: Some(iced::Background::Color(bg)),
-                    border: Border { radius: 8.0.into(), ..Default::default() },
+                    border: Border {
+                        radius: 8.0.into(),
+                        ..Default::default()
+                    },
                     text_color: fg,
                     ..Default::default()
                 }
@@ -1146,7 +1194,8 @@ impl App {
             if matches!(kind, SidebarKind::Home) && is_expanded {
                 for sub in &self.home_subdirs {
                     let sub_active = *sub == self.current_tab().current_dir;
-                    let sub_label = sub.file_name()
+                    let sub_label = sub
+                        .file_name()
                         .and_then(|s| s.to_str())
                         .unwrap_or("")
                         .to_string();
@@ -1176,7 +1225,9 @@ impl App {
         }
         if !drives_col.is_empty() {
             sidebar_col = sidebar_col.push(
-                container(horizontal_rule(1)).padding([8, 0]).width(Length::Fill),
+                container(horizontal_rule(1))
+                    .padding([8, 0])
+                    .width(Length::Fill),
             );
             sidebar_col = sidebar_col.push(group_header("DRIVES"));
             for btn in drives_col {
@@ -1192,11 +1243,14 @@ impl App {
                 let bd = th.border;
                 move |_| iced::widget::container::Style {
                     background: Some(iced::Background::Color(bg)),
-                    border: Border { color: bd, width: 0.0, ..Default::default() },
+                    border: Border {
+                        color: bd,
+                        width: 0.0,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 }
             });
-
 
         // -- File grid -----------------------------------------------------
         let grid = self.view_grid(fg, muted, accent, panel_hi, sep);
@@ -1274,17 +1328,26 @@ impl App {
             let path = &props.path;
             let size_str = crate::filelist::FileList::human_size(path);
             let mod_str = crate::filelist::FileList::human_modified(path);
-            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("--").to_string();
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("--")
+                .to_string();
             let perms = {
                 use std::os::unix::fs::PermissionsExt;
-                path.metadata().map(|m| format!("{:o}", m.permissions().mode() & 0o777)).unwrap_or_else(|_| "--".to_string())
+                path.metadata()
+                    .map(|m| format!("{:o}", m.permissions().mode() & 0o777))
+                    .unwrap_or_else(|_| "--".to_string())
             };
 
             let btn_apply = button(text("Aplicar").size(13).color(fg))
                 .on_press(Message::PropertiesApply)
                 .style(move |_, _| iced::widget::button::Style {
                     background: Some(iced::Background::Color(LumoTheme::accent())),
-                    border: iced::Border { radius: 4.0.into(), ..Default::default() },
+                    border: iced::Border {
+                        radius: 4.0.into(),
+                        ..Default::default()
+                    },
                     text_color: LumoTheme::bg(),
                     ..Default::default()
                 })
@@ -1294,7 +1357,10 @@ impl App {
                 .on_press(Message::CloseProperties)
                 .style(move |_, _| iced::widget::button::Style {
                     background: Some(iced::Background::Color(Color::TRANSPARENT)),
-                    border: iced::Border { radius: 4.0.into(), ..Default::default() },
+                    border: iced::Border {
+                        radius: 4.0.into(),
+                        ..Default::default()
+                    },
                     text_color: LumoTheme::muted(),
                     ..Default::default()
                 })
@@ -1303,7 +1369,9 @@ impl App {
             let dialog = container(
                 column![
                     text("Propriedades").size(16).color(fg),
-                    container(horizontal_rule(1)).padding([4, 0]).width(Length::Fill),
+                    container(horizontal_rule(1))
+                        .padding([4, 0])
+                        .width(Length::Fill),
                     text("Nome:").size(12).color(muted),
                     name_input,
                     text("Tamanho:").size(12).color(muted),
@@ -1314,7 +1382,9 @@ impl App {
                     text(ext.clone()).size(13).color(fg),
                     text("Permissoes:").size(12).color(muted),
                     text(perms.clone()).size(13).color(fg),
-                    container(horizontal_rule(1)).padding([4, 0]).width(Length::Fill),
+                    container(horizontal_rule(1))
+                        .padding([4, 0])
+                        .width(Length::Fill),
                     row![btn_apply, btn_cancel].spacing(8),
                 ]
                 .spacing(6)
@@ -1342,7 +1412,10 @@ impl App {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(move |_| iced::widget::container::Style {
-                background: Some(iced::Background::Color(Color { a: 0.6, ..LumoTheme::bg() })),
+                background: Some(iced::Background::Color(Color {
+                    a: 0.6,
+                    ..LumoTheme::bg()
+                })),
                 ..Default::default()
             })
             .into()
@@ -1362,11 +1435,7 @@ impl App {
             with_ctx
         } else {
             // Embaixo da base, alinha a direita.
-            column![
-                with_ctx,
-                crate::toast::view(&self.theme, &self.toasts),
-            ]
-            .into()
+            column![with_ctx, crate::toast::view(&self.theme, &self.toasts),].into()
         }
     }
 
@@ -1379,13 +1448,25 @@ impl App {
         _sep: Color,
     ) -> Element<Message> {
         let entries: Vec<(usize, &PathBuf)> = if self.search_query.is_empty() {
-            self.current_tab().file_list.entries.iter().enumerate().collect()
+            self.current_tab()
+                .file_list
+                .entries
+                .iter()
+                .enumerate()
+                .collect()
         } else {
             let q = self.search_query.to_ascii_lowercase();
-            self.current_tab().file_list.entries.iter().enumerate()
+            self.current_tab()
+                .file_list
+                .entries
+                .iter()
+                .enumerate()
                 .filter(|(_, p)| {
-                    p.file_name().unwrap_or_default()
-                        .to_string_lossy().to_ascii_lowercase().contains(&q)
+                    p.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_ascii_lowercase()
+                        .contains(&q)
                 })
                 .collect()
         };
@@ -1427,58 +1508,75 @@ impl App {
                 let is_selected = self.current_tab().file_list.selected.contains(&idx);
                 let name = FileList::display_name_max(path, 18);
                 let kind = icon_for_path(path);
-                let icon_color = if matches!(kind, IconKind::Folder) { accent } else { muted };
-                let cell_bg = if is_selected { th.accent_subtle } else { Color::TRANSPARENT };
+                let icon_color = if matches!(kind, IconKind::Folder) {
+                    accent
+                } else {
+                    muted
+                };
+                let cell_bg = if is_selected {
+                    th.accent_subtle
+                } else {
+                    Color::TRANSPARENT
+                };
 
                 let svg_icon = Svg::new(SvgHandle::from_memory(icons::svg_bytes_for_kind(&kind)))
                     .width(Length::Fixed(56.0))
                     .height(Length::Fixed(56.0))
-                    .style(move |_, _| iced::widget::svg::Style { color: Some(icon_color) });
+                    .style(move |_, _| iced::widget::svg::Style {
+                        color: Some(icon_color),
+                    });
 
-                let cell_content: Element<Message> = if self.current_tab().file_list.renaming == Some(idx) {
-                    column![
-                        container(svg_icon).width(Length::Fixed(56.0)).height(Length::Fixed(56.0)),
-                        text_input("nome", &self.current_tab().file_list.rename_input)
-                            .on_input(Message::RenameInputChanged)
-                            .on_submit(Message::RenameConfirm)
-                            .size(11)
-                            .padding([2, 4]),
-                    ]
-                    .spacing(6)
-                    .align_x(Alignment::Center)
-                    .into()
-                } else if matches!(kind, IconKind::Image) {
-                    let thumb_key = crate::thumbs::cache_key(path);
-                    if let Some(bytes) = self.thumb_cache.get(&thumb_key) {
+                let cell_content: Element<Message> =
+                    if self.current_tab().file_list.renaming == Some(idx) {
                         column![
-                            iced::widget::image::Image::new(
-                                iced::widget::image::Handle::from_bytes(bytes.clone())
-                            )
+                            container(svg_icon)
+                                .width(Length::Fixed(56.0))
+                                .height(Length::Fixed(56.0)),
+                            text_input("nome", &self.current_tab().file_list.rename_input)
+                                .on_input(Message::RenameInputChanged)
+                                .on_submit(Message::RenameConfirm)
+                                .size(11)
+                                .padding([2, 4]),
+                        ]
+                        .spacing(6)
+                        .align_x(Alignment::Center)
+                        .into()
+                    } else if matches!(kind, IconKind::Image) {
+                        let thumb_key = crate::thumbs::cache_key(path);
+                        if let Some(bytes) = self.thumb_cache.get(&thumb_key) {
+                            column![
+                                iced::widget::image::Image::new(
+                                    iced::widget::image::Handle::from_bytes(bytes.clone())
+                                )
                                 .width(Length::Fixed(80.0))
                                 .height(Length::Fixed(80.0)),
-                            text(name).size(11).color(fg),
-                        ]
-                        .spacing(8)
-                        .align_x(Alignment::Center)
-                        .into()
+                                text(name).size(11).color(fg),
+                            ]
+                            .spacing(8)
+                            .align_x(Alignment::Center)
+                            .into()
+                        } else {
+                            column![
+                                container(svg_icon)
+                                    .width(Length::Fixed(56.0))
+                                    .height(Length::Fixed(56.0)),
+                                text(name).size(11).color(fg),
+                            ]
+                            .spacing(8)
+                            .align_x(Alignment::Center)
+                            .into()
+                        }
                     } else {
                         column![
-                            container(svg_icon).width(Length::Fixed(56.0)).height(Length::Fixed(56.0)),
+                            container(svg_icon)
+                                .width(Length::Fixed(56.0))
+                                .height(Length::Fixed(56.0)),
                             text(name).size(11).color(fg),
                         ]
                         .spacing(8)
                         .align_x(Alignment::Center)
                         .into()
-                    }
-                } else {
-                    column![
-                        container(svg_icon).width(Length::Fixed(56.0)).height(Length::Fixed(56.0)),
-                        text(name).size(11).color(fg),
-                    ]
-                    .spacing(8)
-                    .align_x(Alignment::Center)
-                    .into()
-                };
+                    };
 
                 let panel_hi_local = th.bg_subtle;
                 let cell = button(
@@ -1489,11 +1587,18 @@ impl App {
                         .align_x(Alignment::Center)
                         .style(move |_| iced::widget::container::Style {
                             background: Some(iced::Background::Color(cell_bg)),
-                            border: Border { radius: 12.0.into(), ..Default::default() },
+                            border: Border {
+                                radius: 12.0.into(),
+                                ..Default::default()
+                            },
                             ..Default::default()
                         }),
                 )
-                .on_press(Message::ItemClicked { idx, ctrl: false, shift: false })
+                .on_press(Message::ItemClicked {
+                    idx,
+                    ctrl: false,
+                    shift: false,
+                })
                 .style(move |_, status| {
                     let bg = if is_selected {
                         cell_bg
@@ -1504,7 +1609,10 @@ impl App {
                     };
                     iced::widget::button::Style {
                         background: Some(iced::Background::Color(bg)),
-                        border: Border { radius: 12.0.into(), ..Default::default() },
+                        border: Border {
+                            radius: 12.0.into(),
+                            ..Default::default()
+                        },
                         text_color: fg,
                         ..Default::default()
                     }
@@ -1522,7 +1630,8 @@ impl App {
 
         let col: Element<Message> = column(grid_rows).spacing(8).padding([12, 12]).into();
         container(scrollable(col).height(Length::Fill))
-            .width(Length::Fill).height(Length::Fill)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .style(move |_| container_style(LumoTheme::bg()))
             .into()
     }
@@ -1557,21 +1666,22 @@ impl App {
             // via text("v") como fallback simples
             let s = if self.sort_ascending { " " } else { " " };
             let _ = (bytes, s);
-            container(text(if self.sort_ascending { "^" } else { "v" }).size(10).color(accent))
-                .padding([0, 4])
-                .into()
+            container(
+                text(if self.sort_ascending { "^" } else { "v" })
+                    .size(10)
+                    .color(accent),
+            )
+            .padding([0, 4])
+            .into()
         };
 
         let header_cell = |label: &'static str, col: SortBy, w: Length| -> Element<Message> {
             let is_active = self.sort_by == col;
             let color = if is_active { fg } else { muted };
             button(
-                row![
-                    text(label).size(12).color(color),
-                    sort_indicator(col),
-                ]
-                .spacing(4)
-                .align_y(Alignment::Center),
+                row![text(label).size(12).color(color), sort_indicator(col),]
+                    .spacing(4)
+                    .align_y(Alignment::Center),
             )
             .on_press(Message::SetSortBy(col))
             .padding([6, 12])
@@ -1583,7 +1693,10 @@ impl App {
                 };
                 iced::widget::button::Style {
                     background: Some(iced::Background::Color(bg)),
-                    border: Border { radius: 4.0.into(), ..Default::default() },
+                    border: Border {
+                        radius: 4.0.into(),
+                        ..Default::default()
+                    },
                     text_color: fg,
                     ..Default::default()
                 }
@@ -1622,7 +1735,8 @@ impl App {
         if entries.is_empty() {
             rows.push(self.view_empty_state_inline());
             return container(scrollable(column(rows).spacing(0)).height(Length::Fill))
-                .width(Length::Fill).height(Length::Fill)
+                .width(Length::Fill)
+                .height(Length::Fill)
                 .style({
                     let bg = th.bg;
                     move |_| iced::widget::container::Style {
@@ -1636,24 +1750,46 @@ impl App {
         for (idx, path) in entries {
             let idx = *idx;
             let is_selected = self.current_tab().file_list.selected.contains(&idx);
-            let row_bg = if is_selected { th.accent_subtle } else { Color::TRANSPARENT };
+            let row_bg = if is_selected {
+                th.accent_subtle
+            } else {
+                Color::TRANSPARENT
+            };
             let kind = icon_for_path(path);
-            let icon_color = if matches!(kind, IconKind::Folder) { accent } else { muted };
-            let name_str = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-            let size_str = if path.is_dir() { "--".to_string() } else { FileList::human_size(path) };
+            let icon_color = if matches!(kind, IconKind::Folder) {
+                accent
+            } else {
+                muted
+            };
+            let name_str = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let size_str = if path.is_dir() {
+                "--".to_string()
+            } else {
+                FileList::human_size(path)
+            };
             let mod_str = FileList::human_modified_relative(path);
             let type_str = FileList::human_type(path);
 
             let svg_icon = Svg::new(SvgHandle::from_memory(icons::svg_bytes_for_kind(&kind)))
                 .width(Length::Fixed(14.0))
                 .height(Length::Fixed(14.0))
-                .style(move |_, _| iced::widget::svg::Style { color: Some(icon_color) });
+                .style(move |_, _| iced::widget::svg::Style {
+                    color: Some(icon_color),
+                });
 
             let active_bar = container(iced::widget::horizontal_space())
                 .width(Length::Fixed(2.0))
                 .height(Length::Fixed(20.0))
                 .style({
-                    let c = if is_selected { accent } else { Color::TRANSPARENT };
+                    let c = if is_selected {
+                        accent
+                    } else {
+                        Color::TRANSPARENT
+                    };
                     move |_| iced::widget::container::Style {
                         background: Some(iced::Background::Color(c)),
                         ..Default::default()
@@ -1663,12 +1799,26 @@ impl App {
             let row_content = row![
                 active_bar,
                 row![
-                    container(svg_icon).width(Length::Fixed(14.0)).height(Length::Fixed(14.0)),
+                    container(svg_icon)
+                        .width(Length::Fixed(14.0))
+                        .height(Length::Fixed(14.0)),
                     text(name_str).size(13).color(fg),
-                ].spacing(8).align_y(Alignment::Center).width(Length::Fill),
-                text(size_str).size(12).color(muted).width(Length::Fixed(96.0)),
-                text(mod_str).size(12).color(muted).width(Length::Fixed(160.0)),
-                text(type_str).size(12).color(muted).width(Length::Fixed(80.0)),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center)
+                .width(Length::Fill),
+                text(size_str)
+                    .size(12)
+                    .color(muted)
+                    .width(Length::Fixed(96.0)),
+                text(mod_str)
+                    .size(12)
+                    .color(muted)
+                    .width(Length::Fixed(160.0)),
+                text(type_str)
+                    .size(12)
+                    .color(muted)
+                    .width(Length::Fixed(80.0)),
             ]
             .spacing(10)
             .align_y(Alignment::Center);
@@ -1683,7 +1833,11 @@ impl App {
                         ..Default::default()
                     }),
             )
-            .on_press(Message::ItemClicked { idx, ctrl: false, shift: false })
+            .on_press(Message::ItemClicked {
+                idx,
+                ctrl: false,
+                shift: false,
+            })
             .style(move |_, status| {
                 let bg = if is_selected {
                     row_bg
@@ -1706,7 +1860,8 @@ impl App {
         }
 
         container(scrollable(column(rows).spacing(0)).height(Length::Fill))
-            .width(Length::Fill).height(Length::Fill)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .style({
                 let bg = th.bg;
                 move |_| iced::widget::container::Style {
@@ -1732,7 +1887,10 @@ impl App {
                         let bg = th.bg_subtle;
                         move |_| iced::widget::container::Style {
                             background: Some(iced::Background::Color(bg)),
-                            border: Border { radius: 12.0.into(), ..Default::default() },
+                            border: Border {
+                                radius: 12.0.into(),
+                                ..Default::default()
+                            },
                             ..Default::default()
                         }
                     });
@@ -1764,7 +1922,10 @@ impl App {
                     let bg = th.bg_subtle;
                     move |_| iced::widget::container::Style {
                         background: Some(iced::Background::Color(bg)),
-                        border: Border { radius: 4.0.into(), ..Default::default() },
+                        border: Border {
+                            radius: 4.0.into(),
+                            ..Default::default()
+                        },
                         ..Default::default()
                     }
                 });
@@ -1829,7 +1990,9 @@ impl App {
             column![
                 container(icon).padding([0, 0]),
                 text("Esta pasta esta vazia").size(13).color(th.fg_subtle),
-                text("Use Ctrl+N para criar uma pasta").size(11).color(th.fg_subtle),
+                text("Use Ctrl+N para criar uma pasta")
+                    .size(11)
+                    .color(th.fg_subtle),
             ]
             .spacing(12)
             .align_x(Alignment::Center),
@@ -1852,8 +2015,16 @@ impl App {
         const ITEMS_PER_COL: usize = 20;
 
         let col1_entries: Vec<_> = entries.iter().take(ITEMS_PER_COL).collect();
-        let col2_entries: Vec<_> = entries.iter().skip(ITEMS_PER_COL).take(ITEMS_PER_COL).collect();
-        let col3_entries: Vec<_> = entries.iter().skip(ITEMS_PER_COL * 2).take(ITEMS_PER_COL).collect();
+        let col2_entries: Vec<_> = entries
+            .iter()
+            .skip(ITEMS_PER_COL)
+            .take(ITEMS_PER_COL)
+            .collect();
+        let col3_entries: Vec<_> = entries
+            .iter()
+            .skip(ITEMS_PER_COL * 2)
+            .take(ITEMS_PER_COL)
+            .collect();
 
         fn make_col<'b>(
             slf: &'b crate::app::App,
@@ -1866,16 +2037,28 @@ impl App {
             for (idx, path) in col_entries {
                 let idx = *idx;
                 let is_selected = slf.current_tab().file_list.selected.contains(&idx);
-                let row_bg = if is_selected { slf.theme.accent_subtle } else { Color::TRANSPARENT };
+                let row_bg = if is_selected {
+                    slf.theme.accent_subtle
+                } else {
+                    Color::TRANSPARENT
+                };
                 let kind = icon_for_path(path);
-                let icon_color = if matches!(kind, IconKind::Folder) { accent } else { muted };
+                let icon_color = if matches!(kind, IconKind::Folder) {
+                    accent
+                } else {
+                    muted
+                };
                 let svg_icon = Svg::new(SvgHandle::from_memory(icons::svg_bytes_for_kind(&kind)))
                     .width(Length::Fixed(14.0))
                     .height(Length::Fixed(14.0))
-                    .style(move |_, _| iced::widget::svg::Style { color: Some(icon_color) });
+                    .style(move |_, _| iced::widget::svg::Style {
+                        color: Some(icon_color),
+                    });
                 let name_str = FileList::display_name_max(path, 22);
                 let row_content = row![
-                    container(svg_icon).width(Length::Fixed(14.0)).height(Length::Fixed(14.0)),
+                    container(svg_icon)
+                        .width(Length::Fixed(14.0))
+                        .height(Length::Fixed(14.0)),
                     text(name_str).size(13).color(fg),
                 ]
                 .spacing(8)
@@ -1890,7 +2073,11 @@ impl App {
                             ..Default::default()
                         }),
                 )
-                .on_press(crate::app::Message::ItemClicked { idx, ctrl: false, shift: false })
+                .on_press(crate::app::Message::ItemClicked {
+                    idx,
+                    ctrl: false,
+                    shift: false,
+                })
                 .style(|_, _| iced::widget::button::Style {
                     background: Some(iced::Background::Color(Color::TRANSPARENT)),
                     border: iced::Border::default(),
@@ -1906,7 +2093,8 @@ impl App {
             if items.is_empty() {
                 items.push(
                     container(iced::widget::horizontal_space())
-                        .height(Length::Fixed(1.0)).into()
+                        .height(Length::Fixed(1.0))
+                        .into(),
                 );
             }
 
@@ -1954,27 +2142,43 @@ impl App {
         muted: Color,
         _accent: Color,
     ) -> iced::Element<Message> {
-        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-        let size_str = if path.is_dir() { "--".to_string() } else { crate::filelist::FileList::human_size(path) };
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let size_str = if path.is_dir() {
+            "--".to_string()
+        } else {
+            crate::filelist::FileList::human_size(path)
+        };
         let mod_str = crate::filelist::FileList::human_modified(path);
         let kind = crate::icons::icon_for_path(path);
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("--").to_string();
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("--")
+            .to_string();
         let icon_color = muted;
         let preview_icon = Svg::new(SvgHandle::from_memory(icons::svg_bytes_for_kind(&kind)))
             .width(Length::Fixed(40.0))
             .height(Length::Fixed(40.0))
-            .style(move |_, _| iced::widget::svg::Style { color: Some(icon_color) });
+            .style(move |_, _| iced::widget::svg::Style {
+                color: Some(icon_color),
+            });
 
         let text_preview: Option<String> = if matches!(ext.as_str(), "txt" | "md" | "json") {
-            std::fs::read_to_string(path).ok().map(|s| {
-                s.chars().take(200).collect()
-            })
+            std::fs::read_to_string(path)
+                .ok()
+                .map(|s| s.chars().take(200).collect())
         } else {
             None
         };
 
         let mut info_col = column![
-            container(preview_icon).width(Length::Fixed(40.0)).height(Length::Fixed(40.0)),
+            container(preview_icon)
+                .width(Length::Fixed(40.0))
+                .height(Length::Fixed(40.0)),
             text(name).size(13).color(fg),
             text("Tamanho:").size(11).color(muted),
             text(size_str).size(12).color(fg),
@@ -1993,9 +2197,12 @@ impl App {
                     .padding([6, 8])
                     .style(move |_| iced::widget::container::Style {
                         background: Some(iced::Background::Color(LumoTheme::panel_hi())),
-                        border: iced::Border { radius: 4.0.into(), ..Default::default() },
+                        border: iced::Border {
+                            radius: 4.0.into(),
+                            ..Default::default()
+                        },
                         ..Default::default()
-                    })
+                    }),
             );
         }
 
@@ -2038,8 +2245,7 @@ impl App {
     // Helpers internos
     // -----------------------------------------------------------------------
 
-    fn push_back(&mut self) {
-    }
+    fn push_back(&mut self) {}
 
     // -----------------------------------------------------------------------
     // Manual hit-test (workaround: Iced widget handlers nao disparam no
@@ -2086,9 +2292,14 @@ impl App {
         let mut flat: Vec<(std::path::PathBuf, bool)> = Vec::new();
         // bool = true se e item expandivel (Home ou Drive)
         for item in &self.sidebar {
-            let expandable = matches!(item.kind, crate::sidebar::SidebarKind::Home | crate::sidebar::SidebarKind::Drive);
+            let expandable = matches!(
+                item.kind,
+                crate::sidebar::SidebarKind::Home | crate::sidebar::SidebarKind::Drive
+            );
             flat.push((item.path.clone(), expandable));
-            if matches!(item.kind, crate::sidebar::SidebarKind::Home) && self.expanded.contains(&item.path) {
+            if matches!(item.kind, crate::sidebar::SidebarKind::Home)
+                && self.expanded.contains(&item.path)
+            {
                 for sub in &self.home_subdirs {
                     flat.push((sub.clone(), false));
                 }
@@ -2299,10 +2510,8 @@ mod tests {
     #[test]
     fn test_search_filter_empty_returns_all() {
         let mut app = make_app();
-        let paths: Vec<PathBuf> = vec![
-            PathBuf::from("/tmp/foo.txt"),
-            PathBuf::from("/tmp/bar.txt"),
-        ];
+        let paths: Vec<PathBuf> =
+            vec![PathBuf::from("/tmp/foo.txt"), PathBuf::from("/tmp/bar.txt")];
         set_entries(&mut app, paths.clone());
         app.search_query = String::new();
         let tab = app.current_tab();

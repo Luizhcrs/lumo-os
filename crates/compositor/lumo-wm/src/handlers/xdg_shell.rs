@@ -31,7 +31,8 @@ impl XdgShellHandler for LumoState {
 
         // W9.A: init opening animation (a11y guard included in new_opening).
         let a11y = lumo_foundation::A11yTokens::load_from_disk();
-        self.window_anim.insert_opening(surface.wl_surface(), a11y.reduced_motion);
+        self.window_anim
+            .insert_opening(surface.wl_surface(), a11y.reduced_motion);
 
         // Opcao C: toda nova toplevel recebe SSD default. Iced 0.13 nao
         // solicita xdg-decoration protocol, entao compositor insere aqui
@@ -75,7 +76,8 @@ impl XdgShellHandler for LumoState {
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         // W9.A: register closing animation (delayed destroy via close_done check in render tick).
         let a11y = lumo_foundation::A11yTokens::load_from_disk();
-        self.window_anim.insert_closing(surface.wl_surface(), a11y.reduced_motion);
+        self.window_anim
+            .insert_closing(surface.wl_surface(), a11y.reduced_motion);
 
         // M1: limpa SSD entry ao fechar toplevel.
         self.ssd_windows.remove(surface.wl_surface());
@@ -92,7 +94,8 @@ impl XdgShellHandler for LumoState {
         // Fallback: primeiro toplevel restante. Sem toplevels -> None.
         let prev = self.focus_manager.prev_focus.take();
         let prev_alive = prev.as_ref().and_then(|ps| {
-            self.space.elements()
+            self.space
+                .elements()
                 .find(|w| w.wl_surface().map(|s| *s == *ps).unwrap_or(false))
                 .and_then(|w| w.wl_surface())
                 .map(|s| s.into_owned())
@@ -163,10 +166,7 @@ impl XdgShellHandler for LumoState {
             None => return,
         };
 
-        let initial_window_location = self
-            .space
-            .element_location(&window)
-            .unwrap_or_default();
+        let initial_window_location = self.space.element_location(&window).unwrap_or_default();
 
         // Constroi GrabStartData com estado atual do pointer.
         let pointer = self.pointer.clone();

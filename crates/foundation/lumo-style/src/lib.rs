@@ -18,16 +18,18 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-pub mod parser;
 pub mod model;
+pub mod parser;
 pub mod watcher;
 
-pub use model::{Stylesheet, Selector, PropertyValue};
+pub use model::{PropertyValue, Selector, Stylesheet};
 
 #[derive(Debug, thiserror::Error)]
 pub enum StyleError {
-    #[error("io: {0}")] Io(#[from] std::io::Error),
-    #[error("parse: {0}")] Parse(String),
+    #[error("io: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("parse: {0}")]
+    Parse(String),
 }
 
 /// Default path: $XDG_CONFIG_HOME/lumo/lumo.css OR $HOME/.config/lumo/lumo.css.

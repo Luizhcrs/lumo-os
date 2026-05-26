@@ -6,7 +6,7 @@
 //! - move_grab: pointer grab para arrastar toplevel via CSD header
 
 pub mod keyboard;
-pub mod touchpad;
 pub mod move_grab;
+pub mod touchpad;
 
 pub use touchpad::{TouchpadConfig, TouchpadGestureState};

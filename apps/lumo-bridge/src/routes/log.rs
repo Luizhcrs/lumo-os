@@ -7,7 +7,11 @@ use axum::{
 };
 use serde::Deserialize;
 
-const ALLOWED: &[&str] = &["/tmp/lumo-wm-tty.log", "/tmp/lumo-bar.log", "/tmp/lumo-bridge.log"];
+const ALLOWED: &[&str] = &[
+    "/tmp/lumo-wm-tty.log",
+    "/tmp/lumo-bar.log",
+    "/tmp/lumo-bridge.log",
+];
 
 #[derive(Deserialize)]
 pub struct TailParams {
@@ -34,5 +38,10 @@ pub async fn tail(Query(p): Query<TailParams>) -> Response {
     let lines: Vec<&str> = content.lines().collect();
     let start = lines.len().saturating_sub(n);
     let tail = lines[start..].join("\n");
-    (StatusCode::OK, [("content-type", "text/plain; charset=utf-8")], tail).into_response()
+    (
+        StatusCode::OK,
+        [("content-type", "text/plain; charset=utf-8")],
+        tail,
+    )
+        .into_response()
 }

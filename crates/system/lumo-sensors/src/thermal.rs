@@ -61,7 +61,11 @@ impl ThermalZone {
                 .map(|s| s.trim().to_string())
                 .unwrap_or_else(|_| format!("zone{idx}"));
             let kind = ThermalKind::from_type_str(&name);
-            zones.push(ThermalZone { name, kind, temp_path });
+            zones.push(ThermalZone {
+                name,
+                kind,
+                temp_path,
+            });
         }
         zones
     }

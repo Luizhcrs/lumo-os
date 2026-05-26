@@ -83,7 +83,10 @@ impl TouchpadConfig {
         match Self::load_inner() {
             Ok(cfg) => cfg,
             Err(err) => {
-                tracing::debug!(?err, "touchpad.toml nao carregado, usando defaults industry");
+                tracing::debug!(
+                    ?err,
+                    "touchpad.toml nao carregado, usando defaults industry"
+                );
                 Self::default()
             }
         }
@@ -169,9 +172,11 @@ impl TouchpadConfig {
 }
 
 fn config_path() -> anyhow::Result<PathBuf> {
-    let home = std::env::var("HOME")
-        .map_err(|_| anyhow::anyhow!("HOME nao definido"))?;
-    Ok(PathBuf::from(home).join(".config").join("lumo").join("touchpad.toml"))
+    let home = std::env::var("HOME").map_err(|_| anyhow::anyhow!("HOME nao definido"))?;
+    Ok(PathBuf::from(home)
+        .join(".config")
+        .join("lumo")
+        .join("touchpad.toml"))
 }
 
 // ---- Gesture State --------------------------------------------------------
@@ -230,11 +235,19 @@ impl TouchpadGestureState {
         // Determina eixo dominante.
         if dx.abs() >= dy.abs() {
             if dx.abs() >= SWIPE_H_THRESHOLD {
-                let dir = if dx > 0.0 { SwipeDirection::Right } else { SwipeDirection::Left };
+                let dir = if dx > 0.0 {
+                    SwipeDirection::Right
+                } else {
+                    SwipeDirection::Left
+                };
                 return Some((fingers, dir));
             }
         } else if dy.abs() >= SWIPE_V_THRESHOLD {
-            let dir = if dy > 0.0 { SwipeDirection::Down } else { SwipeDirection::Up };
+            let dir = if dy > 0.0 {
+                SwipeDirection::Down
+            } else {
+                SwipeDirection::Up
+            };
             return Some((fingers, dir));
         }
 

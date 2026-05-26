@@ -80,23 +80,56 @@ pub fn keysym(name: &str) -> Option<u16> {
         "8" => 9,
         "9" => 10,
         // Letters
-        "a" => 30, "b" => 48, "c" => 46, "d" => 32, "e" => 18,
-        "f" => 33, "g" => 34, "h" => 35, "i" => 23, "j" => 36,
-        "k" => 37, "l" => 38, "m" => 50, "n" => 49, "o" => 24,
-        "p" => 25, "q" => 16, "r" => 19, "s" => 31, "t" => 20,
-        "u" => 22, "v" => 47, "w" => 17, "x" => 45, "y" => 21,
+        "a" => 30,
+        "b" => 48,
+        "c" => 46,
+        "d" => 32,
+        "e" => 18,
+        "f" => 33,
+        "g" => 34,
+        "h" => 35,
+        "i" => 23,
+        "j" => 36,
+        "k" => 37,
+        "l" => 38,
+        "m" => 50,
+        "n" => 49,
+        "o" => 24,
+        "p" => 25,
+        "q" => 16,
+        "r" => 19,
+        "s" => 31,
+        "t" => 20,
+        "u" => 22,
+        "v" => 47,
+        "w" => 17,
+        "x" => 45,
+        "y" => 21,
         "z" => 44,
         // Function
-        "f1" => 59, "f2" => 60, "f3" => 61, "f4" => 62,
-        "f5" => 63, "f6" => 64, "f7" => 65, "f8" => 66,
-        "f9" => 67, "f10" => 68, "f11" => 87, "f12" => 88,
+        "f1" => 59,
+        "f2" => 60,
+        "f3" => 61,
+        "f4" => 62,
+        "f5" => 63,
+        "f6" => 64,
+        "f7" => 65,
+        "f8" => 66,
+        "f9" => 67,
+        "f10" => 68,
+        "f11" => 87,
+        "f12" => 88,
         _ => return None,
     })
 }
 
 /// Parse "ctrl+alt+t" -> Vec<u16> de keycodes (modifiers primeiro, key final).
 pub fn parse_sequence(seq: &str) -> Result<Vec<u16>, String> {
-    let parts: Vec<&str> = seq.split('+').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+    let parts: Vec<&str> = seq
+        .split('+')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
     if parts.is_empty() {
         return Err("empty sequence".into());
     }
@@ -170,7 +203,9 @@ pub async fn type_text(Json(p): Json<TypeText>) -> Result<Json<Value>, (StatusCo
 }
 
 async fn wtype_fallback(text: &str) -> Result<(), String> {
-    let out = exec::run("/usr/bin/wtype", &[text]).await.map_err(|e| e.to_string())?;
+    let out = exec::run("/usr/bin/wtype", &[text])
+        .await
+        .map_err(|e| e.to_string())?;
     if out.status != 0 {
         let out2 = exec::run("/usr/bin/ydotool", &["type", "--", text])
             .await
@@ -188,7 +223,11 @@ async fn wtype_fallback(text: &str) -> Result<(), String> {
 pub async fn key_sequence(Json(p): Json<KeySeq>) -> Result<Json<Value>, (StatusCode, String)> {
     let codes = parse_sequence(&p.sequence).map_err(|e| (StatusCode::BAD_REQUEST, e))?;
     let codes_u32: Vec<u32> = codes.iter().map(|c| *c as u32).collect();
-    match send_command_async(LumoCommand::SyntheticKeyCombo { keys: codes_u32.clone() }).await {
+    match send_command_async(LumoCommand::SyntheticKeyCombo {
+        keys: codes_u32.clone(),
+    })
+    .await
+    {
         Ok(()) => Ok(Json(json!({
             "ok": true, "sequence": p.sequence, "codes": codes, "via": "ipc"
         }))),

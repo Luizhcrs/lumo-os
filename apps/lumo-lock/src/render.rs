@@ -28,11 +28,20 @@ fn fill_rect(pixmap: &mut PixmapMut, x: f32, y: f32, w: f32, h: f32, color: Colo
 fn fill_circle(pixmap: &mut PixmapMut, cx: f32, cy: f32, r: f32, color: Color) {
     let mut pb = PathBuilder::new();
     pb.push_circle(cx, cy, r);
-    let path = match pb.finish() { Some(p) => p, None => return };
+    let path = match pb.finish() {
+        Some(p) => p,
+        None => return,
+    };
     let mut paint = Paint::default();
     paint.set_color(color);
     paint.anti_alias = true;
-    pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+    pixmap.fill_path(
+        &path,
+        &paint,
+        FillRule::Winding,
+        Transform::identity(),
+        None,
+    );
 }
 
 fn draw_pixel_char(pixmap: &mut PixmapMut, x: f32, y: f32, scale: f32, ch: char, color: Color) {
@@ -55,20 +64,42 @@ fn draw_pixel_char(pixmap: &mut PixmapMut, x: f32, y: f32, scale: f32, ch: char,
 
 fn pixel_char_bitmap(ch: char) -> [u8; 7] {
     if ch == ':' {
-        return [0b00000, 0b00100, 0b00000, 0b00000, 0b00000, 0b00100, 0b00000];
+        return [
+            0b00000, 0b00100, 0b00000, 0b00000, 0b00000, 0b00100, 0b00000,
+        ];
     }
     match ch {
-        '0' => [0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110],
-        '1' => [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
-        '2' => [0b01110, 0b10001, 0b00001, 0b00110, 0b01000, 0b10000, 0b11111],
-        '3' => [0b11111, 0b00010, 0b00100, 0b00010, 0b00001, 0b10001, 0b01110],
-        '4' => [0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010],
-        '5' => [0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110],
-        '6' => [0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110],
-        '7' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000],
-        '8' => [0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110],
-        '9' => [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100],
-        _   => [0b00000; 7],
+        '0' => [
+            0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110,
+        ],
+        '1' => [
+            0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110,
+        ],
+        '2' => [
+            0b01110, 0b10001, 0b00001, 0b00110, 0b01000, 0b10000, 0b11111,
+        ],
+        '3' => [
+            0b11111, 0b00010, 0b00100, 0b00010, 0b00001, 0b10001, 0b01110,
+        ],
+        '4' => [
+            0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010,
+        ],
+        '5' => [
+            0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110,
+        ],
+        '6' => [
+            0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110,
+        ],
+        '7' => [
+            0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000,
+        ],
+        '8' => [
+            0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110,
+        ],
+        '9' => [
+            0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100,
+        ],
+        _ => [0b00000; 7],
     }
 }
 
@@ -132,7 +163,9 @@ fn draw_password_dots(pixmap: &mut PixmapMut, cx: f32, cy: f32, len: usize, shak
 }
 
 fn draw_error_text(pixmap: &mut PixmapMut, cx: f32, cy: f32, msg: &str) {
-    if msg.is_empty() { return; }
+    if msg.is_empty() {
+        return;
+    }
     let color = Color::from_rgba8(255, 100, 100, 220);
     const SCALE: f32 = 2.0;
     const CHAR_W: f32 = 5.0 * SCALE;
@@ -181,10 +214,23 @@ pub fn paint_lock(
 
     // Separator.
     let sep = Color::from_rgba8(255, 255, 255, 40);
-    fill_rect(pixmap, cx - 120.0, cy + DOT_Y_OFFSET - 10.0, 240.0, 1.0, sep);
+    fill_rect(
+        pixmap,
+        cx - 120.0,
+        cy + DOT_Y_OFFSET - 10.0,
+        240.0,
+        1.0,
+        sep,
+    );
 
     // Password dots.
-    draw_password_dots(pixmap, cx, cy + DOT_Y_OFFSET + 20.0, password.len(), shake_offset);
+    draw_password_dots(
+        pixmap,
+        cx,
+        cy + DOT_Y_OFFSET + 20.0,
+        password.len(),
+        shake_offset,
+    );
 
     // Error message.
     if !last_fail_msg.is_empty() {

@@ -89,7 +89,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/log/tail", get(routes::log::tail))
         .route("/state/dump", get(routes::state::dump))
         .route("/procs", get(routes::state::procs))
-        .layer(middleware::from_fn_with_state(state.clone(), auth::require_bearer));
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth::require_bearer,
+        ));
 
     Router::new()
         .route("/healthz", get(healthz))
@@ -122,7 +125,10 @@ async fn main() -> Result<()> {
     tracing::info!("lumo-bridge v{} starting on {}", VERSION, BIND_ADDR);
     tracing::info!("token path: {}", token_path().display());
 
-    let started_at = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let started_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
     let state = AppState {
         token: Arc::new(token),
         started_at,
@@ -157,7 +163,10 @@ mod http_tests {
     #[tokio::test]
     async fn auth_missing_token_returns_401() {
         let app = build_router(test_state());
-        let req = Request::builder().uri("/state").body(Body::empty()).unwrap();
+        let req = Request::builder()
+            .uri("/state")
+            .body(Body::empty())
+            .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
@@ -177,7 +186,10 @@ mod http_tests {
     #[tokio::test]
     async fn healthz_is_public() {
         let app = build_router(test_state());
-        let req = Request::builder().uri("/healthz").body(Body::empty()).unwrap();
+        let req = Request::builder()
+            .uri("/healthz")
+            .body(Body::empty())
+            .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
     }
@@ -200,7 +212,10 @@ mod http_tests {
             status
         );
         if status == StatusCode::OK {
-            let ct = resp.headers().get("content-type").and_then(|v| v.to_str().ok());
+            let ct = resp
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok());
             assert_eq!(ct, Some("image/png"));
         }
     }

@@ -29,11 +29,21 @@ struct PowerConfig {
     enabled: bool,
 }
 
-fn def_limit() -> u8 { 80 }
-fn def_cron() -> String { "0 22 * * 5".to_string() }
-fn def_target() -> u8 { 100 }
-fn def_hours() -> u8 { 12 }
-fn def_enabled() -> bool { true }
+fn def_limit() -> u8 {
+    80
+}
+fn def_cron() -> String {
+    "0 22 * * 5".to_string()
+}
+fn def_target() -> u8 {
+    100
+}
+fn def_hours() -> u8 {
+    12
+}
+fn def_enabled() -> bool {
+    true
+}
 
 impl Default for PowerConfig {
     fn default() -> Self {
@@ -50,7 +60,9 @@ impl Default for PowerConfig {
 fn config_path() -> std::path::PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
     let xdg = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{home}/.config"));
-    std::path::PathBuf::from(xdg).join("lumo").join("power.toml")
+    std::path::PathBuf::from(xdg)
+        .join("lumo")
+        .join("power.toml")
 }
 
 fn load_config() -> PowerConfig {
@@ -58,7 +70,10 @@ fn load_config() -> PowerConfig {
     match std::fs::read_to_string(&path) {
         Ok(s) => match toml::from_str::<PowerConfig>(&s) {
             Ok(c) => {
-                eprintln!("[lumo-power] config: limit={}% balance={}% hours={}h enabled={}", c.limit_percent, c.balance_target, c.balance_duration_hours, c.enabled);
+                eprintln!(
+                    "[lumo-power] config: limit={}% balance={}% hours={}h enabled={}",
+                    c.limit_percent, c.balance_target, c.balance_duration_hours, c.enabled
+                );
                 c
             }
             Err(e) => {
@@ -67,7 +82,10 @@ fn load_config() -> PowerConfig {
             }
         },
         Err(_) => {
-            eprintln!("[lumo-power] no config at {}; defaults (limit=80%)", path.display());
+            eprintln!(
+                "[lumo-power] no config at {}; defaults (limit=80%)",
+                path.display()
+            );
             PowerConfig::default()
         }
     }
@@ -129,19 +147,34 @@ pub fn days_until_next_friday() -> u32 {
 // ------------------------------------------------------------
 
 fn run_balance_cycle(battery: &Battery, cfg: &PowerConfig) {
-    eprintln!("[lumo-power] balance cycle: raising limit to {}%", cfg.balance_target);
+    eprintln!(
+        "[lumo-power] balance cycle: raising limit to {}%",
+        cfg.balance_target
+    );
     notify("Bateria balanceando");
     if let Err(e) = battery.set_charge_limit(cfg.balance_target) {
-        eprintln!("[lumo-power] set_charge_limit({}) failed: {e}", cfg.balance_target);
+        eprintln!(
+            "[lumo-power] set_charge_limit({}) failed: {e}",
+            cfg.balance_target
+        );
         return;
     }
     let total_secs = cfg.balance_duration_hours as u64 * 3600;
-    eprintln!("[lumo-power] balance cycle: holding {}h", cfg.balance_duration_hours);
+    eprintln!(
+        "[lumo-power] balance cycle: holding {}h",
+        cfg.balance_duration_hours
+    );
     std::thread::sleep(Duration::from_secs(total_secs));
-    eprintln!("[lumo-power] balance cycle: restoring to {}%", cfg.limit_percent);
+    eprintln!(
+        "[lumo-power] balance cycle: restoring to {}%",
+        cfg.limit_percent
+    );
     match battery.set_charge_limit(cfg.limit_percent) {
         Ok(()) => notify("Bateria 80% (otimizado)"),
-        Err(e) => eprintln!("[lumo-power] restore set_charge_limit({}) failed: {e}", cfg.limit_percent),
+        Err(e) => eprintln!(
+            "[lumo-power] restore set_charge_limit({}) failed: {e}",
+            cfg.limit_percent
+        ),
     }
 }
 
@@ -162,7 +195,10 @@ fn main() {
     let cfg = load_config();
     if cfg.enabled {
         match battery.set_charge_limit(cfg.limit_percent) {
-            Ok(()) => eprintln!("[lumo-power] startup: charge limit -> {}%", cfg.limit_percent),
+            Ok(()) => eprintln!(
+                "[lumo-power] startup: charge limit -> {}%",
+                cfg.limit_percent
+            ),
             Err(SensorError::NotSupported(msg)) => {
                 eprintln!("[lumo-power] charge limit not supported: {msg}; continuing for balance schedule");
             }

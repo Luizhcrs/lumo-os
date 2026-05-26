@@ -23,9 +23,9 @@
 //! signal_commit_timing_barriers() deve ser chamado com o timestamp do
 //! vblank atual.
 
+use smithay::wayland::commit_timing::CommitTimerBarrierStateUserData;
 use smithay::wayland::compositor::with_states;
 use smithay::wayland::fifo::FifoBarrierCachedState;
-use smithay::wayland::commit_timing::CommitTimerBarrierStateUserData;
 
 use crate::state::LumoState;
 

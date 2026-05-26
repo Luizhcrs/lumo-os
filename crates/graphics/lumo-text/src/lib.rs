@@ -227,10 +227,7 @@ impl TextRenderer {
             ..Default::default()
         });
 
-        let atlas_packer = BucketedAtlasAllocator::new(size2(
-            ATLAS_SIZE as i32,
-            ATLAS_SIZE as i32,
-        ));
+        let atlas_packer = BucketedAtlasAllocator::new(size2(ATLAS_SIZE as i32, ATLAS_SIZE as i32));
 
         // --- bind group layout (uniforms + atlas + sampler) ---
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -401,9 +398,7 @@ impl TextRenderer {
         };
         // Cor NAO entra no Attrs (faz parte do CacheKey, causaria miss
         // a cada mudanca de cor). Cor vai via GlyphInstance::color no shader.
-        let attrs = Attrs::new()
-            .family(family)
-            .weight(style.weight);
+        let attrs = Attrs::new().family(family).weight(style.weight);
 
         buffer.set_size(&mut self.font_system, Some(4096.0), Some(style.size * 2.0));
         buffer.set_text(&mut self.font_system, text, attrs, Shaping::Advanced);
@@ -544,7 +539,11 @@ impl TextRenderer {
             });
             self.instance_capacity = new_cap;
         }
-        queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(&self.pending));
+        queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&self.pending),
+        );
     }
 
     fn cache_glyph(
@@ -631,10 +630,7 @@ impl TextRenderer {
             uv_origin: [dst_x as f32 / atlas_f, dst_y as f32 / atlas_f],
             uv_size: [w as f32 / atlas_f, h as f32 / atlas_f],
             px_size: [w as f32, h as f32],
-            px_offset: [
-                image.placement.left as f32,
-                -image.placement.top as f32,
-            ],
+            px_offset: [image.placement.left as f32, -image.placement.top as f32],
             _alloc: id,
         };
         self.glyph_cache.insert(key, Some(entry));

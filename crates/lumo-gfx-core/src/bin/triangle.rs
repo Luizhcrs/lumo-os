@@ -38,11 +38,7 @@ impl ApplicationHandler for App {
             .with_title("lumo-gfx-core triangle")
             .with_inner_size(LogicalSize::new(800, 600));
 
-        let window = Arc::new(
-            event_loop
-                .create_window(attrs)
-                .expect("create_window"),
-        );
+        let window = Arc::new(event_loop.create_window(attrs).expect("create_window"));
 
         let renderer = pollster::block_on(Renderer::new(window.clone()));
 
@@ -72,20 +68,18 @@ impl ApplicationHandler for App {
                 renderer.resize(size);
                 window.request_redraw();
             }
-            WindowEvent::RedrawRequested => {
-                match renderer.render() {
-                    Ok(()) => {}
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        let size = window.inner_size();
-                        renderer.resize(size);
-                    }
-                    Err(wgpu::SurfaceError::OutOfMemory) => {
-                        log::error!("out of memory, exiting");
-                        event_loop.exit();
-                    }
-                    Err(e) => log::warn!("render error: {e:?}"),
+            WindowEvent::RedrawRequested => match renderer.render() {
+                Ok(()) => {}
+                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                    let size = window.inner_size();
+                    renderer.resize(size);
                 }
-            }
+                Err(wgpu::SurfaceError::OutOfMemory) => {
+                    log::error!("out of memory, exiting");
+                    event_loop.exit();
+                }
+                Err(e) => log::warn!("render error: {e:?}"),
+            },
             _ => {}
         }
     }

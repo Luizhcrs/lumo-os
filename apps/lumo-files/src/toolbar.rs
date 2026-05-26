@@ -33,15 +33,48 @@ pub fn view<'a>(
     view_mode: ViewMode,
     breadcrumb_el: Element<'a, Message>,
 ) -> Element<'a, Message> {
-    let btn_back = icon_btn(th, icons::CHEVRON_LEFT, Message::NavigateBack, can_back, false);
-    let btn_fwd = icon_btn(th, icons::CHEVRON_RIGHT, Message::NavigateForward, can_forward, false);
+    let btn_back = icon_btn(
+        th,
+        icons::CHEVRON_LEFT,
+        Message::NavigateBack,
+        can_back,
+        false,
+    );
+    let btn_fwd = icon_btn(
+        th,
+        icons::CHEVRON_RIGHT,
+        Message::NavigateForward,
+        can_forward,
+        false,
+    );
     let btn_up = icon_btn(th, icons::ARROW_UP, Message::NavigateUp, true, false);
     let btn_new = icon_btn(th, icons::PLUS, Message::NewFolder, true, false);
-    let btn_search = icon_btn(th, icons::SEARCH, Message::ToggleSearch, true, search_visible);
+    let btn_search = icon_btn(
+        th,
+        icons::SEARCH,
+        Message::ToggleSearch,
+        true,
+        search_visible,
+    );
 
-    let seg_list = segment_btn(th, icons::LIST, Message::SetViewMode(ViewMode::List), view_mode == ViewMode::List);
-    let seg_grid = segment_btn(th, icons::GRID, Message::SetViewMode(ViewMode::Grid), view_mode == ViewMode::Grid);
-    let seg_cols = segment_btn(th, icons::COLUMNS, Message::SetViewMode(ViewMode::Columns), view_mode == ViewMode::Columns);
+    let seg_list = segment_btn(
+        th,
+        icons::LIST,
+        Message::SetViewMode(ViewMode::List),
+        view_mode == ViewMode::List,
+    );
+    let seg_grid = segment_btn(
+        th,
+        icons::GRID,
+        Message::SetViewMode(ViewMode::Grid),
+        view_mode == ViewMode::Grid,
+    );
+    let seg_cols = segment_btn(
+        th,
+        icons::COLUMNS,
+        Message::SetViewMode(ViewMode::Columns),
+        view_mode == ViewMode::Columns,
+    );
 
     let view_toggle = container(
         row![seg_list, seg_grid, seg_cols]
@@ -54,7 +87,11 @@ pub fn view<'a>(
         let bd = th.border;
         move |_| iced::widget::container::Style {
             background: Some(iced::Background::Color(bg)),
-            border: Border { color: bd, width: 1.0, radius: 10.0.into() },
+            border: Border {
+                color: bd,
+                width: 1.0,
+                radius: 10.0.into(),
+            },
             ..Default::default()
         }
     });
@@ -64,7 +101,9 @@ pub fn view<'a>(
         let icon_prefix = Svg::new(Handle::from_memory(icons::SEARCH))
             .width(Length::Fixed(12.0))
             .height(Length::Fixed(12.0))
-            .style(move |_, _| iced::widget::svg::Style { color: Some(icon_color) });
+            .style(move |_, _| iced::widget::svg::Style {
+                color: Some(icon_color),
+            });
         container(
             row![
                 icon_prefix,
@@ -83,7 +122,11 @@ pub fn view<'a>(
             let bd = th.border;
             move |_| iced::widget::container::Style {
                 background: Some(iced::Background::Color(bg)),
-                border: Border { color: bd, width: 1.0, radius: 8.0.into() },
+                border: Border {
+                    color: bd,
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
                 ..Default::default()
             }
         })
@@ -97,9 +140,7 @@ pub fn view<'a>(
         .align_y(Alignment::Center)
         .into();
 
-    let center: Element<'a, Message> = container(breadcrumb_el)
-        .width(Length::Fill)
-        .into();
+    let center: Element<'a, Message> = container(breadcrumb_el).width(Length::Fill).into();
 
     let right: Element<'a, Message> = row![search_el, btn_search, btn_new, view_toggle]
         .spacing(6)
@@ -131,7 +172,11 @@ fn icon_btn<'a>(
     enabled: bool,
     active: bool,
 ) -> Element<'a, Message> {
-    let bg = if active { th.accent_subtle } else { Color::TRANSPARENT };
+    let bg = if active {
+        th.accent_subtle
+    } else {
+        Color::TRANSPARENT
+    };
     let icon_color = if !enabled {
         let mut c = th.fg_subtle;
         c.a = 0.4;
@@ -145,16 +190,25 @@ fn icon_btn<'a>(
     let icon = Svg::new(handle)
         .width(Length::Fixed(16.0))
         .height(Length::Fixed(16.0))
-        .style(move |_, _| iced::widget::svg::Style { color: Some(icon_color) });
-    let fg = th.fg;
-    let mut btn = button(container(icon).width(Length::Fixed(16.0)).height(Length::Fixed(16.0)))
-        .padding([8, 8])
-        .style(move |_, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(bg)),
-            border: Border { radius: 8.0.into(), ..Default::default() },
-            text_color: fg,
-            ..Default::default()
+        .style(move |_, _| iced::widget::svg::Style {
+            color: Some(icon_color),
         });
+    let fg = th.fg;
+    let mut btn = button(
+        container(icon)
+            .width(Length::Fixed(16.0))
+            .height(Length::Fixed(16.0)),
+    )
+    .padding([8, 8])
+    .style(move |_, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(bg)),
+        border: Border {
+            radius: 8.0.into(),
+            ..Default::default()
+        },
+        text_color: fg,
+        ..Default::default()
+    });
     if enabled {
         btn = btn.on_press(msg);
     }
@@ -167,22 +221,35 @@ fn segment_btn<'a>(
     msg: Message,
     active: bool,
 ) -> Element<'a, Message> {
-    let bg = if active { th.accent_subtle } else { Color::TRANSPARENT };
+    let bg = if active {
+        th.accent_subtle
+    } else {
+        Color::TRANSPARENT
+    };
     let icon_color = if active { th.accent } else { th.fg_subtle };
     let handle = Handle::from_memory(bytes);
     let icon = Svg::new(handle)
         .width(Length::Fixed(14.0))
         .height(Length::Fixed(14.0))
-        .style(move |_, _| iced::widget::svg::Style { color: Some(icon_color) });
+        .style(move |_, _| iced::widget::svg::Style {
+            color: Some(icon_color),
+        });
     let fg = th.fg;
-    button(container(icon).width(Length::Fixed(14.0)).height(Length::Fixed(14.0)))
-        .on_press(msg)
-        .padding([6, 10])
-        .style(move |_, _| iced::widget::button::Style {
-            background: Some(iced::Background::Color(bg)),
-            border: Border { radius: 8.0.into(), ..Default::default() },
-            text_color: fg,
+    button(
+        container(icon)
+            .width(Length::Fixed(14.0))
+            .height(Length::Fixed(14.0)),
+    )
+    .on_press(msg)
+    .padding([6, 10])
+    .style(move |_, _| iced::widget::button::Style {
+        background: Some(iced::Background::Color(bg)),
+        border: Border {
+            radius: 8.0.into(),
             ..Default::default()
-        })
-        .into()
+        },
+        text_color: fg,
+        ..Default::default()
+    })
+    .into()
 }

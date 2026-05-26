@@ -50,7 +50,12 @@ pub struct LAAnimator<T: LAInterpolable> {
 
 impl<T: LAInterpolable> LAAnimator<T> {
     pub fn new(from: T, to: T, curve: AnimCurve) -> Self {
-        Self { from, to, curve, elapsed: 0.0 }
+        Self {
+            from,
+            to,
+            curve,
+            elapsed: 0.0,
+        }
     }
 
     /// Avanca o animator por `dt` segundos e retorna o valor atual.
@@ -67,7 +72,12 @@ impl<T: LAInterpolable> LAAnimator<T> {
                 // Spring mantem value; mapeia [0..1] interno pra [from..to].
                 T::lerp(self.from, self.to, spring.value.clamp(0.0, 1.5))
             }
-            AnimCurve::ClosedForm { spring, from_val, to_val, initial_velocity } => {
+            AnimCurve::ClosedForm {
+                spring,
+                from_val,
+                to_val,
+                initial_velocity,
+            } => {
                 self.elapsed += dt;
                 // value_at retorna a posicao fisica; mapeia [from_val..to_val] -> [from..to].
                 let phys = spring.value_at(self.elapsed, *from_val, *to_val, *initial_velocity);
@@ -88,7 +98,12 @@ impl<T: LAInterpolable> LAAnimator<T> {
         match &self.curve {
             AnimCurve::Bezier { duration, .. } => self.elapsed >= *duration,
             AnimCurve::Spring(spring) => spring.settled(),
-            AnimCurve::ClosedForm { spring, from_val, to_val, initial_velocity } => {
+            AnimCurve::ClosedForm {
+                spring,
+                from_val,
+                to_val,
+                initial_velocity,
+            } => {
                 // Epsilon de 0.002 adequado para animacoes visuais (sub-pixel).
                 spring.settled(self.elapsed, *from_val, *to_val, *initial_velocity, 0.002)
             }
@@ -119,16 +134,28 @@ mod tests {
 
     #[test]
     fn bezier_anim_starts_at_from() {
-        let mut a = LAAnimator::new(0.0f32, 1.0f32,
-            AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.3 });
+        let mut a = LAAnimator::new(
+            0.0f32,
+            1.0f32,
+            AnimCurve::Bezier {
+                curve: LACurve::ease_out_cubic(),
+                duration: 0.3,
+            },
+        );
         let v = a.tick(0.0);
         assert!(v < 0.05, "v={v}");
     }
 
     #[test]
     fn bezier_anim_ends_at_to() {
-        let mut a = LAAnimator::new(0.0f32, 1.0f32,
-            AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.3 });
+        let mut a = LAAnimator::new(
+            0.0f32,
+            1.0f32,
+            AnimCurve::Bezier {
+                curve: LACurve::ease_out_cubic(),
+                duration: 0.3,
+            },
+        );
         a.tick(0.3);
         assert!(a.is_done());
         let v = a.tick(0.0);
@@ -153,7 +180,8 @@ mod tests {
     fn closed_form_anim_starts_at_from() {
         let spring = ClosedFormSpring::from_preset(SpringPreset::WindowOpenClose);
         let mut a = LAAnimator::new(
-            0.85f32, 1.0f32,
+            0.85f32,
+            1.0f32,
             AnimCurve::ClosedForm {
                 spring,
                 from_val: 0.85,
@@ -162,14 +190,18 @@ mod tests {
             },
         );
         let v = a.tick(0.0);
-        assert!((v - 0.85).abs() < 0.01, "deve comecar em from=0.85, got {v}");
+        assert!(
+            (v - 0.85).abs() < 0.01,
+            "deve comecar em from=0.85, got {v}"
+        );
     }
 
     #[test]
     fn closed_form_anim_converges_to_to() {
         let spring = ClosedFormSpring::from_preset(SpringPreset::WindowOpenClose);
         let mut a = LAAnimator::new(
-            0.85f32, 1.0f32,
+            0.85f32,
+            1.0f32,
             AnimCurve::ClosedForm {
                 spring,
                 from_val: 0.85,
@@ -189,7 +221,8 @@ mod tests {
     fn closed_form_anim_is_done_after_settle() {
         let spring = ClosedFormSpring::from_preset(SpringPreset::WindowOpenClose);
         let mut a = LAAnimator::new(
-            0.85f32, 1.0f32,
+            0.85f32,
+            1.0f32,
             AnimCurve::ClosedForm {
                 spring,
                 from_val: 0.85,

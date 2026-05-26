@@ -17,7 +17,6 @@
 //! nested e Lumo fullscreen).
 
 use super::corner_shader::{CornerMaskShader, CornerShader, RoundedSurfaceElement};
-use smithay::backend::renderer::gles::element::PixelShaderElement;
 use smithay::backend::renderer::element::memory::{
     MemoryRenderBuffer, MemoryRenderBufferRenderElement,
 };
@@ -25,13 +24,14 @@ use smithay::backend::renderer::element::solid::SolidColorRenderElement;
 use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
 use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::element::{render_elements, Id, Kind};
+use smithay::backend::renderer::gles::element::PixelShaderElement;
 use smithay::backend::renderer::gles::{GlesRenderer, GlesTexture};
 use smithay::backend::renderer::Color32F;
 use smithay::desktop::space::{space_render_elements, SpaceRenderElements};
 use smithay::desktop::{Space, Window};
-use smithay::wayland::seat::WaylandFocus;
 use smithay::output::Output;
 use smithay::utils::{Logical, Physical, Point, Rectangle};
+use smithay::wayland::seat::WaylandFocus;
 
 use crate::cursor::LoadedCursor;
 
@@ -79,7 +79,10 @@ pub const BTN_GAP: i32 = 4;
 
 /// Retorna rect do close button dado o geometry da window no space.
 /// Coordenadas em Physical (scale 1.0).
-pub fn close_btn_rect(win_loc: smithay::utils::Point<i32, smithay::utils::Logical>, win_w: i32) -> smithay::utils::Rectangle<i32, Physical> {
+pub fn close_btn_rect(
+    win_loc: smithay::utils::Point<i32, smithay::utils::Logical>,
+    win_w: i32,
+) -> smithay::utils::Rectangle<i32, Physical> {
     let x = win_loc.x + win_w - CLOSE_BTN_SIZE - CLOSE_BTN_MARGIN;
     let y = win_loc.y + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
     smithay::utils::Rectangle::new(
@@ -145,45 +148,89 @@ pub fn ssd_titlebar_rect_logical(
 pub fn titlebar_btns_for_window(
     window: &Window,
     space: &Space<Window>,
-    ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    ssd_windows: &std::collections::HashSet<
+        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    >,
 ) -> Vec<SolidColorRenderElement> {
     let single = [window];
     let mut out = Vec::new();
-    let bg_color = Color32F::new(TITLEBAR_BG[0], TITLEBAR_BG[1], TITLEBAR_BG[2], TITLEBAR_BG[3]);
+    let bg_color = Color32F::new(
+        TITLEBAR_BG[0],
+        TITLEBAR_BG[1],
+        TITLEBAR_BG[2],
+        TITLEBAR_BG[3],
+    );
     let _ = bg_color;
-    let btn_color = Color32F::new(CLOSE_BTN_COLOR[0], CLOSE_BTN_COLOR[1], CLOSE_BTN_COLOR[2], CLOSE_BTN_COLOR[3]);
+    let btn_color = Color32F::new(
+        CLOSE_BTN_COLOR[0],
+        CLOSE_BTN_COLOR[1],
+        CLOSE_BTN_COLOR[2],
+        CLOSE_BTN_COLOR[3],
+    );
     for window in single.iter().copied() {
         let is_ssd = window
             .wl_surface()
             .map(|s| ssd_windows.contains(&*s))
             .unwrap_or(false);
-        if !is_ssd { continue; }
+        if !is_ssd {
+            continue;
+        }
         let loc = space.element_location(window).unwrap_or_default();
         let geo = window.geometry();
         let win_w = geo.size.w;
         // W32.1: skip se janela ainda nao configurada (size<200 = ack inicial pendente)
-        if win_w < 200 { continue; }
+        if win_w < 200 {
+            continue;
+        }
         let btn_rect = close_btn_rect(
             smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H)),
             win_w,
         );
-        out.push(SolidColorRenderElement::new(Id::new(), btn_rect, 0, btn_color, Kind::Unspecified));
-        let max_color = Color32F::new(BTN_MAX_COLOR[0], BTN_MAX_COLOR[1], BTN_MAX_COLOR[2], BTN_MAX_COLOR[3]);
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            btn_rect,
+            0,
+            btn_color,
+            Kind::Unspecified,
+        ));
+        let max_color = Color32F::new(
+            BTN_MAX_COLOR[0],
+            BTN_MAX_COLOR[1],
+            BTN_MAX_COLOR[2],
+            BTN_MAX_COLOR[3],
+        );
         let max_x = loc.x + win_w - CLOSE_BTN_SIZE * 2 - CLOSE_BTN_MARGIN - BTN_GAP;
         let max_y = loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
         let max_rect: Rectangle<i32, Physical> = Rectangle::new(
             smithay::utils::Point::from((max_x, max_y)).to_physical_precise_round(1.0),
             (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
         );
-        out.push(SolidColorRenderElement::new(Id::new(), max_rect, 0, max_color, Kind::Unspecified));
-        let min_color = Color32F::new(BTN_MIN_COLOR[0], BTN_MIN_COLOR[1], BTN_MIN_COLOR[2], BTN_MIN_COLOR[3]);
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            max_rect,
+            0,
+            max_color,
+            Kind::Unspecified,
+        ));
+        let min_color = Color32F::new(
+            BTN_MIN_COLOR[0],
+            BTN_MIN_COLOR[1],
+            BTN_MIN_COLOR[2],
+            BTN_MIN_COLOR[3],
+        );
         let min_x = loc.x + win_w - CLOSE_BTN_SIZE * 3 - CLOSE_BTN_MARGIN - BTN_GAP * 2;
         let min_y = loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
         let min_rect: Rectangle<i32, Physical> = Rectangle::new(
             smithay::utils::Point::from((min_x, min_y)).to_physical_precise_round(1.0),
             (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
         );
-        out.push(SolidColorRenderElement::new(Id::new(), min_rect, 0, min_color, Kind::Unspecified));
+        out.push(SolidColorRenderElement::new(
+            Id::new(),
+            min_rect,
+            0,
+            min_color,
+            Kind::Unspecified,
+        ));
     }
     out
 }
@@ -192,7 +239,9 @@ pub fn titlebar_btns_for_window(
 pub fn titlebar_bg_for_window(
     window: &Window,
     space: &Space<Window>,
-    ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    ssd_windows: &std::collections::HashSet<
+        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    >,
     bg_shader: Option<&crate::backend::corner_shader::TitlebarBgShader>,
 ) -> Option<PixelShaderElement> {
     let shader = bg_shader?;
@@ -200,11 +249,15 @@ pub fn titlebar_bg_for_window(
         .wl_surface()
         .map(|s| ssd_windows.contains(&*s))
         .unwrap_or(false);
-    if !is_ssd { return None; }
+    if !is_ssd {
+        return None;
+    }
     let loc = space.element_location(window).unwrap_or_default();
     let win_w = window.geometry().size.w;
     // W32.1: skip se janela ainda nao configurada (evita flicker btns lado esquerdo)
-    if win_w < 200 { return None; }
+    if win_w < 200 {
+        return None;
+    }
     let area: Rectangle<i32, smithay::utils::Logical> = Rectangle::new(
         smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H)),
         (win_w, TITLEBAR_H).into(),
@@ -213,7 +266,8 @@ pub fn titlebar_bg_for_window(
         smithay::backend::renderer::gles::Uniform::new(
             "u_color",
             (TITLEBAR_BG[0], TITLEBAR_BG[1], TITLEBAR_BG[2]),
-        ).into_owned(),
+        )
+        .into_owned(),
         smithay::backend::renderer::gles::Uniform::new("u_radius", 12.0f32).into_owned(),
     ];
     Some(PixelShaderElement::new(
@@ -228,11 +282,23 @@ pub fn titlebar_bg_for_window(
 
 pub fn titlebar_elements(
     space: &Space<Window>,
-    ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    ssd_windows: &std::collections::HashSet<
+        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    >,
 ) -> Vec<SolidColorRenderElement> {
     let mut out = Vec::new();
-    let bg_color = Color32F::new(TITLEBAR_BG[0], TITLEBAR_BG[1], TITLEBAR_BG[2], TITLEBAR_BG[3]);
-    let btn_color = Color32F::new(CLOSE_BTN_COLOR[0], CLOSE_BTN_COLOR[1], CLOSE_BTN_COLOR[2], CLOSE_BTN_COLOR[3]);
+    let bg_color = Color32F::new(
+        TITLEBAR_BG[0],
+        TITLEBAR_BG[1],
+        TITLEBAR_BG[2],
+        TITLEBAR_BG[3],
+    );
+    let btn_color = Color32F::new(
+        CLOSE_BTN_COLOR[0],
+        CLOSE_BTN_COLOR[1],
+        CLOSE_BTN_COLOR[2],
+        CLOSE_BTN_COLOR[3],
+    );
 
     // W29.4: iterar TOP-DOWN (focal first). Smithay vec front-first; focal
     // push primeiro = vec[idx_menor] = drawn last em damage tracker = ON TOP.
@@ -268,7 +334,12 @@ pub fn titlebar_elements(
         ));
 
         // W17.1: Maximize button (verde, esquerda do close).
-        let max_color = Color32F::new(BTN_MAX_COLOR[0], BTN_MAX_COLOR[1], BTN_MAX_COLOR[2], BTN_MAX_COLOR[3]);
+        let max_color = Color32F::new(
+            BTN_MAX_COLOR[0],
+            BTN_MAX_COLOR[1],
+            BTN_MAX_COLOR[2],
+            BTN_MAX_COLOR[3],
+        );
         let max_x = loc.x + win_w - CLOSE_BTN_SIZE * 2 - CLOSE_BTN_MARGIN - BTN_GAP;
         let max_y = loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
         let max_rect: Rectangle<i32, Physical> = Rectangle::new(
@@ -284,7 +355,12 @@ pub fn titlebar_elements(
         ));
 
         // W17.1: Minimize button (amarelo, esquerda do maximize).
-        let min_color = Color32F::new(BTN_MIN_COLOR[0], BTN_MIN_COLOR[1], BTN_MIN_COLOR[2], BTN_MIN_COLOR[3]);
+        let min_color = Color32F::new(
+            BTN_MIN_COLOR[0],
+            BTN_MIN_COLOR[1],
+            BTN_MIN_COLOR[2],
+            BTN_MIN_COLOR[3],
+        );
         let min_x = loc.x + win_w - CLOSE_BTN_SIZE * 3 - CLOSE_BTN_MARGIN - BTN_GAP * 2;
         let min_y = loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
         let min_rect: Rectangle<i32, Physical> = Rectangle::new(
@@ -311,11 +387,15 @@ pub fn titlebar_elements(
 /// = TitlebarBgShader SDF top-round (top corners radius=12, bottom squared).
 pub fn titlebar_bg_elements(
     space: &Space<Window>,
-    ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    ssd_windows: &std::collections::HashSet<
+        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    >,
     bg_shader: Option<&crate::backend::corner_shader::TitlebarBgShader>,
 ) -> Vec<PixelShaderElement> {
     let mut out = Vec::new();
-    let Some(shader) = bg_shader else { return out; };
+    let Some(shader) = bg_shader else {
+        return out;
+    };
 
     // W29.4: TOP-DOWN ordem pra focal frente bg shader (vec[idx_menor]).
     let windows: Vec<&Window> = space.elements().rev().collect();
@@ -324,7 +404,9 @@ pub fn titlebar_bg_elements(
             .wl_surface()
             .map(|s| ssd_windows.contains(&*s))
             .unwrap_or(false);
-        if !is_ssd { continue; }
+        if !is_ssd {
+            continue;
+        }
         let loc = space.element_location(window).unwrap_or_default();
         let win_w = window.geometry().size.w;
 
@@ -336,7 +418,8 @@ pub fn titlebar_bg_elements(
             smithay::backend::renderer::gles::Uniform::new(
                 "u_color",
                 (TITLEBAR_BG[0], TITLEBAR_BG[1], TITLEBAR_BG[2]),
-            ).into_owned(),
+            )
+            .into_owned(),
             smithay::backend::renderer::gles::Uniform::new("u_radius", 12.0f32).into_owned(),
         ];
         out.push(PixelShaderElement::new(
@@ -351,14 +434,14 @@ pub fn titlebar_bg_elements(
     out
 }
 
-
-
 /// W28.8: corner mask elements (TL+TR+BL+BR) com SDF AA preto premultiplied.
 /// Cobre wallpaper atras dos cantos round da janela. 4 PixelShaderElement
 /// por janela SSD, 12x12 logico cada, anchor=(1,1)/(0,1)/(1,0)/(0,0).
 pub fn ssd_corner_masks(
     space: &Space<Window>,
-    ssd_windows: &std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    ssd_windows: &std::collections::HashSet<
+        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    >,
     mask_shader: Option<&CornerMaskShader>,
 ) -> Vec<PixelShaderElement> {
     let mut out = Vec::new();
@@ -427,8 +510,11 @@ pub fn titlebar_menu_elements(
         (menu_w, item_h * num_items).into(),
     );
     out.push(SolidColorRenderElement::new(
-        Id::new(), bg_rect, 0,
-        Color32F::new(0.10, 0.10, 0.11, 0.95), Kind::Unspecified,
+        Id::new(),
+        bg_rect,
+        0,
+        Color32F::new(0.10, 0.10, 0.11, 0.95),
+        Kind::Unspecified,
     ));
     let sep_y = menu_pos.y + item_h * 3 + item_h / 2 - 1;
     let sep_rect: Rectangle<i32, Physical> = Rectangle::new(
@@ -436,17 +522,27 @@ pub fn titlebar_menu_elements(
         (menu_w - 16, 1).into(),
     );
     out.push(SolidColorRenderElement::new(
-        Id::new(), sep_rect, 0,
-        Color32F::new(0.3, 0.3, 0.3, 0.5), Kind::Unspecified,
+        Id::new(),
+        sep_rect,
+        0,
+        Color32F::new(0.3, 0.3, 0.3, 0.5),
+        Kind::Unspecified,
     ));
     if hover_idx < 5 && hover_idx != 3 {
         let hl_rect: Rectangle<i32, Physical> = Rectangle::new(
-            smithay::utils::Point::from((menu_pos.x + 2, menu_pos.y + item_h * hover_idx as i32 + 1)).to_physical_precise_round(1.0),
+            smithay::utils::Point::from((
+                menu_pos.x + 2,
+                menu_pos.y + item_h * hover_idx as i32 + 1,
+            ))
+            .to_physical_precise_round(1.0),
             (menu_w - 4, item_h - 2).into(),
         );
         out.push(SolidColorRenderElement::new(
-            Id::new(), hl_rect, 0,
-            Color32F::new(0.24, 0.24, 0.28, 0.90), Kind::Unspecified,
+            Id::new(),
+            hl_rect,
+            0,
+            Color32F::new(0.24, 0.24, 0.28, 0.90),
+            Kind::Unspecified,
         ));
     }
     out
@@ -559,8 +655,7 @@ pub fn corner_mask_elements(output_w: i32, output_h: i32) -> [SolidColorRenderEl
     let cc = corner_color();
     let color = Color32F::new(cc[0], cc[1], cc[2], cc[3]);
     let make = |x: i32, y: i32| -> SolidColorRenderElement {
-        let geo: Rectangle<i32, Physical> =
-            Rectangle::new(Point::from((x, y)), (r, r).into());
+        let geo: Rectangle<i32, Physical> = Rectangle::new(Point::from((x, y)), (r, r).into());
         SolidColorRenderElement::new(Id::new(), geo, 0, color, Kind::Unspecified)
     };
     [
@@ -647,8 +742,14 @@ pub fn shadow_elements(space: &Space<Window>) -> Vec<SolidColorRenderElement> {
 /// Subtrai o retangulo oclusor (ox,oy,ow,oh) de (sx,sy,sw,sh).
 /// Adiciona os sub-rects restantes (ate 4) em . Coords Logical.
 fn shadow_subtract_rect(
-    sx: i32, sy: i32, sw: i32, sh: i32,
-    ox: i32, oy: i32, ow: i32, oh: i32,
+    sx: i32,
+    sy: i32,
+    sw: i32,
+    sh: i32,
+    ox: i32,
+    oy: i32,
+    ow: i32,
+    oh: i32,
     out: &mut Vec<(i32, i32, i32, i32)>,
 ) {
     let ix = sx.max(ox);
@@ -689,7 +790,6 @@ pub fn window_corner_elements(_space: &Space<Window>) -> Vec<SolidColorRenderEle
     // quadrados ate A38 implementar shader SDF real com clip transparente.
     Vec::new()
 }
-
 
 /// Converte SpaceRenderElements de toplevel (Element variant) em
 /// RoundedSurfaceElement com SDF corner radius (A38).
@@ -734,7 +834,9 @@ pub struct OverlayInputs<'a> {
     /// W6.C: splash buffer pre-carregado. None = sem splash.
     pub splash_buffer: Option<&'a MemoryRenderBuffer>,
     /// M1: surfaces SSD para pintar titlebar.
-    pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    pub ssd_windows: &'a std::collections::HashSet<
+        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    >,
     pub corner_mask_shader: Option<&'a CornerMaskShader>,
     pub titlebar_bg_shader: Option<&'a crate::backend::corner_shader::TitlebarBgShader>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
@@ -760,8 +862,10 @@ pub fn build_overlay(
     // A39: boot curtain full-screen.
     if inputs.boot_curtain_alpha > 0.001 {
         let alpha = inputs.boot_curtain_alpha.clamp(0.0, 1.0);
-        let geo: Rectangle<i32, Physical> =
-            Rectangle::new(Point::from((0, 0)), (inputs.output_w, inputs.output_h).into());
+        let geo: Rectangle<i32, Physical> = Rectangle::new(
+            Point::from((0, 0)),
+            (inputs.output_w, inputs.output_h).into(),
+        );
         overlay.push(LumoCustomElement::Solid(SolidColorRenderElement::new(
             Id::new(),
             geo,
@@ -827,9 +931,11 @@ pub fn build_overlay(
     }
     // W9.B: snap zone preview overlay.
     if let Some(zone) = inputs.snap_preview {
-        overlay.push(LumoCustomElement::Solid(
-            snap_preview_element(zone, inputs.output_w, inputs.output_h)
-        ));
+        overlay.push(LumoCustomElement::Solid(snap_preview_element(
+            zone,
+            inputs.output_w,
+            inputs.output_h,
+        )));
     }
     // W12.B/C: overview + picker overlays (front of stack).
     for elem in &inputs.overview_elements {
@@ -864,7 +970,9 @@ pub struct DrmCollectInputs<'a> {
     /// W6.C: splash buffer. None = sem splash.
     pub splash_buffer: Option<&'a MemoryRenderBuffer>,
     /// M1: surfaces SSD para pintar titlebar.
-    pub ssd_windows: &'a std::collections::HashSet<smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+    pub ssd_windows: &'a std::collections::HashSet<
+        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    >,
     pub corner_mask_shader: Option<&'a CornerMaskShader>,
     pub titlebar_bg_shader: Option<&'a crate::backend::corner_shader::TitlebarBgShader>,
     /// T1.1: menu popup titlebar ativo. None = sem menu.
@@ -902,8 +1010,10 @@ pub fn collect_drm_elements(
     // na FRENTE de tudo (lista front-first = primeiro elemento).
     if inputs.boot_curtain_alpha > 0.001 {
         let alpha = inputs.boot_curtain_alpha.clamp(0.0, 1.0);
-        let geo: Rectangle<i32, Physical> =
-            Rectangle::new(Point::from((0, 0)), (inputs.output_w, inputs.output_h).into());
+        let geo: Rectangle<i32, Physical> = Rectangle::new(
+            Point::from((0, 0)),
+            (inputs.output_w, inputs.output_h).into(),
+        );
         out.push(LumoCustomElement::Solid(SolidColorRenderElement::new(
             Id::new(),
             geo,
@@ -965,23 +1075,32 @@ pub fn collect_drm_elements(
         std::iter::once(inputs.space),
         inputs.output,
         1.0,
-    ).unwrap_or_default();
+    )
+    .unwrap_or_default();
     let mut upper_layers: Vec<_> = Vec::new();
     let mut lower_layers: Vec<_> = Vec::new();
     let mut in_lower = false;
     let mut element_seen = false;
     for el in all_elements {
         match &el {
-            smithay::desktop::space::SpaceRenderElements::Element(_) => { element_seen = true; }
+            smithay::desktop::space::SpaceRenderElements::Element(_) => {
+                element_seen = true;
+            }
             smithay::desktop::space::SpaceRenderElements::Surface(_) => {
-                if element_seen { in_lower = true; }
+                if element_seen {
+                    in_lower = true;
+                }
             }
             _ => {}
         }
         if matches!(el, smithay::desktop::space::SpaceRenderElements::Element(_)) {
             continue;
         }
-        if in_lower { lower_layers.push(el); } else { upper_layers.push(el); }
+        if in_lower {
+            lower_layers.push(el);
+        } else {
+            upper_layers.push(el);
+        }
     }
 
     // 4a. Upper layers (Layer::Top/Overlay) na frente de titlebars.
@@ -997,9 +1116,11 @@ pub fn collect_drm_elements(
     }
     // W9.B: snap zone preview overlay.
     if let Some(zone) = inputs.snap_preview {
-        out.push(LumoCustomElement::Solid(
-            snap_preview_element(zone, inputs.output_w, inputs.output_h)
-        ));
+        out.push(LumoCustomElement::Solid(snap_preview_element(
+            zone,
+            inputs.output_w,
+            inputs.output_h,
+        )));
     }
     // W12.B/C: overview + picker overlays.
     for elem in &inputs.overview_elements {
@@ -1022,7 +1143,12 @@ pub fn collect_drm_elements(
             out.push(LumoCustomElement::Solid(btn));
         }
         // SSD bg shader
-        if let Some(bg) = titlebar_bg_for_window(window, inputs.space, inputs.ssd_windows, inputs.titlebar_bg_shader) {
+        if let Some(bg) = titlebar_bg_for_window(
+            window,
+            inputs.space,
+            inputs.ssd_windows,
+            inputs.titlebar_bg_shader,
+        ) {
             out.push(LumoCustomElement::Pixel(bg));
         }
         // Content via window.render_elements
@@ -1043,7 +1169,9 @@ pub fn collect_drm_elements(
             for el in content_elems {
                 let space_wrap = smithay::desktop::space::SpaceRenderElements::Surface(el);
                 out.push(LumoCustomElement::Rounded(RoundedSurfaceElement::new(
-                    space_wrap, cs.program.clone(), CORNER_RADIUS_WINDOW as f32,
+                    space_wrap,
+                    cs.program.clone(),
+                    CORNER_RADIUS_WINDOW as f32,
                 )));
             }
         } else {
@@ -1080,7 +1208,6 @@ pub fn collect_drm_elements(
     out
 }
 
-
 /// A19: pra o winit path injetar wallpaper ATRAS de Space, precisamos
 /// construir uma lista combinada (chrome + space + wallpaper) e usar
 /// damage_tracker.render_output direto -- nao da pra passar wallpaper
@@ -1104,8 +1231,10 @@ pub fn build_winit_elements(
     // A39: boot curtain full-screen.
     if inputs.boot_curtain_alpha > 0.001 {
         let alpha = inputs.boot_curtain_alpha.clamp(0.0, 1.0);
-        let geo: Rectangle<i32, Physical> =
-            Rectangle::new(Point::from((0, 0)), (inputs.output_w, inputs.output_h).into());
+        let geo: Rectangle<i32, Physical> = Rectangle::new(
+            Point::from((0, 0)),
+            (inputs.output_w, inputs.output_h).into(),
+        );
         out.push(LumoCustomElement::Solid(SolidColorRenderElement::new(
             Id::new(),
             geo,
@@ -1151,13 +1280,18 @@ pub fn build_winit_elements(
         1.0,
     ) {
         Ok(elements) => {
-            let first_elem = elements.iter().position(|e| {
-                matches!(e, smithay::desktop::space::SpaceRenderElements::Element(_))
-            }).unwrap_or(elements.len());
+            let first_elem = elements
+                .iter()
+                .position(|e| matches!(e, smithay::desktop::space::SpaceRenderElements::Element(_)))
+                .unwrap_or(elements.len());
             let mut upper = Vec::with_capacity(first_elem);
             let mut rest = Vec::with_capacity(elements.len().saturating_sub(first_elem));
             for (i, el) in elements.into_iter().enumerate() {
-                if i < first_elem { upper.push(el); } else { rest.push(el); }
+                if i < first_elem {
+                    upper.push(el);
+                } else {
+                    rest.push(el);
+                }
             }
             (upper, rest)
         }
@@ -1193,9 +1327,11 @@ pub fn build_winit_elements(
     }
     // W9.B: snap zone preview overlay.
     if let Some(zone) = inputs.snap_preview {
-        out.push(LumoCustomElement::Solid(
-            snap_preview_element(zone, inputs.output_w, inputs.output_h)
-        ));
+        out.push(LumoCustomElement::Solid(snap_preview_element(
+            zone,
+            inputs.output_w,
+            inputs.output_h,
+        )));
     }
     // W12.B/C: overview + picker overlays.
     for elem in &inputs.overview_elements {
@@ -1280,8 +1416,6 @@ pub fn snap_preview_element(
     SolidColorRenderElement::new(Id::new(), geo, 0, color, Kind::Unspecified)
 }
 
-
-
 #[cfg(test)]
 mod ssd_btn_tests {
     use super::*;
@@ -1302,12 +1436,24 @@ mod ssd_btn_tests {
         assert_eq!(min.size.w, CLOSE_BTN_SIZE);
 
         // Order esquerda->direita: min < max < close (no eixo x).
-        assert!(min.loc.x < max.loc.x, "minimize deve ficar a esquerda de maximize");
-        assert!(max.loc.x < close.loc.x, "maximize deve ficar a esquerda de close");
+        assert!(
+            min.loc.x < max.loc.x,
+            "minimize deve ficar a esquerda de maximize"
+        );
+        assert!(
+            max.loc.x < close.loc.x,
+            "maximize deve ficar a esquerda de close"
+        );
 
         // Nao sobrepoem (gap entre eles).
-        assert!(min.loc.x + min.size.w <= max.loc.x, "min e max nao podem sobrepor");
-        assert!(max.loc.x + max.size.w <= close.loc.x, "max e close nao podem sobrepor");
+        assert!(
+            min.loc.x + min.size.w <= max.loc.x,
+            "min e max nao podem sobrepor"
+        );
+        assert!(
+            max.loc.x + max.size.w <= close.loc.x,
+            "max e close nao podem sobrepor"
+        );
 
         // Todos dentro da titlebar (y entre [loc.y - TITLEBAR_H, loc.y]).
         for r in [close, max, min] {

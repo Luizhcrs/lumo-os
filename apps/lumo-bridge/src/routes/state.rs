@@ -26,7 +26,11 @@ pub struct ActiveApp {
 }
 
 fn proc_running(name: &str) -> bool {
-    if let Ok(out) = std::process::Command::new("/usr/bin/pgrep").arg("-x").arg(name).output() {
+    if let Ok(out) = std::process::Command::new("/usr/bin/pgrep")
+        .arg("-x")
+        .arg(name)
+        .output()
+    {
         return out.status.success() && !out.stdout.is_empty();
     }
     false
@@ -71,7 +75,10 @@ pub async fn get_state() -> Json<StateResp> {
 pub async fn procs() -> Json<Value> {
     // pgrep -af lumo-  -- lista PID + cmdline. ps pra RSS/cpu.
     let mut out_procs: Vec<Value> = Vec::new();
-    if let Ok(o) = std::process::Command::new("/usr/bin/pgrep").args(["-f", "lumo-"]).output() {
+    if let Ok(o) = std::process::Command::new("/usr/bin/pgrep")
+        .args(["-f", "lumo-"])
+        .output()
+    {
         let pids: Vec<u32> = String::from_utf8_lossy(&o.stdout)
             .lines()
             .filter_map(|l| l.trim().parse::<u32>().ok())
@@ -104,7 +111,6 @@ pub async fn procs() -> Json<Value> {
     }
     Json(json!({"procs": out_procs}))
 }
-
 
 /// GET /state/dump — snapshot completo Lumo OS pra debug + observability.
 /// Agrega: procs lumo-*, samsung-galaxybook sysfs, telemetry socket, env, logs tail.
@@ -168,7 +174,9 @@ async fn collect_procs() -> Value {
 }
 
 fn read_sysfs(path: &str) -> Option<String> {
-    std::fs::read_to_string(path).ok().map(|s| s.trim().to_string())
+    std::fs::read_to_string(path)
+        .ok()
+        .map(|s| s.trim().to_string())
 }
 
 fn collect_galaxybook() -> Value {
@@ -187,8 +195,8 @@ fn collect_galaxybook() -> Value {
 }
 
 async fn collect_telemetry() -> Value {
-    use std::os::unix::net::UnixStream;
     use std::io::Read;
+    use std::os::unix::net::UnixStream;
     use std::time::Duration;
 
     let sock = "/run/user/1000/lumo-metrics.sock";
@@ -217,7 +225,10 @@ fn collect_env() -> Value {
     ];
     let mut m = serde_json::Map::new();
     for k in keys {
-        m.insert(k.into(), Value::String(std::env::var(k).unwrap_or_default()));
+        m.insert(
+            k.into(),
+            Value::String(std::env::var(k).unwrap_or_default()),
+        );
     }
     Value::Object(m)
 }

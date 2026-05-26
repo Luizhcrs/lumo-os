@@ -37,7 +37,11 @@ impl History {
     }
     fn save(&self) {
         let p = Self::path();
-        if let Some(parent) = std::path::Path::new(&p).parent() { fs::create_dir_all(parent).ok(); }
-        if let Ok(s) = serde_json::to_string_pretty(self) { fs::write(&p, s).ok(); }
+        if let Some(parent) = std::path::Path::new(&p).parent() {
+            fs::create_dir_all(parent).ok();
+        }
+        if let Ok(s) = serde_json::to_string_pretty(self) {
+            fs::write(&p, s).ok();
+        }
     }
 }

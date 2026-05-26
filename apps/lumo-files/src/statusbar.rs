@@ -29,7 +29,11 @@ pub fn format_disk(free_bytes: u64, total_bytes: u64) -> String {
     if total_bytes == 0 {
         return String::new();
     }
-    format!("{:.1} GB livres de {:.1} GB", to_gb(free_bytes), to_gb(total_bytes))
+    format!(
+        "{:.1} GB livres de {:.1} GB",
+        to_gb(free_bytes),
+        to_gb(total_bytes)
+    )
 }
 
 /// Renderiza a status bar inteira.
@@ -41,7 +45,9 @@ pub fn view<'a>(
     total_bytes: u64,
     status: &'a str,
 ) -> Element<'a, Message> {
-    let left = text(format_selection(selected, total)).size(11).color(th.fg_subtle);
+    let left = text(format_selection(selected, total))
+        .size(11)
+        .color(th.fg_subtle);
 
     let mid: Element<'a, Message> = if !status.is_empty() {
         row![
@@ -109,8 +115,14 @@ pub fn disk_usage(path: &std::path::Path) -> (u64, u64) {
     let _ = lines.next(); // header
     if let Some(line) = lines.next() {
         let mut parts = line.split_whitespace();
-        let avail = parts.next().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
-        let total = parts.next().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+        let avail = parts
+            .next()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
+        let total = parts
+            .next()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0);
         return (avail, total);
     }
     (0, 0)

@@ -90,7 +90,7 @@ impl A11yTokens {
             let val = parts[1].trim().trim_matches('"');
             match key {
                 "reduced_motion" => tokens.reduced_motion = val == "true",
-                "high_contrast"  => tokens.high_contrast  = val == "true",
+                "high_contrast" => tokens.high_contrast = val == "true",
                 "font_scale" => {
                     if let Ok(f) = val.parse::<f32>() {
                         tokens.font_scale = f.clamp(0.8, 1.4);
@@ -120,19 +120,31 @@ impl A11yTokens {
     /// Accent linear quando high_contrast=true. #FFFF00 yellow.
     pub fn hc_accent_linear(&self) -> [f32; 4] {
         let to_lin = |c: f32| -> f32 {
-            if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+            if c <= 0.04045 {
+                c / 12.92
+            } else {
+                ((c + 0.055) / 1.055).powf(2.4)
+            }
         };
         [to_lin(1.0), to_lin(1.0), to_lin(0.0), 1.0]
     }
 
     /// Largura de borda: 2px high_contrast, 1px normal.
     pub fn border_width(&self) -> u32 {
-        if self.high_contrast { 2 } else { 1 }
+        if self.high_contrast {
+            2
+        } else {
+            1
+        }
     }
 
     /// Largura de focus outline: 3px high_contrast, 1px normal.
     pub fn focus_outline_width(&self) -> u32 {
-        if self.high_contrast { 3 } else { 1 }
+        if self.high_contrast {
+            3
+        } else {
+            1
+        }
     }
 }
 
@@ -151,7 +163,10 @@ pub fn watch_accessibility<F: Fn(A11yTokens) + Send + 'static>(callback: F) {
     let mut watcher = match RecommendedWatcher::new(
         move |res: notify::Result<notify::Event>| {
             if let Ok(ev) = res {
-                if matches!(ev.kind, notify::EventKind::Modify(_) | notify::EventKind::Create(_)) {
+                if matches!(
+                    ev.kind,
+                    notify::EventKind::Modify(_) | notify::EventKind::Create(_)
+                ) {
                     let _ = tx.send(());
                 }
             }
@@ -163,7 +178,10 @@ pub fn watch_accessibility<F: Fn(A11yTokens) + Send + 'static>(callback: F) {
     };
 
     let watch_dir = path.parent().unwrap_or(&path).to_owned();
-    if watcher.watch(&watch_dir, RecursiveMode::NonRecursive).is_err() {
+    if watcher
+        .watch(&watch_dir, RecursiveMode::NonRecursive)
+        .is_err()
+    {
         return;
     }
 
@@ -224,13 +242,19 @@ mod tests {
 
     #[test]
     fn a11y_focus_outline_hc() {
-        let t = A11yTokens { high_contrast: true, ..Default::default() };
+        let t = A11yTokens {
+            high_contrast: true,
+            ..Default::default()
+        };
         assert_eq!(t.focus_outline_width(), 3);
     }
 
     #[test]
     fn a11y_hc_accent_is_yellow() {
-        let t = A11yTokens { high_contrast: true, ..Default::default() };
+        let t = A11yTokens {
+            high_contrast: true,
+            ..Default::default()
+        };
         let a = t.hc_accent_linear();
         assert!((a[0] - 1.0).abs() < 0.001);
         assert!((a[1] - 1.0).abs() < 0.001);
@@ -239,7 +263,11 @@ mod tests {
 
     #[test]
     fn a11y_toml_roundtrip() {
-        let t = A11yTokens { reduced_motion: true, high_contrast: false, font_scale: 1.2 };
+        let t = A11yTokens {
+            reduced_motion: true,
+            high_contrast: false,
+            font_scale: 1.2,
+        };
         let toml = t.to_toml();
         let t2 = A11yTokens::parse_toml(&toml).unwrap();
         assert_eq!(t.reduced_motion, t2.reduced_motion);

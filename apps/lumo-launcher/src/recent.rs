@@ -32,6 +32,8 @@ impl RecentApps {
         if let Some(parent) = std::path::Path::new(&p).parent() {
             fs::create_dir_all(parent).ok();
         }
-        if let Ok(s) = toml::to_string(self) { fs::write(&p, s).ok(); }
+        if let Ok(s) = toml::to_string(self) {
+            fs::write(&p, s).ok();
+        }
     }
 }

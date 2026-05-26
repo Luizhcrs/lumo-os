@@ -5,13 +5,13 @@
 //! LumoState.snap_preview. On button release at edge -> apply layout.
 
 use smithay::desktop::Window;
-use smithay::input::pointer::{
-    AxisFrame, ButtonEvent, GestureHoldBeginEvent, GestureHoldEndEvent,
-    GesturePinchBeginEvent, GesturePinchEndEvent, GesturePinchUpdateEvent,
-    GestureSwipeBeginEvent, GestureSwipeEndEvent, GestureSwipeUpdateEvent,
-    GrabStartData, MotionEvent, PointerGrab, PointerInnerHandle, RelativeMotionEvent,
-};
 use smithay::input::pointer::Focus;
+use smithay::input::pointer::{
+    AxisFrame, ButtonEvent, GestureHoldBeginEvent, GestureHoldEndEvent, GesturePinchBeginEvent,
+    GesturePinchEndEvent, GesturePinchUpdateEvent, GestureSwipeBeginEvent, GestureSwipeEndEvent,
+    GestureSwipeUpdateEvent, GrabStartData, MotionEvent, PointerGrab, PointerInnerHandle,
+    RelativeMotionEvent,
+};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Size};
 
@@ -34,18 +34,18 @@ impl SnapZone {
         const EDGE_PX: f64 = 8.0;
         let x = pos.x;
         let y = pos.y;
-        let near_left   = x < EDGE_PX;
-        let near_right  = x > (out_w as f64 - EDGE_PX);
-        let near_top    = y < EDGE_PX;
+        let near_left = x < EDGE_PX;
+        let near_right = x > (out_w as f64 - EDGE_PX);
+        let near_top = y < EDGE_PX;
         let near_bottom = y > (out_h as f64 - EDGE_PX);
         match (near_left, near_right, near_top, near_bottom) {
-            (true,  false, true,  false) => Some(SnapZone::TopLeft),
-            (false, true,  true,  false) => Some(SnapZone::TopRight),
-            (true,  false, false, true)  => Some(SnapZone::BottomLeft),
-            (false, true,  false, true)  => Some(SnapZone::BottomRight),
-            (true,  false, false, false) => Some(SnapZone::Left),
-            (false, true,  false, false) => Some(SnapZone::Right),
-            (false, false, true,  false) => Some(SnapZone::Maximize),
+            (true, false, true, false) => Some(SnapZone::TopLeft),
+            (false, true, true, false) => Some(SnapZone::TopRight),
+            (true, false, false, true) => Some(SnapZone::BottomLeft),
+            (false, true, false, true) => Some(SnapZone::BottomRight),
+            (true, false, false, false) => Some(SnapZone::Left),
+            (false, true, false, false) => Some(SnapZone::Right),
+            (false, false, true, false) => Some(SnapZone::Maximize),
             _ => None,
         }
     }
@@ -53,17 +53,23 @@ impl SnapZone {
     /// Returns (x, y, w, h) layout in logical pixels.
     /// W24: layout respect usable area (excludes bar layer-shell).
     /// usable_x/usable_y = offset, usable_w/usable_h = dims.
-    pub fn layout_usable(self, usable_x: i32, usable_y: i32, usable_w: i32, usable_h: i32) -> (i32, i32, i32, i32) {
+    pub fn layout_usable(
+        self,
+        usable_x: i32,
+        usable_y: i32,
+        usable_w: i32,
+        usable_h: i32,
+    ) -> (i32, i32, i32, i32) {
         let hw = usable_w / 2;
         let hh = usable_h / 2;
         match self {
-            SnapZone::Left        => (usable_x,        usable_y,         hw,            usable_h),
-            SnapZone::Right       => (usable_x + hw,   usable_y,         usable_w - hw, usable_h),
-            SnapZone::Maximize    => (usable_x,        usable_y,         usable_w,      usable_h),
-            SnapZone::TopLeft     => (usable_x,        usable_y,         hw,            hh),
-            SnapZone::TopRight    => (usable_x + hw,   usable_y,         usable_w - hw, hh),
-            SnapZone::BottomLeft  => (usable_x,        usable_y + hh,    hw,            usable_h - hh),
-            SnapZone::BottomRight => (usable_x + hw,   usable_y + hh,    usable_w - hw, usable_h - hh),
+            SnapZone::Left => (usable_x, usable_y, hw, usable_h),
+            SnapZone::Right => (usable_x + hw, usable_y, usable_w - hw, usable_h),
+            SnapZone::Maximize => (usable_x, usable_y, usable_w, usable_h),
+            SnapZone::TopLeft => (usable_x, usable_y, hw, hh),
+            SnapZone::TopRight => (usable_x + hw, usable_y, usable_w - hw, hh),
+            SnapZone::BottomLeft => (usable_x, usable_y + hh, hw, usable_h - hh),
+            SnapZone::BottomRight => (usable_x + hw, usable_y + hh, usable_w - hw, usable_h - hh),
         }
     }
 
@@ -98,12 +104,21 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
         const SSD_TITLEBAR_H: i32 = 30;
         let usable = data.usable_geometry();
         let win_bbox = self.window.bbox();
-        new_loc.x = new_loc.x.clamp(usable.loc.x, usable.loc.x + usable.size.w - win_bbox.size.w.max(64));
-        new_loc.y = new_loc.y.clamp(usable.loc.y + SSD_TITLEBAR_H, usable.loc.y + usable.size.h - 32);
+        new_loc.x = new_loc.x.clamp(
+            usable.loc.x,
+            usable.loc.x + usable.size.w - win_bbox.size.w.max(64),
+        );
+        new_loc.y = new_loc.y.clamp(
+            usable.loc.y + SSD_TITLEBAR_H,
+            usable.loc.y + usable.size.h - 32,
+        );
         data.space.map_element(self.window.clone(), new_loc, true);
 
         // W9.B: update snap preview.
-        let (out_w, out_h) = data.space.outputs().next()
+        let (out_w, out_h) = data
+            .space
+            .outputs()
+            .next()
             .and_then(|o| o.current_mode())
             .map(|m| (m.size.w, m.size.h))
             .unwrap_or((1920, 1080));
@@ -138,14 +153,19 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
         {
             if let Some(zone) = data.snap_preview.take() {
                 let usable = data.usable_geometry();
-                let (sx, sy, sw, sh) = zone.layout_usable(usable.loc.x, usable.loc.y, usable.size.w, usable.size.h);
+                let (sx, sy, sw, sh) =
+                    zone.layout_usable(usable.loc.x, usable.loc.y, usable.size.w, usable.size.h);
                 if let Some(tl) = self.window.toplevel() {
                     tl.with_pending_state(|state| {
                         state.size = Some(Size::from((sw, sh)));
                     });
                     let _ = tl.send_configure();
                 }
-                data.space.map_element(self.window.clone(), smithay::utils::Point::<i32, smithay::utils::Logical>::from((sx, sy)), true);
+                data.space.map_element(
+                    self.window.clone(),
+                    smithay::utils::Point::<i32, smithay::utils::Logical>::from((sx, sy)),
+                    true,
+                );
                 tracing::info!(?zone, sx, sy, sw, sh, "W9.B: snap applied");
             } else {
                 data.snap_preview = None;
@@ -163,11 +183,7 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
         handle.axis(data, details);
     }
 
-    fn frame(
-        &mut self,
-        data: &mut LumoState,
-        handle: &mut PointerInnerHandle<'_, LumoState>,
-    ) {
+    fn frame(&mut self, data: &mut LumoState, handle: &mut PointerInnerHandle<'_, LumoState>) {
         handle.frame(data);
     }
 
@@ -257,41 +273,64 @@ mod tests {
     use super::*;
     use smithay::utils::Point;
 
-    fn pt(x: f64, y: f64) -> Point<f64, Logical> { Point::from((x, y)) }
+    fn pt(x: f64, y: f64) -> Point<f64, Logical> {
+        Point::from((x, y))
+    }
 
     #[test]
     fn snap_left_edge() {
-        assert_eq!(SnapZone::detect(pt(4.0, 540.0), 1920, 1080), Some(SnapZone::Left));
+        assert_eq!(
+            SnapZone::detect(pt(4.0, 540.0), 1920, 1080),
+            Some(SnapZone::Left)
+        );
     }
 
     #[test]
     fn snap_right_edge() {
-        assert_eq!(SnapZone::detect(pt(1916.0, 540.0), 1920, 1080), Some(SnapZone::Right));
+        assert_eq!(
+            SnapZone::detect(pt(1916.0, 540.0), 1920, 1080),
+            Some(SnapZone::Right)
+        );
     }
 
     #[test]
     fn snap_top_maximize() {
-        assert_eq!(SnapZone::detect(pt(960.0, 4.0), 1920, 1080), Some(SnapZone::Maximize));
+        assert_eq!(
+            SnapZone::detect(pt(960.0, 4.0), 1920, 1080),
+            Some(SnapZone::Maximize)
+        );
     }
 
     #[test]
     fn snap_top_left_corner() {
-        assert_eq!(SnapZone::detect(pt(4.0, 4.0), 1920, 1080), Some(SnapZone::TopLeft));
+        assert_eq!(
+            SnapZone::detect(pt(4.0, 4.0), 1920, 1080),
+            Some(SnapZone::TopLeft)
+        );
     }
 
     #[test]
     fn snap_top_right_corner() {
-        assert_eq!(SnapZone::detect(pt(1916.0, 4.0), 1920, 1080), Some(SnapZone::TopRight));
+        assert_eq!(
+            SnapZone::detect(pt(1916.0, 4.0), 1920, 1080),
+            Some(SnapZone::TopRight)
+        );
     }
 
     #[test]
     fn snap_bottom_left_corner() {
-        assert_eq!(SnapZone::detect(pt(4.0, 1076.0), 1920, 1080), Some(SnapZone::BottomLeft));
+        assert_eq!(
+            SnapZone::detect(pt(4.0, 1076.0), 1920, 1080),
+            Some(SnapZone::BottomLeft)
+        );
     }
 
     #[test]
     fn snap_bottom_right_corner() {
-        assert_eq!(SnapZone::detect(pt(1916.0, 1076.0), 1920, 1080), Some(SnapZone::BottomRight));
+        assert_eq!(
+            SnapZone::detect(pt(1916.0, 1076.0), 1920, 1080),
+            Some(SnapZone::BottomRight)
+        );
     }
 
     #[test]
@@ -324,8 +363,8 @@ mod tests {
     #[test]
     fn quarter_areas_fill_screen() {
         let (_, _, w1, h1) = SnapZone::TopLeft.layout(1920, 1080);
-        let (_, _, w2, _)  = SnapZone::TopRight.layout(1920, 1080);
-        let (_, _, _,  h3) = SnapZone::BottomLeft.layout(1920, 1080);
+        let (_, _, w2, _) = SnapZone::TopRight.layout(1920, 1080);
+        let (_, _, _, h3) = SnapZone::BottomLeft.layout(1920, 1080);
         assert_eq!(w1 + w2, 1920);
         assert_eq!(h1 + h3, 1080);
     }

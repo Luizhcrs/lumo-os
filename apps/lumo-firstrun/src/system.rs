@@ -11,7 +11,10 @@ pub fn create_user(username: &str, password: &str) -> Result<(), String> {
         .map_err(|e| format!("useradd falhou: {e}"))?;
 
     if !status.success() {
-        return Err(format!("useradd retornou codigo {}", status.code().unwrap_or(-1)));
+        return Err(format!(
+            "useradd retornou codigo {}",
+            status.code().unwrap_or(-1)
+        ));
     }
 
     // Definir senha via `chpasswd`
@@ -22,8 +25,7 @@ pub fn create_user(username: &str, password: &str) -> Result<(), String> {
 
     if let Some(stdin) = child.stdin.as_mut() {
         use std::io::Write;
-        writeln!(stdin, "{username}:{password}")
-            .map_err(|e| format!("chpasswd stdin: {e}"))?;
+        writeln!(stdin, "{username}:{password}").map_err(|e| format!("chpasswd stdin: {e}"))?;
     }
 
     let out = child.wait().map_err(|e| format!("chpasswd wait: {e}"))?;

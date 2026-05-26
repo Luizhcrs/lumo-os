@@ -1,25 +1,22 @@
 //! desktop/handlers.rs - Wayland handlers + LumoDesktop::redraw / hit_test_menu.
 
+use smithay_client_toolkit::reexports::client::{
+    protocol::{wl_output, wl_seat, wl_shm, wl_surface},
+    Connection, QueueHandle,
+};
 use smithay_client_toolkit::{
     compositor::CompositorHandler,
     output::{OutputHandler, OutputState},
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
-    seat::{
-        pointer::ThemeSpec,
-        Capability, SeatHandler, SeatState,
-    },
+    seat::{pointer::ThemeSpec, Capability, SeatHandler, SeatState},
     shell::wlr_layer::{LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
     shell::WaylandSurface,
     shm::{Shm, ShmHandler},
 };
-use smithay_client_toolkit::reexports::client::{
-    protocol::{wl_output, wl_seat, wl_shm, wl_surface},
-    Connection, QueueHandle,
-};
 use tiny_skia::Pixmap;
 
-use crate::desktop::icons::{paint_icons, paint_ctx_menu};
+use crate::desktop::icons::{paint_ctx_menu, paint_icons};
 use crate::desktop::menu_overlay::{paint_menu_at, MENU_ITEMS, MENU_W};
 use crate::desktop::rubber_band::paint_rubber_band;
 use crate::desktop::state::{LumoDesktop, MENU_OFFSET, OUTPUT_H, OUTPUT_W};
@@ -105,17 +102,47 @@ impl LumoDesktop {
 }
 
 impl CompositorHandler for LumoDesktop {
-    fn scale_factor_changed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: i32) {}
-    fn transform_changed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: wl_output::Transform) {}
+    fn scale_factor_changed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: i32,
+    ) {
+    }
+    fn transform_changed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: wl_output::Transform,
+    ) {
+    }
     fn frame(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: u32) {
         self.redraw(qh);
     }
-    fn surface_enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: &wl_output::WlOutput) {}
-    fn surface_leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: &wl_output::WlOutput) {}
+    fn surface_enter(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+    }
+    fn surface_leave(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+    }
 }
 
 impl OutputHandler for LumoDesktop {
-    fn output_state(&mut self) -> &mut OutputState { &mut self.output_state }
+    fn output_state(&mut self) -> &mut OutputState {
+        &mut self.output_state
+    }
     fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
@@ -137,17 +164,24 @@ impl LayerShellHandler for LumoDesktop {
         self.width = if w > 0 { w } else { OUTPUT_W };
         self.height = if h > 0 { h } else { OUTPUT_H };
         self.first_configured = true;
-        eprintln!("[lumo-desktop] configured cfg_size=({},{}) using=({},{})", w, h, self.width, self.height);
+        eprintln!(
+            "[lumo-desktop] configured cfg_size=({},{}) using=({},{})",
+            w, h, self.width, self.height
+        );
         self.redraw(qh);
     }
 }
 
 impl ShmHandler for LumoDesktop {
-    fn shm_state(&mut self) -> &mut Shm { &mut self.shm }
+    fn shm_state(&mut self) -> &mut Shm {
+        &mut self.shm
+    }
 }
 
 impl SeatHandler for LumoDesktop {
-    fn seat_state(&mut self) -> &mut SeatState { &mut self.seat_state }
+    fn seat_state(&mut self) -> &mut SeatState {
+        &mut self.seat_state
+    }
     fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
     fn new_capability(
         &mut self,
@@ -169,11 +203,20 @@ impl SeatHandler for LumoDesktop {
             }
         }
     }
-    fn remove_capability(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat, _: Capability) {}
+    fn remove_capability(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: wl_seat::WlSeat,
+        _: Capability,
+    ) {
+    }
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }
 
 impl ProvidesRegistryState for LumoDesktop {
-    fn registry(&mut self) -> &mut RegistryState { &mut self.registry }
+    fn registry(&mut self) -> &mut RegistryState {
+        &mut self.registry
+    }
     registry_handlers!(OutputState, SeatState);
 }

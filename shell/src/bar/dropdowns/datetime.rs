@@ -28,13 +28,13 @@ use crate::bar::tokens::*;
 
 #[derive(Clone)]
 pub struct DateTimeInfo {
-    pub weekday_full: String, // "domingo"
-    pub day: u32,             // 17 (today)
-    pub month_full: String,   // "maio" (today)
-    pub year: i32,            // 2026 (today)
-    pub hour: u8,             // 17
-    pub minute: u8,           // 50
-    pub second: u8,           // 32
+    pub weekday_full: String,              // "domingo"
+    pub day: u32,                          // 17 (today)
+    pub month_full: String,                // "maio" (today)
+    pub year: i32,                         // 2026 (today)
+    pub hour: u8,                          // 17
+    pub minute: u8,                        // 50
+    pub second: u8,                        // 32
     pub month_grid: Vec<Vec<Option<u32>>>, // 6 weeks x 7 days, None = padding
     pub today_day: u32,
     pub today_month: u32, // A26: pra destacar today so quando viewed = today month/year
@@ -71,16 +71,30 @@ impl Default for DateTimeInfo {
 pub fn weekday_full_pt(w: chrono::Weekday) -> &'static str {
     use chrono::Weekday::*;
     match w {
-        Mon => "segunda-feira", Tue => "terca-feira", Wed => "quarta-feira",
-        Thu => "quinta-feira", Fri => "sexta-feira", Sat => "sabado", Sun => "domingo",
+        Mon => "segunda-feira",
+        Tue => "terca-feira",
+        Wed => "quarta-feira",
+        Thu => "quinta-feira",
+        Fri => "sexta-feira",
+        Sat => "sabado",
+        Sun => "domingo",
     }
 }
 
 pub fn month_full_pt(m: u32) -> &'static str {
     match m {
-        1 => "janeiro", 2 => "fevereiro", 3 => "marco", 4 => "abril",
-        5 => "maio", 6 => "junho", 7 => "julho", 8 => "agosto",
-        9 => "setembro", 10 => "outubro", 11 => "novembro", 12 => "dezembro",
+        1 => "janeiro",
+        2 => "fevereiro",
+        3 => "marco",
+        4 => "abril",
+        5 => "maio",
+        6 => "junho",
+        7 => "julho",
+        8 => "agosto",
+        9 => "setembro",
+        10 => "outubro",
+        11 => "novembro",
+        12 => "dezembro",
         _ => "?",
     }
 }
@@ -150,29 +164,69 @@ pub fn draw_datetime_dropdown(
     // Botao prev: alinhado a esquerda do grid.
     let prev_x = x + DROPDOWN_PAD;
     let prev_y = header_y + (CAL_HEADER_H - CAL_NAV_BTN_H) / 2.0;
-    fill_rrect(canvas, prev_x, prev_y, CAL_NAV_BTN_W, CAL_NAV_BTN_H, CAL_NAV_BTN_RADIUS, accent_subtle);
+    fill_rrect(
+        canvas,
+        prev_x,
+        prev_y,
+        CAL_NAV_BTN_W,
+        CAL_NAV_BTN_H,
+        CAL_NAV_BTN_RADIUS,
+        accent_subtle,
+    );
     let arrow_l = "<";
     let arrow_l_w = measure_text(arrow_l, FONT_CAL_NAV, true);
     let arrow_l_x = prev_x + (CAL_NAV_BTN_W - arrow_l_w) / 2.0;
     let arrow_l_y = prev_y + (CAL_NAV_BTN_H - FONT_CAL_NAV) / 2.0 - 1.0;
-    draw_text(canvas, arrow_l_x, arrow_l_y, arrow_l, FONT_CAL_NAV, fg, true);
+    draw_text(
+        canvas,
+        arrow_l_x,
+        arrow_l_y,
+        arrow_l,
+        FONT_CAL_NAV,
+        fg,
+        true,
+    );
     hits.prev_rect = Some((prev_x, prev_y, CAL_NAV_BTN_W, CAL_NAV_BTN_H));
 
     // Botao next: alinhado a direita.
     let next_x = x + w - DROPDOWN_PAD - CAL_NAV_BTN_W;
     let next_y = prev_y;
-    fill_rrect(canvas, next_x, next_y, CAL_NAV_BTN_W, CAL_NAV_BTN_H, CAL_NAV_BTN_RADIUS, accent_subtle);
+    fill_rrect(
+        canvas,
+        next_x,
+        next_y,
+        CAL_NAV_BTN_W,
+        CAL_NAV_BTN_H,
+        CAL_NAV_BTN_RADIUS,
+        accent_subtle,
+    );
     let arrow_r = ">";
     let arrow_r_w = measure_text(arrow_r, FONT_CAL_NAV, true);
     let arrow_r_x = next_x + (CAL_NAV_BTN_W - arrow_r_w) / 2.0;
     let arrow_r_y = next_y + (CAL_NAV_BTN_H - FONT_CAL_NAV) / 2.0 - 1.0;
-    draw_text(canvas, arrow_r_x, arrow_r_y, arrow_r, FONT_CAL_NAV, fg, true);
+    draw_text(
+        canvas,
+        arrow_r_x,
+        arrow_r_y,
+        arrow_r,
+        FONT_CAL_NAV,
+        fg,
+        true,
+    );
     hits.next_rect = Some((next_x, next_y, CAL_NAV_BTN_W, CAL_NAV_BTN_H));
 
     // Label centralizado entre os botoes.
     let header_label_x = x + (w - header_text_w) / 2.0;
     let header_label_y = header_y + (CAL_HEADER_H - FONT_CAL_NAV) / 2.0 - 1.0;
-    draw_text(canvas, header_label_x, header_label_y, &header_label, FONT_CAL_NAV, fg, true);
+    draw_text(
+        canvas,
+        header_label_x,
+        header_label_y,
+        &header_label,
+        FONT_CAL_NAV,
+        fg,
+        true,
+    );
     cy += CAL_HEADER_H + 2.0;
 
     // Grid horizontal centralizado em w. 7 colunas * DATETIME_CELL_W.
@@ -185,12 +239,21 @@ pub fn draw_datetime_dropdown(
         let cell_x = grid_x + DATETIME_CELL_W * i as f32;
         let label_w = measure_text(label, FONT_DROPDOWN_CALENDAR, true);
         let lx = cell_x + (DATETIME_CELL_W - label_w) / 2.0;
-        draw_text(canvas, lx, cy, label, FONT_DROPDOWN_CALENDAR, fg_subtle, true);
+        draw_text(
+            canvas,
+            lx,
+            cy,
+            label,
+            FONT_DROPDOWN_CALENDAR,
+            fg_subtle,
+            true,
+        );
     }
     cy += DATETIME_CELL_H;
 
     // Today destacado SO quando viewed_month/year == today_month/year.
-    let viewing_today_month = info.viewed_year == info.today_year && info.viewed_month == info.today_month;
+    let viewing_today_month =
+        info.viewed_year == info.today_year && info.viewed_month == info.today_month;
 
     // Grid 6x7 dias.
     for week in 0..6 {
@@ -208,7 +271,8 @@ pub fn draw_datetime_dropdown(
                 let dy = cell_y + (DATETIME_CELL_H - FONT_DROPDOWN_CALENDAR) / 2.0 - 1.0;
 
                 // A26: hit-rect celula inteira (alvo de click).
-                hits.day_rects.push((day, (cell_x, cell_y, DATETIME_CELL_W, DATETIME_CELL_H)));
+                hits.day_rects
+                    .push((day, (cell_x, cell_y, DATETIME_CELL_W, DATETIME_CELL_H)));
 
                 if is_today {
                     let pill_w = 22.0;
@@ -216,7 +280,15 @@ pub fn draw_datetime_dropdown(
                     let pxp = cell_x + (DATETIME_CELL_W - pill_w) / 2.0;
                     let pyp = cell_y + (DATETIME_CELL_H - pill_h) / 2.0;
                     fill_rrect(canvas, pxp, pyp, pill_w, pill_h, 9.0, accent);
-                    draw_text_mono(canvas, dx, dy, &day_str, FONT_DROPDOWN_CALENDAR, on_accent, true);
+                    draw_text_mono(
+                        canvas,
+                        dx,
+                        dy,
+                        &day_str,
+                        FONT_DROPDOWN_CALENDAR,
+                        on_accent,
+                        true,
+                    );
                 } else if is_selected {
                     let pill_w = 22.0;
                     let pill_h = 18.0;
@@ -237,11 +309,27 @@ pub fn draw_datetime_dropdown(
     let today_label = "Hoje";
     let today_x = x + (w - CAL_TODAY_BTN_W) / 2.0;
     let today_y = footer_y + (CAL_FOOTER_H - CAL_TODAY_BTN_H) / 2.0;
-    fill_rrect(canvas, today_x, today_y, CAL_TODAY_BTN_W, CAL_TODAY_BTN_H, CAL_NAV_BTN_RADIUS, accent_subtle);
+    fill_rrect(
+        canvas,
+        today_x,
+        today_y,
+        CAL_TODAY_BTN_W,
+        CAL_TODAY_BTN_H,
+        CAL_NAV_BTN_RADIUS,
+        accent_subtle,
+    );
     let today_w_text = measure_text(today_label, FONT_CAL_NAV, true);
     let today_label_x = today_x + (CAL_TODAY_BTN_W - today_w_text) / 2.0;
     let today_label_y = today_y + (CAL_TODAY_BTN_H - FONT_CAL_NAV) / 2.0 - 1.0;
-    draw_text(canvas, today_label_x, today_label_y, today_label, FONT_CAL_NAV, fg, true);
+    draw_text(
+        canvas,
+        today_label_x,
+        today_label_y,
+        today_label,
+        FONT_CAL_NAV,
+        fg,
+        true,
+    );
     hits.today_rect = Some((today_x, today_y, CAL_TODAY_BTN_W, CAL_TODAY_BTN_H));
 
     let _ = cy;

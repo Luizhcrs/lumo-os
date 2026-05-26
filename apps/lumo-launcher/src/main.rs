@@ -7,12 +7,12 @@ mod paint;
 mod recent;
 mod state;
 
-use std::time::Instant;
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
+use smithay_client_toolkit::reexports::client::{globals::registry_queue_init, Connection};
 use smithay_client_toolkit::{
     compositor::CompositorState,
-    delegate_compositor, delegate_keyboard, delegate_layer, delegate_output,
-    delegate_registry, delegate_seat, delegate_shm,
+    delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_registry,
+    delegate_seat, delegate_shm,
     output::OutputState,
     registry::RegistryState,
     seat::SeatState,
@@ -20,8 +20,8 @@ use smithay_client_toolkit::{
     shell::WaylandSurface,
     shm::{slot::SlotPool, Shm},
 };
-use smithay_client_toolkit::reexports::client::{globals::registry_queue_init, Connection};
 use state::LumoLauncher;
+use std::time::Instant;
 
 delegate_compositor!(LumoLauncher);
 delegate_output!(LumoLauncher);
@@ -50,7 +50,8 @@ fn main() {
     let layer_shell = LayerShell::bind(&globals, &qh).expect("wlr_layer_shell");
     let shm = Shm::bind(&globals, &qh).expect("wl_shm");
     let surface = compositor.create_surface(&qh);
-    let layer = layer_shell.create_layer_surface(&qh, surface, Layer::Overlay, Some("lumo-launcher"), None);
+    let layer =
+        layer_shell.create_layer_surface(&qh, surface, Layer::Overlay, Some("lumo-launcher"), None);
     layer.set_anchor(Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
     layer.set_size(SCREEN_W, SCREEN_H);
     layer.set_exclusive_zone(-1);
@@ -73,7 +74,14 @@ fn main() {
             let _ = poll(&mut pfd, PollTimeout::try_from(16i32).unwrap());
             let _ = guard.read();
         }
-        if let Err(e) = queue.dispatch_pending(&mut state) { let s = format!("{e:?}"); if s.contains("ConnectionReset") || s.contains("BrokenPipe") { break; } }
-        if conn.flush().is_err() { break; }
+        if let Err(e) = queue.dispatch_pending(&mut state) {
+            let s = format!("{e:?}");
+            if s.contains("ConnectionReset") || s.contains("BrokenPipe") {
+                break;
+            }
+        }
+        if conn.flush().is_err() {
+            break;
+        }
     }
 }

@@ -91,9 +91,21 @@ impl LumoWallpaper {
         if magic != CACHE_MAGIC {
             return Err(anyhow!("magic invalido: {:?}", magic));
         }
-        let w = u32::from_le_bytes(data[4..8].try_into().expect("slice 4B garantido pelo bounds check")) as i32;
-        let h = u32::from_le_bytes(data[8..12].try_into().expect("slice 4B garantido pelo bounds check")) as i32;
-        let version = u32::from_le_bytes(data[12..16].try_into().expect("slice 4B garantido pelo bounds check"));
+        let w = u32::from_le_bytes(
+            data[4..8]
+                .try_into()
+                .expect("slice 4B garantido pelo bounds check"),
+        ) as i32;
+        let h = u32::from_le_bytes(
+            data[8..12]
+                .try_into()
+                .expect("slice 4B garantido pelo bounds check"),
+        ) as i32;
+        let version = u32::from_le_bytes(
+            data[12..16]
+                .try_into()
+                .expect("slice 4B garantido pelo bounds check"),
+        );
 
         if version != CACHE_VERSION {
             return Err(anyhow!("versao de cache incompativel: {version}"));
@@ -131,7 +143,10 @@ impl LumoWallpaper {
         // (PNG transparente). Default seguro.
         let buffer = TextureBuffer::from_texture(renderer, texture, 1, Transform::Normal, None);
 
-        Ok(Self { buffer, size: (w, h) })
+        Ok(Self {
+            buffer,
+            size: (w, h),
+        })
     }
 
     /// Resolve path do wallpaper: env LUMO_WALLPAPER se setado,
@@ -197,9 +212,8 @@ impl LumoWallpaper {
         // forca scale 7680x4320 -> 1920x1080. Sem src explicito, smithay
         // pode renderizar 1:1 sem scale.
         let logical_size: Size<i32, Logical> = (output_w, output_h).into();
-        let src: Rectangle<f64, Logical> = Rectangle::from_size(
-            (self.size.0 as f64, self.size.1 as f64).into(),
-        );
+        let src: Rectangle<f64, Logical> =
+            Rectangle::from_size((self.size.0 as f64, self.size.1 as f64).into());
         TextureRenderElement::from_texture_buffer(
             Point::<f64, Physical>::from((0.0, 0.0)),
             &self.buffer,
@@ -218,7 +232,8 @@ impl LumoWallpaper {
 /// Carrega assets/splash.png como MemoryRenderBuffer RGBA8.
 /// Embutido em compile-time via include_bytes!.
 /// Retorna None se decode falhar (graceful degradation).
-pub fn load_splash_buffer() -> Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer> {
+pub fn load_splash_buffer(
+) -> Option<smithay::backend::renderer::element::memory::MemoryRenderBuffer> {
     use smithay::backend::allocator::Fourcc;
     use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
     use smithay::utils::Transform;
@@ -245,9 +260,11 @@ pub fn splash_element(
     output_w: i32,
     output_h: i32,
     alpha: f32,
-) -> Option<smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement<
-    smithay::backend::renderer::gles::GlesRenderer
->> {
+) -> Option<
+    smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement<
+        smithay::backend::renderer::gles::GlesRenderer,
+    >,
+> {
     use smithay::backend::renderer::element::memory::MemoryRenderBufferRenderElement;
     use smithay::backend::renderer::element::Kind;
     use smithay::utils::{Physical, Point};

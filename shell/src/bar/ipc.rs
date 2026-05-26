@@ -105,22 +105,36 @@ pub fn drain_ipc(
             }
         }
     }
-    DrainResult { alive, close_dropdowns, active_app, clear_appmenu, theme_reloaded }
+    DrainResult {
+        alive,
+        close_dropdowns,
+        active_app,
+        clear_appmenu,
+        theme_reloaded,
+    }
 }
 
 impl LumoBar {
     /// A26: envia LumoCommand::CloseDesktopMenu pelo socket IPC.
     /// Usado quando bar abre dropdown -> mutex pede lumo-desktop fechar menu.
     pub fn send_ipc_close_desktop_menu(&mut self) {
-        let Some(s) = self.ipc_stream.as_mut() else { return };
+        let Some(s) = self.ipc_stream.as_mut() else {
+            return;
+        };
         let mut payload = match serde_json::to_string(&LumoCommand::CloseDesktopMenu) {
             Ok(p) => p,
-            Err(e) => { eprintln!("[lumo-bar] serialize CloseDesktopMenu falhou: {e}"); return; }
+            Err(e) => {
+                eprintln!("[lumo-bar] serialize CloseDesktopMenu falhou: {e}");
+                return;
+            }
         };
         payload.push('\n');
         if let Err(e) = s.write_all(payload.as_bytes()) {
             if e.kind() != ErrorKind::WouldBlock {
-                eprintln!("[lumo-bar] IPC write CloseDesktopMenu erro: {}; dropando socket", e);
+                eprintln!(
+                    "[lumo-bar] IPC write CloseDesktopMenu erro: {}; dropando socket",
+                    e
+                );
                 self.ipc_stream = None;
             }
         }
@@ -128,15 +142,23 @@ impl LumoBar {
 
     /// T1.2: envia LumoCommand::CloseFocusedToplevel ao compositor.
     pub fn send_ipc_close_focused_toplevel(&mut self) {
-        let Some(s) = self.ipc_stream.as_mut() else { return };
+        let Some(s) = self.ipc_stream.as_mut() else {
+            return;
+        };
         let mut payload = match serde_json::to_string(&LumoCommand::CloseFocusedToplevel) {
             Ok(p) => p,
-            Err(e) => { eprintln!("[lumo-bar] serialize CloseFocusedToplevel falhou: {e}"); return; }
+            Err(e) => {
+                eprintln!("[lumo-bar] serialize CloseFocusedToplevel falhou: {e}");
+                return;
+            }
         };
         payload.push('\n');
         if let Err(e) = s.write_all(payload.as_bytes()) {
             if e.kind() != ErrorKind::WouldBlock {
-                eprintln!("[lumo-bar] IPC write CloseFocusedToplevel erro: {}; dropando socket", e);
+                eprintln!(
+                    "[lumo-bar] IPC write CloseFocusedToplevel erro: {}; dropando socket",
+                    e
+                );
                 self.ipc_stream = None;
             }
         }
@@ -145,15 +167,23 @@ impl LumoBar {
     /// A26: envia LumoCommand::CloseDropdowns (broadcast a todos os clients).
     /// Usado pelo right-click na bar.
     pub fn send_ipc_close_dropdowns(&mut self) {
-        let Some(s) = self.ipc_stream.as_mut() else { return };
+        let Some(s) = self.ipc_stream.as_mut() else {
+            return;
+        };
         let mut payload = match serde_json::to_string(&LumoCommand::CloseDropdowns) {
             Ok(p) => p,
-            Err(e) => { eprintln!("[lumo-bar] serialize CloseDropdowns falhou: {e}"); return; }
+            Err(e) => {
+                eprintln!("[lumo-bar] serialize CloseDropdowns falhou: {e}");
+                return;
+            }
         };
         payload.push('\n');
         if let Err(e) = s.write_all(payload.as_bytes()) {
             if e.kind() != ErrorKind::WouldBlock {
-                eprintln!("[lumo-bar] IPC write CloseDropdowns erro: {}; dropando socket", e);
+                eprintln!(
+                    "[lumo-bar] IPC write CloseDropdowns erro: {}; dropando socket",
+                    e
+                );
                 self.ipc_stream = None;
             }
         }

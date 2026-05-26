@@ -46,11 +46,7 @@ impl CompositorHandler for LumoState {
             if let Some(window) = self
                 .space
                 .elements()
-                .find(|w| {
-                    w.wl_surface()
-                        .map(|s| s.as_ref() == &root)
-                        .unwrap_or(false)
-                })
+                .find(|w| w.wl_surface().map(|s| s.as_ref() == &root).unwrap_or(false))
                 .cloned()
             {
                 window.on_commit();

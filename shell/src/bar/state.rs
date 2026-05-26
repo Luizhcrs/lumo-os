@@ -5,10 +5,7 @@
 //! imutavel. Render delegado pra modulos pills/icons/dropdowns.
 
 use std::os::unix::net::UnixStream;
-use std::sync::{
-    atomic::AtomicU8,
-    Arc,
-};
+use std::sync::{atomic::AtomicU8, Arc};
 use std::time::Instant;
 
 use smithay_client_toolkit::{
@@ -21,11 +18,10 @@ use smithay_client_toolkit::{
 };
 use tiny_skia::{Color, Pixmap};
 
-use lumo_foundation::{current_bar_layout, LumoColors, LumoTheme};
 use lumo_animation::{AnimCurve, LAAnimator, LACurve};
+use lumo_foundation::{current_bar_layout, LumoColors, LumoTheme};
 
 use crate::bar::dropdowns::battery::{draw_battery_dropdown, BatteryInfo};
-use crate::bar::password_modal::{draw_password_modal, PasswordModalHits, PasswordModalState};
 use crate::bar::dropdowns::brightness::{draw_brightness_dropdown, BrightnessInfo};
 use crate::bar::dropdowns::datetime::{draw_datetime_dropdown, DateTimeInfo};
 use crate::bar::dropdowns::lumo_menu::draw_lumo_menu;
@@ -34,9 +30,10 @@ use crate::bar::dropdowns::DropdownActive;
 use crate::bar::fonts::{
     draw_text, draw_text_mono, measure_text, measure_text_mono, opaque, rgba_hex,
 };
-use crate::bar::icons::{draw_brightness_sun, 
-    battery_total_width, draw_battery, draw_brand_dot, draw_wifi, fill_circle,
+use crate::bar::icons::{
+    battery_total_width, draw_battery, draw_brand_dot, draw_brightness_sun, draw_wifi, fill_circle,
 };
+use crate::bar::password_modal::{draw_password_modal, PasswordModalHits, PasswordModalState};
 use crate::bar::pills::draw_pill_bg;
 use crate::bar::tokens::*;
 
@@ -57,9 +54,9 @@ pub(crate) struct BarSnapshot {
     pub date_str: String,
     pub dropdown: DropdownActive,
     pub battery_info: BatteryInfo,
-    pub wifi_info: WifiInfo, // A23
+    pub wifi_info: WifiInfo,             // A23
     pub brightness_info: BrightnessInfo, // L5
-    pub datetime_info: DateTimeInfo, // A24
+    pub datetime_info: DateTimeInfo,     // A24
     /// A27: indice do item em hover no menu Lumo (usize::MAX = nenhum).
     pub lumo_menu_hover_idx: usize,
     // C5: appmenu pills (app em foco).
@@ -83,9 +80,9 @@ pub(crate) struct BarSnapshot {
 #[derive(Default, Clone)]
 pub(crate) struct PaintResult {
     pub bat_hit_rect: Option<(f32, f32, f32, f32)>,
-    pub wifi_hit_rect: Option<(f32, f32, f32, f32)>,     // A23
+    pub wifi_hit_rect: Option<(f32, f32, f32, f32)>, // A23
     pub datetime_hit_rect: Option<(f32, f32, f32, f32)>, // A24
-    pub lumo_hit_rect: Option<(f32, f32, f32, f32)>,     // A27: brand "Lumo" pill esquerda
+    pub lumo_hit_rect: Option<(f32, f32, f32, f32)>, // A27: brand "Lumo" pill esquerda
     // A26: hit-tests do calendar interativo (so populados quando dropdown=DateTime).
     pub cal_prev_rect: Option<(f32, f32, f32, f32)>,
     pub cal_next_rect: Option<(f32, f32, f32, f32)>,
@@ -128,17 +125,17 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
 
     let mut result = PaintResult::default();
     let h = snap.height as f32;
-    let layout       = current_bar_layout();
-    let pill_y       = layout.margin_top;
-    let pill_h       = layout.height as f32 - layout.margin_top * 2.0;
-    let pill_pad_x   = layout.padding_x;
-    let pill_gap     = layout.pill_gap;
-    let pill_margin  = layout.margin_x;
+    let layout = current_bar_layout();
+    let pill_y = layout.margin_top;
+    let pill_h = layout.height as f32 - layout.margin_top * 2.0;
+    let pill_pad_x = layout.padding_x;
+    let pill_gap = layout.pill_gap;
+    let pill_margin = layout.margin_x;
     let pill_radius_ = layout.pill_radius;
-    let bat_w_override      = layout.find_pill("battery")   .and_then(|s| s.width);
-    let wifi_w_override     = layout.find_pill("wifi")      .and_then(|s| s.width);
-    let bright_w_override   = layout.find_pill("brightness").and_then(|s| s.width);
-    let _dt_w_override      = layout.find_pill("datetime")  .and_then(|s| s.width);
+    let bat_w_override = layout.find_pill("battery").and_then(|s| s.width);
+    let wifi_w_override = layout.find_pill("wifi").and_then(|s| s.width);
+    let bright_w_override = layout.find_pill("brightness").and_then(|s| s.width);
+    let _dt_w_override = layout.find_pill("datetime").and_then(|s| s.width);
     let _ = PILL_MARGIN_TOP;
     let pill_cy = pill_y + pill_h / 2.0;
 
@@ -193,8 +190,24 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
             let fb_w = label_w + pill_pad_x * 2.0 + 18.0;
             let fb_x = pill_l_x + pill_l_w + pill_gap;
             draw_pill_bg(&mut canvas, fb_x, pill_y, fb_w, pill_h, pill_bg, 0);
-            draw_text(&mut canvas, fb_x + pill_pad_x, text_top, &label, FONT_PILL, pill_fg, false);
-            draw_text(&mut canvas, fb_x + pill_pad_x + label_w + 4.0, text_top, "v", FONT_PILL, pill_fg, false);
+            draw_text(
+                &mut canvas,
+                fb_x + pill_pad_x,
+                text_top,
+                &label,
+                FONT_PILL,
+                pill_fg,
+                false,
+            );
+            draw_text(
+                &mut canvas,
+                fb_x + pill_pad_x + label_w + 4.0,
+                text_top,
+                "v",
+                FONT_PILL,
+                pill_fg,
+                false,
+            );
             result.appmenu_fallback_rect = Some((fb_x, pill_y, fb_w, pill_h));
         }
     }
@@ -220,15 +233,19 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
             } else {
                 pill_bg
             };
-            let fg_color = if is_open {
-                opaque(0xFFFFFF)
-            } else {
-                pill_fg
-            };
+            let fg_color = if is_open { opaque(0xFFFFFF) } else { pill_fg };
             {
                 let mut canvas = pixmap.as_mut();
                 draw_pill_bg(&mut canvas, ax, pill_y, pill_w, pill_h, bg_color, 0);
-                draw_text(&mut canvas, ax + pill_pad_x, text_top, &item.label, FONT_PILL, fg_color, false);
+                draw_text(
+                    &mut canvas,
+                    ax + pill_pad_x,
+                    text_top,
+                    &item.label,
+                    FONT_PILL,
+                    fg_color,
+                    false,
+                );
             }
             appmenu_rects.push((idx, (ax, pill_y, pill_w, pill_h)));
             ax += pill_w + pill_gap / 2.0;
@@ -247,7 +264,15 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
         let mut canvas = pixmap.as_mut();
         draw_pill_bg(&mut canvas, pill_c_x, pill_y, pill_c_w, pill_h, pill_bg, 0);
 
-        draw_text(&mut canvas, pill_c_x + pill_pad_x, text_top, &snap.appmenu_title, FONT_PILL, pill_fg, true);
+        draw_text(
+            &mut canvas,
+            pill_c_x + pill_pad_x,
+            text_top,
+            &snap.appmenu_title,
+            FONT_PILL,
+            pill_fg,
+            true,
+        );
     }
 
     // ============================================================
@@ -261,8 +286,15 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     let date_w = measure_text(&snap.date_str, FONT_DATE, false);
     let brightness_icon_w: f32 = bright_w_override.unwrap_or(14.0);
     let wifi_icon_w = wifi_w_override.unwrap_or(WIFI_SIZE);
-    let pill_r_content_w =
-        bat_icon_w + pill_gap + wifi_icon_w + pill_gap + brightness_icon_w + pill_gap + date_w + 8.0 + clock_w;
+    let pill_r_content_w = bat_icon_w
+        + pill_gap
+        + wifi_icon_w
+        + pill_gap
+        + brightness_icon_w
+        + pill_gap
+        + date_w
+        + 8.0
+        + clock_w;
     let pill_r_w = pill_r_content_w + pill_pad_x * 2.0;
     let pill_r_x = snap.width as f32 - pill_margin - pill_r_w;
 
@@ -274,26 +306,69 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
         let bat_x_start = cx;
         // A31 fix: A30 alterou signature de draw_battery pra incluir flag charging.
         let bat_charging = snap.battery_info.status == "Charging";
-        draw_battery(&mut canvas, cx, pill_cy - BAT_BODY_H / 2.0, snap.battery_pct, bat_charging, pill_fg, accent);
+        draw_battery(
+            &mut canvas,
+            cx,
+            pill_cy - BAT_BODY_H / 2.0,
+            snap.battery_pct,
+            bat_charging,
+            pill_fg,
+            accent,
+        );
         // A20.13: hit area = SO o icone bateria (era pill inteira A20.4)
         result.bat_hit_rect = Some((bat_x_start - 4.0, pill_y, bat_icon_w + 8.0, pill_h));
         cx += bat_icon_w + pill_gap;
         // A23: salvar wifi_hit_rect igual bat.
         let wifi_x_start = cx;
-        draw_wifi(&mut canvas, cx, pill_cy - wifi_icon_w / 2.0, snap.wifi_on, pill_fg, pill_fg_subtle);
+        draw_wifi(
+            &mut canvas,
+            cx,
+            pill_cy - wifi_icon_w / 2.0,
+            snap.wifi_on,
+            pill_fg,
+            pill_fg_subtle,
+        );
         result.wifi_hit_rect = Some((wifi_x_start - 4.0, pill_y, wifi_icon_w + 8.0, pill_h));
         cx += wifi_icon_w + pill_gap;
         // L5: brightness pill (sun icon + pct).
         let brightness_x_start = cx;
-        draw_brightness_sun(&mut canvas, cx + 7.0, pill_cy, snap.brightness_info.pct, pill_fg, opaque(palette.accent));
-        result.brightness_hit_rect = Some((brightness_x_start - 4.0, pill_y, brightness_icon_w + 8.0, pill_h));
+        draw_brightness_sun(
+            &mut canvas,
+            cx + 7.0,
+            pill_cy,
+            snap.brightness_info.pct,
+            pill_fg,
+            opaque(palette.accent),
+        );
+        result.brightness_hit_rect = Some((
+            brightness_x_start - 4.0,
+            pill_y,
+            brightness_icon_w + 8.0,
+            pill_h,
+        ));
         cx += brightness_icon_w + pill_gap;
         // A24: hit area cobre data + hora juntas (mesmo dropdown calendario).
         let datetime_x_start = cx;
-        draw_text(&mut canvas, cx, text_top, &snap.date_str, FONT_DATE, pill_fg, false);
+        draw_text(
+            &mut canvas,
+            cx,
+            text_top,
+            &snap.date_str,
+            FONT_DATE,
+            pill_fg,
+            false,
+        );
         cx += date_w + 8.0;
         // A29: clock HH:MM = Geist Mono.
-        draw_text_mono(&mut canvas, cx, text_top, &clock_s, FONT_PILL, pill_fg, false);
+        draw_text_mono(
+            &mut canvas,
+            cx,
+            text_top,
+            &clock_s,
+            FONT_PILL,
+            pill_fg,
+            false,
+        );
         let datetime_end = cx + clock_w;
         result.datetime_hit_rect = Some((
             datetime_x_start - 4.0,
@@ -328,33 +403,78 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                     {
                         let mut canvas = sub.as_mut();
                         // Fundo.
-                        crate::bar::icons::fill_rrect(&mut canvas, 0.0, 0.0, dropdown_w, dropdown_h, 10.0, rgba_hex(palette.pill_bg, 0xF0));
+                        crate::bar::icons::fill_rrect(
+                            &mut canvas,
+                            0.0,
+                            0.0,
+                            dropdown_w,
+                            dropdown_h,
+                            10.0,
+                            rgba_hex(palette.pill_bg, 0xF0),
+                        );
                         for (i, label) in labels.iter().enumerate() {
                             let iy = 4.0 + item_h * i as f32;
                             if *label == "---" {
                                 // Separator line
                                 let mid_y = iy + item_h / 2.0;
-                                crate::bar::icons::fill_rrect(&mut canvas, 8.0, mid_y, dropdown_w - 16.0, 1.0, 0.0, rgba_hex(palette.pill_sep, 0x60));
+                                crate::bar::icons::fill_rrect(
+                                    &mut canvas,
+                                    8.0,
+                                    mid_y,
+                                    dropdown_w - 16.0,
+                                    1.0,
+                                    0.0,
+                                    rgba_hex(palette.pill_sep, 0x60),
+                                );
                                 continue;
                             }
                             let is_hover = snap.appmenu_fallback_hover_idx == Some(i);
                             if is_hover {
-                                crate::bar::icons::fill_rrect(&mut canvas, 4.0, iy + 1.0, dropdown_w - 8.0, item_h - 2.0, 6.0, rgba_hex(palette.pill_fg, 0x15));
+                                crate::bar::icons::fill_rrect(
+                                    &mut canvas,
+                                    4.0,
+                                    iy + 1.0,
+                                    dropdown_w - 8.0,
+                                    item_h - 2.0,
+                                    6.0,
+                                    rgba_hex(palette.pill_fg, 0x15),
+                                );
                             }
-                            let text_color = if i == 4 { rgba_hex(0xC0392B, 0xFF) } else { opaque(palette.pill_fg) };
-                            draw_text(&mut canvas, 12.0, iy + (item_h - FONT_PILL * 1.2) / 2.0, label, FONT_PILL, text_color, false);
+                            let text_color = if i == 4 {
+                                rgba_hex(0xC0392B, 0xFF)
+                            } else {
+                                opaque(palette.pill_fg)
+                            };
+                            draw_text(
+                                &mut canvas,
+                                12.0,
+                                iy + (item_h - FONT_PILL * 1.2) / 2.0,
+                                label,
+                                FONT_PILL,
+                                text_color,
+                                false,
+                            );
                             fb_rects.push((i, (0.0, iy, dropdown_w, item_h)));
                         }
                     }
                     result.appmenu_fallback_dropdown_rects = fb_rects
                         .into_iter()
-                        .map(|(idx, (bx, by, bw, bh))| (idx, (bx + dropdown_x, by + dropdown_y, bw, bh)))
+                        .map(|(idx, (bx, by, bw, bh))| {
+                            (idx, (bx + dropdown_x, by + dropdown_y, bw, bh))
+                        })
                         .collect();
-                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                    composite_dropdown(
+                        pixmap,
+                        &sub,
+                        dropdown_x,
+                        dropdown_y,
+                        snap.dropdown_scale,
+                        snap.dropdown_alpha,
+                    );
                 }
             }
         }
-            DropdownActive::Battery => {
+        DropdownActive::Battery => {
             if let Some((rx, ry, rw, rh)) = result.bat_hit_rect {
                 let want_x = rx + rw / 2.0 - DROPDOWN_W / 2.0;
                 let max_x = snap.width as f32 - pill_margin - DROPDOWN_W;
@@ -373,11 +493,20 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                             &snap.battery_info,
                         )
                     };
-                    result.bat_charge_limit_toggle_rect = bat_hits.charge_limit_toggle_rect
-                        .map(|(bx,by,bw,bh)| (bx+dropdown_x, by+dropdown_y, bw, bh));
-                    result.bat_profile_cycle_rect = bat_hits.profile_cycle_rect
-                        .map(|(bx,by,bw,bh)| (bx+dropdown_x, by+dropdown_y, bw, bh));
-                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                    result.bat_charge_limit_toggle_rect = bat_hits
+                        .charge_limit_toggle_rect
+                        .map(|(bx, by, bw, bh)| (bx + dropdown_x, by + dropdown_y, bw, bh));
+                    result.bat_profile_cycle_rect = bat_hits
+                        .profile_cycle_rect
+                        .map(|(bx, by, bw, bh)| (bx + dropdown_x, by + dropdown_y, bw, bh));
+                    composite_dropdown(
+                        pixmap,
+                        &sub,
+                        dropdown_x,
+                        dropdown_y,
+                        snap.dropdown_scale,
+                        snap.dropdown_alpha,
+                    );
                 }
             }
         }
@@ -387,7 +516,9 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                 let max_x = snap.width as f32 - pill_margin - DROPDOWN_BRIGHTNESS_W;
                 let dropdown_x = want_x.max(pill_margin).min(max_x.max(pill_margin));
                 let dropdown_y = ry + rh + DROPDOWN_GAP;
-                if let Some(mut sub) = Pixmap::new(DROPDOWN_BRIGHTNESS_W as u32, DROPDOWN_BRIGHTNESS_H as u32) {
+                if let Some(mut sub) =
+                    Pixmap::new(DROPDOWN_BRIGHTNESS_W as u32, DROPDOWN_BRIGHTNESS_H as u32)
+                {
                     let br_hits = {
                         let mut canvas = sub.as_mut();
                         draw_brightness_dropdown(
@@ -400,10 +531,23 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                             &snap.brightness_info,
                         )
                     };
-                    result.brightness_slider_rect = br_hits.slider_rect.map(|(bx,by,bw,bh)| (bx+dropdown_x, by+dropdown_y, bw, bh));
-                    result.brightness_preset_day_rect = br_hits.preset_day_rect.map(|(bx,by,bw,bh)| (bx+dropdown_x, by+dropdown_y, bw, bh));
-                    result.brightness_preset_night_rect = br_hits.preset_night_rect.map(|(bx,by,bw,bh)| (bx+dropdown_x, by+dropdown_y, bw, bh));
-                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                    result.brightness_slider_rect = br_hits
+                        .slider_rect
+                        .map(|(bx, by, bw, bh)| (bx + dropdown_x, by + dropdown_y, bw, bh));
+                    result.brightness_preset_day_rect = br_hits
+                        .preset_day_rect
+                        .map(|(bx, by, bw, bh)| (bx + dropdown_x, by + dropdown_y, bw, bh));
+                    result.brightness_preset_night_rect = br_hits
+                        .preset_night_rect
+                        .map(|(bx, by, bw, bh)| (bx + dropdown_x, by + dropdown_y, bw, bh));
+                    composite_dropdown(
+                        pixmap,
+                        &sub,
+                        dropdown_x,
+                        dropdown_y,
+                        snap.dropdown_scale,
+                        snap.dropdown_alpha,
+                    );
                 }
             }
         }
@@ -426,10 +570,27 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                             &snap.wifi_info,
                         )
                     };
-                    result.wifi_toggle_rect = hits.toggle_rect.map(|(x,y,w,h)| (x+dropdown_x, y+dropdown_y, w, h));
-                    result.wifi_disconnect_rect = hits.disconnect_rect.map(|(x,y,w,h)| (x+dropdown_x, y+dropdown_y, w, h));
-                    result.wifi_connect_rects = hits.connect_rects.iter().map(|(s,(x,y,w,h))| (s.clone(), (x+dropdown_x, y+dropdown_y, *w, *h))).collect();
-                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                    result.wifi_toggle_rect = hits
+                        .toggle_rect
+                        .map(|(x, y, w, h)| (x + dropdown_x, y + dropdown_y, w, h));
+                    result.wifi_disconnect_rect = hits
+                        .disconnect_rect
+                        .map(|(x, y, w, h)| (x + dropdown_x, y + dropdown_y, w, h));
+                    result.wifi_connect_rects = hits
+                        .connect_rects
+                        .iter()
+                        .map(|(s, (x, y, w, h))| {
+                            (s.clone(), (x + dropdown_x, y + dropdown_y, *w, *h))
+                        })
+                        .collect();
+                    composite_dropdown(
+                        pixmap,
+                        &sub,
+                        dropdown_x,
+                        dropdown_y,
+                        snap.dropdown_scale,
+                        snap.dropdown_alpha,
+                    );
                 }
             }
         }
@@ -439,7 +600,9 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                 let max_x = snap.width as f32 - pill_margin - DROPDOWN_DATETIME_W;
                 let dropdown_x = want_x.max(pill_margin).min(max_x.max(pill_margin));
                 let dropdown_y = ry + rh + DROPDOWN_GAP;
-                if let Some(mut sub) = Pixmap::new(DROPDOWN_DATETIME_W as u32, DROPDOWN_DATETIME_H as u32) {
+                if let Some(mut sub) =
+                    Pixmap::new(DROPDOWN_DATETIME_W as u32, DROPDOWN_DATETIME_H as u32)
+                {
                     let hits = {
                         let mut canvas = sub.as_mut();
                         draw_datetime_dropdown(
@@ -452,11 +615,28 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                             &snap.datetime_info,
                         )
                     };
-                    result.cal_prev_rect = hits.prev_rect.map(|(x,y,w,h)| (x+dropdown_x, y+dropdown_y, w, h));
-                    result.cal_next_rect = hits.next_rect.map(|(x,y,w,h)| (x+dropdown_x, y+dropdown_y, w, h));
-                    result.cal_today_rect = hits.today_rect.map(|(x,y,w,h)| (x+dropdown_x, y+dropdown_y, w, h));
-                    result.cal_day_rects = hits.day_rects.iter().map(|(d,(x,y,w,h))| (*d, (x+dropdown_x, y+dropdown_y, *w, *h))).collect();
-                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                    result.cal_prev_rect = hits
+                        .prev_rect
+                        .map(|(x, y, w, h)| (x + dropdown_x, y + dropdown_y, w, h));
+                    result.cal_next_rect = hits
+                        .next_rect
+                        .map(|(x, y, w, h)| (x + dropdown_x, y + dropdown_y, w, h));
+                    result.cal_today_rect = hits
+                        .today_rect
+                        .map(|(x, y, w, h)| (x + dropdown_x, y + dropdown_y, w, h));
+                    result.cal_day_rects = hits
+                        .day_rects
+                        .iter()
+                        .map(|(d, (x, y, w, h))| (*d, (x + dropdown_x, y + dropdown_y, *w, *h)))
+                        .collect();
+                    composite_dropdown(
+                        pixmap,
+                        &sub,
+                        dropdown_x,
+                        dropdown_y,
+                        snap.dropdown_scale,
+                        snap.dropdown_alpha,
+                    );
                 }
             }
         }
@@ -472,7 +652,14 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                         let mut canvas = sub.as_mut();
                         draw_lumo_menu(&mut canvas, 0.0, 0.0, palette, snap.lumo_menu_hover_idx);
                     }
-                    composite_dropdown(pixmap, &sub, dropdown_x, dropdown_y, snap.dropdown_scale, snap.dropdown_alpha);
+                    composite_dropdown(
+                        pixmap,
+                        &sub,
+                        dropdown_x,
+                        dropdown_y,
+                        snap.dropdown_scale,
+                        snap.dropdown_alpha,
+                    );
                 }
             }
         }
@@ -485,18 +672,33 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     // e independente dos dropdowns de sistema).
     // ============================================================
     if let Some(open_idx) = snap.appmenu_open_idx {
-        if let Some(&(_, (rx, ry, rw, rh))) = result.appmenu_pill_rects.iter().find(|(i, _)| *i == open_idx) {
+        if let Some(&(_, (rx, ry, rw, rh))) = result
+            .appmenu_pill_rects
+            .iter()
+            .find(|(i, _)| *i == open_idx)
+        {
             if !snap.appmenu_submenu.is_empty() {
                 // Calcula dimensoes do submenu.
                 let sub_item_h: f32 = 22.0;
                 let sub_pad: f32 = 8.0;
-                let max_label_w = snap.appmenu_submenu.iter()
-                    .map(|it| if it.label == "---" { 0.0 } else { measure_text(&it.label, FONT_PILL, false) })
+                let max_label_w = snap
+                    .appmenu_submenu
+                    .iter()
+                    .map(|it| {
+                        if it.label == "---" {
+                            0.0
+                        } else {
+                            measure_text(&it.label, FONT_PILL, false)
+                        }
+                    })
                     .fold(0.0f32, f32::max);
                 let sub_w = (max_label_w + pill_pad_x * 2.0).max(120.0);
-                let sub_h = snap.appmenu_submenu.iter()
+                let sub_h = snap
+                    .appmenu_submenu
+                    .iter()
                     .map(|it| if it.label == "---" { 8.0 } else { sub_item_h })
-                    .sum::<f32>() + sub_pad * 2.0;
+                    .sum::<f32>()
+                    + sub_pad * 2.0;
                 let sub_x = rx.max(pill_margin);
                 let sub_y = ry + rh + DROPDOWN_GAP;
 
@@ -516,17 +718,40 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                             let sep_color = rgba_hex(palette.pill_sep, palette.pill_sep_alpha);
                             {
                                 let mut canvas = sub.as_mut();
-                                fill_rrect(&mut canvas, pill_pad_x, item_y + 3.0, sub_w - pill_pad_x * 2.0, 1.0, 0.0, sep_color);
+                                fill_rrect(
+                                    &mut canvas,
+                                    pill_pad_x,
+                                    item_y + 3.0,
+                                    sub_w - pill_pad_x * 2.0,
+                                    1.0,
+                                    0.0,
+                                    sep_color,
+                                );
                             }
                             item_y += 8.0;
                             continue;
                         }
                         {
                             let mut canvas = sub.as_mut();
-                            draw_text(&mut canvas, pill_pad_x, item_y + (sub_item_h - FONT_PILL * 1.2) / 2.0,
-                                      &item.label, FONT_PILL, opaque(palette.pill_fg), false);
+                            draw_text(
+                                &mut canvas,
+                                pill_pad_x,
+                                item_y + (sub_item_h - FONT_PILL * 1.2) / 2.0,
+                                &item.label,
+                                FONT_PILL,
+                                opaque(palette.pill_fg),
+                                false,
+                            );
                         }
-                        submenu_rects.push((sidx, (sub_x + pill_pad_x, sub_y + item_y, sub_w - pill_pad_x * 2.0, sub_item_h)));
+                        submenu_rects.push((
+                            sidx,
+                            (
+                                sub_x + pill_pad_x,
+                                sub_y + item_y,
+                                sub_w - pill_pad_x * 2.0,
+                                sub_item_h,
+                            ),
+                        ));
                         item_y += sub_item_h;
                     }
                     result.appmenu_submenu_rects = submenu_rects;
@@ -565,14 +790,7 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
 // tiny-skia nao tem transform de scale em filhos. MVP: clip-by-height
 // (o dropdown "cresce" de cima pra baixo) + alpha global via loop manual.
 // ============================================================
-fn composite_dropdown(
-    dst: &mut Pixmap,
-    src: &Pixmap,
-    x: f32,
-    y: f32,
-    scale: f32,
-    alpha: f32,
-) {
+fn composite_dropdown(dst: &mut Pixmap, src: &Pixmap, x: f32, y: f32, scale: f32, alpha: f32) {
     use tiny_skia::{BlendMode, FilterQuality, PixmapPaint, Transform};
 
     // Altura visivel = scale * src.height (cresce de cima).
@@ -593,7 +811,8 @@ fn composite_dropdown(
             let src_off = row * row_bytes;
             let dst_off = row * row_bytes;
             if src_off + row_bytes <= src_data.len() && dst_off + row_bytes <= dst_data.len() {
-                dst_data[dst_off..dst_off + row_bytes].copy_from_slice(&src_data[src_off..src_off + row_bytes]);
+                dst_data[dst_off..dst_off + row_bytes]
+                    .copy_from_slice(&src_data[src_off..src_off + row_bytes]);
             }
         }
 
@@ -654,14 +873,15 @@ pub(crate) struct LumoBar {
     pub first_configured: bool,
     pub pointer: Option<ThemedPointer>,
     // A31.3: handle de teclado (adquirido quando seat reporta Capability::Keyboard).
-    pub keyboard: Option<smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard>,
+    pub keyboard:
+        Option<smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard>,
     pub pointer_x: f32,
     pub pointer_pos: Option<(f64, f64)>,
     pub bat_hit_rect: Option<(f32, f32, f32, f32)>,
-    pub wifi_hit_rect: Option<(f32, f32, f32, f32)>,     // A23
+    pub wifi_hit_rect: Option<(f32, f32, f32, f32)>, // A23
     pub datetime_hit_rect: Option<(f32, f32, f32, f32)>, // A24
-    pub lumo_hit_rect: Option<(f32, f32, f32, f32)>,     // A27
-    pub lumo_menu_hover_idx: usize,                      // A27
+    pub lumo_hit_rect: Option<(f32, f32, f32, f32)>, // A27
+    pub lumo_menu_hover_idx: usize,                  // A27
     // A26: hit-tests calendar interativo.
     pub cal_prev_rect: Option<(f32, f32, f32, f32)>,
     pub cal_next_rect: Option<(f32, f32, f32, f32)>,

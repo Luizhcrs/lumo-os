@@ -56,13 +56,13 @@ impl LAInterpolable for LAColor {
     fn lerp(a: Self, b: Self, t: f32) -> Self {
         let ar = ((a.0 >> 24) & 0xFF) as f32 / 255.0;
         let ag = ((a.0 >> 16) & 0xFF) as f32 / 255.0;
-        let ab = ((a.0 >>  8) & 0xFF) as f32 / 255.0;
-        let aa = ( a.0        & 0xFF) as f32 / 255.0;
+        let ab = ((a.0 >> 8) & 0xFF) as f32 / 255.0;
+        let aa = (a.0 & 0xFF) as f32 / 255.0;
 
         let br = ((b.0 >> 24) & 0xFF) as f32 / 255.0;
         let bg = ((b.0 >> 16) & 0xFF) as f32 / 255.0;
-        let bb = ((b.0 >>  8) & 0xFF) as f32 / 255.0;
-        let ba = ( b.0        & 0xFF) as f32 / 255.0;
+        let bb = ((b.0 >> 8) & 0xFF) as f32 / 255.0;
+        let ba = (b.0 & 0xFF) as f32 / 255.0;
 
         // Lineariza RGB (gamma 2.0 como aproximacao de sRGB).
         let lr_a = ar * ar;
@@ -76,7 +76,7 @@ impl LAInterpolable for LAColor {
         let lr_c = lr_a + (lr_b - lr_a) * t;
         let lg_c = lg_a + (lg_b - lg_a) * t;
         let lb_c = lb_a + (lb_b - lb_a) * t;
-        let la_c = aa  + (ba   - aa)   * t;
+        let la_c = aa + (ba - aa) * t;
 
         // Gamma-encode de volta.
         let r = lr_c.sqrt().clamp(0.0, 1.0);
@@ -85,9 +85,9 @@ impl LAInterpolable for LAColor {
         let a = la_c.clamp(0.0, 1.0);
 
         let packed = ((r * 255.0) as u32) << 24
-                   | ((g * 255.0) as u32) << 16
-                   | ((b_c * 255.0) as u32) << 8
-                   | (a * 255.0) as u32;
+            | ((g * 255.0) as u32) << 16
+            | ((b_c * 255.0) as u32) << 8
+            | (a * 255.0) as u32;
 
         LAColor(packed)
     }

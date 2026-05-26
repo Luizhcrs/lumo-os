@@ -2,15 +2,21 @@
 
 #[cfg(test)]
 mod integration {
+    use crate::locale::LocaleConfig;
     use crate::steps::{AccountState, Locale, Step, WifiNetwork};
     use crate::system::mark_first_run_done;
-    use crate::locale::LocaleConfig;
     use tempfile::tempdir;
 
     #[test]
     fn step_full_sequence() {
         let mut s = Step::Welcome;
-        let order = [Step::Welcome, Step::Language, Step::Account, Step::Wifi, Step::Done];
+        let order = [
+            Step::Welcome,
+            Step::Language,
+            Step::Account,
+            Step::Wifi,
+            Step::Done,
+        ];
         for expected in order {
             assert_eq!(s, expected);
             s = s.next();

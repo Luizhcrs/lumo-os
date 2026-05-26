@@ -28,10 +28,7 @@ async fn main() {
 
     // SIGUSR1 -> abrir picker
     unsafe {
-        libc::signal(
-            libc::SIGUSR1,
-            sigusr1_handler as libc::sighandler_t,
-        );
+        libc::signal(libc::SIGUSR1, sigusr1_handler as libc::sighandler_t);
     }
 
     tracing::info!("lumo-clip daemon iniciado, pid={}", std::process::id());
@@ -74,5 +71,9 @@ fn read_clipboard_text() -> Option<String> {
     let p = "/tmp/lumo-clipboard";
     let s = std::fs::read_to_string(p).ok()?;
     let s = s.trim().to_string();
-    if s.is_empty() { None } else { Some(s) }
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }

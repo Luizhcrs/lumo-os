@@ -26,21 +26,21 @@ pub struct LFTokens;
 impl LFTokens {
     // -- sRGB references (design system originals; debug / reference) -----------
     /// `#0a0a0c` ink deep -- sRGB normalizado.
-    pub const INK_DEEP_SRGB:    [f32; 4] = [0.039_215_688, 0.039_215_688, 0.047_058_82, 1.0];
+    pub const INK_DEEP_SRGB: [f32; 4] = [0.039_215_688, 0.039_215_688, 0.047_058_82, 1.0];
     /// `#1a1a21` panel-hi -- sRGB normalizado.
-    pub const PANEL_HI_SRGB:    [f32; 4] = [0.101_960_786, 0.101_960_786, 0.129_411_77, 1.0];
+    pub const PANEL_HI_SRGB: [f32; 4] = [0.101_960_786, 0.101_960_786, 0.129_411_77, 1.0];
     /// `#131318` panel -- sRGB normalizado.
-    pub const PANEL_SRGB:       [f32; 4] = [0.074_509_81, 0.074_509_81, 0.094_117_65, 1.0];
+    pub const PANEL_SRGB: [f32; 4] = [0.074_509_81, 0.074_509_81, 0.094_117_65, 1.0];
     /// `#059669` emerald-600 -- sRGB normalizado.
     pub const EMERALD_600_SRGB: [f32; 4] = [0.019_607_844, 0.588_235_3, 0.411_764_7, 1.0];
     /// `#10b981` emerald-500 -- sRGB normalizado.
     pub const EMERALD_500_SRGB: [f32; 4] = [0.062_745_1, 0.725_490_2, 0.505_882_4, 1.0];
     /// `#f5f5f7` pearl -- sRGB normalizado.
-    pub const PEARL_SRGB:       [f32; 4] = [0.960_784_3, 0.960_784_3, 0.968_627_5, 1.0];
+    pub const PEARL_SRGB: [f32; 4] = [0.960_784_3, 0.960_784_3, 0.968_627_5, 1.0];
     /// `#9596a0` muted -- sRGB normalizado.
-    pub const MUTED_SRGB:       [f32; 4] = [0.585_0, 0.586_0, 0.627_0, 1.0];
+    pub const MUTED_SRGB: [f32; 4] = [0.585_0, 0.586_0, 0.627_0, 1.0];
     /// `#f87171` danger (red-400) -- sRGB normalizado.
-    pub const DANGER_SRGB:      [f32; 4] = [0.972_549, 0.443_137, 0.443_137, 1.0];
+    pub const DANGER_SRGB: [f32; 4] = [0.972_549, 0.443_137, 0.443_137, 1.0];
 
     // -- Linear (GPU-ready) -----------------------------------------------------
     // Pre-computado offline via `LFColor::srgb_to_linear(c)` para evitar
@@ -48,21 +48,21 @@ impl LFTokens {
     // recalcular e atualizar.
 
     /// `#0a0a0c` ink deep (background do shell) -- linear.
-    pub const INK_DEEP:    [f32; 4] = [0.003_035_3, 0.003_035_3, 0.003_676_5, 1.0];
+    pub const INK_DEEP: [f32; 4] = [0.003_035_3, 0.003_035_3, 0.003_676_5, 1.0];
     /// `#1a1a21` panel-hi (cards, surfaces elevadas) -- linear.
-    pub const PANEL_HI:    [f32; 4] = [0.010_329_8, 0.010_329_8, 0.015_208_5, 1.0];
+    pub const PANEL_HI: [f32; 4] = [0.010_329_8, 0.010_329_8, 0.015_208_5, 1.0];
     /// `#131318` panel base (surface neutra) -- linear.
-    pub const PANEL:       [f32; 4] = [0.006_512_1, 0.006_512_1, 0.009_134_1, 1.0];
+    pub const PANEL: [f32; 4] = [0.006_512_1, 0.006_512_1, 0.009_134_1, 1.0];
     /// `#059669` emerald-600 (accent primario) -- linear.
     pub const EMERALD_600: [f32; 4] = [0.001_517_6, 0.304_987_3, 0.141_263_3, 1.0];
     /// `#10b981` emerald-500 (accent secundario / hover) -- linear.
     pub const EMERALD_500: [f32; 4] = [0.005_181_5, 0.485_149_9, 0.219_526_2, 1.0];
     /// `#f5f5f7` quasi-white (texto, borders fortes) -- linear.
-    pub const PEARL:       [f32; 4] = [0.913_098_6, 0.913_098_6, 0.930_111, 1.0];
+    pub const PEARL: [f32; 4] = [0.913_098_6, 0.913_098_6, 0.930_111, 1.0];
     /// `#9596a0` muted (text de baixa enfase) -- linear.
-    pub const MUTED:       [f32; 4] = [0.301_318_7, 0.302_449_8, 0.350_975_3, 1.0];
+    pub const MUTED: [f32; 4] = [0.301_318_7, 0.302_449_8, 0.350_975_3, 1.0];
     /// `#f87171` danger / red-400 -- linear.
-    pub const DANGER:      [f32; 4] = [0.938_685_7, 0.165_132_2, 0.165_132_2, 1.0];
+    pub const DANGER: [f32; 4] = [0.938_685_7, 0.165_132_2, 0.165_132_2, 1.0];
 
     /// Transparente puro.
     pub const TRANSPARENT: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
@@ -93,26 +93,26 @@ impl LFTokens {
 pub mod color {
     use super::LFTokens as T;
 
-    pub const INK_DEEP_SRGB:    [f32; 4] = T::INK_DEEP_SRGB;
-    pub const PANEL_HI_SRGB:    [f32; 4] = T::PANEL_HI_SRGB;
-    pub const PANEL_SRGB:       [f32; 4] = T::PANEL_SRGB;
+    pub const INK_DEEP_SRGB: [f32; 4] = T::INK_DEEP_SRGB;
+    pub const PANEL_HI_SRGB: [f32; 4] = T::PANEL_HI_SRGB;
+    pub const PANEL_SRGB: [f32; 4] = T::PANEL_SRGB;
     pub const EMERALD_600_SRGB: [f32; 4] = T::EMERALD_600_SRGB;
     pub const EMERALD_500_SRGB: [f32; 4] = T::EMERALD_500_SRGB;
-    pub const PEARL_SRGB:       [f32; 4] = T::PEARL_SRGB;
-    pub const MUTED_SRGB:       [f32; 4] = T::MUTED_SRGB;
-    pub const DANGER_SRGB:      [f32; 4] = T::DANGER_SRGB;
+    pub const PEARL_SRGB: [f32; 4] = T::PEARL_SRGB;
+    pub const MUTED_SRGB: [f32; 4] = T::MUTED_SRGB;
+    pub const DANGER_SRGB: [f32; 4] = T::DANGER_SRGB;
 
-    pub const INK_DEEP:    [f32; 4] = T::INK_DEEP;
-    pub const PANEL_HI:    [f32; 4] = T::PANEL_HI;
-    pub const PANEL:       [f32; 4] = T::PANEL;
+    pub const INK_DEEP: [f32; 4] = T::INK_DEEP;
+    pub const PANEL_HI: [f32; 4] = T::PANEL_HI;
+    pub const PANEL: [f32; 4] = T::PANEL;
     pub const EMERALD_600: [f32; 4] = T::EMERALD_600;
     pub const EMERALD_500: [f32; 4] = T::EMERALD_500;
-    pub const PEARL:       [f32; 4] = T::PEARL;
-    pub const MUTED:       [f32; 4] = T::MUTED;
-    pub const DANGER:      [f32; 4] = T::DANGER;
+    pub const PEARL: [f32; 4] = T::PEARL;
+    pub const MUTED: [f32; 4] = T::MUTED;
+    pub const DANGER: [f32; 4] = T::DANGER;
     pub const TRANSPARENT: [f32; 4] = T::TRANSPARENT;
 
-    pub const SHADOW_BLACK:  [f32; 4] = T::SHADOW_BLACK;
+    pub const SHADOW_BLACK: [f32; 4] = T::SHADOW_BLACK;
     pub const SHADOW_ACCENT: [f32; 4] = T::SHADOW_ACCENT;
     pub const SHADOW_DANGER: [f32; 4] = T::SHADOW_DANGER;
 
@@ -236,8 +236,7 @@ pub struct LumoColors {
     pub pill_bg: u32,
     /// A18: pill background alpha (0..0xFF). Light = 0xEE (semi opaco
     /// escuro contraste forte); Dark = 0x22 (sutileza sobre AMOLED).
-    pub // A18.1 alpha 0xEE -> 0xFF (opaco, sem blend artifacts)
-            pill_bg_alpha: u8,
+    pub pill_bg_alpha: u8,
     /// A18: pill foreground RGB (0xRRGGBB). Pearl em ambos os temas
     /// — light pill eh escuro entao texto branco; dark pill eh pearl
     /// translucido com texto pearl.
@@ -254,44 +253,44 @@ impl LumoColors {
     /// Tema light -- pearl muito claro, ink ainda legivel, emerald-600 saturado.
     pub const fn light() -> Self {
         Self {
-            bg:            0x00FAFAFA, // pearl muito claro (#FAFAFA)
-            bg_subtle:     0x00F0F0F2, // hover stretch
-            fg:            0x0018181B, // ink claro (Tailwind zinc-900)
-            fg_subtle:     0x006B7280, // zinc-500
-            accent:        0x003B82F6, // Samsung adaptive blue (One UI 7 inspired)
+            bg: 0x00FAFAFA,            // pearl muito claro (#FAFAFA)
+            bg_subtle: 0x00F0F0F2,     // hover stretch
+            fg: 0x0018181B,            // ink claro (Tailwind zinc-900)
+            fg_subtle: 0x006B7280,     // zinc-500
+            accent: 0x003B82F6,        // Samsung adaptive blue (One UI 7 inspired)
             accent_subtle: 0x00DBEAFE, // blue-100 hover wash
-            border:        0x00E5E7EB, // zinc-200
-            shadow:        0x00000000, // alpha aplicado on use
+            border: 0x00E5E7EB,        // zinc-200
+            shadow: 0x00000000,        // alpha aplicado on use
             // A18 pill spec: pill escuro #1F1F22 alpha EE -> contraste
             // invertido sobre bg pearl, vira destaque tipo Dynamic Island.
-            pill_bg:           0x001F1F22,
-            pill_bg_alpha:     0xE0, // A19.15 transparencia leve (shader demultiply correto)
-            pill_fg:           0x00F5F5F7, // pearl sobre pill escuro
-            pill_shadow_alpha: 0x40,       // 25% preto neutro
-            pill_sep:          0x00FFFFFF, // dot middle separator
-            pill_sep_alpha:    0x66,       // 40% pearl
+            pill_bg: 0x001F1F22,
+            pill_bg_alpha: 0xE0, // A19.15 transparencia leve (shader demultiply correto)
+            pill_fg: 0x00F5F5F7, // pearl sobre pill escuro
+            pill_shadow_alpha: 0x40, // 25% preto neutro
+            pill_sep: 0x00FFFFFF, // dot middle separator
+            pill_sep_alpha: 0x66, // 40% pearl
         }
     }
 
     /// Tema dark -- ink_deep, pearl no fg, emerald-500 mais vivo.
     pub const fn dark() -> Self {
         Self {
-            bg:            0x000F1419, // dark Samsung AMOLED-style // ink_deep
-            bg_subtle:     0x001F2024, // hover panel
-            fg:            0x00F5F5F7, // pearl
-            fg_subtle:     0x009CA3AF, // zinc-400
-            accent:        0x0060A5FA, // blue-400 (mais vibrante no dark AMOLED)
+            bg: 0x000F1419,            // dark Samsung AMOLED-style // ink_deep
+            bg_subtle: 0x001F2024,     // hover panel
+            fg: 0x00F5F5F7,            // pearl
+            fg_subtle: 0x009CA3AF,     // zinc-400
+            accent: 0x0060A5FA,        // blue-400 (mais vibrante no dark AMOLED)
             accent_subtle: 0x001E3A8A, // blue-900
-            border:        0x002A2A2E, // hairline
-            shadow:        0x00000000,
+            border: 0x002A2A2E,        // hairline
+            shadow: 0x00000000,
             // W25 fix: pill dark = neutro escuro com transparencia leve.
             // Anterior FFFFFF deixava pills BRANCOS sobre AMOLED — bug visual.
-            pill_bg:           0x001F2024, // bg_subtle (hover panel) dark
-            pill_bg_alpha:     0xE0,       // 88% opaco — destaca mas mantem profundidade
-            pill_fg:           0x00F5F5F7,
+            pill_bg: 0x001F2024, // bg_subtle (hover panel) dark
+            pill_bg_alpha: 0xE0, // 88% opaco — destaca mas mantem profundidade
+            pill_fg: 0x00F5F5F7,
             pill_shadow_alpha: 0x40,
-            pill_sep:          0x00FFFFFF,
-            pill_sep_alpha:    0x66,
+            pill_sep: 0x00FFFFFF,
+            pill_sep_alpha: 0x66,
         }
     }
 
@@ -492,7 +491,14 @@ impl LumoTokens {
             Ok("light") | Ok("Light") | Ok("LIGHT") => LumoTheme::Light,
             _ => LumoTheme::Dark,
         };
-        Self { mode, accent: None, ink_deep: None, pill_bg: None, font_sans: None, font_mono: None }
+        Self {
+            mode,
+            accent: None,
+            ink_deep: None,
+            pill_bg: None,
+            font_sans: None,
+            font_mono: None,
+        }
     }
 
     fn parse_toml(text: &str) -> Result<Self, TokenError> {
@@ -534,7 +540,14 @@ impl LumoTokens {
                 _ => {}
             }
         }
-        Ok(Self { mode, accent, ink_deep, pill_bg, font_sans, font_mono })
+        Ok(Self {
+            mode,
+            accent,
+            ink_deep,
+            pill_bg,
+            font_sans,
+            font_mono,
+        })
     }
 
     fn to_toml(&self) -> String {
@@ -575,7 +588,9 @@ impl LumoTokens {
 
     /// R4: retorna familia mono configurada ou default "JetBrainsMono Nerd Font".
     pub fn effective_font_mono(&self) -> &str {
-        self.font_mono.as_deref().unwrap_or("JetBrainsMono Nerd Font")
+        self.font_mono
+            .as_deref()
+            .unwrap_or("JetBrainsMono Nerd Font")
     }
 }
 
@@ -601,12 +616,14 @@ fn parse_hex_color(s: &str) -> Option<u32> {
 /// Retorna silenciosamente se o path de config nao puder ser determinado
 /// ou se o watcher falhar (nao bloqueia o boot do client).
 pub fn watch_theme<F: Fn(LumoTokens) + Send + 'static>(callback: F) {
-    let Some(path) = LumoTokens::config_path() else { return };
+    let Some(path) = LumoTokens::config_path() else {
+        return;
+    };
     std::thread::Builder::new()
         .name("lumo-theme-watcher".into())
         .spawn(move || {
+            use notify::event::{CreateKind, ModifyKind};
             use notify::{EventKind, RecursiveMode, Watcher};
-            use notify::event::{ModifyKind, CreateKind};
 
             // Garante que o diretorio existe antes de registrar o watcher.
             if let Some(parent) = path.parent() {
@@ -614,22 +631,26 @@ pub fn watch_theme<F: Fn(LumoTokens) + Send + 'static>(callback: F) {
             }
 
             let (tx, rx) = std::sync::mpsc::channel();
-            let mut watcher = match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-                if let Ok(ev) = res {
-                    let _ = tx.send(ev);
-                }
-            }) {
-                Ok(w) => w,
-                Err(e) => {
-                    eprintln!("[lumo-foundation] watch_theme: watcher init falhou: {e}");
-                    return;
-                }
-            };
+            let mut watcher =
+                match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+                    if let Ok(ev) = res {
+                        let _ = tx.send(ev);
+                    }
+                }) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        eprintln!("[lumo-foundation] watch_theme: watcher init falhou: {e}");
+                        return;
+                    }
+                };
 
             // Observa o diretorio pai para capturar criacao/atomic-rename do arquivo.
             let watch_dir = path.parent().unwrap_or(path.as_path());
             if let Err(e) = watcher.watch(watch_dir, RecursiveMode::NonRecursive) {
-                eprintln!("[lumo-foundation] watch_theme: watch({}) falhou: {e}", watch_dir.display());
+                eprintln!(
+                    "[lumo-foundation] watch_theme: watch({}) falhou: {e}",
+                    watch_dir.display()
+                );
                 return;
             }
 
@@ -641,9 +662,9 @@ pub fn watch_theme<F: Fn(LumoTokens) + Send + 'static>(callback: F) {
                 let relevant = matches!(
                     event.kind,
                     EventKind::Modify(ModifyKind::Data(_))
-                    | EventKind::Modify(ModifyKind::Any)
-                    | EventKind::Create(CreateKind::File)
-                    | EventKind::Create(CreateKind::Any)
+                        | EventKind::Modify(ModifyKind::Any)
+                        | EventKind::Create(CreateKind::File)
+                        | EventKind::Create(CreateKind::Any)
                 );
                 if relevant {
                     let tokens = LumoTokens::load_from_disk();
@@ -673,7 +694,8 @@ mod theme_tests {
 
     #[test]
     fn parse_toml_basic() {
-        let toml = "[theme]\nmode = \"dark\"\n\n[colors]\naccent = \"#3B82F6\"\nink_deep = \"#0a0a0c\"\n";
+        let toml =
+            "[theme]\nmode = \"dark\"\n\n[colors]\naccent = \"#3B82F6\"\nink_deep = \"#0a0a0c\"\n";
         let tokens = LumoTokens::parse_toml(toml).unwrap();
         assert!(matches!(tokens.mode, LumoTheme::Dark));
         assert_eq!(tokens.accent, Some(0x3B82F6));
@@ -930,10 +952,16 @@ pub struct PillSpec {
 
 impl PillSpec {
     pub fn new(id: &str) -> Self {
-        Self { id: id.to_string(), width: None }
+        Self {
+            id: id.to_string(),
+            width: None,
+        }
     }
     pub fn with_width(id: &str, w: f32) -> Self {
-        Self { id: id.to_string(), width: Some(w) }
+        Self {
+            id: id.to_string(),
+            width: Some(w),
+        }
     }
 }
 
@@ -974,7 +1002,8 @@ impl BarLayout {
     }
 
     pub fn find_pill(&self, id: &str) -> Option<&PillSpec> {
-        self.left_pills.iter()
+        self.left_pills
+            .iter()
             .chain(self.right_pills.iter())
             .find(|p| p.id == id)
     }
@@ -1003,7 +1032,9 @@ impl BarLayout {
         let mut section = String::new();
         for raw_line in text.lines() {
             let line = raw_line.trim();
-            if line.is_empty() || line.starts_with('#') { continue; }
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
             if line.starts_with('[') && line.ends_with(']') {
                 section = line[1..line.len() - 1].trim().to_string();
                 continue;
@@ -1012,7 +1043,7 @@ impl BarLayout {
                 if let Some(arr_start) = line.find('[') {
                     let pills = parse_pill_array(&line[arr_start..]);
                     match section.as_str() {
-                        "bar.left"  => layout.left_pills  = pills,
+                        "bar.left" => layout.left_pills = pills,
                         "bar.right" => layout.right_pills = pills,
                         _ => {}
                     }
@@ -1023,12 +1054,36 @@ impl BarLayout {
             let key = line[..eq].trim();
             let val = line[eq + 1..].trim().trim_matches('"').trim_matches('\'');
             match (section.as_str(), key) {
-                ("bar", "height")      => { if let Ok(v) = val.parse::<u32>() { layout.height      = v; } }
-                ("bar", "padding_x")   => { if let Ok(v) = val.parse::<f32>() { layout.padding_x   = v; } }
-                ("bar", "pill_gap")    => { if let Ok(v) = val.parse::<f32>() { layout.pill_gap    = v; } }
-                ("bar", "pill_radius") => { if let Ok(v) = val.parse::<f32>() { layout.pill_radius = v; } }
-                ("bar", "margin_top")  => { if let Ok(v) = val.parse::<f32>() { layout.margin_top  = v; } }
-                ("bar", "margin_x")    => { if let Ok(v) = val.parse::<f32>() { layout.margin_x    = v; } }
+                ("bar", "height") => {
+                    if let Ok(v) = val.parse::<u32>() {
+                        layout.height = v;
+                    }
+                }
+                ("bar", "padding_x") => {
+                    if let Ok(v) = val.parse::<f32>() {
+                        layout.padding_x = v;
+                    }
+                }
+                ("bar", "pill_gap") => {
+                    if let Ok(v) = val.parse::<f32>() {
+                        layout.pill_gap = v;
+                    }
+                }
+                ("bar", "pill_radius") => {
+                    if let Ok(v) = val.parse::<f32>() {
+                        layout.pill_radius = v;
+                    }
+                }
+                ("bar", "margin_top") => {
+                    if let Ok(v) = val.parse::<f32>() {
+                        layout.margin_top = v;
+                    }
+                }
+                ("bar", "margin_x") => {
+                    if let Ok(v) = val.parse::<f32>() {
+                        layout.margin_x = v;
+                    }
+                }
                 _ => {}
             }
         }
@@ -1043,13 +1098,17 @@ fn parse_pill_array(arr_str: &str) -> Vec<PillSpec> {
     let chars: Vec<char> = arr_str.chars().collect();
     for (i, &c) in chars.iter().enumerate() {
         if c == '{' {
-            if depth == 0 { start = i; }
+            if depth == 0 {
+                start = i;
+            }
             depth += 1;
         } else if c == '}' {
             depth -= 1;
             if depth == 0 {
                 let item: String = chars[start..=i].iter().collect();
-                if let Some(spec) = parse_pill_item(&item) { pills.push(spec); }
+                if let Some(spec) = parse_pill_item(&item) {
+                    pills.push(spec);
+                }
             }
         }
     }
@@ -1066,8 +1125,12 @@ fn parse_pill_item(item: &str) -> Option<PillSpec> {
             let k = kv[..eq].trim();
             let v = kv[eq + 1..].trim().trim_matches('"').trim_matches('\'');
             match k {
-                "id"    => id = Some(v.to_string()),
-                "width" => { if let Ok(w) = v.parse::<f32>() { width = Some(w); } }
+                "id" => id = Some(v.to_string()),
+                "width" => {
+                    if let Ok(w) = v.parse::<f32>() {
+                        width = Some(w);
+                    }
+                }
                 _ => {}
             }
         }
@@ -1075,7 +1138,7 @@ fn parse_pill_item(item: &str) -> Option<PillSpec> {
     let id = id?;
     Some(match width {
         Some(w) => PillSpec::with_width(&id, w),
-        None    => PillSpec::new(&id),
+        None => PillSpec::new(&id),
     })
 }
 
@@ -1083,9 +1146,8 @@ static BAR_LAYOUT_GLOBAL: std::sync::OnceLock<std::sync::Arc<std::sync::RwLock<B
     std::sync::OnceLock::new();
 
 pub fn bar_layout_global() -> &'static std::sync::Arc<std::sync::RwLock<BarLayout>> {
-    BAR_LAYOUT_GLOBAL.get_or_init(|| {
-        std::sync::Arc::new(std::sync::RwLock::new(BarLayout::load_from_disk()))
-    })
+    BAR_LAYOUT_GLOBAL
+        .get_or_init(|| std::sync::Arc::new(std::sync::RwLock::new(BarLayout::load_from_disk())))
 }
 
 /// Snapshot imutavel do layout atual. Chame por frame (clone e barato).
@@ -1095,39 +1157,49 @@ pub fn current_bar_layout() -> BarLayout {
 
 /// Inicia thread de filewatcher para layout.toml. Atualiza global e chama callback.
 pub fn watch_layout<F: Fn(BarLayout) + Send + 'static>(callback: F) {
-    let Some(path) = BarLayout::config_path() else { return };
+    let Some(path) = BarLayout::config_path() else {
+        return;
+    };
     std::thread::Builder::new()
         .name("lumo-layout-watcher".into())
         .spawn(move || {
+            use notify::event::{CreateKind, ModifyKind};
             use notify::{EventKind, RecursiveMode, Watcher};
-            use notify::event::{ModifyKind, CreateKind};
             if let Some(parent) = path.parent() {
                 let _ = std::fs::create_dir_all(parent);
             }
             let (tx, rx) = std::sync::mpsc::channel();
-            let mut watcher = match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-                if let Ok(ev) = res { let _ = tx.send(ev); }
-            }) {
-                Ok(w) => w,
-                Err(e) => {
-                    eprintln!("[lumo-foundation] watch_layout: watcher init falhou: {e}");
-                    return;
-                }
-            };
+            let mut watcher =
+                match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+                    if let Ok(ev) = res {
+                        let _ = tx.send(ev);
+                    }
+                }) {
+                    Ok(w) => w,
+                    Err(e) => {
+                        eprintln!("[lumo-foundation] watch_layout: watcher init falhou: {e}");
+                        return;
+                    }
+                };
             let watch_dir = path.parent().unwrap_or(path.as_path());
             if let Err(e) = watcher.watch(watch_dir, RecursiveMode::NonRecursive) {
-                eprintln!("[lumo-foundation] watch_layout: watch({}) falhou: {e}", watch_dir.display());
+                eprintln!(
+                    "[lumo-foundation] watch_layout: watch({}) falhou: {e}",
+                    watch_dir.display()
+                );
                 return;
             }
             for event in rx {
                 let is_layout_file = event.paths.iter().any(|p| p == &path);
-                if !is_layout_file { continue; }
+                if !is_layout_file {
+                    continue;
+                }
                 let relevant = matches!(
                     event.kind,
                     EventKind::Modify(ModifyKind::Data(_))
-                    | EventKind::Modify(ModifyKind::Any)
-                    | EventKind::Create(CreateKind::File)
-                    | EventKind::Create(CreateKind::Any)
+                        | EventKind::Modify(ModifyKind::Any)
+                        | EventKind::Create(CreateKind::File)
+                        | EventKind::Create(CreateKind::Any)
                 );
                 if relevant {
                     let new_layout = BarLayout::load_from_disk();
@@ -1180,9 +1252,7 @@ mod bar_layout_tests {
 
     #[test]
     fn parse_pill_array_inline() {
-        let arr = concat!(
-            r#"[{ id = "wifi", width = 24 }, { id = "brand" }]"#
-        );
+        let arr = concat!(r#"[{ id = "wifi", width = 24 }, { id = "brand" }]"#);
         let pills = super::parse_pill_array(arr);
         assert_eq!(pills.len(), 2);
         assert_eq!(pills[0].id, "wifi");
@@ -1200,7 +1270,7 @@ mod bar_layout_tests {
 
 // W8.C
 pub mod accessibility;
-pub use accessibility::{A11yTokens, watch_accessibility};
+pub use accessibility::{watch_accessibility, A11yTokens};
 
 // W11.A
 pub mod i18n;

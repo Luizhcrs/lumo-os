@@ -11,14 +11,14 @@
 //! - [[feedback-design-lapidado]]
 //! - [[project-lumo-os]]
 
-pub mod battery;
 pub mod backlight;
+pub mod battery;
 pub mod lid;
 pub mod platform;
 pub mod thermal;
 
-pub use battery::{Battery, ChargingStatus};
 pub use backlight::Backlight;
+pub use battery::{Battery, ChargingStatus};
 pub use lid::{LidState, LidSwitch};
 pub use platform::{PlatformProfile, Profile, SysfsPlatformProfile};
 pub use thermal::{ThermalKind, ThermalZone};
@@ -130,4 +130,5 @@ pub(crate) fn read_sysfs_u32(path: &PathBuf) -> Result<u32, SensorError> {
 pub(crate) fn write_sysfs(path: &PathBuf, value: &str) -> Result<(), SensorError> {
     std::fs::write(path, value).map_err(SensorError::Io)
 }
-#[cfg(test)] mod tests;
+#[cfg(test)]
+mod tests;

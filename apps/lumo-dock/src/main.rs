@@ -5,12 +5,12 @@ mod input;
 mod paint;
 mod state;
 
-use std::time::{Duration, Instant};
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
+use smithay_client_toolkit::reexports::client::{globals::registry_queue_init, Connection};
 use smithay_client_toolkit::{
     compositor::CompositorState,
-    delegate_compositor, delegate_layer, delegate_output, delegate_pointer,
-    delegate_registry, delegate_seat, delegate_shm,
+    delegate_compositor, delegate_layer, delegate_output, delegate_pointer, delegate_registry,
+    delegate_seat, delegate_shm,
     output::OutputState,
     registry::RegistryState,
     seat::SeatState,
@@ -18,8 +18,8 @@ use smithay_client_toolkit::{
     shell::WaylandSurface,
     shm::{slot::SlotPool, Shm},
 };
-use smithay_client_toolkit::reexports::client::{globals::registry_queue_init, Connection};
 use state::LumoDock;
+use std::time::{Duration, Instant};
 
 delegate_compositor!(LumoDock);
 delegate_output!(LumoDock);
@@ -49,7 +49,8 @@ fn main() {
     let layer_shell = LayerShell::bind(&globals, &qh).expect("wlr_layer_shell");
     let shm = Shm::bind(&globals, &qh).expect("wl_shm");
     let surface = compositor.create_surface(&qh);
-    let layer = layer_shell.create_layer_surface(&qh, surface, Layer::Bottom, Some("lumo-dock"), None);
+    let layer =
+        layer_shell.create_layer_surface(&qh, surface, Layer::Bottom, Some("lumo-dock"), None);
     layer.set_anchor(Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT);
     layer.set_size(DOCK_W, DOCK_H);
     layer.set_exclusive_zone(DOCK_H as i32);
@@ -80,9 +81,16 @@ fn main() {
             let _ = guard.read();
         }
         match queue.dispatch_pending(&mut state) {
-            Err(e) => { let s = format!("{e:?}"); if s.contains("ConnectionReset") || s.contains("BrokenPipe") { break; } }
+            Err(e) => {
+                let s = format!("{e:?}");
+                if s.contains("ConnectionReset") || s.contains("BrokenPipe") {
+                    break;
+                }
+            }
             Ok(_) => {}
         }
-        if conn.flush().is_err() { break; }
+        if conn.flush().is_err() {
+            break;
+        }
     }
 }

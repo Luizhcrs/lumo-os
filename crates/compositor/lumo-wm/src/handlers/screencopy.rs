@@ -15,17 +15,17 @@
 //! Resultado: grim retornava PNG solid color. Agora le do cache real
 //! atualizado em backend::screencopy_cache pelo render_drm.
 
-use std::sync::{Arc, Mutex};
-use smithay::reexports::wayland_server::{
-    Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, New, Resource,
-};
-use smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer;
-use smithay::reexports::wayland_server::protocol::wl_output::WlOutput;
 use smithay::reexports::wayland_protocols_wlr::screencopy::v1::server::{
     zwlr_screencopy_frame_v1::{self, ZwlrScreencopyFrameV1},
     zwlr_screencopy_manager_v1::{self, ZwlrScreencopyManagerV1},
 };
+use smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer;
+use smithay::reexports::wayland_server::protocol::wl_output::WlOutput;
+use smithay::reexports::wayland_server::{
+    Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, New, Resource,
+};
 use smithay::wayland::shm::with_buffer_contents;
+use std::sync::{Arc, Mutex};
 
 use crate::state::LumoState;
 
@@ -202,7 +202,8 @@ fn do_copy(
                 .as_ref()
                 .and_then(|b| b.screencopy_cache.as_ref())
                 .filter(|c| {
-                    c.width == frame_data.width && c.height == frame_data.height
+                    c.width == frame_data.width
+                        && c.height == frame_data.height
                         && !c.pixels.is_empty()
                 })
                 .map(|c| c.pixels.clone())
@@ -374,12 +375,7 @@ fn arm_and_refresh_now(state: &mut LumoState) {
         crate::backend::render_common::collect_drm_elements(&mut backend.renderer, &inputs);
 
     let clear = crate::backend::render_common::clear_color_linear();
-    if let Err(err) = cache.refresh(
-        &mut backend.renderer,
-        &surface.output,
-        &all_elements,
-        clear,
-    ) {
+    if let Err(err) = cache.refresh(&mut backend.renderer, &surface.output, &all_elements, clear) {
         tracing::warn!(?err, "W8.A: screencopy cache refresh sincrono falhou");
     } else {
         tracing::debug!(
@@ -396,7 +392,12 @@ mod tests {
 
     #[test]
     fn screencopy_frame_data_fields() {
-        let d = ScreencopyFrameData { format: 0, width: 1920, height: 1080, stride: 1920 * 4 };
+        let d = ScreencopyFrameData {
+            format: 0,
+            width: 1920,
+            height: 1080,
+            stride: 1920 * 4,
+        };
         assert_eq!(d.format, 0);
         assert_eq!(d.width, 1920);
         assert_eq!(d.height, 1080);
@@ -413,7 +414,12 @@ mod tests {
     #[test]
     fn frame_user_data_take_once() {
         let ud = FrameUserData {
-            data: Mutex::new(Some(ScreencopyFrameData { format: 0, width: 100, height: 100, stride: 400 })),
+            data: Mutex::new(Some(ScreencopyFrameData {
+                format: 0,
+                width: 100,
+                height: 100,
+                stride: 400,
+            })),
         };
         assert!(ud.data.lock().unwrap().take().is_some());
         assert!(ud.data.lock().unwrap().take().is_none());

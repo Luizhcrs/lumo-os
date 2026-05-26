@@ -24,7 +24,9 @@ pub struct Selector {
 }
 
 impl Selector {
-    pub fn specificity(&self) -> usize { self.classes.len() }
+    pub fn specificity(&self) -> usize {
+        self.classes.len()
+    }
 
     /// Element with `set` of classes matches selector if all selector
     /// classes are in set.
@@ -51,7 +53,9 @@ impl Stylesheet {
     pub fn get(&self, classes: &[&str], prop: &str) -> Option<&PropertyValue> {
         let mut best: Option<(usize, &PropertyValue)> = None;
         for r in &self.rules {
-            if !r.selector.matches(classes) { continue; }
+            if !r.selector.matches(classes) {
+                continue;
+            }
             for (k, v) in &r.props {
                 if k == prop {
                     let spec = r.selector.specificity();
@@ -108,7 +112,10 @@ impl Stylesheet {
 
 pub fn parse_px_literal(s: &str) -> Option<f32> {
     let s = s.trim();
-    let s = s.strip_suffix("px").or_else(|| s.strip_suffix("pt")).unwrap_or(s);
+    let s = s
+        .strip_suffix("px")
+        .or_else(|| s.strip_suffix("pt"))
+        .unwrap_or(s);
     s.trim().parse::<f32>().ok()
 }
 
@@ -117,8 +124,8 @@ pub fn parse_color_literal(s: &str) -> Option<u32> {
     let s = s.strip_prefix('#')?;
     let v = u32::from_str_radix(s, 16).ok()?;
     Some(match s.len() {
-        6 => (v << 8) | 0xFF,  // RGB → RGBA
-        8 => v,                  // RGBA
+        6 => (v << 8) | 0xFF, // RGB → RGBA
+        8 => v,               // RGBA
         _ => return None,
     })
 }

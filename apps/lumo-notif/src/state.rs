@@ -1,12 +1,15 @@
 //! state.rs - event loop Wayland do lumo-notif.
 
-use std::collections::VecDeque;
-use std::time::{Duration, Instant};
+use crate::dbus::NotifEvent;
+use crate::history::{History, HistoryEntry};
+use crate::paint::{self, ToastRender, TOAST_W};
+use lumo_animation::Spring;
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
+use smithay_client_toolkit::reexports::client::{globals::registry_queue_init, Connection};
 use smithay_client_toolkit::{
     compositor::CompositorState,
-    delegate_compositor, delegate_layer, delegate_output, delegate_registry,
-    delegate_seat, delegate_shm,
+    delegate_compositor, delegate_layer, delegate_output, delegate_registry, delegate_seat,
+    delegate_shm,
     output::OutputState,
     registry::RegistryState,
     seat::SeatState,
@@ -14,12 +17,9 @@ use smithay_client_toolkit::{
     shell::WaylandSurface,
     shm::{slot::SlotPool, Shm},
 };
-use smithay_client_toolkit::reexports::client::{globals::registry_queue_init, Connection};
+use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use lumo_animation::Spring;
-use crate::dbus::NotifEvent;
-use crate::history::{History, HistoryEntry};
-use crate::paint::{self, ToastRender, TOAST_W};
 
 const MAX_TOASTS: usize = 3;
 const DEFAULT_TIMEOUT_MS: u64 = 5000;
@@ -43,11 +43,30 @@ impl Toast {
         let mut slide = Spring::snappy();
         slide.snap_to(TOAST_W);
         slide.set_target(0.0);
-        Self { id, app_name, summary, body, slide, created_at: Instant::now(), timeout_ms, hover: false, dismissing: false }
+        Self {
+            id,
+            app_name,
+            summary,
+            body,
+            slide,
+            created_at: Instant::now(),
+            timeout_ms,
+            hover: false,
+            dismissing: false,
+        }
     }
-    fn dismiss(&mut self) { self.dismissing = true; self.slide.set_target(TOAST_W); }
-    fn should_remove(&self) -> bool { self.dismissing && self.slide.settled() }
-    fn expired(&self) -> bool { !self.hover && !self.dismissing && self.created_at.elapsed() >= Duration::from_millis(self.timeout_ms) }
+    fn dismiss(&mut self) {
+        self.dismissing = true;
+        self.slide.set_target(TOAST_W);
+    }
+    fn should_remove(&self) -> bool {
+        self.dismissing && self.slide.settled()
+    }
+    fn expired(&self) -> bool {
+        !self.hover
+            && !self.dismissing
+            && self.created_at.elapsed() >= Duration::from_millis(self.timeout_ms)
+    }
 }
 
 struct NotifState {
@@ -71,35 +90,92 @@ delegate_seat!(NotifState);
 delegate_registry!(NotifState);
 
 impl NotifState {
-    fn push_toast(&mut self, id: u32, app_name: String, summary: String, body: String, timeout_ms: i32) {
+    fn push_toast(
+        &mut self,
+        id: u32,
+        app_name: String,
+        summary: String,
+        body: String,
+        timeout_ms: i32,
+    ) {
         self.toasts.retain(|t| t.id != id);
         if self.toasts.len() >= MAX_TOASTS {
-            if let Some(oldest) = self.toasts.front_mut() { oldest.dismiss(); }
+            if let Some(oldest) = self.toasts.front_mut() {
+                oldest.dismiss();
+            }
         }
-        let ms = if timeout_ms <= 0 { DEFAULT_TIMEOUT_MS } else { timeout_ms as u64 };
-        self.toasts.push_back(Toast::new(id, app_name.clone(), summary.clone(), body.clone(), ms));
-        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        self.history.push(HistoryEntry { id, app_name, summary, body, timestamp: ts });
+        let ms = if timeout_ms <= 0 {
+            DEFAULT_TIMEOUT_MS
+        } else {
+            timeout_ms as u64
+        };
+        self.toasts.push_back(Toast::new(
+            id,
+            app_name.clone(),
+            summary.clone(),
+            body.clone(),
+            ms,
+        ));
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        self.history.push(HistoryEntry {
+            id,
+            app_name,
+            summary,
+            body,
+            timestamp: ts,
+        });
     }
     fn close_toast(&mut self, id: u32) {
-        if let Some(t) = self.toasts.iter_mut().find(|t| t.id == id) { t.dismiss(); }
+        if let Some(t) = self.toasts.iter_mut().find(|t| t.id == id) {
+            t.dismiss();
+        }
     }
     fn tick(&mut self, dt: f32) {
-        for t in &mut self.toasts { t.slide.tick(dt); if t.expired() { t.dismiss(); } }
+        for t in &mut self.toasts {
+            t.slide.tick(dt);
+            if t.expired() {
+                t.dismiss();
+            }
+        }
         self.toasts.retain(|t| !t.should_remove());
     }
-    fn animating(&self) -> bool { self.toasts.iter().any(|t| !t.slide.settled()) }
+    fn animating(&self) -> bool {
+        self.toasts.iter().any(|t| !t.slide.settled())
+    }
     fn redraw(&mut self, qh: &smithay_client_toolkit::reexports::client::QueueHandle<Self>) {
-        if !self.configured { return; }
-        let w = SURFACE_W as usize; let h = SURFACE_H as usize;
+        if !self.configured {
+            return;
+        }
+        let w = SURFACE_W as usize;
+        let h = SURFACE_H as usize;
         use smithay_client_toolkit::reexports::client::protocol::wl_shm;
-        let (buffer, canvas) = match self.pool.create_buffer(w as i32, h as i32, (w*4) as i32, wl_shm::Format::Argb8888) {
-            Ok(v) => v, Err(e) => { eprintln!("[lumo-notif] buf: {:?}", e); return; }
+        let (buffer, canvas) = match self.pool.create_buffer(
+            w as i32,
+            h as i32,
+            (w * 4) as i32,
+            wl_shm::Format::Argb8888,
+        ) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("[lumo-notif] buf: {:?}", e);
+                return;
+            }
         };
         let mut pm = tiny_skia::PixmapMut::from_bytes(canvas, w as u32, h as u32).expect("pix");
-        let renders: Vec<ToastRender> = self.toasts.iter().map(|t| ToastRender {
-            id: t.id, slide_x: t.slide.value, summary: t.summary.clone(), app_name: t.app_name.clone(), body: t.body.clone(),
-        }).collect();
+        let renders: Vec<ToastRender> = self
+            .toasts
+            .iter()
+            .map(|t| ToastRender {
+                id: t.id,
+                slide_x: t.slide.value,
+                summary: t.summary.clone(),
+                app_name: t.app_name.clone(),
+                body: t.body.clone(),
+            })
+            .collect();
         paint::paint_toasts(&mut pm, &renders, w as u32, h as u32);
         let surf = self.layer.wl_surface();
         surf.damage_buffer(0, 0, w as i32, h as i32);
@@ -108,6 +184,10 @@ impl NotifState {
     }
 }
 
+use smithay_client_toolkit::reexports::client::{
+    protocol::{wl_output, wl_seat, wl_surface},
+    QueueHandle,
+};
 use smithay_client_toolkit::{
     compositor::CompositorHandler,
     output::OutputHandler,
@@ -117,40 +197,100 @@ use smithay_client_toolkit::{
     shell::wlr_layer::{LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
     shm::ShmHandler,
 };
-use smithay_client_toolkit::reexports::client::{
-    protocol::{wl_output, wl_seat, wl_surface},
-    QueueHandle,
-};
 
 impl CompositorHandler for NotifState {
-    fn scale_factor_changed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: i32) {}
-    fn transform_changed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: wl_output::Transform) {}
-    fn frame(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: u32) { self.redraw(qh); }
-    fn surface_enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: &wl_output::WlOutput) {}
-    fn surface_leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: &wl_output::WlOutput) {}
+    fn scale_factor_changed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: i32,
+    ) {
+    }
+    fn transform_changed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: wl_output::Transform,
+    ) {
+    }
+    fn frame(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: u32) {
+        self.redraw(qh);
+    }
+    fn surface_enter(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+    }
+    fn surface_leave(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+    }
 }
 impl OutputHandler for NotifState {
-    fn output_state(&mut self) -> &mut OutputState { &mut self.output_state }
+    fn output_state(&mut self) -> &mut OutputState {
+        &mut self.output_state
+    }
     fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 }
-impl ShmHandler for NotifState { fn shm_state(&mut self) -> &mut Shm { &mut self.shm } }
+impl ShmHandler for NotifState {
+    fn shm_state(&mut self) -> &mut Shm {
+        &mut self.shm
+    }
+}
 impl LayerShellHandler for NotifState {
-    fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &LayerSurface) { self.running = false; }
-    fn configure(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &LayerSurface, _: LayerSurfaceConfigure, _: u32) {
-        self.configured = true; self.redraw(qh);
+    fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &LayerSurface) {
+        self.running = false;
+    }
+    fn configure(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        _: &LayerSurface,
+        _: LayerSurfaceConfigure,
+        _: u32,
+    ) {
+        self.configured = true;
+        self.redraw(qh);
     }
 }
 impl SeatHandler for NotifState {
-    fn seat_state(&mut self) -> &mut SeatState { &mut self.seat_state }
+    fn seat_state(&mut self) -> &mut SeatState {
+        &mut self.seat_state
+    }
     fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
-    fn new_capability(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat, _: smithay_client_toolkit::seat::Capability) {}
-    fn remove_capability(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat, _: smithay_client_toolkit::seat::Capability) {}
+    fn new_capability(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: wl_seat::WlSeat,
+        _: smithay_client_toolkit::seat::Capability,
+    ) {
+    }
+    fn remove_capability(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: wl_seat::WlSeat,
+        _: smithay_client_toolkit::seat::Capability,
+    ) {
+    }
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }
 impl ProvidesRegistryState for NotifState {
-    fn registry(&mut self) -> &mut RegistryState { &mut self.registry }
+    fn registry(&mut self) -> &mut RegistryState {
+        &mut self.registry
+    }
     registry_handlers![OutputState, SeatState];
 }
 
@@ -162,27 +302,46 @@ pub async fn run(mut rx: mpsc::Receiver<NotifEvent>) {
     let layer_shell = LayerShell::bind(&globals, &qh).expect("wlr_layer_shell");
     let shm = Shm::bind(&globals, &qh).expect("wl_shm");
     let surface = compositor.create_surface(&qh);
-    let layer = layer_shell.create_layer_surface(&qh, surface, Layer::Overlay, Some("lumo-notif"), None);
+    let layer =
+        layer_shell.create_layer_surface(&qh, surface, Layer::Overlay, Some("lumo-notif"), None);
     layer.set_anchor(Anchor::TOP | Anchor::RIGHT);
     layer.set_size(SURFACE_W, SURFACE_H);
     layer.set_margin(16, 16, 0, 0);
     layer.set_exclusive_zone(-1);
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
-    let pool = SlotPool::new(SURFACE_W as usize * SURFACE_H as usize * 4 * 2, &shm).expect("SlotPool");
+    let pool =
+        SlotPool::new(SURFACE_W as usize * SURFACE_H as usize * 4 * 2, &shm).expect("SlotPool");
     let mut state = NotifState {
         registry: RegistryState::new(&globals),
         output_state: OutputState::new(&globals, &qh),
-        shm, seat_state: SeatState::new(&globals, &qh),
-        layer, pool, running: true, configured: false,
-        toasts: VecDeque::new(), history: History::load(),
+        shm,
+        seat_state: SeatState::new(&globals, &qh),
+        layer,
+        pool,
+        running: true,
+        configured: false,
+        toasts: VecDeque::new(),
+        history: History::load(),
     };
     let mut last_tick = Instant::now();
     while state.running {
         while let Ok(ev) = rx.try_recv() {
             match ev {
-                NotifEvent::Notify { id, app_name, summary, body, timeout_ms } => { state.push_toast(id, app_name, summary, body, timeout_ms); state.redraw(&qh); }
-                NotifEvent::CloseNotification { id } => { state.close_toast(id); state.redraw(&qh); }
+                NotifEvent::Notify {
+                    id,
+                    app_name,
+                    summary,
+                    body,
+                    timeout_ms,
+                } => {
+                    state.push_toast(id, app_name, summary, body, timeout_ms);
+                    state.redraw(&qh);
+                }
+                NotifEvent::CloseNotification { id } => {
+                    state.close_toast(id);
+                    state.redraw(&qh);
+                }
             }
         }
         let now = Instant::now();
@@ -190,7 +349,9 @@ pub async fn run(mut rx: mpsc::Receiver<NotifEvent>) {
         if dt >= 0.016 {
             last_tick = now;
             state.tick(dt);
-            if state.animating() || !state.toasts.is_empty() { state.redraw(&qh); }
+            if state.animating() || !state.toasts.is_empty() {
+                state.redraw(&qh);
+            }
         }
         conn.flush().ok();
         if let Some(guard) = queue.prepare_read() {
@@ -200,7 +361,14 @@ pub async fn run(mut rx: mpsc::Receiver<NotifEvent>) {
             let _ = poll(&mut pfd, PollTimeout::try_from(16i32).unwrap());
             let _ = guard.read();
         }
-        if let Err(e) = queue.dispatch_pending(&mut state) { let s = format!("{e:?}"); if s.contains("ConnectionReset") || s.contains("BrokenPipe") { break; } }
-        if conn.flush().is_err() { break; }
+        if let Err(e) = queue.dispatch_pending(&mut state) {
+            let s = format!("{e:?}");
+            if s.contains("ConnectionReset") || s.contains("BrokenPipe") {
+                break;
+            }
+        }
+        if conn.flush().is_err() {
+            break;
+        }
     }
 }

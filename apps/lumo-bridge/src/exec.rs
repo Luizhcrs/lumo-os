@@ -33,14 +33,19 @@ pub async fn run(cmd: &str, args: &[&str]) -> Result<ExecOutput> {
 
 pub async fn run_with_timeout(cmd: &str, args: &[&str], dur: Duration) -> Result<ExecOutput> {
     let mut c = Command::new(cmd);
-    c.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    c.args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     for (k, v) in wayland_env() {
         c.env(k, v);
     }
     tracing::debug!(target: "lumo_bridge::exec", "exec {} {:?}", cmd, args);
     let child = c.spawn().map_err(|e| anyhow!("spawn {}: {}", cmd, e))?;
     let fut = child.wait_with_output();
-    let out = timeout(dur, fut).await.map_err(|_| anyhow!("timeout ({:?}) running {}", dur, cmd))??;
+    let out = timeout(dur, fut)
+        .await
+        .map_err(|_| anyhow!("timeout ({:?}) running {}", dur, cmd))??;
     Ok(ExecOutput {
         status: out.status.code().unwrap_or(-1),
         stdout: out.stdout,
@@ -55,7 +60,9 @@ mod tests {
     #[tokio::test]
     async fn run_echo_safe_quoting() {
         // arg com aspas/espacos -- nao expande, vai literal pro processo
-        let out = run("/usr/bin/printf", &["%s", "hello; rm -rf /tmp/whatever"]).await.unwrap();
+        let out = run("/usr/bin/printf", &["%s", "hello; rm -rf /tmp/whatever"])
+            .await
+            .unwrap();
         assert_eq!(out.status, 0);
         assert_eq!(out.stdout, b"hello; rm -rf /tmp/whatever");
     }

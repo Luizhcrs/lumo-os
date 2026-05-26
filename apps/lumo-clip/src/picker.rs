@@ -4,6 +4,10 @@
 //! Enter = pasta entrada selecionada, Esc = fechar.
 
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
+use smithay_client_toolkit::reexports::client::protocol::{wl_output, wl_seat, wl_surface};
+use smithay_client_toolkit::reexports::client::{
+    globals::registry_queue_init, Connection, QueueHandle,
+};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_registry,
@@ -18,12 +22,10 @@ use smithay_client_toolkit::{
     shell::WaylandSurface,
     shm::{slot::SlotPool, Shm},
 };
-use smithay_client_toolkit::reexports::client::{globals::registry_queue_init, Connection, QueueHandle};
-use smithay_client_toolkit::reexports::client::protocol::{wl_output, wl_seat, wl_surface};
 use tiny_skia::{Color, Paint, PixmapMut, Rect, Transform};
 
-use lumo_foundation::LumoColors;
 use crate::history::ClipEntry;
+use lumo_foundation::LumoColors;
 
 pub const PICKER_W: u32 = 480;
 pub const PICKER_H: u32 = 400;
@@ -149,53 +151,125 @@ use smithay_client_toolkit::{
 };
 
 impl CompositorHandler for PickerState {
-    fn scale_factor_changed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: i32) {}
-    fn transform_changed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: wl_output::Transform) {}
+    fn scale_factor_changed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: i32,
+    ) {
+    }
+    fn transform_changed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: wl_output::Transform,
+    ) {
+    }
     fn frame(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: u32) {
         self.redraw(qh);
     }
-    fn surface_enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: &wl_output::WlOutput) {}
-    fn surface_leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: &wl_output::WlOutput) {}
+    fn surface_enter(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+    }
+    fn surface_leave(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+    }
 }
 impl OutputHandler for PickerState {
-    fn output_state(&mut self) -> &mut OutputState { &mut self.output_state }
+    fn output_state(&mut self) -> &mut OutputState {
+        &mut self.output_state
+    }
     fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 }
 impl ShmHandler for PickerState {
-    fn shm_state(&mut self) -> &mut Shm { &mut self.shm }
+    fn shm_state(&mut self) -> &mut Shm {
+        &mut self.shm
+    }
 }
 impl LayerShellHandler for PickerState {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &LayerSurface) {
         self.running = false;
     }
-    fn configure(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &LayerSurface, _: LayerSurfaceConfigure, _: u32) {
+    fn configure(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        _: &LayerSurface,
+        _: LayerSurfaceConfigure,
+        _: u32,
+    ) {
         self.configured = true;
         self.redraw(qh);
     }
 }
 impl SeatHandler for PickerState {
-    fn seat_state(&mut self) -> &mut SeatState { &mut self.seat_state }
+    fn seat_state(&mut self) -> &mut SeatState {
+        &mut self.seat_state
+    }
     fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
     fn new_capability(
-        &mut self, _: &Connection, qh: &QueueHandle<Self>,
-        seat: wl_seat::WlSeat, cap: smithay_client_toolkit::seat::Capability,
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        seat: wl_seat::WlSeat,
+        cap: smithay_client_toolkit::seat::Capability,
     ) {
         if cap == smithay_client_toolkit::seat::Capability::Keyboard {
             self.seat_state.get_keyboard(qh, &seat, None).ok();
         }
     }
-    fn remove_capability(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat, _: smithay_client_toolkit::seat::Capability) {}
+    fn remove_capability(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: wl_seat::WlSeat,
+        _: smithay_client_toolkit::seat::Capability,
+    ) {
+    }
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }
 impl KeyboardHandler for PickerState {
-    fn enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32, _: &[u32], _: &[Keysym]) {}
-    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32) {}
-    fn press_key(
-        &mut self, _: &Connection, qh: &QueueHandle<Self>,
+    fn enter(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
-        _: u32, ev: KeyEvent,
+        _: &wl_surface::WlSurface,
+        _: u32,
+        _: &[u32],
+        _: &[Keysym],
+    ) {
+    }
+    fn leave(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _: &wl_surface::WlSurface,
+        _: u32,
+    ) {
+    }
+    fn press_key(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _: u32,
+        ev: KeyEvent,
     ) {
         match ev.keysym {
             Keysym::Escape => {
@@ -239,11 +313,30 @@ impl KeyboardHandler for PickerState {
             }
         }
     }
-    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard, _: u32, _: KeyEvent) {}
-    fn update_modifiers(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard, _: u32, _: Modifiers, _: u32) {}
+    fn release_key(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _: u32,
+        _: KeyEvent,
+    ) {
+    }
+    fn update_modifiers(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _: u32,
+        _: Modifiers,
+        _: u32,
+    ) {
+    }
 }
 impl ProvidesRegistryState for PickerState {
-    fn registry(&mut self) -> &mut RegistryState { &mut self.registry }
+    fn registry(&mut self) -> &mut RegistryState {
+        &mut self.registry
+    }
     registry_handlers![OutputState, SeatState];
 }
 
@@ -259,7 +352,11 @@ pub fn run_picker(entries: Vec<ClipEntry>) -> Option<ClipEntry> {
     let shm = Shm::bind(&globals, &qh).ok()?;
     let surface = compositor.create_surface(&qh);
     let layer = layer_shell.create_layer_surface(
-        &qh, surface, Layer::Overlay, Some("lumo-clip-picker"), None,
+        &qh,
+        surface,
+        Layer::Overlay,
+        Some("lumo-clip-picker"),
+        None,
     );
     layer.set_anchor(Anchor::empty());
     layer.set_size(PICKER_W, PICKER_H);

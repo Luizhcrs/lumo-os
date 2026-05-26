@@ -21,15 +21,12 @@ use smithay::reexports::input as libinput;
 use crate::input::TouchpadConfig;
 use crate::state::LumoState;
 
-pub fn init(
-    session: &LibSeatSession,
-    loop_handle: &LoopHandle<'static, LumoState>,
-) -> Result<()> {
+pub fn init(session: &LibSeatSession, loop_handle: &LoopHandle<'static, LumoState>) -> Result<()> {
     let seat_name = session.seat();
 
-    let mut context = libinput::Libinput::new_with_udev::<
-        LibinputSessionInterface<LibSeatSession>,
-    >(session.clone().into());
+    let mut context = libinput::Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(
+        session.clone().into(),
+    );
 
     context
         .udev_assign_seat(&seat_name)

@@ -8,6 +8,10 @@
 use std::time::Instant;
 
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
+use smithay_client_toolkit::reexports::client::protocol::{wl_output, wl_seat, wl_surface};
+use smithay_client_toolkit::reexports::client::{
+    globals::registry_queue_init, Connection, QueueHandle,
+};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_registry,
@@ -22,10 +26,6 @@ use smithay_client_toolkit::{
     shell::WaylandSurface,
     shm::{slot::SlotPool, Shm},
 };
-use smithay_client_toolkit::reexports::client::{
-    globals::registry_queue_init, Connection, QueueHandle,
-};
-use smithay_client_toolkit::reexports::client::protocol::{wl_output, wl_seat, wl_surface};
 use tiny_skia::{Color, Paint, PathBuilder, PixmapMut, Rect, Transform};
 
 use lumo_animation::Spring;
@@ -147,7 +147,13 @@ fn fill_rrect(pm: &mut PixmapMut, x: f32, y: f32, w: f32, h: f32, r: f32, color:
     if let Some(path) = pb.finish() {
         let mut paint = Paint::default();
         paint.set_color(color);
-        pm.fill_path(&path, &paint, tiny_skia::FillRule::Winding, Transform::identity(), None);
+        pm.fill_path(
+            &path,
+            &paint,
+            tiny_skia::FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
     }
 }
 
@@ -179,7 +185,15 @@ fn paint_center(pm: &mut PixmapMut, slide_x: f32, entries: &[HistoryEntry], w: u
     } else {
         for (i, entry) in entries.iter().take(n).enumerate() {
             let row_y = cy + i as f32 * (ROW_H + 8.0);
-            fill_rrect(pm, x + PAD, row_y, w as f32 - PAD * 2.0, ROW_H, ROW_RADIUS, panel_hi);
+            fill_rrect(
+                pm,
+                x + PAD,
+                row_y,
+                w as f32 - PAD * 2.0,
+                ROW_H,
+                ROW_RADIUS,
+                panel_hi,
+            );
 
             // Timestamp indicator dot
             let mut dot_paint = Paint::default();
@@ -211,63 +225,154 @@ use smithay_client_toolkit::{
 };
 
 impl CompositorHandler for CenterState {
-    fn scale_factor_changed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: i32) {}
-    fn transform_changed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: wl_output::Transform) {}
+    fn scale_factor_changed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: i32,
+    ) {
+    }
+    fn transform_changed(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: wl_output::Transform,
+    ) {
+    }
     fn frame(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: u32) {
         self.tick(qh);
     }
-    fn surface_enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: &wl_output::WlOutput) {}
-    fn surface_leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_surface::WlSurface, _: &wl_output::WlOutput) {}
+    fn surface_enter(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+    }
+    fn surface_leave(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_surface::WlSurface,
+        _: &wl_output::WlOutput,
+    ) {
+    }
 }
 impl OutputHandler for CenterState {
-    fn output_state(&mut self) -> &mut OutputState { &mut self.output_state }
+    fn output_state(&mut self) -> &mut OutputState {
+        &mut self.output_state
+    }
     fn new_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn update_output(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
 }
 impl ShmHandler for CenterState {
-    fn shm_state(&mut self) -> &mut Shm { &mut self.shm }
+    fn shm_state(&mut self) -> &mut Shm {
+        &mut self.shm
+    }
 }
 impl LayerShellHandler for CenterState {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &LayerSurface) {
         self.running = false;
     }
-    fn configure(&mut self, _: &Connection, qh: &QueueHandle<Self>, _: &LayerSurface, _: LayerSurfaceConfigure, _: u32) {
+    fn configure(
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        _: &LayerSurface,
+        _: LayerSurfaceConfigure,
+        _: u32,
+    ) {
         self.configured = true;
         self.redraw(qh);
     }
 }
 impl SeatHandler for CenterState {
-    fn seat_state(&mut self) -> &mut SeatState { &mut self.seat_state }
+    fn seat_state(&mut self) -> &mut SeatState {
+        &mut self.seat_state
+    }
     fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
     fn new_capability(
-        &mut self, _: &Connection, qh: &QueueHandle<Self>,
-        seat: wl_seat::WlSeat, cap: smithay_client_toolkit::seat::Capability,
+        &mut self,
+        _: &Connection,
+        qh: &QueueHandle<Self>,
+        seat: wl_seat::WlSeat,
+        cap: smithay_client_toolkit::seat::Capability,
     ) {
         if cap == smithay_client_toolkit::seat::Capability::Keyboard {
             self.seat_state.get_keyboard(qh, &seat, None).ok();
         }
     }
-    fn remove_capability(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat, _: smithay_client_toolkit::seat::Capability) {}
+    fn remove_capability(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: wl_seat::WlSeat,
+        _: smithay_client_toolkit::seat::Capability,
+    ) {
+    }
     fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
 }
 impl KeyboardHandler for CenterState {
-    fn enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32, _: &[u32], _: &[Keysym]) {}
-    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32) {}
-    fn press_key(
-        &mut self, _: &Connection, _qh: &QueueHandle<Self>,
+    fn enter(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
         _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
-        _: u32, ev: KeyEvent,
+        _: &wl_surface::WlSurface,
+        _: u32,
+        _: &[u32],
+        _: &[Keysym],
+    ) {
+    }
+    fn leave(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _: &wl_surface::WlSurface,
+        _: u32,
+    ) {
+    }
+    fn press_key(
+        &mut self,
+        _: &Connection,
+        _qh: &QueueHandle<Self>,
+        _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _: u32,
+        ev: KeyEvent,
     ) {
         if ev.keysym == Keysym::Escape {
             self.close();
         }
     }
-    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard, _: u32, _: KeyEvent) {}
-    fn update_modifiers(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard, _: u32, _: Modifiers, _: u32) {}
+    fn release_key(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _: u32,
+        _: KeyEvent,
+    ) {
+    }
+    fn update_modifiers(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &smithay_client_toolkit::reexports::client::protocol::wl_keyboard::WlKeyboard,
+        _: u32,
+        _: Modifiers,
+        _: u32,
+    ) {
+    }
 }
 impl ProvidesRegistryState for CenterState {
-    fn registry(&mut self) -> &mut RegistryState { &mut self.registry }
+    fn registry(&mut self) -> &mut RegistryState {
+        &mut self.registry
+    }
     registry_handlers![OutputState, SeatState];
 }
 
@@ -275,31 +380,45 @@ impl ProvidesRegistryState for CenterState {
 pub fn run_center(entries: Vec<HistoryEntry>, reduced_motion: bool) {
     let conn = match Connection::connect_to_env() {
         Ok(c) => c,
-        Err(e) => { eprintln!("[lumo-notif-center] wayland: {e}"); return; }
+        Err(e) => {
+            eprintln!("[lumo-notif-center] wayland: {e}");
+            return;
+        }
     };
     let (globals, mut queue) = match registry_queue_init::<CenterState>(&conn) {
         Ok(v) => v,
-        Err(e) => { eprintln!("[lumo-notif-center] registry: {e}"); return; }
+        Err(e) => {
+            eprintln!("[lumo-notif-center] registry: {e}");
+            return;
+        }
     };
     let qh = queue.handle();
     let compositor = match CompositorState::bind(&globals, &qh) {
         Ok(c) => c,
-        Err(e) => { eprintln!("[lumo-notif-center] compositor: {e}"); return; }
+        Err(e) => {
+            eprintln!("[lumo-notif-center] compositor: {e}");
+            return;
+        }
     };
     let layer_shell = match LayerShell::bind(&globals, &qh) {
         Ok(ls) => ls,
-        Err(e) => { eprintln!("[lumo-notif-center] layer_shell: {e}"); return; }
+        Err(e) => {
+            eprintln!("[lumo-notif-center] layer_shell: {e}");
+            return;
+        }
     };
     let shm = match Shm::bind(&globals, &qh) {
         Ok(s) => s,
-        Err(e) => { eprintln!("[lumo-notif-center] shm: {e}"); return; }
+        Err(e) => {
+            eprintln!("[lumo-notif-center] shm: {e}");
+            return;
+        }
     };
     let surface = compositor.create_surface(&qh);
     let n = entries.len();
     let h = center_height(n.min(MAX_VISIBLE));
-    let layer = layer_shell.create_layer_surface(
-        &qh, surface, Layer::Top, Some("lumo-notif-center"), None,
-    );
+    let layer =
+        layer_shell.create_layer_surface(&qh, surface, Layer::Top, Some("lumo-notif-center"), None);
     layer.set_anchor(Anchor::TOP | Anchor::RIGHT | Anchor::BOTTOM);
     layer.set_size(CENTER_W, h);
     layer.set_exclusive_zone(CENTER_W as i32);
@@ -308,7 +427,10 @@ pub fn run_center(entries: Vec<HistoryEntry>, reduced_motion: bool) {
     let pool_size = CENTER_W as usize * h as usize * 4 * 2;
     let pool = match SlotPool::new(pool_size.max(4096), &shm) {
         Ok(p) => p,
-        Err(e) => { eprintln!("[lumo-notif-center] pool: {e}"); return; }
+        Err(e) => {
+            eprintln!("[lumo-notif-center] pool: {e}");
+            return;
+        }
     };
 
     let mut slide = Spring::snappy();
@@ -377,7 +499,15 @@ mod tests {
         let mut pixels = vec![0u8; (CENTER_W * 200) as usize * 4];
         let mut pm = PixmapMut::from_bytes(&mut pixels, CENTER_W, 200).expect("pix");
         // fill_rrect nao deve crashar com dimensoes validas
-        fill_rrect(&mut pm, 10.0, 10.0, 100.0, 60.0, 10.0, rgba_hex(0x10b981, 200));
+        fill_rrect(
+            &mut pm,
+            10.0,
+            10.0,
+            100.0,
+            60.0,
+            10.0,
+            rgba_hex(0x10b981, 200),
+        );
         // zero size deve retornar silenciosamente
         fill_rrect(&mut pm, 10.0, 10.0, 0.0, 0.0, 10.0, rgba_hex(0x10b981, 200));
     }

@@ -113,14 +113,30 @@ fn with_alpha(color: Color, a: f32) -> Color {
 pub struct LumoTheme;
 
 impl LumoTheme {
-    pub fn bg() -> Color { c(LFTokens::INK_DEEP_SRGB) }
-    pub fn panel() -> Color { c(LFTokens::PANEL_SRGB) }
-    pub fn panel_hi() -> Color { c(LFTokens::PANEL_HI_SRGB) }
-    pub fn fg() -> Color { c(LFTokens::PEARL_SRGB) }
-    pub fn muted() -> Color { c(LFTokens::MUTED_SRGB) }
-    pub fn accent() -> Color { c(LFTokens::EMERALD_600_SRGB) }
-    pub fn accent_hover() -> Color { c(LFTokens::EMERALD_500_SRGB) }
-    pub fn danger() -> Color { c(LFTokens::DANGER_SRGB) }
+    pub fn bg() -> Color {
+        c(LFTokens::INK_DEEP_SRGB)
+    }
+    pub fn panel() -> Color {
+        c(LFTokens::PANEL_SRGB)
+    }
+    pub fn panel_hi() -> Color {
+        c(LFTokens::PANEL_HI_SRGB)
+    }
+    pub fn fg() -> Color {
+        c(LFTokens::PEARL_SRGB)
+    }
+    pub fn muted() -> Color {
+        c(LFTokens::MUTED_SRGB)
+    }
+    pub fn accent() -> Color {
+        c(LFTokens::EMERALD_600_SRGB)
+    }
+    pub fn accent_hover() -> Color {
+        c(LFTokens::EMERALD_500_SRGB)
+    }
+    pub fn danger() -> Color {
+        c(LFTokens::DANGER_SRGB)
+    }
 
     pub fn sep() -> Color {
         Color::from_rgba(0.165, 0.165, 0.18, 1.0)
@@ -190,7 +206,10 @@ impl ButtonStyle {
         match self {
             ButtonStyle::Primary => button::Style {
                 background: Some(Background::Color(LumoTheme::accent())),
-                border: Border { radius: 8.0.into(), ..Default::default() },
+                border: Border {
+                    radius: 8.0.into(),
+                    ..Default::default()
+                },
                 text_color: LumoTheme::bg(),
                 ..Default::default()
             },
@@ -206,7 +225,10 @@ impl ButtonStyle {
             },
             ButtonStyle::Ghost => button::Style {
                 background: Some(Background::Color(Color::TRANSPARENT)),
-                border: Border { radius: 8.0.into(), ..Default::default() },
+                border: Border {
+                    radius: 8.0.into(),
+                    ..Default::default()
+                },
                 text_color: LumoTheme::fg(),
                 ..Default::default()
             },

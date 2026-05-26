@@ -1,9 +1,14 @@
 //! bar/main_loop.rs - Entry point `run()` da bar.
 
-use std::sync::{atomic::{AtomicBool, AtomicU8, Ordering as AtomOrd}, Arc};
+use std::sync::{
+    atomic::{AtomicBool, AtomicU8, Ordering as AtomOrd},
+    Arc,
+};
 use std::time::{Duration, Instant};
 
 use chrono::{Datelike, Local};
+use smithay_client_toolkit::reexports::client::{globals::registry_queue_init, Connection};
+use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::{
     compositor::CompositorState,
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
@@ -14,21 +19,16 @@ use smithay_client_toolkit::{
     shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerShell},
     shm::{slot::SlotPool, Shm},
 };
-use smithay_client_toolkit::shell::WaylandSurface;
-use smithay_client_toolkit::reexports::client::{
-    globals::registry_queue_init,
-    Connection,
-};
 
 use crate::bar::dropdowns::battery::BatteryInfo;
 use crate::bar::dropdowns::wifi::WifiInfo;
 use crate::bar::dropdowns::DropdownActive;
 use crate::bar::fonts::{font_system, swash_cache};
 use crate::bar::ipc::{connect_ipc, drain_ipc};
-use lumo_animation::{AnimCurve, LAAnimator, LACurve, Spring};
 use crate::bar::state::LumoBar;
 use crate::bar::tokens::*;
 use crate::menu;
+use lumo_animation::{AnimCurve, LAAnimator, LACurve, Spring};
 
 // Delegate macros
 delegate_compositor!(LumoBar);
@@ -45,14 +45,20 @@ pub fn run() {
     let uid = unsafe { libc::getuid() };
     let lock_path = format!("/run/user/{}/lumo-bar.lock", uid);
     let lock_file = std::fs::OpenOptions::new()
-        .read(true).write(true).create(true).open(&lock_path)
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(&lock_path)
         .expect("Falha ao abrir lock file da bar");
 
     use std::os::unix::io::AsRawFd;
     let fd = lock_file.as_raw_fd();
     let locked = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
     if locked != 0 {
-        eprintln!("[lumo-bar] ERRO: Outra instancia ja esta rodando (lock em {}).", lock_path);
+        eprintln!(
+            "[lumo-bar] ERRO: Outra instancia ja esta rodando (lock em {}).",
+            lock_path
+        );
         std::process::exit(1);
     }
 
@@ -79,9 +85,14 @@ pub fn run() {
     let surface = compositor.create_surface(&qh);
     let layer = layer_shell.create_layer_surface(&qh, surface, Layer::Top, Some("lumo-bar"), None);
     layer.set_anchor(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT);
-    
+
     let lumo_menu_h_main = menu::menu_height(MENU_LUMO_ITEMS) as u32;
-    let surface_max_h = BAR_HEIGHT + DROPDOWN_GAP as u32 + DROPDOWN_H.max(DROPDOWN_DATETIME_H).max(lumo_menu_h_main as f32) as u32 + 8;
+    let surface_max_h = BAR_HEIGHT
+        + DROPDOWN_GAP as u32
+        + DROPDOWN_H
+            .max(DROPDOWN_DATETIME_H)
+            .max(lumo_menu_h_main as f32) as u32
+        + 8;
     layer.set_size(1920, surface_max_h);
     layer.set_exclusive_zone(BAR_HEIGHT as i32);
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
@@ -161,19 +172,40 @@ pub fn run() {
         palette,
         brightness_dragging_slider: false,
         dropdown_scale_anim: {
-            let mut a = LAAnimator::new(1.0f32, 1.0f32, AnimCurve::Bezier { curve: LACurve::ease_in_out(), duration: 0.28 });
+            let mut a = LAAnimator::new(
+                1.0f32,
+                1.0f32,
+                AnimCurve::Bezier {
+                    curve: LACurve::ease_in_out(),
+                    duration: 0.28,
+                },
+            );
             a.elapsed = 1.0;
             a
         },
         dropdown_alpha_anim: {
-            let mut a = LAAnimator::new(1.0f32, 1.0f32, AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.22 });
+            let mut a = LAAnimator::new(
+                1.0f32,
+                1.0f32,
+                AnimCurve::Bezier {
+                    curve: LACurve::ease_out_cubic(),
+                    duration: 0.22,
+                },
+            );
             a.elapsed = 1.0;
             a
         },
         dropdown_closing: false,
         dropdown_closing_which: DropdownActive::None,
         refresh_anim: {
-            let mut a = LAAnimator::new(0.7f32, 1.0f32, AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.25 });
+            let mut a = LAAnimator::new(
+                0.7f32,
+                1.0f32,
+                AnimCurve::Bezier {
+                    curve: LACurve::ease_out_cubic(),
+                    duration: 0.25,
+                },
+            );
             a.elapsed = 1.0;
             a
         },
@@ -194,14 +226,19 @@ pub fn run() {
     while state.running {
         {
             let anim_dt = last_anim_tick.elapsed().as_secs_f32();
-            let animating = !state.dropdown_scale_anim.is_done() || !state.dropdown_alpha_anim.is_done() || state.dropdown_closing || state.refresh_animating;
+            let animating = !state.dropdown_scale_anim.is_done()
+                || !state.dropdown_alpha_anim.is_done()
+                || state.dropdown_closing
+                || state.refresh_animating;
             if animating && anim_dt >= 1.0 / 62.0 {
                 last_anim_tick = Instant::now();
                 state.dropdown_scale_anim.tick(anim_dt);
                 state.dropdown_alpha_anim.tick(anim_dt);
                 if state.refresh_animating {
                     state.refresh_anim.tick(anim_dt);
-                    if state.refresh_anim.is_done() { state.refresh_animating = false; }
+                    if state.refresh_anim.is_done() {
+                        state.refresh_animating = false;
+                    }
                 }
                 if state.dropdown_closing {
                     if state.dropdown_scale_anim.is_done() && state.dropdown_alpha_anim.is_done() {
@@ -225,10 +262,14 @@ pub fn run() {
             }
         }
         if let Some(ref rx) = state.nm_connect_rx {
-            if let Ok(crate::bar::system_info::NmConnectResult::NeedPassword { ssid }) = rx.try_recv() {
+            if let Ok(crate::bar::system_info::NmConnectResult::NeedPassword { ssid }) =
+                rx.try_recv()
+            {
                 state.password_modal.open(ssid);
                 state.nm_connect_rx = None;
-                state.layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+                state
+                    .layer
+                    .set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
                 state.layer.wl_surface().commit();
                 state.redraw(&qh);
             }
@@ -241,16 +282,23 @@ pub fn run() {
         conn.flush().ok();
         if let Some(guard) = queue.prepare_read() {
             use std::os::fd::AsFd;
-            let mut pfd = [nix::poll::PollFd::new(conn.as_fd(), nix::poll::PollFlags::POLLIN)];
+            let mut pfd = [nix::poll::PollFd::new(
+                conn.as_fd(),
+                nix::poll::PollFlags::POLLIN,
+            )];
             let _ = nix::poll::poll(&mut pfd, nix::poll::PollTimeout::try_from(50i32).unwrap());
             let _ = guard.read();
         }
-        if let Err(_) = queue.dispatch_pending(&mut state) { break; }
+        if let Err(_) = queue.dispatch_pending(&mut state) {
+            break;
+        }
         if last_ipc_tick.elapsed() >= Duration::from_millis(8) {
             last_ipc_tick = Instant::now();
             if let Some(mut s) = state.ipc_stream.take() {
                 let res = drain_ipc(&mut s, &mut state.ipc_rx_buf, &state.active_workspace);
-                if res.alive { state.ipc_stream = Some(s); }
+                if res.alive {
+                    state.ipc_stream = Some(s);
+                }
                 if res.close_dropdowns {
                     state.dropdown = DropdownActive::None;
                     state.appmenu_open_idx = None;
@@ -274,7 +322,14 @@ pub fn run() {
                     state.redraw(&qh);
                 }
                 if res.theme_reloaded {
-                    state.refresh_anim = LAAnimator::new(0.7f32, 1.0f32, AnimCurve::Bezier { curve: LACurve::ease_out_cubic(), duration: 0.25 });
+                    state.refresh_anim = LAAnimator::new(
+                        0.7f32,
+                        1.0f32,
+                        AnimCurve::Bezier {
+                            curve: LACurve::ease_out_cubic(),
+                            duration: 0.25,
+                        },
+                    );
                     state.refresh_animating = true;
                 }
             }

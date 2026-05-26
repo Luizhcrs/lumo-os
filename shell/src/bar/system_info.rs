@@ -63,7 +63,9 @@ pub fn read_battery_info() -> BatteryInfo {
     let current_now_ua = sys_read_u32(&format!("{}/current_now", dir));
 
     // Convert uWh -> mWh (divide 1000); uAh + mV -> uWh -> mWh.
-    fn uwh_to_mwh(uwh: Option<u32>) -> Option<u32> { uwh.map(|v| v / 1000) }
+    fn uwh_to_mwh(uwh: Option<u32>) -> Option<u32> {
+        uwh.map(|v| v / 1000)
+    }
     fn uah_to_mwh(uah: Option<u32>, mv: Option<u32>) -> Option<u32> {
         let a = uah? as u64;
         let v = mv? as u64;
@@ -72,10 +74,9 @@ pub fn read_battery_info() -> BatteryInfo {
 
     let full = uwh_to_mwh(energy_full).or_else(|| uah_to_mwh(charge_full, voltage_mv));
     let now = uwh_to_mwh(energy_now).or_else(|| uah_to_mwh(charge_now, voltage_mv));
-    let full_design = uwh_to_mwh(energy_full_design)
-        .or_else(|| uah_to_mwh(charge_full_design, voltage_mv));
-    let power_now = uwh_to_mwh(power_now_uw)
-        .or_else(|| uah_to_mwh(current_now_ua, voltage_mv));
+    let full_design =
+        uwh_to_mwh(energy_full_design).or_else(|| uah_to_mwh(charge_full_design, voltage_mv));
+    let power_now = uwh_to_mwh(power_now_uw).or_else(|| uah_to_mwh(current_now_ua, voltage_mv));
 
     BatteryInfo {
         pct: sys_read_u32(&format!("{}/capacity", dir)).unwrap_or(100) as u8,
@@ -89,10 +90,17 @@ pub fn read_battery_info() -> BatteryInfo {
         model: sys_read_string(&format!("{}/model_name", dir)),
         manufacturer: sys_read_string(&format!("{}/manufacturer", dir)),
         current_now: current_now_ua,
-        charge_limit: sys_read_u32(&format!("{}/charge_control_end_threshold", dir)).map(|v| v.clamp(0, 100) as u8),
+        charge_limit: sys_read_u32(&format!("{}/charge_control_end_threshold", dir))
+            .map(|v| v.clamp(0, 100) as u8),
         balance_days: {
-            let limit = sys_read_u32(&format!("{}/charge_control_end_threshold", dir)).map(|v| v.clamp(0, 100) as u8).unwrap_or(100);
-            if limit <= 80 { Some(days_until_next_friday()) } else { None }
+            let limit = sys_read_u32(&format!("{}/charge_control_end_threshold", dir))
+                .map(|v| v.clamp(0, 100) as u8)
+                .unwrap_or(100);
+            if limit <= 80 {
+                Some(days_until_next_friday())
+            } else {
+                None
+            }
         },
         platform_profile: sys_read_string("/sys/firmware/acpi/platform_profile"),
         cpu_temp_c: read_cpu_temp_celsius(),
@@ -197,7 +205,14 @@ pub fn read_wifi_info() -> WifiInfo {
 /// escapados como `\:`. Dedupe por SSID (mantem signal maior). Sort desc.
 pub fn list_wifi_networks() -> Vec<WifiNetwork> {
     let out = match std::process::Command::new("nmcli")
-        .args(["-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "dev", "wifi", "list"])
+        .args([
+            "-t",
+            "-f",
+            "IN-USE,SSID,SIGNAL,SECURITY",
+            "dev",
+            "wifi",
+            "list",
+        ])
         .output()
     {
         Ok(o) if o.status.success() => o,
@@ -287,8 +302,7 @@ pub fn read_wifi() -> bool {
             let name = e.file_name();
             let name = name.to_string_lossy();
             if name.starts_with("wl") {
-                let s =
-                    std::fs::read_to_string(e.path().join("operstate")).unwrap_or_default();
+                let s = std::fs::read_to_string(e.path().join("operstate")).unwrap_or_default();
                 if s.trim() == "up" {
                     return true;
                 }
@@ -305,14 +319,19 @@ pub fn read_wifi() -> bool {
 /// Constroi grid 6x7 do mes. Coluna 0 = Domingo (padrao PT-BR D S T Q Q S S).
 pub fn month_grid_for(year: i32, month: u32) -> Vec<Vec<Option<u32>>> {
     use chrono::NaiveDate;
-    let first = NaiveDate::from_ymd_opt(year, month, 1).expect("year e month validados pelo caller; dia 1 sempre existe");
+    let first = NaiveDate::from_ymd_opt(year, month, 1)
+        .expect("year e month validados pelo caller; dia 1 sempre existe");
     let first_weekday = first.weekday().num_days_from_sunday() as usize;
     let next_month_first = if month == 12 {
         NaiveDate::from_ymd_opt(year + 1, 1, 1).expect("janeiro dia 1 sempre existe")
     } else {
-        NaiveDate::from_ymd_opt(year, month + 1, 1).expect("mes + 1 com dia 1 valido quando month < 12")
+        NaiveDate::from_ymd_opt(year, month + 1, 1)
+            .expect("mes + 1 com dia 1 valido quando month < 12")
     };
-    let days_in_month = next_month_first.pred_opt().expect("pred_opt de Jan 1 nunca e None para datas razoaveis").day();
+    let days_in_month = next_month_first
+        .pred_opt()
+        .expect("pred_opt de Jan 1 nunca e None para datas razoaveis")
+        .day();
 
     let mut grid = vec![vec![None; 7]; 6];
     let mut day = 1u32;
@@ -329,7 +348,11 @@ pub fn month_grid_for(year: i32, month: u32) -> Vec<Vec<Option<u32>>> {
     grid
 }
 
-pub fn read_datetime_info(viewed_year: i32, viewed_month: u32, selected_day: Option<u32>) -> DateTimeInfo {
+pub fn read_datetime_info(
+    viewed_year: i32,
+    viewed_month: u32,
+    selected_day: Option<u32>,
+) -> DateTimeInfo {
     let now = Local::now();
     DateTimeInfo {
         weekday_full: weekday_full_pt(now.weekday()).to_string(),
@@ -357,22 +380,41 @@ pub fn read_datetime_info(viewed_year: i32, viewed_month: u32, selected_day: Opt
 pub fn weekday_abbr_pt(d: chrono::Weekday) -> &'static str {
     use chrono::Weekday::*;
     match d {
-        Mon => "seg", Tue => "ter", Wed => "qua", Thu => "qui",
-        Fri => "sex", Sat => "sáb", Sun => "dom",
+        Mon => "seg",
+        Tue => "ter",
+        Wed => "qua",
+        Thu => "qui",
+        Fri => "sex",
+        Sat => "sáb",
+        Sun => "dom",
     }
 }
 
 pub fn month_abbr_pt(m: u32) -> &'static str {
     match m {
-        1 => "jan", 2 => "fev", 3 => "mar", 4 => "abr",
-        5 => "mai", 6 => "jun", 7 => "jul", 8 => "ago",
-        9 => "set", 10 => "out", 11 => "nov", 12 => "dez",
+        1 => "jan",
+        2 => "fev",
+        3 => "mar",
+        4 => "abr",
+        5 => "mai",
+        6 => "jun",
+        7 => "jul",
+        8 => "ago",
+        9 => "set",
+        10 => "out",
+        11 => "nov",
+        12 => "dez",
         _ => "?",
     }
 }
 
 pub fn format_date_pt(dt: &chrono::DateTime<Local>) -> String {
-    format!("{} {} {}", weekday_abbr_pt(dt.weekday()), dt.day(), month_abbr_pt(dt.month()))
+    format!(
+        "{} {} {}",
+        weekday_abbr_pt(dt.weekday()),
+        dt.day(),
+        month_abbr_pt(dt.month())
+    )
 }
 
 // ============================================================
@@ -419,7 +461,11 @@ pub enum NmConnectResult {
 pub fn nm_connect(ssid: String) -> std::sync::mpsc::Receiver<NmConnectResult> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        eprintln!("[lumo-bar] R2 nm_connect ssid={:?} (len={})", ssid, ssid.len());
+        eprintln!(
+            "[lumo-bar] R2 nm_connect ssid={:?} (len={})",
+            ssid,
+            ssid.len()
+        );
         let up = std::process::Command::new("nmcli")
             .args(["con", "up", &ssid])
             .output();
@@ -432,12 +478,20 @@ pub fn nm_connect(ssid: String) -> std::sync::mpsc::Receiver<NmConnectResult> {
             Ok(o) => {
                 let stderr = String::from_utf8_lossy(&o.stderr);
                 let stdout = String::from_utf8_lossy(&o.stdout);
-                if stderr.contains("Secrets were required") || stdout.contains("Secrets were required") {
-                    eprintln!("[lumo-bar] nm_connect {:?}: senha necessaria -> modal A31.3", ssid);
+                if stderr.contains("Secrets were required")
+                    || stdout.contains("Secrets were required")
+                {
+                    eprintln!(
+                        "[lumo-bar] nm_connect {:?}: senha necessaria -> modal A31.3",
+                        ssid
+                    );
                     let _ = tx.send(NmConnectResult::NeedPassword { ssid });
                     return;
                 }
-                eprintln!("[lumo-bar] nm_connect {:?} con up falhou; tenta dev wifi connect", ssid);
+                eprintln!(
+                    "[lumo-bar] nm_connect {:?} con up falhou; tenta dev wifi connect",
+                    ssid
+                );
             }
             Err(e) => {
                 eprintln!("[lumo-bar] nmcli spawn falha: {}", e);
@@ -464,10 +518,17 @@ pub fn nm_connect(ssid: String) -> std::sync::mpsc::Receiver<NmConnectResult> {
                 let e = String::from_utf8_lossy(&o.stderr);
                 let stdout = String::from_utf8_lossy(&o.stdout);
                 if e.contains("Secrets were required") || stdout.contains("Secrets were required") {
-                    eprintln!("[lumo-bar] nm_connect {:?}: senha necessaria fallback -> modal", ssid);
+                    eprintln!(
+                        "[lumo-bar] nm_connect {:?}: senha necessaria fallback -> modal",
+                        ssid
+                    );
                     let _ = tx.send(NmConnectResult::NeedPassword { ssid });
                 } else {
-                    eprintln!("[lumo-bar] nmcli dev wifi connect {:?} falha: {}", ssid, e.trim());
+                    eprintln!(
+                        "[lumo-bar] nmcli dev wifi connect {:?} falha: {}",
+                        ssid,
+                        e.trim()
+                    );
                     let _ = tx.send(NmConnectResult::Failed(format!("{}", e.trim())));
                 }
             }
@@ -488,7 +549,11 @@ pub fn nm_connect_with_password(ssid: String, password: String) {
         eprintln!("[lumo-bar] A31.3 nm_connect_with_password ssid={:?}", ssid);
         let iface_opt = find_wifi_iface();
         let mut args: Vec<String> = vec![
-            "--ask".into(), "dev".into(), "wifi".into(), "connect".into(), ssid.clone(),
+            "--ask".into(),
+            "dev".into(),
+            "wifi".into(),
+            "connect".into(),
+            ssid.clone(),
         ];
         if let Some(ref iface) = iface_opt {
             args.push("ifname".into());
@@ -503,7 +568,10 @@ pub fn nm_connect_with_password(ssid: String, password: String) {
         {
             Ok(c) => c,
             Err(e) => {
-                eprintln!("[lumo-bar] A31.3 nm_connect_with_password spawn falha: {}", e);
+                eprintln!(
+                    "[lumo-bar] A31.3 nm_connect_with_password spawn falha: {}",
+                    e
+                );
                 return;
             }
         };
@@ -516,9 +584,16 @@ pub fn nm_connect_with_password(ssid: String, password: String) {
             }
             Ok(o) => {
                 let e = String::from_utf8_lossy(&o.stderr);
-                eprintln!("[lumo-bar] A31.3 nm_connect_with_password {:?} falha: {}", ssid, e.trim());
+                eprintln!(
+                    "[lumo-bar] A31.3 nm_connect_with_password {:?} falha: {}",
+                    ssid,
+                    e.trim()
+                );
             }
-            Err(e) => eprintln!("[lumo-bar] A31.3 nm_connect_with_password wait falha: {}", e),
+            Err(e) => eprintln!(
+                "[lumo-bar] A31.3 nm_connect_with_password wait falha: {}",
+                e
+            ),
         }
     });
 }
@@ -545,7 +620,6 @@ pub fn nm_disconnect_iface(iface: String) {
 // ============================================================
 // L5: CPU thermal + platform profile helpers.
 // ============================================================
-
 
 /// Returns days until the next Friday (0 = today is Friday, 1 = tomorrow, ...).
 pub fn days_until_next_friday() -> u32 {
@@ -604,7 +678,9 @@ pub fn read_brightness_info() -> crate::bar::dropdowns::brightness::BrightnessIn
         let max_path = format!("{}/max_brightness", dir);
         if let (Some(cur), Some(max)) = (sys_read_u32(&cur_path), sys_read_u32(&max_path)) {
             if max > 0 {
-                let pct = ((cur as f32 / max as f32) * 100.0).round().clamp(0.0, 100.0) as u8;
+                let pct = ((cur as f32 / max as f32) * 100.0)
+                    .round()
+                    .clamp(0.0, 100.0) as u8;
                 return crate::bar::dropdowns::brightness::BrightnessInfo { pct };
             }
         }

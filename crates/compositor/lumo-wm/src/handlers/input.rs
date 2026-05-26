@@ -6,10 +6,9 @@
 //! a acao correspondente.
 
 use smithay::backend::input::{
-    AbsolutePositionEvent, ButtonState, Event as _, GestureBeginEvent,
-    GestureEndEvent, GesturePinchUpdateEvent, GestureSwipeUpdateEvent,
-    InputBackend, InputEvent, KeyState, KeyboardKeyEvent, PointerButtonEvent,
-    PointerMotionEvent,
+    AbsolutePositionEvent, ButtonState, Event as _, GestureBeginEvent, GestureEndEvent,
+    GesturePinchUpdateEvent, GestureSwipeUpdateEvent, InputBackend, InputEvent, KeyState,
+    KeyboardKeyEvent, PointerButtonEvent, PointerMotionEvent,
 };
 use smithay::input::keyboard::FilterResult;
 use smithay::input::pointer::{ButtonEvent, MotionEvent};
@@ -39,13 +38,11 @@ impl LumoState {
                 let press = state == KeyState::Pressed;
 
                 // A40: Cell pra capturar sym calculado dentro do closure.
-                let last_sym_for_a40 = std::cell::Cell::new(
-                    smithay::input::keyboard::xkb::Keysym::NoSymbol
-                );
+                let last_sym_for_a40 =
+                    std::cell::Cell::new(smithay::input::keyboard::xkb::Keysym::NoSymbol);
                 // W12.C: capture sym on key release too (for picker SUPER detection).
-                let last_sym_release = std::cell::Cell::new(
-                    smithay::input::keyboard::xkb::Keysym::NoSymbol
-                );
+                let last_sym_release =
+                    std::cell::Cell::new(smithay::input::keyboard::xkb::Keysym::NoSymbol);
                 let action_opt = keyboard.input::<KeyAction, _>(
                     self,
                     keycode,
@@ -80,9 +77,7 @@ impl LumoState {
                             state.num_lock_on = !state.num_lock_on;
                             write_sys_led("numlock", state.num_lock_on);
                         }
-                        if let Some(action) =
-                            state.keyboard_config.match_binding(mods, sym)
-                        {
+                        if let Some(action) = state.keyboard_config.match_binding(mods, sym) {
                             FilterResult::Intercept(action.clone())
                         } else {
                             FilterResult::Forward
@@ -102,7 +97,9 @@ impl LumoState {
                         let kb2 = self.keyboard.clone();
                         let mods_state = kb2.modifier_state();
                         if sym == Keysym::Tab && mods_state.shift && mods_state.logo {
-                            if let Some(p) = self.stack_picker.as_mut() { p.cycle_prev(); }
+                            if let Some(p) = self.stack_picker.as_mut() {
+                                p.cycle_prev();
+                            }
                         }
                         // Esc -> dismiss without switching.
                         if sym == Keysym::Escape {
@@ -112,7 +109,8 @@ impl LumoState {
                     }
                     // SUPER key release -> activate selected and close.
                     let release_sym = last_sym_release.get();
-                    if !press && (release_sym == Keysym::Super_L || release_sym == Keysym::Super_R) {
+                    if !press && (release_sym == Keysym::Super_L || release_sym == Keysym::Super_R)
+                    {
                         if let Some(picker) = self.stack_picker.take() {
                             if let Some(win) = picker.selected_window() {
                                 if let Some(surf) = win.wl_surface() {
@@ -122,12 +120,16 @@ impl LumoState {
                                     let kb3 = self.keyboard.clone();
                                     self.space.raise_element(win, true);
                                     kb3.set_focus(self, Some(owned), serial);
-                                    tracing::trace!("W12.C: picker activated window on SUPER release");
+                                    tracing::trace!(
+                                        "W12.C: picker activated window on SUPER release"
+                                    );
                                 }
                             }
                         }
                         #[cfg(feature = "drm-backend")]
-                        { self.drm_force_repaint = true; }
+                        {
+                            self.drm_force_repaint = true;
+                        }
                     }
                 }
                 // W12.B: overview key handling.
@@ -136,13 +138,16 @@ impl LumoState {
                     let sym = last_sym_for_a40.get();
                     if sym == Keysym::Escape {
                         let a11y = lumo_foundation::A11yTokens::load_from_disk();
-                        if let Some(ov) = self.overview.as_mut() { ov.close(a11y.reduced_motion); }
+                        if let Some(ov) = self.overview.as_mut() {
+                            ov.close(a11y.reduced_motion);
+                        }
                         tracing::trace!("W12.B: overview dismissed via Esc");
                     }
                 }
                 // A40: Return sem binding + sem toplevel focado
                 // -> roteia pra desktop abrir icone selecionado.
-                if press && last_sym_for_a40.get() == smithay::input::keyboard::xkb::Keysym::Return {
+                if press && last_sym_for_a40.get() == smithay::input::keyboard::xkb::Keysym::Return
+                {
                     let has_focus = self.keyboard.current_focus().is_some();
                     if !has_focus {
                         tracing::trace!("A40: Return sem toplevel -> DesktopOpenSelected");
@@ -194,7 +199,9 @@ impl LumoState {
                 if self.overview.is_some() {
                     let pos_l = self.pointer_location.to_i32_round();
                     let (ow, oh) = self.output_dimensions();
-                    let hit = self.overview.as_ref()
+                    let hit = self
+                        .overview
+                        .as_ref()
                         .and_then(|ov| ov.hit_test(pos_l, ow, oh));
                     if let Some(ov) = self.overview.as_mut() {
                         ov.hovered = hit;
@@ -252,7 +259,13 @@ impl LumoState {
                     use lumo_telemetry::EventKind;
                     let mut meta = std::collections::HashMap::new();
                     meta.insert("button".to_string(), format!("{}", button));
-                    meta.insert("pos".to_string(), format!("{},{}", self.pointer_location.x as i32, self.pointer_location.y as i32));
+                    meta.insert(
+                        "pos".to_string(),
+                        format!(
+                            "{},{}",
+                            self.pointer_location.x as i32, self.pointer_location.y as i32
+                        ),
+                    );
                     lumo_telemetry::record_event(EventKind::Click, meta);
                     self.last_input_ts = Some(std::time::Instant::now());
                 }
@@ -276,15 +289,19 @@ impl LumoState {
                             let item_h = 22i32;
                             let mx = menu_pos.x;
                             let my = menu_pos.y;
-                            let in_menu = ptr_pos.x >= mx && ptr_pos.x <= mx + menu_w
-                                && ptr_pos.y >= my && ptr_pos.y <= my + item_h * 5;
+                            let in_menu = ptr_pos.x >= mx
+                                && ptr_pos.x <= mx + menu_w
+                                && ptr_pos.y >= my
+                                && ptr_pos.y <= my + item_h * 5;
                             if in_menu && button == 0x110 {
                                 let idx = ((ptr_pos.y - my) / item_h) as usize;
                                 self.titlebar_menu = None;
                                 match idx {
                                     0 => {
                                         // W32.6: snap close (igual btn X) - unmap imediato.
-                                        if let Some(tl) = menu_win.toplevel() { tl.send_close(); }
+                                        if let Some(tl) = menu_win.toplevel() {
+                                            tl.send_close();
+                                        }
                                         if let Some(s) = menu_win.wl_surface() {
                                             self.ssd_windows.remove(&*s);
                                         }
@@ -294,15 +311,23 @@ impl LumoState {
                                     1 => {
                                         if let Some(tl) = menu_win.toplevel() {
                                             use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
-                                            let is_fs = tl.current_state().states.contains(XdgState::Fullscreen);
+                                            let is_fs = tl
+                                                .current_state()
+                                                .states
+                                                .contains(XdgState::Fullscreen);
                                             tl.with_pending_state(|st| {
-                                                if is_fs { st.states.unset(XdgState::Fullscreen); }
-                                                else { st.states.set(XdgState::Fullscreen); }
+                                                if is_fs {
+                                                    st.states.unset(XdgState::Fullscreen);
+                                                } else {
+                                                    st.states.set(XdgState::Fullscreen);
+                                                }
                                             });
                                             tl.send_configure();
                                         }
                                     }
-                                    2 => { tracing::trace!("T1.1 menu: Minimizar (stub)"); }
+                                    2 => {
+                                        tracing::trace!("T1.1 menu: Minimizar (stub)");
+                                    }
                                     3 => { /* separator */ }
                                     4 => {
                                         let app_id = menu_win.wl_surface()
@@ -324,7 +349,9 @@ impl LumoState {
                                 // D2: dismiss-on-outside-click titlebar_menu.
                                 self.titlebar_menu = None;
                                 #[cfg(feature = "drm-backend")]
-                                { self.drm_force_repaint = true; }
+                                {
+                                    self.drm_force_repaint = true;
+                                }
                             }
                             if ssd_handled {
                                 pointer.frame(self);
@@ -335,8 +362,13 @@ impl LumoState {
                         let windows: Vec<_> = self.space.elements().cloned().collect();
                         for window in &windows {
                             let surf_opt = window.toplevel().map(|t| t.wl_surface().clone());
-                            let surf = match surf_opt { Some(s) => s, None => continue };
-                            if !self.ssd_windows.contains(&surf) { continue; }
+                            let surf = match surf_opt {
+                                Some(s) => s,
+                                None => continue,
+                            };
+                            if !self.ssd_windows.contains(&surf) {
+                                continue;
+                            }
                             let loc = self.space.element_location(window).unwrap_or_default();
                             let geo = window.geometry();
                             let close_rect = ssd_close_btn_rect_logical(loc, geo.size.w);
@@ -345,7 +377,9 @@ impl LumoState {
 
                             // W17.1: minimize button (amarelo) -- stub log ate iconify protocol.
                             if button == 0x110 && min_rect.contains(ptr_pos) {
-                                tracing::trace!("W17.1: minimize click (stub, no Wayland iconify protocol)");
+                                tracing::trace!(
+                                    "W17.1: minimize click (stub, no Wayland iconify protocol)"
+                                );
                                 ssd_handled = true;
                                 break;
                             }
@@ -353,13 +387,20 @@ impl LumoState {
                             if button == 0x110 && max_rect.contains(ptr_pos) {
                                 if let Some(tl) = window.toplevel() {
                                     use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
-                                    let is_fs = tl.current_state().states.contains(XdgState::Fullscreen);
+                                    let is_fs =
+                                        tl.current_state().states.contains(XdgState::Fullscreen);
                                     tl.with_pending_state(|st| {
-                                        if is_fs { st.states.unset(XdgState::Fullscreen); }
-                                        else { st.states.set(XdgState::Fullscreen); }
+                                        if is_fs {
+                                            st.states.unset(XdgState::Fullscreen);
+                                        } else {
+                                            st.states.set(XdgState::Fullscreen);
+                                        }
                                     });
                                     tl.send_configure();
-                                    tracing::trace!(was_fs = is_fs, "W17.1: maximize toggle fullscreen");
+                                    tracing::trace!(
+                                        was_fs = is_fs,
+                                        "W17.1: maximize toggle fullscreen"
+                                    );
                                 }
                                 ssd_handled = true;
                                 break;
@@ -425,10 +466,14 @@ impl LumoState {
                     if self.overview.is_some() {
                         let pos_l = self.pointer_location.to_i32_round();
                         let (ow, oh) = self.output_dimensions();
-                        let hit = self.overview.as_ref()
+                        let hit = self
+                            .overview
+                            .as_ref()
                             .and_then(|ov| ov.hit_test(pos_l, ow, oh));
                         if let Some(idx) = hit {
-                            let win_opt = self.overview.as_ref()
+                            let win_opt = self
+                                .overview
+                                .as_ref()
                                 .and_then(|ov| ov.windows.get(idx).cloned());
                             if let Some(win) = win_opt {
                                 if let Some(surf) = win.wl_surface() {
@@ -443,9 +488,13 @@ impl LumoState {
                             }
                         }
                         let a11y_ov = lumo_foundation::A11yTokens::load_from_disk();
-                        if let Some(ov) = self.overview.as_mut() { ov.close(a11y_ov.reduced_motion); }
+                        if let Some(ov) = self.overview.as_mut() {
+                            ov.close(a11y_ov.reduced_motion);
+                        }
                         #[cfg(feature = "drm-backend")]
-                        { self.drm_force_repaint = true; }
+                        {
+                            self.drm_force_repaint = true;
+                        }
                         pointer.frame(self);
                         return;
                     }
@@ -458,17 +507,21 @@ impl LumoState {
                     }
 
                     let kb = self.keyboard.clone();
-                    let new_focus = if let Some((surface, _)) = self.surface_under(self.pointer_location) {
+                    let new_focus = if let Some((surface, _)) =
+                        self.surface_under(self.pointer_location)
+                    {
                         // L1: FocusManager centraliza policy de foco.
                         use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
-                        let is_toplevel = smithay::wayland::compositor::with_states(
-                            &surface,
-                            |states| states.data_map.get::<XdgToplevelSurfaceData>().is_some(),
-                        );
+                        let is_toplevel =
+                            smithay::wayland::compositor::with_states(&surface, |states| {
+                                states.data_map.get::<XdgToplevelSurfaceData>().is_some()
+                            });
                         if is_toplevel {
                             // Q1: raise toplevel ao topo no click.
                             // Coletar antes de mutar (borrow check).
-                            let win_to_raise = self.space.elements()
+                            let win_to_raise = self
+                                .space
+                                .elements()
                                 .find(|w| w.wl_surface().map(|s| *s == surface).unwrap_or(false))
                                 .cloned();
                             if let Some(win) = win_to_raise {
@@ -494,14 +547,13 @@ impl LumoState {
                     for win in &windows {
                         if let Some(root_surf) = win.wl_surface() {
                             let win_loc = self.space.element_location(win).unwrap_or_default();
-                            let popups: Vec<_> = PopupManager::popups_for_surface(&root_surf).collect();
+                            let popups: Vec<_> =
+                                PopupManager::popups_for_surface(&root_surf).collect();
                             for (popup, popup_offset) in popups {
                                 let geo = popup.geometry();
                                 let popup_loc = win_loc + popup_offset;
-                                let rect = smithay::utils::Rectangle::new(
-                                    popup_loc + geo.loc,
-                                    geo.size,
-                                );
+                                let rect =
+                                    smithay::utils::Rectangle::new(popup_loc + geo.loc, geo.size);
                                 if !rect.contains(ptr) {
                                     // TODO P1.4: Check popup grab before dismiss.
                                     // Wayland spec: grabbed popup should only be dismissed by client.
@@ -548,7 +600,8 @@ impl LumoState {
             }
 
             InputEvent::GestureSwipeUpdate { event } => {
-                self.gesture.on_swipe_update(event.delta_x(), event.delta_y());
+                self.gesture
+                    .on_swipe_update(event.delta_x(), event.delta_y());
             }
 
             InputEvent::GestureSwipeEnd { event } => {
@@ -582,7 +635,11 @@ impl LumoState {
             3 => match dir {
                 SwipeDirection::Left => {
                     let next = (self.active_workspace % MAX_WORKSPACES) + 1;
-                    tracing::trace!(from = self.active_workspace, to = next, "3-finger left -> workspace next");
+                    tracing::trace!(
+                        from = self.active_workspace,
+                        to = next,
+                        "3-finger left -> workspace next"
+                    );
                     self.set_workspace(next);
                 }
                 SwipeDirection::Right => {
@@ -591,7 +648,11 @@ impl LumoState {
                     } else {
                         self.active_workspace - 1
                     };
-                    tracing::trace!(from = self.active_workspace, to = prev, "3-finger right -> workspace prev");
+                    tracing::trace!(
+                        from = self.active_workspace,
+                        to = prev,
+                        "3-finger right -> workspace prev"
+                    );
                     self.set_workspace(prev);
                 }
                 SwipeDirection::Up => {
@@ -633,7 +694,8 @@ impl LumoState {
                         lumo_foundation::LumoTheme::Light => lumo_ipc::ThemeMode::Light,
                         lumo_foundation::LumoTheme::Dark => lumo_ipc::ThemeMode::Dark,
                     };
-                    self.ipc.broadcast(&lumo_ipc::LumoEvent::ThemeReloaded { mode });
+                    self.ipc
+                        .broadcast(&lumo_ipc::LumoEvent::ThemeReloaded { mode });
                 }
             }
             KeyAction::Lock => {
@@ -657,9 +719,9 @@ impl LumoState {
             }
             KeyAction::TileMove(dir) => {
                 let dir_str = match dir {
-                    TileDir::Up    => "Up",
-                    TileDir::Down  => "Down",
-                    TileDir::Left  => "Left",
+                    TileDir::Up => "Up",
+                    TileDir::Down => "Down",
+                    TileDir::Left => "Left",
                     TileDir::Right => "Right",
                 };
                 tracing::trace!(dir = dir_str, "TileMove arrow");
@@ -670,14 +732,18 @@ impl LumoState {
                 crate::tiling::apply_tiling(&mut self.space, self.tiling_mode, out_w, out_h);
                 tracing::trace!(mode = self.tiling_mode.name(), "W12.A: tiling cycled");
                 #[cfg(feature = "drm-backend")]
-                { self.drm_force_repaint = true; }
+                {
+                    self.drm_force_repaint = true;
+                }
             }
             KeyAction::TilingRebalance => {
                 let (out_w, out_h) = self.output_dimensions();
                 crate::tiling::apply_tiling(&mut self.space, self.tiling_mode, out_w, out_h);
                 tracing::trace!(mode = self.tiling_mode.name(), "W12.A: tiling rebalanced");
                 #[cfg(feature = "drm-backend")]
-                { self.drm_force_repaint = true; }
+                {
+                    self.drm_force_repaint = true;
+                }
             }
             KeyAction::TilingFocusPrev => {
                 let windows: Vec<_> = self.space.elements().cloned().collect();
@@ -723,7 +789,9 @@ impl LumoState {
                     tracing::trace!("W12.B: mission control opened");
                 }
                 #[cfg(feature = "drm-backend")]
-                { self.drm_force_repaint = true; }
+                {
+                    self.drm_force_repaint = true;
+                }
             }
             KeyAction::StackPicker => {
                 if let Some(picker) = self.stack_picker.as_mut() {
@@ -731,17 +799,17 @@ impl LumoState {
                 } else {
                     let kb = self.keyboard.clone();
                     let focused = kb.current_focus();
-                    let picker = crate::stack_picker::StackPickerState::new(
-                        &self.space,
-                        focused.as_ref(),
-                    );
+                    let picker =
+                        crate::stack_picker::StackPickerState::new(&self.space, focused.as_ref());
                     if !picker.is_empty() {
                         self.stack_picker = Some(picker);
                         tracing::trace!("W12.C: stack picker opened");
                     }
                 }
                 #[cfg(feature = "drm-backend")]
-                { self.drm_force_repaint = true; }
+                {
+                    self.drm_force_repaint = true;
+                }
             }
             KeyAction::FullscreenToggle => {
                 self.toggle_fullscreen_focused();
@@ -778,8 +846,7 @@ impl LumoState {
     /// Spawna um processo com o ambiente Wayland correto.
     fn spawn_cmd(&self, cmd: &str) {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
-        let xdg = std::env::var("XDG_CONFIG_HOME")
-            .unwrap_or_else(|_| format!("{home}/.config"));
+        let xdg = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{home}/.config"));
         let mut proc = std::process::Command::new(cmd);
         proc.env("HOME", &home);
         proc.env("XDG_CONFIG_HOME", &xdg);
@@ -808,11 +875,7 @@ impl LumoState {
             let window = self
                 .space
                 .elements()
-                .find(|w| {
-                    w.wl_surface()
-                        .map(|s| *s == focused)
-                        .unwrap_or(false)
-                })
+                .find(|w| w.wl_surface().map(|s| *s == focused).unwrap_or(false))
                 .cloned();
             if let Some(win) = window {
                 if let Some(toplevel) = win.toplevel() {
@@ -836,11 +899,9 @@ impl LumoState {
         let kb = self.keyboard.clone();
         let current = kb.current_focus();
         let current_idx = current.as_ref().and_then(|focused| {
-            windows.iter().position(|w| {
-                w.wl_surface()
-                    .map(|s| *s == *focused)
-                    .unwrap_or(false)
-            })
+            windows
+                .iter()
+                .position(|w| w.wl_surface().map(|s| *s == *focused).unwrap_or(false))
         });
         let len = windows.len() as isize;
         let next_idx = match current_idx {
@@ -864,11 +925,7 @@ impl LumoState {
             let window = self
                 .space
                 .elements()
-                .find(|w| {
-                    w.wl_surface()
-                        .map(|s| *s == focused)
-                        .unwrap_or(false)
-                })
+                .find(|w| w.wl_surface().map(|s| *s == focused).unwrap_or(false))
                 .cloned();
             if let Some(win) = window {
                 if let Some(toplevel) = win.toplevel() {
@@ -889,7 +946,6 @@ impl LumoState {
         }
     }
 }
-
 
 fn write_sys_led(name: &str, on: bool) {
     let dir = std::path::Path::new("/sys/class/leds");
@@ -947,14 +1003,17 @@ impl LumoState {
         {
             let cf = pointer.current_focus();
             tracing::trace!(
-                x, y,
+                x,
+                y,
                 under_some = under.is_some(),
                 current_focus_some = cf.is_some(),
                 "INSTR.F1 synth_move post-motion"
             );
         }
         #[cfg(feature = "drm-backend")]
-        { self.drm_force_repaint = true; }
+        {
+            self.drm_force_repaint = true;
+        }
         tracing::debug!(x, y, "SI.1: SyntheticPointerMove");
     }
 
@@ -964,7 +1023,11 @@ impl LumoState {
         use smithay::backend::input::ButtonState;
         let serial = SERIAL_COUNTER.next_serial();
         let time = self.clock.now().as_millis();
-        let state = if pressed { ButtonState::Pressed } else { ButtonState::Released };
+        let state = if pressed {
+            ButtonState::Pressed
+        } else {
+            ButtonState::Released
+        };
 
         // SI.2: replica do PointerButton real -- SSD btn hit-test +
         // titlebar drag grab. Sem isso clicks via IPC sintetico nao
@@ -973,8 +1036,8 @@ impl LumoState {
         // dismiss popups -- esses ficam para evolucao incremental).
         if pressed {
             use crate::backend::render_common::{
-                ssd_close_btn_rect_logical, ssd_max_btn_rect_logical,
-                ssd_min_btn_rect_logical, ssd_titlebar_rect_logical,
+                ssd_close_btn_rect_logical, ssd_max_btn_rect_logical, ssd_min_btn_rect_logical,
+                ssd_titlebar_rect_logical,
             };
             use smithay::input::pointer::Focus;
             let ptr_pos = self.pointer_location.to_i32_round();
@@ -983,8 +1046,13 @@ impl LumoState {
             let windows: Vec<_> = self.space.elements().cloned().collect();
             for window in &windows {
                 let surf_opt = window.toplevel().map(|t| t.wl_surface().clone());
-                let surf = match surf_opt { Some(s) => s, None => continue };
-                if !self.ssd_windows.contains(&surf) { continue; }
+                let surf = match surf_opt {
+                    Some(s) => s,
+                    None => continue,
+                };
+                if !self.ssd_windows.contains(&surf) {
+                    continue;
+                }
                 let loc = self.space.element_location(window).unwrap_or_default();
                 let geo = window.geometry();
                 let close_rect = ssd_close_btn_rect_logical(loc, geo.size.w);
@@ -1001,8 +1069,11 @@ impl LumoState {
                         use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
                         let is_fs = tl.current_state().states.contains(XdgState::Fullscreen);
                         tl.with_pending_state(|st| {
-                            if is_fs { st.states.unset(XdgState::Fullscreen); }
-                            else { st.states.set(XdgState::Fullscreen); }
+                            if is_fs {
+                                st.states.unset(XdgState::Fullscreen);
+                            } else {
+                                st.states.set(XdgState::Fullscreen);
+                            }
                         });
                         tl.send_configure();
                         tracing::trace!(was_fs = is_fs, "SI.2: synthetic maximize toggle");
@@ -1011,7 +1082,9 @@ impl LumoState {
                     break;
                 }
                 if button == 0x110 && close_rect.contains(ptr_pos) {
-                    if let Some(toplevel) = window.toplevel() { toplevel.send_close(); }
+                    if let Some(toplevel) = window.toplevel() {
+                        toplevel.send_close();
+                    }
                     ssd_handled = true;
                     break;
                 }
@@ -1051,8 +1124,13 @@ impl LumoState {
                 let pointer = self.pointer.clone();
                 pointer.frame(self);
                 #[cfg(feature = "drm-backend")]
-                { self.drm_force_repaint = true; }
-                tracing::debug!(button = format!("0x{:x}", button), "SI.2: synthetic consumed by SSD/grab");
+                {
+                    self.drm_force_repaint = true;
+                }
+                tracing::debug!(
+                    button = format!("0x{:x}", button),
+                    "SI.2: synthetic consumed by SSD/grab"
+                );
                 return;
             }
         }
@@ -1063,12 +1141,13 @@ impl LumoState {
         if pressed {
             if let Some((surface, _)) = self.surface_under(self.pointer_location) {
                 use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
-                let is_toplevel = smithay::wayland::compositor::with_states(
-                    &surface,
-                    |states| states.data_map.get::<XdgToplevelSurfaceData>().is_some(),
-                );
+                let is_toplevel = smithay::wayland::compositor::with_states(&surface, |states| {
+                    states.data_map.get::<XdgToplevelSurfaceData>().is_some()
+                });
                 if is_toplevel {
-                    let win_to_raise = self.space.elements()
+                    let win_to_raise = self
+                        .space
+                        .elements()
                         .find(|w| w.wl_surface().map(|s| *s == surface).unwrap_or(false))
                         .cloned();
                     if let Some(win) = win_to_raise {
@@ -1108,21 +1187,28 @@ impl LumoState {
         {
             let cf = pointer.current_focus();
             tracing::trace!(
-                button = format!("0x{:x}", button), pressed,
+                button = format!("0x{:x}", button),
+                pressed,
                 current_focus_some_after = cf.is_some(),
                 "INSTR.F3 synth_button post-frame"
             );
         }
         #[cfg(feature = "drm-backend")]
-        { self.drm_force_repaint = true; }
-        tracing::debug!(button = format!("0x{:x}", button), pressed, "SI.1: SyntheticPointerButton");
+        {
+            self.drm_force_repaint = true;
+        }
+        tracing::debug!(
+            button = format!("0x{:x}", button),
+            pressed,
+            "SI.1: SyntheticPointerButton"
+        );
     }
 
     /// SI.1: Injeta scroll. dx horizontal, dy vertical.
     /// Conhecido: emitido como Continuous source -- nao gera passos discretos.
     pub fn handle_synthetic_pointer_scroll(&mut self, dx: f64, dy: f64) {
-        use smithay::input::pointer::AxisFrame;
         use smithay::backend::input::{Axis, AxisSource};
+        use smithay::input::pointer::AxisFrame;
         let time = self.clock.now().as_millis();
         let mut frame = AxisFrame::new(time).source(AxisSource::Continuous);
         if dy != 0.0 {
@@ -1135,7 +1221,9 @@ impl LumoState {
         pointer.axis(self, frame);
         pointer.frame(self);
         #[cfg(feature = "drm-backend")]
-        { self.drm_force_repaint = true; }
+        {
+            self.drm_force_repaint = true;
+        }
         tracing::debug!(dx, dy, "SI.1: SyntheticPointerScroll");
     }
 
@@ -1146,18 +1234,17 @@ impl LumoState {
         use smithay::input::keyboard::{FilterResult, Keycode};
         let serial = SERIAL_COUNTER.next_serial();
         let time = self.clock.now().as_millis();
-        let state = if pressed { KeyState::Pressed } else { KeyState::Released };
+        let state = if pressed {
+            KeyState::Pressed
+        } else {
+            KeyState::Released
+        };
         // Smithay/xkbcommon usa keycode = evdev + 8.
         let xkb_code = Keycode::new(keycode.saturating_add(8));
         let keyboard = self.keyboard.clone();
-        keyboard.input::<(), _>(
-            self,
-            xkb_code,
-            state,
-            serial,
-            time,
-            |_, _, _| FilterResult::Forward,
-        );
+        keyboard.input::<(), _>(self, xkb_code, state, serial, time, |_, _, _| {
+            FilterResult::Forward
+        });
         tracing::debug!(keycode, pressed, "SI.1: SyntheticKey");
     }
 

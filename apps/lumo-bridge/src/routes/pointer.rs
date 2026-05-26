@@ -64,10 +64,7 @@ pub fn button_code(b: &str) -> Option<u32> {
 
 /// Envia LumoCommand via IPC. Em caso de erro, se LUMO_BRIDGE_FALLBACK_YDOTOOL=1,
 /// invoca `fallback` (ydotool-based). Caso contrario, propaga 503.
-async fn ipc_or_fallback<F, Fut>(
-    cmd: LumoCommand,
-    fallback: F,
-) -> Result<(), (StatusCode, String)>
+async fn ipc_or_fallback<F, Fut>(cmd: LumoCommand, fallback: F) -> Result<(), (StatusCode, String)>
 where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = Result<(), String>>,
@@ -78,7 +75,10 @@ where
             if ydotool_fallback_enabled() {
                 tracing::warn!(err = %ipc_err, "SI.1: IPC falhou, tentando ydotool fallback");
                 fallback().await.map_err(|e| {
-                    (StatusCode::SERVICE_UNAVAILABLE, format!("ipc={ipc_err}; fallback={e}"))
+                    (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        format!("ipc={ipc_err}; fallback={e}"),
+                    )
                 })
             } else {
                 Err((StatusCode::SERVICE_UNAVAILABLE, ipc_err.to_string()))
@@ -90,9 +90,12 @@ where
 async fn ydotool_mousemove_abs(x: f64, y: f64) -> Result<(), String> {
     let x_s = (x as i64).to_string();
     let y_s = (y as i64).to_string();
-    let out = exec::run("/usr/bin/ydotool", &["mousemove", "-a", "-x", &x_s, "-y", &y_s])
-        .await
-        .map_err(|e| e.to_string())?;
+    let out = exec::run(
+        "/usr/bin/ydotool",
+        &["mousemove", "-a", "-x", &x_s, "-y", &y_s],
+    )
+    .await
+    .map_err(|e| e.to_string())?;
     if out.status != 0 {
         return Err(format!(
             "ydotool mousemove exit {}: {}",
@@ -111,8 +114,9 @@ async fn ydotool_click_label(label: &str) -> Result<(), String> {
         _ => return Err(format!("invalid button: {label}")),
     };
     let code = format!("0x{:02X}", base | 0xC0);
-    let out =
-        exec::run("/usr/bin/ydotool", &["click", &code]).await.map_err(|e| e.to_string())?;
+    let out = exec::run("/usr/bin/ydotool", &["click", &code])
+        .await
+        .map_err(|e| e.to_string())?;
     if out.status != 0 {
         return Err(format!(
             "ydotool click exit {}: {}",
@@ -124,49 +128,62 @@ async fn ydotool_click_label(label: &str) -> Result<(), String> {
 }
 
 pub async fn click(Json(p): Json<Click>) -> Result<Json<Value>, (StatusCode, String)> {
-    let btn = button_code(&p.button)
-        .ok_or((StatusCode::BAD_REQUEST, format!("invalid button: {}", p.button)))?;
+    let btn = button_code(&p.button).ok_or((
+        StatusCode::BAD_REQUEST,
+        format!("invalid button: {}", p.button),
+    ))?;
     // 1. move
-    ipc_or_fallback(
-        LumoCommand::SyntheticPointerMove { x: p.x, y: p.y },
-        || ydotool_mousemove_abs(p.x, p.y),
-    )
+    ipc_or_fallback(LumoCommand::SyntheticPointerMove { x: p.x, y: p.y }, || {
+        ydotool_mousemove_abs(p.x, p.y)
+    })
     .await?;
     // 2. press
     ipc_or_fallback(
-        LumoCommand::SyntheticPointerButton { button: btn, pressed: true },
+        LumoCommand::SyntheticPointerButton {
+            button: btn,
+            pressed: true,
+        },
         || async { Ok(()) },
     )
     .await?;
     // 3. release
     let label = p.button.clone();
     ipc_or_fallback(
-        LumoCommand::SyntheticPointerButton { button: btn, pressed: false },
+        LumoCommand::SyntheticPointerButton {
+            button: btn,
+            pressed: false,
+        },
         || ydotool_click_label(&label),
     )
     .await?;
-    Ok(Json(json!({"ok": true, "x": p.x, "y": p.y, "button": p.button})))
+    Ok(Json(
+        json!({"ok": true, "x": p.x, "y": p.y, "button": p.button}),
+    ))
 }
 
 pub async fn pointer_move(Json(p): Json<PointerMove>) -> Result<Json<Value>, (StatusCode, String)> {
-    ipc_or_fallback(
-        LumoCommand::SyntheticPointerMove { x: p.x, y: p.y },
-        || ydotool_mousemove_abs(p.x, p.y),
-    )
+    ipc_or_fallback(LumoCommand::SyntheticPointerMove { x: p.x, y: p.y }, || {
+        ydotool_mousemove_abs(p.x, p.y)
+    })
     .await?;
     Ok(Json(json!({"ok": true, "x": p.x, "y": p.y})))
 }
 
 pub async fn drag(Json(p): Json<Drag>) -> Result<Json<Value>, (StatusCode, String)> {
-    let btn = button_code(&p.button)
-        .ok_or((StatusCode::BAD_REQUEST, format!("invalid button: {}", p.button)))?;
+    let btn = button_code(&p.button).ok_or((
+        StatusCode::BAD_REQUEST,
+        format!("invalid button: {}", p.button),
+    ))?;
     ipc_or_fallback(
         LumoCommand::SyntheticPointerMove { x: p.x1, y: p.y1 },
         || ydotool_mousemove_abs(p.x1, p.y1),
     )
     .await?;
     ipc_or_fallback(
-        LumoCommand::SyntheticPointerButton { button: btn, pressed: true },
+        LumoCommand::SyntheticPointerButton {
+            button: btn,
+            pressed: true,
+        },
         || async { Ok(()) },
     )
     .await?;
@@ -176,11 +193,16 @@ pub async fn drag(Json(p): Json<Drag>) -> Result<Json<Value>, (StatusCode, Strin
     )
     .await?;
     ipc_or_fallback(
-        LumoCommand::SyntheticPointerButton { button: btn, pressed: false },
+        LumoCommand::SyntheticPointerButton {
+            button: btn,
+            pressed: false,
+        },
         || async { Ok(()) },
     )
     .await?;
-    Ok(Json(json!({"ok": true, "from": [p.x1, p.y1], "to": [p.x2, p.y2], "button": p.button})))
+    Ok(Json(
+        json!({"ok": true, "from": [p.x1, p.y1], "to": [p.x2, p.y2], "button": p.button}),
+    ))
 }
 
 pub async fn scroll(Json(p): Json<Scroll>) -> Result<Json<Value>, (StatusCode, String)> {

@@ -42,7 +42,10 @@ impl AppMenuState {
     /// Em caso de falha retorna estado vazio (silencio).
     pub fn fetch(pid: u32, app_id: &str, title: &str) -> Self {
         // W34.9 debug: log app_id recebido pra diagnosticar pills missing.
-        eprintln!("[appmenu] W34.9 fetch pid={} app_id={:?} title={:?}", pid, app_id, title);
+        eprintln!(
+            "[appmenu] W34.9 fetch pid={} app_id={:?} title={:?}",
+            pid, app_id, title
+        );
         if pid == 0 {
             let mut s = Self::default();
             s.app_id = app_id.to_string();
@@ -53,23 +56,27 @@ impl AppMenuState {
         // W34.9 fix #6: tighten "com.lumo." only (era || "lumo-", intercepta 3rd-party).
         if app_id.starts_with("com.lumo.") {
             let labels: &[&str] = match app_id {
-                "com.lumo.files"    => &["Arquivo", "Editar", "Ir", "Ajuda"],
-                "com.lumo.editor"   => &["Arquivo", "Editar", "Localizar", "Ajuda"],
-                "com.lumo.calc"     => &["Arquivo", "Editar", "Ajuda"],
-                "com.lumo.notes"    => &["Arquivo", "Editar", "Formatar", "Ajuda"],
-                "com.lumo.monitor"  => &["Arquivo", "Ver", "Ajuda"],
+                "com.lumo.files" => &["Arquivo", "Editar", "Ir", "Ajuda"],
+                "com.lumo.editor" => &["Arquivo", "Editar", "Localizar", "Ajuda"],
+                "com.lumo.calc" => &["Arquivo", "Editar", "Ajuda"],
+                "com.lumo.notes" => &["Arquivo", "Editar", "Formatar", "Ajuda"],
+                "com.lumo.monitor" => &["Arquivo", "Ver", "Ajuda"],
                 "com.lumo.settings" => &["Arquivo", "Ajuda"],
-                "com.lumo.store"    => &["Arquivo", "Ver", "Ajuda"],
-                "com.lumo.about"    => &["Ajuda"],
+                "com.lumo.store" => &["Arquivo", "Ver", "Ajuda"],
+                "com.lumo.about" => &["Ajuda"],
                 _ => &[],
             };
             let mut s = Self::default();
             s.app_id = app_id.to_string();
             s.title = title.to_string();
-            s.items = labels.iter().enumerate().map(|(i, l)| AppMenuItem {
-                id: i as i32,
-                label: l.to_string(),
-            }).collect();
+            s.items = labels
+                .iter()
+                .enumerate()
+                .map(|(i, l)| AppMenuItem {
+                    id: i as i32,
+                    label: l.to_string(),
+                })
+                .collect();
             return s;
         }
         // Tenta lookup direto por PID primeiro.
@@ -127,7 +134,10 @@ impl AppMenuState {
         match fetch_submenu_inner(&self.service, &self.object_path, parent_id) {
             Ok(items) => items,
             Err(e) => {
-                eprintln!("[appmenu] C5: fetch_submenu parent={} falhou: {}", parent_id, e);
+                eprintln!(
+                    "[appmenu] C5: fetch_submenu parent={} falhou: {}",
+                    parent_id, e
+                );
                 Vec::new()
             }
         }
@@ -159,7 +169,10 @@ fn fetch_inner(pid: u32, app_id: &str) -> Result<AppMenuState, Box<dyn std::erro
         Ok((s, o)) => (s, o.to_string()),
         Err(e) => {
             // App nao registrou appmenu. Silencio normal pra GTK4/electron.
-            eprintln!("[appmenu] C5: GetMenuForWindow(pid={}) sem registro: {}", pid, e);
+            eprintln!(
+                "[appmenu] C5: GetMenuForWindow(pid={}) sem registro: {}",
+                pid, e
+            );
             return Ok(AppMenuState::default());
         }
     };
@@ -168,7 +181,10 @@ fn fetch_inner(pid: u32, app_id: &str) -> Result<AppMenuState, Box<dyn std::erro
         return Ok(AppMenuState::default());
     }
 
-    eprintln!("[appmenu] C5: pid={} -> service={} path={}", pid, service, obj_path);
+    eprintln!(
+        "[appmenu] C5: pid={} -> service={} path={}",
+        pid, service, obj_path
+    );
 
     let items = {
         let menu_proxy = Proxy::new(
@@ -179,14 +195,18 @@ fn fetch_inner(pid: u32, app_id: &str) -> Result<AppMenuState, Box<dyn std::erro
         )?;
         parse_layout_at(&menu_proxy, 0)?
     };
-    eprintln!("[appmenu] C5: {} items top-level para app_id={}", items.len(), app_id);
+    eprintln!(
+        "[appmenu] C5: {} items top-level para app_id={}",
+        items.len(),
+        app_id
+    );
 
     Ok(AppMenuState {
         service,
         object_path: obj_path,
         items,
         title: String::new(),
-            app_id: app_id.to_string(),
+        app_id: app_id.to_string(),
     })
 }
 
@@ -201,8 +221,10 @@ fn parse_layout_at(
     let reply = proxy.call_method("GetLayout", &(parent_id, 1i32, Vec::<&str>::new()))?;
     let body = reply.body();
 
-    let (_rev, layout): (u32, (i32, std::collections::HashMap<String, Value>, Vec<Value>)) =
-        body.deserialize()?;
+    let (_rev, layout): (
+        u32,
+        (i32, std::collections::HashMap<String, Value>, Vec<Value>),
+    ) = body.deserialize()?;
 
     let (_root_id, _root_props, children) = layout;
     let mut items = Vec::new();
@@ -222,14 +244,24 @@ fn parse_layout_at(
                 let (label, kind) = if let Some(dc) = dict_clone {
                     let map: std::collections::HashMap<String, Value> =
                         dc.try_into().unwrap_or_default();
-                    let lbl = map.get("label")
+                    let lbl = map
+                        .get("label")
                         .and_then(|v| {
-                            if let Value::Str(s) = v { Some(s.as_str().to_string()) } else { None }
+                            if let Value::Str(s) = v {
+                                Some(s.as_str().to_string())
+                            } else {
+                                None
+                            }
                         })
                         .unwrap_or_default();
-                    let knd = map.get("type")
+                    let knd = map
+                        .get("type")
                         .and_then(|v| {
-                            if let Value::Str(s) = v { Some(s.as_str().to_string()) } else { None }
+                            if let Value::Str(s) = v {
+                                Some(s.as_str().to_string())
+                            } else {
+                                None
+                            }
                         })
                         .unwrap_or_default();
                     (lbl, knd)
@@ -241,7 +273,10 @@ fn parse_layout_at(
                 (String::new(), false)
             };
             if is_sep {
-                items.push(AppMenuItem { id, label: "---".to_string() });
+                items.push(AppMenuItem {
+                    id,
+                    label: "---".to_string(),
+                });
                 continue;
             }
             // Remove mnemonics GTK (_File -> File, Fi_le -> File).
@@ -277,10 +312,15 @@ fn activate_inner(
 /// Retorna primeiro com items nao-vazios.
 /// Apps GTK3 registram via gtk_window_id (nao PID) -- pode ser qualquer u32.
 fn fetch_any_registered(app_id: &str) -> Result<AppMenuState, Box<dyn std::error::Error>> {
-    for wid in 1u32..=10 {  // W33.1: 100->10 (reduce DBus blocking)
+    for wid in 1u32..=10 {
+        // W33.1: 100->10 (reduce DBus blocking)
         match fetch_inner(wid, app_id) {
             Ok(state) if !state.items.is_empty() => {
-                eprintln!("[appmenu] C5: fallback wid={} -> {} items", wid, state.items.len());
+                eprintln!(
+                    "[appmenu] C5: fallback wid={} -> {} items",
+                    wid,
+                    state.items.len()
+                );
                 return Ok(state);
             }
             _ => {}
@@ -306,7 +346,6 @@ fn fetch_submenu_inner(
     parse_layout_at(&proxy, parent_id)
 }
 
-
 /// W34.9: dispatch local pra (app_id, item_id) hardcoded. Sem DBus.
 /// item_id segue convencao hardcoded_submenu: parent_pill * 100 + idx + 1.
 /// Pra "Fechar": envia LumoCommand::CloseFocusedToplevel via socket lumo-wm.
@@ -315,43 +354,99 @@ fn hardcoded_activate(app_id: &str, item_id: i32) {
     use std::process::Command;
     let pill = item_id / 100;
     let idx = item_id - pill * 100; // 1-indexed
-    eprintln!("[appmenu] W34.9 hardcoded_activate {} pill={} idx={}", app_id, pill, idx);
+    eprintln!(
+        "[appmenu] W34.9 hardcoded_activate {} pill={} idx={}",
+        app_id, pill, idx
+    );
     match (app_id, pill, idx) {
         // -------- Files --------
-        ("com.lumo.files", 0, 1) => { spawn_appctl("files", None); }                        // Nova janela
-        ("com.lumo.files", 0, 2) => { eprintln!("[appmenu] TODO: Nova pasta"); }            // Nova pasta
-        ("com.lumo.files", 0, 3) => { send_wm_close_focused(); }                            // Fechar
-        ("com.lumo.files", 1, _) => { eprintln!("[appmenu] clipboard via app stub"); }      // Recortar/Copiar/Colar
-        ("com.lumo.files", 2, 1) => { spawn_appctl("files", home_path("").as_deref()); }    // Inicio
-        ("com.lumo.files", 2, 2) => { spawn_appctl("files", home_path("Documents").as_deref()); }
-        ("com.lumo.files", 2, 3) => { spawn_appctl("files", home_path("Downloads").as_deref()); }
-        ("com.lumo.files", 3, 1) => { spawn_appctl("about", None); }                        // Sobre Lumo Files
+        ("com.lumo.files", 0, 1) => {
+            spawn_appctl("files", None);
+        } // Nova janela
+        ("com.lumo.files", 0, 2) => {
+            eprintln!("[appmenu] TODO: Nova pasta");
+        } // Nova pasta
+        ("com.lumo.files", 0, 3) => {
+            send_wm_close_focused();
+        } // Fechar
+        ("com.lumo.files", 1, _) => {
+            eprintln!("[appmenu] clipboard via app stub");
+        } // Recortar/Copiar/Colar
+        ("com.lumo.files", 2, 1) => {
+            spawn_appctl("files", home_path("").as_deref());
+        } // Inicio
+        ("com.lumo.files", 2, 2) => {
+            spawn_appctl("files", home_path("Documents").as_deref());
+        }
+        ("com.lumo.files", 2, 3) => {
+            spawn_appctl("files", home_path("Downloads").as_deref());
+        }
+        ("com.lumo.files", 3, 1) => {
+            spawn_appctl("about", None);
+        } // Sobre Lumo Files
         // -------- Editor --------
-        ("com.lumo.editor", 0, 1) => { spawn_appctl("editor", None); }                      // Novo
-        ("com.lumo.editor", 0, 4) => { send_wm_close_focused(); }                           // Fechar
-        ("com.lumo.editor", 3, 1) => { spawn_appctl("about", None); }                       // Sobre Editor
+        ("com.lumo.editor", 0, 1) => {
+            spawn_appctl("editor", None);
+        } // Novo
+        ("com.lumo.editor", 0, 4) => {
+            send_wm_close_focused();
+        } // Fechar
+        ("com.lumo.editor", 3, 1) => {
+            spawn_appctl("about", None);
+        } // Sobre Editor
         // -------- Calc --------
-        ("com.lumo.calc", 0, 2) => { send_wm_close_focused(); }                             // Fechar
-        ("com.lumo.calc", 2, 1) => { spawn_appctl("about", None); }                         // Sobre Calc
+        ("com.lumo.calc", 0, 2) => {
+            send_wm_close_focused();
+        } // Fechar
+        ("com.lumo.calc", 2, 1) => {
+            spawn_appctl("about", None);
+        } // Sobre Calc
         // -------- Notes --------
-        ("com.lumo.notes", 0, 3) => { send_wm_close_focused(); }                            // Fechar
-        ("com.lumo.notes", 3, 1) => { spawn_appctl("about", None); }                        // Sobre Notes
+        ("com.lumo.notes", 0, 3) => {
+            send_wm_close_focused();
+        } // Fechar
+        ("com.lumo.notes", 3, 1) => {
+            spawn_appctl("about", None);
+        } // Sobre Notes
         // -------- Monitor --------
-        ("com.lumo.monitor", 0, 2) => { send_wm_close_focused(); }                          // Fechar
-        ("com.lumo.monitor", 2, 1) => { spawn_appctl("about", None); }                      // Sobre Monitor
+        ("com.lumo.monitor", 0, 2) => {
+            send_wm_close_focused();
+        } // Fechar
+        ("com.lumo.monitor", 2, 1) => {
+            spawn_appctl("about", None);
+        } // Sobre Monitor
         // -------- Settings --------
-        ("com.lumo.settings", 0, 1) => { send_wm_close_focused(); }                         // Fechar
-        ("com.lumo.settings", 1, 1) => { spawn_appctl("about", None); }                     // Sobre Settings
+        ("com.lumo.settings", 0, 1) => {
+            send_wm_close_focused();
+        } // Fechar
+        ("com.lumo.settings", 1, 1) => {
+            spawn_appctl("about", None);
+        } // Sobre Settings
         // -------- Store --------
-        ("com.lumo.store", 0, 2) => { send_wm_close_focused(); }                            // Fechar
-        ("com.lumo.store", 1, 1) => { spawn_appctl("store", Some("available")); }           // Disponiveis
-        ("com.lumo.store", 1, 2) => { spawn_appctl("store", Some("installed")); }           // Instalados
-        ("com.lumo.store", 1, 3) => { spawn_appctl("store", Some("updates")); }             // W34.9 fix #8: Atualizacoes
-        ("com.lumo.store", 2, 1) => { spawn_appctl("about", None); }                        // Sobre Store
+        ("com.lumo.store", 0, 2) => {
+            send_wm_close_focused();
+        } // Fechar
+        ("com.lumo.store", 1, 1) => {
+            spawn_appctl("store", Some("available"));
+        } // Disponiveis
+        ("com.lumo.store", 1, 2) => {
+            spawn_appctl("store", Some("installed"));
+        } // Instalados
+        ("com.lumo.store", 1, 3) => {
+            spawn_appctl("store", Some("updates"));
+        } // W34.9 fix #8: Atualizacoes
+        ("com.lumo.store", 2, 1) => {
+            spawn_appctl("about", None);
+        } // Sobre Store
         // -------- About --------
-        ("com.lumo.about", 0, 1) => { spawn_appctl("about", None); }                        // Sobre Lumo OS (re-open)
+        ("com.lumo.about", 0, 1) => {
+            spawn_appctl("about", None);
+        } // Sobre Lumo OS (re-open)
         _ => {
-            eprintln!("[appmenu] hardcoded_activate unmapped: app={} pill={} idx={}", app_id, pill, idx);
+            eprintln!(
+                "[appmenu] hardcoded_activate unmapped: app={} pill={} idx={}",
+                app_id, pill, idx
+            );
         }
     }
     let _ = Command::new("true").spawn();
@@ -367,14 +462,18 @@ fn spawn_appctl(kind: &str, arg: Option<&str>) {
     let bin = resolve_lumo_bin("lumo-appctl");
     match Command::new(&bin).arg(&payload).spawn() {
         Ok(_) => eprintln!("[appmenu] spawn {} {}", bin, payload),
-        Err(e) => eprintln!("[appmenu] ERR spawn {} {}: {}", bin, payload, e),  // W34.9 fix #9
+        Err(e) => eprintln!("[appmenu] ERR spawn {} {}: {}", bin, payload, e), // W34.9 fix #9
     }
 }
 
 fn resolve_lumo_bin(name: &str) -> String {
     // Tenta PATH; se PATH falha (TTY autologin sem PATH completo), tenta
     // local de build relativo a $HOME/Projects/lumo-shell/target/release/.
-    if std::process::Command::new(name).arg("--version").output().is_ok() {
+    if std::process::Command::new(name)
+        .arg("--version")
+        .output()
+        .is_ok()
+    {
         return name.to_string();
     }
     let home = std::env::var("HOME").unwrap_or_default();
@@ -401,12 +500,18 @@ fn send_wm_close_focused() {
         use std::os::unix::net::UnixStream;
         let runtime = match std::env::var("XDG_RUNTIME_DIR") {
             Ok(r) => r,
-            Err(_) => { eprintln!("[appmenu] XDG_RUNTIME_DIR ausente; close skip"); return; }
+            Err(_) => {
+                eprintln!("[appmenu] XDG_RUNTIME_DIR ausente; close skip");
+                return;
+            }
         };
         let path = format!("{}/lumo-wm.sock", runtime);
         let mut s = match UnixStream::connect(&path) {
             Ok(s) => s,
-            Err(e) => { eprintln!("[appmenu] connect lumo-wm: {}", e); return; }
+            Err(e) => {
+                eprintln!("[appmenu] connect lumo-wm: {}", e);
+                return;
+            }
         };
         let payload = "{\"type\":\"close_focused_toplevel\"}\n";
         if let Err(e) = s.write_all(payload.as_bytes()) {
@@ -421,34 +526,38 @@ fn send_wm_close_focused() {
 /// W34.6: submenus hardcoded por app_id + parent_id (sem DBus).
 fn hardcoded_submenu(app_id: &str, parent_id: i32) -> Vec<AppMenuItem> {
     let labels: &[&str] = match (app_id, parent_id) {
-        ("com.lumo.files", 0)    => &["Nova janela", "Nova pasta", "Fechar"],
-        ("com.lumo.files", 1)    => &["Recortar", "Copiar", "Colar"],
-        ("com.lumo.files", 2)    => &["Inicio", "Documentos", "Downloads"],
-        ("com.lumo.files", 3)    => &["Sobre Lumo Files"],
-        ("com.lumo.editor", 0)   => &["Novo", "Abrir", "Salvar", "Fechar"],
-        ("com.lumo.editor", 1)   => &["Desfazer", "Refazer", "Recortar", "Copiar", "Colar"],
-        ("com.lumo.editor", 2)   => &["Localizar", "Substituir"],
-        ("com.lumo.editor", 3)   => &["Sobre Lumo Editor"],
-        ("com.lumo.calc", 0)     => &["Limpar", "Fechar"],
-        ("com.lumo.calc", 1)     => &["Copiar resultado"],
-        ("com.lumo.calc", 2)     => &["Sobre Lumo Calc"],
-        ("com.lumo.notes", 0)    => &["Nova nota", "Salvar", "Fechar"],
-        ("com.lumo.notes", 1)    => &["Desfazer", "Refazer"],
-        ("com.lumo.notes", 2)    => &["Negrito", "Italico"],
-        ("com.lumo.notes", 3)    => &["Sobre Lumo Notes"],
-        ("com.lumo.monitor", 0)  => &["Atualizar", "Fechar"],
-        ("com.lumo.monitor", 1)  => &["Processos", "Memoria", "Disco"],
-        ("com.lumo.monitor", 2)  => &["Sobre Lumo Monitor"],
+        ("com.lumo.files", 0) => &["Nova janela", "Nova pasta", "Fechar"],
+        ("com.lumo.files", 1) => &["Recortar", "Copiar", "Colar"],
+        ("com.lumo.files", 2) => &["Inicio", "Documentos", "Downloads"],
+        ("com.lumo.files", 3) => &["Sobre Lumo Files"],
+        ("com.lumo.editor", 0) => &["Novo", "Abrir", "Salvar", "Fechar"],
+        ("com.lumo.editor", 1) => &["Desfazer", "Refazer", "Recortar", "Copiar", "Colar"],
+        ("com.lumo.editor", 2) => &["Localizar", "Substituir"],
+        ("com.lumo.editor", 3) => &["Sobre Lumo Editor"],
+        ("com.lumo.calc", 0) => &["Limpar", "Fechar"],
+        ("com.lumo.calc", 1) => &["Copiar resultado"],
+        ("com.lumo.calc", 2) => &["Sobre Lumo Calc"],
+        ("com.lumo.notes", 0) => &["Nova nota", "Salvar", "Fechar"],
+        ("com.lumo.notes", 1) => &["Desfazer", "Refazer"],
+        ("com.lumo.notes", 2) => &["Negrito", "Italico"],
+        ("com.lumo.notes", 3) => &["Sobre Lumo Notes"],
+        ("com.lumo.monitor", 0) => &["Atualizar", "Fechar"],
+        ("com.lumo.monitor", 1) => &["Processos", "Memoria", "Disco"],
+        ("com.lumo.monitor", 2) => &["Sobre Lumo Monitor"],
         ("com.lumo.settings", 0) => &["Fechar"],
         ("com.lumo.settings", 1) => &["Sobre Lumo Settings"],
-        ("com.lumo.store", 0)    => &["Atualizar lista", "Fechar"],
-        ("com.lumo.store", 1)    => &["Disponiveis", "Instalados", "Atualizacoes"],
-        ("com.lumo.store", 2)    => &["Sobre Lumo Store"],
-        ("com.lumo.about", 0)    => &["Sobre Lumo OS"],
+        ("com.lumo.store", 0) => &["Atualizar lista", "Fechar"],
+        ("com.lumo.store", 1) => &["Disponiveis", "Instalados", "Atualizacoes"],
+        ("com.lumo.store", 2) => &["Sobre Lumo Store"],
+        ("com.lumo.about", 0) => &["Sobre Lumo OS"],
         _ => &[],
     };
-    labels.iter().enumerate().map(|(i, l)| AppMenuItem {
-        id: (parent_id * 100 + i as i32 + 1) as i32,
-        label: l.to_string(),
-    }).collect()
+    labels
+        .iter()
+        .enumerate()
+        .map(|(i, l)| AppMenuItem {
+            id: (parent_id * 100 + i as i32 + 1) as i32,
+            label: l.to_string(),
+        })
+        .collect()
 }
