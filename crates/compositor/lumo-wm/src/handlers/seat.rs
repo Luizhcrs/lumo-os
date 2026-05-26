@@ -105,25 +105,37 @@ impl SeatHandler for LumoState {
         use smithay::wayland::compositor as wl_compositor;
         use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
         let (app_id, title, pid) = if let Some(surf) = focused {
-            let (app_id, title) = wl_compositor::with_states(surf, |states| {
-                if let Some(data) = states.data_map.get::<XdgToplevelSurfaceData>() {
-                    let lock = data
-                        .lock()
-                        .expect("XdgToplevelSurfaceData mutex: nao deve envenenar");
-                    (
-                        lock.app_id.clone().unwrap_or_default(),
-                        lock.title.clone().unwrap_or_default(),
-                    )
-                } else {
-                    (String::new(), String::new())
-                }
+            let mut root = surf.clone();
+            while let Some(parent) = wl_compositor::get_parent(&root) {
+                root = parent;
+            }
+            let is_mapped = self.space.elements().any(|w| {
+                w.wl_surface().map(|s| s.as_ref() == &root).unwrap_or(false)
             });
-            let pid = surf
-                .client()
-                .and_then(|c| c.get_credentials(&self.display_handle).ok())
-                .map(|creds| creds.pid as u32)
-                .unwrap_or(0);
-            (app_id, title, pid)
+
+            if is_mapped {
+                let (app_id, title) = wl_compositor::with_states(surf, |states| {
+                    if let Some(data) = states.data_map.get::<XdgToplevelSurfaceData>() {
+                        let lock = data
+                            .lock()
+                            .expect("XdgToplevelSurfaceData mutex: nao deve envenenar");
+                        (
+                            lock.app_id.clone().unwrap_or_default(),
+                            lock.title.clone().unwrap_or_default(),
+                        )
+                    } else {
+                        (String::new(), String::new())
+                    }
+                });
+                let pid = surf
+                    .client()
+                    .and_then(|c| c.get_credentials(&self.display_handle).ok())
+                    .map(|creds| creds.pid as u32)
+                    .unwrap_or(0);
+                (app_id, title, pid)
+            } else {
+                (String::new(), String::new(), 0u32)
+            }
         } else {
             (String::new(), String::new(), 0u32)
         };
