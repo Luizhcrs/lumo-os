@@ -6,33 +6,18 @@
 
 | Categoria | Testes | Passando | Falhando | Cobertura |
 |-----------|--------|----------|----------|-----------|
-| lumo-foundation | 54 | 54 | 0 | Alta (tokens, cores, tema) |
-| lumo-wm | 140 | 138 | **2** | Media (animacao quebrada) |
-| lumo-shell | 28 | 28 | 0 | Baixa (apenas desktop icons + bar tray) |
+| lumo-foundation | 53 | 53 | 0 | Alta (tokens, cores, tema) |
+| lumo-wm | 139 | 139 | 0 | Alta (após fix W32.4) |
+| lumo-shell | 27 | 27 | 0 | Baixa (apenas desktop icons + bar tray) |
 | lumo-animation | 43 | 43 | 0 | Alta (spring, easing, interpolate) |
 | lumo-ipc | 10 | 10 | 0 | Alta (mensagens, roundtrip) |
 | lumo-sensors | 37 | 37 | 0 | Alta (thermal, platform, battery) |
 | lumo-telemetry | 0 | 0 | 0 | Nenhuma |
-| **Total** | **312** | **310** | **2** | **Media** |
+| **Total** | **309** | **309** | **0** | **Media** |
 
 ## Testes quebrados
 
-### lumo-wm: window_anim
-
-```
-failures:
-    window_anim::tests::closing_animates_to_done
-    window_anim::tests::opening_animates_to_idle
-
-thread 'window_anim::tests::closing_animates_to_done' panicked:
-assertion failed: s.is_animating()
-```
-
-**Arquivo**: `crates/compositor/lumo-wm/src/window_anim.rs:158`
-
-Causa provavel: a animacao de janela (open/close) nao esta sendo iniciada
-automaticamente no construtor. O teste espera `is_animating()` logo apos
-`WindowAnimState::new(WindowAnim::Opening)` mas o estado comeca como idle.
+Nenhum. Todos os 309 testes passam.
 
 ## Crates sem testes
 
@@ -71,15 +56,11 @@ cargo test --lib -p lumo-foundation
 cargo test --lib -p lumo-wm
 cargo test --lib -p lumo-shell
 cargo test --lib -p lumo-animation
-
-# Ignorando os quebrados temporariamente
-cargo test --lib -p lumo-wm -- --skip window_anim
 ```
 
 ## Recomendacoes
 
-1. **Fixar os 2 testes de window_anim** antes de qualquer refactor
-2. **Adicionar testes de integracao** para IPC (mock socket)
-3. **Testes visuais** para shell (snapshot PNG comparado)
-4. **Testes de propiedade** (proptest) para parsers (TOML, etc)
-5. **CI**: rodar `cargo test --workspace` em todo PR
+1. **Adicionar testes de integracao** para IPC (mock socket)
+2. **Testes visuais** para shell (snapshot PNG comparado)
+3. **Testes de propiedade** (proptest) para parsers (TOML, etc)
+4. **CI**: rodar `cargo test --workspace` em todo PR
