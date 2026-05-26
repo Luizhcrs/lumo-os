@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use crate::{read_sysfs_trimmed, read_sysfs_u32, write_sysfs, SensorError};
+use crate::{read_sysfs_trimmed, read_sysfs_u32, read_sysfs_i32, write_sysfs, SensorError};
 
 const SUPPLY_DIRS: &[&str] = &[
     "/sys/class/power_supply/BAT1",
