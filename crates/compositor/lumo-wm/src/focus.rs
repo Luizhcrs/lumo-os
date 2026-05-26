@@ -325,7 +325,7 @@ mod tests {
     // RN: FocusManager deve rastrear o foco anterior (MRU) para restaurar.
     #[test]
     fn business_rule_mru_tracking() {
-        let mut m = mgr();
+        let m = mgr();
         // WlSurface e opaco e dificil de mockar sem server,
         // mas o FocusState::Toplevel(WlSurface) carrega o dado.
         // O teste aqui foca na logica de transicao do Option interno.

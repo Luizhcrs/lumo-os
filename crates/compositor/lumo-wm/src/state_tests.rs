@@ -3,7 +3,6 @@
 use super::state::LumoState;
 use smithay::reexports::wayland_server::Display;
 use smithay::reexports::calloop::EventLoop;
-use smithay::utils::Point;
 
 fn setup() -> (LumoState, EventLoop<'static, LumoState>) {
     let display = Display::<LumoState>::new().expect("failed to create display");

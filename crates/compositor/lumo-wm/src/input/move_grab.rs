@@ -5,7 +5,6 @@
 //! LumoState.snap_preview. On button release at edge -> apply layout.
 
 use smithay::desktop::Window;
-use smithay::input::pointer::Focus;
 use smithay::input::pointer::{
     AxisFrame, ButtonEvent, GestureHoldBeginEvent, GestureHoldEndEvent, GesturePinchBeginEvent,
     GesturePinchEndEvent, GesturePinchUpdateEvent, GestureSwipeBeginEvent, GestureSwipeEndEvent,

@@ -104,7 +104,7 @@ impl OverviewAnim {
     fn spring_step(pos: &mut f32, vel: &mut f32, target: f32, dt: f32) {
         let dt = dt.min(0.05);
         let disp = *pos - target;
-        let accel = (-Self::STIFFNESS * disp - Self::DAMPING * *vel);
+        let accel = -Self::STIFFNESS * disp - Self::DAMPING * *vel;
         *vel += accel * dt;
         *pos += *vel * dt;
         *pos = pos.clamp(0.0, 1.2);

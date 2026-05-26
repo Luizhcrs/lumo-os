@@ -127,6 +127,12 @@ pub(crate) fn read_sysfs_u32(path: &PathBuf) -> Result<u32, SensorError> {
         .map_err(|_| SensorError::Parse(format!("not u32: {s:?} at {path:?}")))
 }
 
+pub(crate) fn read_sysfs_i32(path: &PathBuf) -> Result<i32, SensorError> {
+    let s = read_sysfs_trimmed(path)?;
+    s.parse::<i32>()
+        .map_err(|_| SensorError::Parse(format!("not i32: {s:?} at {path:?}")))
+}
+
 pub(crate) fn write_sysfs(path: &PathBuf, value: &str) -> Result<(), SensorError> {
     std::fs::write(path, value).map_err(SensorError::Io)
 }

@@ -429,4 +429,14 @@ mod charge_policy_tests {
             policy.limit_percent
         );
     }
+
+    #[test]
+    fn read_sysfs_i32_parses_negative_value() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let p = dir.path().join("current_now");
+        std::fs::write(&p, "-1500000\n").unwrap();
+        let val = crate::read_sysfs_i32(&p).unwrap();
+        assert_eq!(val, -1500000);
+        assert_eq!(val.abs(), 1500000);
+    }
 }

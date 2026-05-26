@@ -27,6 +27,12 @@ pub fn sys_read_u32(path: &str) -> Option<u32> {
         .and_then(|s| s.trim().parse::<u32>().ok())
 }
 
+pub fn sys_read_i32(path: &str) -> Option<i32> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| s.trim().parse::<i32>().ok())
+}
+
 // ============================================================
 // BatteryInfo.
 // ============================================================
@@ -60,7 +66,7 @@ pub fn read_battery_info() -> BatteryInfo {
     let charge_now = sys_read_u32(&format!("{}/charge_now", dir));
     let charge_full = sys_read_u32(&format!("{}/charge_full", dir));
     let charge_full_design = sys_read_u32(&format!("{}/charge_full_design", dir));
-    let current_now_ua = sys_read_u32(&format!("{}/current_now", dir));
+    let current_now_ua = sys_read_i32(&format!("{}/current_now", dir)).map(|v| v.abs() as u32);
 
     // Convert uWh -> mWh (divide 1000); uAh + mV -> uWh -> mWh.
     fn uwh_to_mwh(uwh: Option<u32>) -> Option<u32> {
