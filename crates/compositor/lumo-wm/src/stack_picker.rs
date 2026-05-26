@@ -24,7 +24,7 @@ const CELL_W: i32 = 120;
 const CELL_H: i32 = 80;
 const CELL_GAP: i32 = 12;
 const CELL_PADDING: i32 = 16;
-const PICKER_RADIUS: i32 = 8;
+const _PICKER_RADIUS: i32 = 8;
 
 // Colors.
 const BG_COLOR:       [f32; 4] = [0.08, 0.08, 0.10, 0.92];

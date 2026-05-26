@@ -139,11 +139,11 @@ pub fn run() {
         last_click_at: None,
         dropdown: DropdownActive::None,
         dropdown_rect: None,
-        dropdown_h_final: 0.0,
+        _dropdown_h_final: 0.0,
         viewed_year: Local::now().year(),
         viewed_month: Local::now().month(),
         selected_day: None,
-        registrar_handle: {
+        _registrar_handle: {
             let h = crate::bar::registrar::new_handle();
             crate::bar::registrar::spawn_registrar(h.clone());
             h
@@ -155,8 +155,8 @@ pub fn run() {
         appmenu_submenu_rects: Vec::new(),
         ipc_stream: connect_ipc(),
         ipc_rx_buf: Vec::with_capacity(256),
-        ipc_reconnect_at: None,
-        ipc_reconnect_delay: Duration::from_secs(1),
+        _ipc_reconnect_at: None,
+        _ipc_reconnect_delay: Duration::from_secs(1),
         theme,
         palette,
         brightness_dragging_slider: false,

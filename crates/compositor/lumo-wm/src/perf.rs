@@ -20,12 +20,12 @@ use std::time::{Duration, Instant};
 /// Histograma simplificado: vetor de samples, sort-on-demand no log.
 pub struct PerfHistogram {
     samples: Vec<Duration>,
-    label: &'static str,
+    _label: &'static str,
 }
 
 impl PerfHistogram {
     pub fn new(label: &'static str) -> Self {
-        Self { samples: Vec::with_capacity(4096), label }
+        Self { samples: Vec::with_capacity(4096), _label: label }
     }
 
     pub fn record(&mut self, d: Duration) {

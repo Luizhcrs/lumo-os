@@ -28,7 +28,10 @@
 # Memory feedback_design_lapidado: rejeita SSH/pts; warning explicito
 # antes de matar Hyprland (3s pra cancelar).
 
-set -euo pipefail
+set -uo pipefail
+# NOTA: NAO usar set -e global. Build quebrado ou binario faltando
+# devem logar erro e dormir antes de sair — senao o getty reinicia
+# em loop (start-limit-hit).
 
 
 # ============================================================
@@ -170,12 +173,42 @@ cd "$(dirname "$0")/.."
 # Build com feature drm-backend (idempotente, cache cargo).
 # ============================================================
 # W34.24: skip rebuild se binaries fresh (Iced cold start nao precisa re-compile cada login).
-if [[ ! -f target/release/lumo-wm ]] || [[ ! -f target/release/lumo-bar ]]; then
+# Verifica tambem se binarios sao executaveis.
+NEED_BUILD=false
+for bin in ./target/release/lumo-wm ./target/release/lumo-bar ./target/release/lumo-desktop; do
+    if [[ ! -x "$bin" ]]; then
+        NEED_BUILD=true
+        break
+    fi
+done
+
+if [[ "$NEED_BUILD" == true ]]; then
     echo "[1/3] Build lumo-wm (feature drm-backend) + lumo-bar..."
-    cargo build --release --features lumo-wm/drm-backend --bin lumo-wm --bin lumo-bar 2>&1 | tail -6
+    set +e
+    cargo build --release --features lumo-wm/drm-backend --bin lumo-wm --bin lumo-bar 2>&1 | tee /tmp/lumo-build.log
+    BUILD_EC=${PIPESTATUS[0]}
+    set -e
+    if [[ "$BUILD_EC" -ne 0 ]]; then
+        echo ""
+        echo "================================================================"
+        echo "ERRO: Build falhou (exit=$BUILD_EC). Ver /tmp/lumo-build.log"
+        echo "Dormindo 10s antes de sair (evita loop de getty)..."
+        echo "================================================================"
+        sleep 10
+        exit 1
+    fi
 else
     echo "[1/3] Skipping build, binaries already present"
 fi
+
+# Verifica se binarios existem apos build (ou skip)
+for bin in ./target/release/lumo-wm ./target/release/lumo-bar ./target/release/lumo-desktop; do
+    if [[ ! -x "$bin" ]]; then
+        echo "ERRO: binario nao encontrado ou nao executavel: $bin"
+        sleep 10
+        exit 1
+    fi
+done
 
 # ============================================================
 # Env (source de lumo-env.conf).

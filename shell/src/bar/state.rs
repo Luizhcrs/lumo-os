@@ -107,7 +107,7 @@ pub(crate) struct PaintResult {
     pub wifi_toggle_rect: Option<(f32, f32, f32, f32)>,
     pub wifi_disconnect_rect: Option<(f32, f32, f32, f32)>,
     pub wifi_connect_rects: Vec<(String, (f32, f32, f32, f32))>,
-    pub last_click_at: Option<Instant>,
+    pub _last_click_at: Option<Instant>,
     // A31.3: hit-rects do modal de senha wifi.
     pub pwd_confirm_rect: Option<(f32, f32, f32, f32)>,
     pub pwd_cancel_rect: Option<(f32, f32, f32, f32)>,
@@ -681,7 +681,7 @@ pub(crate) struct LumoBar {
     pub brightness_drag_last_y: f32,
     pub brightness_dragging_slider: bool,
     pub dropdown_rect: Option<(f32, f32, f32, f32)>,
-    pub dropdown_h_final: f32,
+    pub _dropdown_h_final: f32,
     // A31.2: hit-rects wifi (toggle + linhas).
     pub wifi_toggle_rect: Option<(f32, f32, f32, f32)>,
     pub wifi_disconnect_rect: Option<(f32, f32, f32, f32)>,
@@ -704,12 +704,12 @@ pub(crate) struct LumoBar {
     pub appmenu_fallback_dropdown_rects: Vec<(usize, (f32, f32, f32, f32))>,
     pub appmenu_fallback_hover_idx: Option<usize>,
     // C5.1: handle compartilhado com thread Registrar DBus.
-    pub registrar_handle: crate::bar::registrar::RegistrarHandle,
+    pub _registrar_handle: crate::bar::registrar::RegistrarHandle,
     pub ipc_stream: Option<UnixStream>,
     pub ipc_rx_buf: Vec<u8>,
     // IPC reconnect backoff: None = not pending; Some(t) = retry at t.
-    pub ipc_reconnect_at: Option<std::time::Instant>,
-    pub ipc_reconnect_delay: std::time::Duration,
+    pub _ipc_reconnect_at: Option<std::time::Instant>,
+    pub _ipc_reconnect_delay: std::time::Duration,
     pub theme: LumoTheme,
     pub palette: LumoColors,
     // B4: animadores de abertura/fechamento de dropdown (scale 0.85->1.0, alpha 0->1).

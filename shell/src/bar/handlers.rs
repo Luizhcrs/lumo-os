@@ -88,7 +88,7 @@ impl LumoBar {
     }
 
     /// Altura efetiva da surface (bar + dropdown opcional).
-    pub fn computed_height(&self) -> u32 {
+    pub fn _computed_height(&self) -> u32 {
         let lumo_menu_h = menu::menu_height(MENU_LUMO_ITEMS) as u32; // A27
         let max_drop = DROPDOWN_H
             .max(DROPDOWN_WIFI_H) // A31: wifi maior que battery

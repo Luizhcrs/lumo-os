@@ -84,7 +84,7 @@ use super::render_common::{clear_color_linear, collect_cursor_only_elements, col
 const WATCHDOG_MS: u64 = 5_000;
 
 /// Frame interval alvo (60Hz). Galaxy U300 painel 60Hz fixo.
-const FRAME_INTERVAL_MS: u64 = 8; // 125Hz tick (vsync 60Hz limita render efetivo)
+const _FRAME_INTERVAL_MS: u64 = 8; // 125Hz tick (vsync 60Hz limita render efetivo)
 
 /// W3.P1: janela de render antes do proximo vblank. Renderizar 3ms antes
 /// do vblank captura inputs mais frescos, cortando latencia p95 em ~8ms.
@@ -140,9 +140,6 @@ pub fn try_enable_vrr_drm(
                     tracing::warn!(?err, "W13.B: use_vrr(true) falhou");
                 }
             }
-        }
-        Ok(_) => {
-            tracing::debug!("W13.B: VrrSupport variante desconhecida, skip");
         }
     }
 }
@@ -211,7 +208,7 @@ pub struct DrmBackendData {
 ///
 /// Retorna Ok(()) se setou Full, Ok(()) com warn se prop nao existe (drivers
 /// nao-Intel), Err se acesso DRM falhou.
-fn set_broadcast_rgb_full(
+fn _set_broadcast_rgb_full(
     drm_device: &smithay::backend::drm::DrmDevice,
     conn: smithay::reexports::drm::control::connector::Handle,
 ) -> anyhow::Result<()> {

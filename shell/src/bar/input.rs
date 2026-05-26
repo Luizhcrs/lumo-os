@@ -561,7 +561,6 @@ impl PointerHandler for LumoBar {
                         self.brightness_dragging_slider = false;
                     }
                 }
-                _ => {}
             }
         }
     }

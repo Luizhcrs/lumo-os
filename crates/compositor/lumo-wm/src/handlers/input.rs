@@ -498,7 +498,7 @@ impl LumoState {
                             for (popup, popup_offset) in popups {
                                 let geo = popup.geometry();
                                 let popup_loc = win_loc + popup_offset;
-                                let rect = smithay::utils::Rectangle::from_loc_and_size(
+                                let rect = smithay::utils::Rectangle::new(
                                     popup_loc + geo.loc,
                                     geo.size,
                                 );
@@ -828,7 +828,7 @@ impl LumoState {
     }
 
     /// Cicla o foco entre janelas no espaco.
-    fn cycle_window_focus(&mut self, delta: i8) {
+    fn _cycle_window_focus(&mut self, delta: i8) {
         let windows: Vec<_> = self.space.elements().cloned().collect();
         if windows.is_empty() {
             return;
