@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-use crate::{read_sysfs_trimmed, read_sysfs_u32, read_sysfs_i32, write_sysfs, SensorError};
+use crate::{read_sysfs_trimmed, read_sysfs_u32, write_sysfs, SensorError};
 
 const SUPPLY_DIRS: &[&str] = &[
     "/sys/class/power_supply/BAT1",
@@ -136,7 +136,7 @@ impl Battery {
     /// Returns None if not discharging or current data unavailable.
     pub fn time_remaining_secs(&self) -> Option<u32> {
         let status = self.status();
-        let current_raw = crate::read_sysfs_i32(&self.path("current_now")).ok()? as f64;
+        let current_raw = read_sysfs_i32(&self.path("current_now")).ok()? as f64;
         let current = current_raw.abs();
         if current < 1.0 {
             return None;

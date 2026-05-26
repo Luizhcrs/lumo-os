@@ -9,7 +9,6 @@
 //!   LID_OPEN before timer -> cancel timer + restore backlight
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

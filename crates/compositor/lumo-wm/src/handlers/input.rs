@@ -148,8 +148,8 @@ impl LumoState {
                 // -> roteia pra desktop abrir icone selecionado.
                 if press && last_sym_for_a40.get() == smithay::input::keyboard::xkb::Keysym::Return
                 {
-                    let has_focus = self.keyboard.current_focus().is_some();
-                    if !has_focus {
+                    let has_toplevel_focus = matches!(self.focus_manager.state, crate::focus::FocusState::Toplevel(_));
+                    if !has_toplevel_focus {
                         tracing::trace!("A40: Return sem toplevel -> DesktopOpenSelected");
                         self.broadcast_desktop_open_selected();
                     }
@@ -961,7 +961,6 @@ fn write_sys_led(name: &str, on: bool) {
     }
 }
 
-// =============================================================================
 // SI.1: synthetic input primitives.
 //
 // Injetam eventos no PointerHandle/KeyboardHandle do compositor sem passar por
@@ -979,7 +978,6 @@ fn write_sys_led(name: &str, on: bool) {
 // - Combo usa std::thread::sleep curto entre press all / release reversed. OK
 //   porque o calloop tick que dispara handle_ipc_command nao bloqueia clientes
 //   wayland por menos de 20ms (release acontece no mesmo tick).
-// =============================================================================
 
 impl LumoState {
     /// SI.1: Injeta motion absoluto. Coords em pixels logicos.
