@@ -42,9 +42,9 @@ impl XdgShellHandler for LumoState {
         self.ssd_windows.insert(surface.wl_surface().clone());
         tracing::info!("new_toplevel: SSD default inserido (M1)");
 
-        // Configure inicial: cliente decide tamanho mas anunciamos
-        // estado Activated.
+        // Configure inicial: forçar resoluçao 1024x768 e Activated.
         surface.with_pending_state(|state| {
+            state.size = Some((1024, 768).into());
             state.states.set(
                 smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State::Activated,
             );

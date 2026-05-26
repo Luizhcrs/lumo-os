@@ -188,8 +188,11 @@ pub fn titlebar_btns_for_window(
         if win_w < 200 {
             continue;
         }
+        // W24.6: Ajusta loc com offset interno da geometria (geo.loc)
+        let actual_loc = loc + geo.loc;
+
         let btn_rect = close_btn_rect(
-            smithay::utils::Point::from((loc.x, loc.y - TITLEBAR_H)),
+            smithay::utils::Point::from((actual_loc.x, actual_loc.y - TITLEBAR_H)),
             win_w,
         );
         out.push(SolidColorRenderElement::new(
@@ -205,8 +208,8 @@ pub fn titlebar_btns_for_window(
             BTN_MAX_COLOR[2],
             BTN_MAX_COLOR[3],
         );
-        let max_x = loc.x + win_w - CLOSE_BTN_SIZE * 2 - CLOSE_BTN_MARGIN - BTN_GAP;
-        let max_y = loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+        let max_x = actual_loc.x + win_w - CLOSE_BTN_SIZE * 2 - CLOSE_BTN_MARGIN - BTN_GAP;
+        let max_y = actual_loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
         let max_rect: Rectangle<i32, Physical> = Rectangle::new(
             smithay::utils::Point::from((max_x, max_y)).to_physical_precise_round(1.0),
             (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
@@ -224,8 +227,8 @@ pub fn titlebar_btns_for_window(
             BTN_MIN_COLOR[2],
             BTN_MIN_COLOR[3],
         );
-        let min_x = loc.x + win_w - CLOSE_BTN_SIZE * 3 - CLOSE_BTN_MARGIN - BTN_GAP * 2;
-        let min_y = loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+        let min_x = actual_loc.x + win_w - CLOSE_BTN_SIZE * 3 - CLOSE_BTN_MARGIN - BTN_GAP * 2;
+        let min_y = actual_loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
         let min_rect: Rectangle<i32, Physical> = Rectangle::new(
             smithay::utils::Point::from((min_x, min_y)).to_physical_precise_round(1.0),
             (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
@@ -696,9 +699,11 @@ pub fn shadow_elements(space: &Space<Window>) -> Vec<SolidColorRenderElement> {
     let mut out = Vec::new();
 
     for (idx, (loc, geo)) in wins.iter().enumerate() {
+        // W24.6: sombra precisa acompanhar o offset da geometria (geo.loc)
+        let actual_loc = *loc + geo.loc;
         // Faixa de sombra: so ABAIXO da janela (drop-shadow classico).
-        let sx = loc.x - SHADOW_BLEED;
-        let sy = loc.y + geo.size.h;
+        let sx = actual_loc.x - SHADOW_BLEED;
+        let sy = actual_loc.y + geo.size.h;
         let sw = geo.size.w + SHADOW_BLEED * 2;
         let sh = SHADOW_OFFSET_Y + SHADOW_BLEED;
 
