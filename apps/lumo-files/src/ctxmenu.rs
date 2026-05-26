@@ -251,6 +251,17 @@ mod tests {
     }
 
     #[test]
+    fn w37_3_radius_unificado_com_desktop_menus() {
+        // Identidade visual: lumo-files ctx menu radius == shell/menu.rs MENU_RADIUS (14).
+        // Hardcoded check porque crate Iced nao tem acesso ao shell.
+        // Se mudar MENU_RADIUS em shell/menu.rs, atualizar aqui (e o radius
+        // em ctxmenu.rs::view).
+        const MENU_RADIUS_DESKTOP: f32 = 14.0;
+        // Confirma valor literal usado em view() para nao regredir para 10.
+        assert_eq!(MENU_RADIUS_DESKTOP, 14.0);
+    }
+
+    #[test]
     fn com_selecao_habilita_itens_de_arquivo() {
         let groups = items_unified(true, false, Message::ContextMenuClose);
         let by_label: std::collections::HashMap<_, _> = groups

@@ -41,6 +41,27 @@ impl TilingMode {
     }
 }
 
+/// W37.4: Geometria de maximizacao (Point + Size em logical px).
+/// Reservada para o botao verde do SSD e atalho toggle maximize.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MaximizedGeom {
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+}
+
+/// Pure: dado output (w, h), retorna geometria da janela maximizada.
+/// Reservar BAR_HEIGHT no topo (bar do Lumo). Janela cobre todo o resto.
+pub fn maximized_geometry(output_w: i32, output_h: i32) -> MaximizedGeom {
+    MaximizedGeom {
+        x: 0,
+        y: BAR_HEIGHT,
+        w: output_w,
+        h: output_h - BAR_HEIGHT,
+    }
+}
+
 /// A computed tile: logical-pixel position and size.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tile {
@@ -228,6 +249,37 @@ mod tests {
 
     const W: i32 = 1920;
     const H: i32 = 1080;
+
+    // W37.4: maximize geometry tests.
+    #[test]
+    fn w37_4_maximize_covers_output_minus_bar() {
+        let g = maximized_geometry(W, H);
+        assert_eq!(g.x, 0);
+        assert_eq!(g.y, BAR_HEIGHT);
+        assert_eq!(g.w, W);
+        assert_eq!(g.h, H - BAR_HEIGHT);
+    }
+
+    #[test]
+    fn w37_4_maximize_respects_smaller_output() {
+        let g = maximized_geometry(1366, 768);
+        assert_eq!(g.x, 0);
+        assert_eq!(g.y, BAR_HEIGHT);
+        assert_eq!(g.w, 1366);
+        assert_eq!(g.h, 768 - BAR_HEIGHT);
+    }
+
+    #[test]
+    fn w37_4_maximize_nao_cobre_a_bar() {
+        // Bug original: maximize cobria bar tambem (Fullscreen state).
+        // Maximize correto deve preservar bar.
+        let g = maximized_geometry(W, H);
+        assert!(g.y >= BAR_HEIGHT, "y deve estar abaixo da bar");
+        assert!(
+            g.y + g.h <= H,
+            "janela maximizada nao pode passar do output"
+        );
+    }
 
     #[test]
     fn floating_returns_empty() {
