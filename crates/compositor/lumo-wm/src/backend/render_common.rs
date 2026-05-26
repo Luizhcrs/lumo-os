@@ -83,8 +83,10 @@ pub fn close_btn_rect(
     win_loc: smithay::utils::Point<i32, smithay::utils::Logical>,
     win_w: i32,
 ) -> smithay::utils::Rectangle<i32, Physical> {
-    let x = win_loc.x + win_w - CLOSE_BTN_SIZE - CLOSE_BTN_MARGIN;
-    let y = win_loc.y + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+    // W24.4: Protecao contra overflow em janelas gigantes.
+    let win_w = win_w.clamp(0, 4096);
+    let x = win_loc.x.saturating_add(win_w).saturating_sub(CLOSE_BTN_SIZE).saturating_sub(CLOSE_BTN_MARGIN);
+    let y = win_loc.y.saturating_add((TITLEBAR_H - CLOSE_BTN_SIZE) / 2);
     smithay::utils::Rectangle::new(
         smithay::utils::Point::from((x, y)).to_physical_precise_round(1.0),
         (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
@@ -96,8 +98,9 @@ pub fn ssd_close_btn_rect_logical(
     win_loc: smithay::utils::Point<i32, smithay::utils::Logical>,
     win_w: i32,
 ) -> smithay::utils::Rectangle<i32, smithay::utils::Logical> {
-    let x = win_loc.x + win_w - CLOSE_BTN_SIZE - CLOSE_BTN_MARGIN;
-    let y = win_loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+    let win_w = win_w.clamp(0, 4096);
+    let x = win_loc.x.saturating_add(win_w).saturating_sub(CLOSE_BTN_SIZE).saturating_sub(CLOSE_BTN_MARGIN);
+    let y = win_loc.y.saturating_sub(TITLEBAR_H).saturating_add((TITLEBAR_H - CLOSE_BTN_SIZE) / 2);
     smithay::utils::Rectangle::new(
         smithay::utils::Point::from((x, y)),
         (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
@@ -109,8 +112,9 @@ pub fn ssd_max_btn_rect_logical(
     win_loc: smithay::utils::Point<i32, smithay::utils::Logical>,
     win_w: i32,
 ) -> smithay::utils::Rectangle<i32, smithay::utils::Logical> {
-    let x = win_loc.x + win_w - CLOSE_BTN_SIZE * 2 - CLOSE_BTN_MARGIN - BTN_GAP;
-    let y = win_loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+    let win_w = win_w.clamp(0, 4096);
+    let x = win_loc.x.saturating_add(win_w).saturating_sub(CLOSE_BTN_SIZE * 2).saturating_sub(CLOSE_BTN_MARGIN).saturating_sub(BTN_GAP);
+    let y = win_loc.y.saturating_sub(TITLEBAR_H).saturating_add((TITLEBAR_H - CLOSE_BTN_SIZE) / 2);
     smithay::utils::Rectangle::new(
         smithay::utils::Point::from((x, y)),
         (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
@@ -122,8 +126,9 @@ pub fn ssd_min_btn_rect_logical(
     win_loc: smithay::utils::Point<i32, smithay::utils::Logical>,
     win_w: i32,
 ) -> smithay::utils::Rectangle<i32, smithay::utils::Logical> {
-    let x = win_loc.x + win_w - CLOSE_BTN_SIZE * 3 - CLOSE_BTN_MARGIN - BTN_GAP * 2;
-    let y = win_loc.y - TITLEBAR_H + (TITLEBAR_H - CLOSE_BTN_SIZE) / 2;
+    let win_w = win_w.clamp(0, 4096);
+    let x = win_loc.x.saturating_add(win_w).saturating_sub(CLOSE_BTN_SIZE * 3).saturating_sub(CLOSE_BTN_MARGIN).saturating_sub(BTN_GAP * 2);
+    let y = win_loc.y.saturating_sub(TITLEBAR_H).saturating_add((TITLEBAR_H - CLOSE_BTN_SIZE) / 2);
     smithay::utils::Rectangle::new(
         smithay::utils::Point::from((x, y)),
         (CLOSE_BTN_SIZE, CLOSE_BTN_SIZE).into(),
@@ -135,8 +140,9 @@ pub fn ssd_titlebar_rect_logical(
     win_loc: smithay::utils::Point<i32, smithay::utils::Logical>,
     win_w: i32,
 ) -> smithay::utils::Rectangle<i32, smithay::utils::Logical> {
+    let win_w = win_w.clamp(0, 4096);
     smithay::utils::Rectangle::new(
-        smithay::utils::Point::from((win_loc.x, win_loc.y - TITLEBAR_H)),
+        smithay::utils::Point::from((win_loc.x, win_loc.y.saturating_sub(TITLEBAR_H))),
         (win_w, TITLEBAR_H).into(),
     )
 }
@@ -1460,5 +1466,31 @@ mod ssd_btn_tests {
             assert!(r.loc.y >= loc.y - TITLEBAR_H);
             assert!(r.loc.y + r.size.h <= loc.y);
         }
+    }
+
+    #[test]
+    fn test_renderer_extreme_geometry_no_panic() {
+        use smithay::utils::Point;
+        let loc: Point<i32, smithay::utils::Logical> = Point::from((0, 0));
+        let huge_w = i32::MAX;
+        
+        // Teste: nao deve dar panic nem overflow bizarro (usamos saturating e clamp)
+        let rect = close_btn_rect(loc, huge_w);
+        assert!(rect.loc.x >= 0);
+        assert!(rect.size.w > 0);
+        
+        let logical_rect = ssd_close_btn_rect_logical(loc, huge_w);
+        assert!(logical_rect.loc.x >= 0);
+    }
+
+    #[test]
+    fn test_renderer_negative_geometry_no_panic() {
+        use smithay::utils::Point;
+        let loc: Point<i32, smithay::utils::Logical> = Point::from((0, 0));
+        let neg_w = -100;
+        
+        // Deve clamp para 0 e nao dar panic
+        let rect = close_btn_rect(loc, neg_w);
+        assert!(rect.size.w > 0);
     }
 }

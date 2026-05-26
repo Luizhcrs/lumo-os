@@ -531,7 +531,15 @@ impl LumoState {
         use smithay::desktop::layer_map_for_output;
         if let Some(output) = self.space.outputs().next() {
             let map = layer_map_for_output(output);
-            map.non_exclusive_zone()
+            let zone = map.non_exclusive_zone();
+            // W24.5: Garante que a zona util nao seja negativa ou absurda.
+            smithay::utils::Rectangle::new(
+                zone.loc,
+                smithay::utils::Size::from((
+                    zone.size.w.clamp(64, 4096),
+                    zone.size.h.clamp(64, 4096),
+                )),
+            )
         } else {
             smithay::utils::Rectangle::new(
                 smithay::utils::Point::from((0, 0)),
@@ -555,14 +563,14 @@ impl LumoState {
         let cascade = (n_open % 6) * CASCADE_STEP;
         let mut x = cx - DEFAULT_W / 2 + cascade;
         let mut y = cy - DEFAULT_H / 2 + cascade;
-        x = x.clamp(
-            usable.loc.x + 8,
-            usable.loc.x + usable.size.w - DEFAULT_W - 8,
-        );
-        y = y.clamp(
-            usable.loc.y + SSD_TITLEBAR_H + 8,
-            usable.loc.y + usable.size.h - DEFAULT_H - 8,
-        );
+        
+        let min_x = usable.loc.x + 8;
+        let max_x = (usable.loc.x + usable.size.w - DEFAULT_W - 8).max(min_x);
+        x = x.clamp(min_x, max_x);
+        
+        let min_y = usable.loc.y + SSD_TITLEBAR_H + 8;
+        let max_y = (usable.loc.y + usable.size.h - DEFAULT_H - 8).max(min_y);
+        y = y.clamp(min_y, max_y);
         (x, y).into()
     }
 
