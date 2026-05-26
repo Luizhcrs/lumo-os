@@ -160,6 +160,14 @@ impl SeatHandler for LumoState {
             pid,
             focused.is_some()
         );
+        // W35: se app_id ainda vazio (ex: surface interna Iced "winit window"),
+        // forcamos title e pid a vazio tambem pra bar limpar -- nao vazar
+        // titulo de superficie interna do compositor.
+        let (app_id, title, pid) = if app_id.is_empty() {
+            (String::new(), String::new(), 0u32)
+        } else {
+            (app_id, title, pid)
+        };
         if !app_id.is_empty() {
             self.last_active_app = Some((app_id.clone(), title.clone(), pid));
         } else {
