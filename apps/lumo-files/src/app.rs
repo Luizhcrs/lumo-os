@@ -940,9 +940,27 @@ impl App {
                 match &event {
                     iced::Event::Mouse(mouse::Event::CursorMoved { position }) => {
                         self.last_cursor_pos = *position;
-                        eprintln!("[hit] CursorMoved {},{}", position.x, position.y);
+                    }
+                    // W36: right-click abre context menu na posicao do cursor.
+                    // Distingue area vazia vs item selecionado pelo hit-test.
+                    iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
+                        let pos = self.last_cursor_pos;
+                        let has_selection = !self.current_tab().file_list.selected.is_empty();
+                        let ctx = if has_selection {
+                            ContextMenu::Item { x: pos.x, y: pos.y }
+                        } else {
+                            ContextMenu::Area { x: pos.x, y: pos.y }
+                        };
+                        eprintln!("[hit] RightClick ctx={:?} x={} y={}", ctx, pos.x, pos.y);
+                        self.context_menu = Some(ctx);
                     }
                     iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                        // W36: left-click fora do menu fecha ele (dismiss).
+                        // Se havia menu aberto, apenas fecha sem propagar sidebar nav.
+                        if self.context_menu.is_some() {
+                            self.context_menu = None;
+                            return Task::none();
+                        }
                         let pos = self.last_cursor_pos;
                         eprintln!("[hit] ButtonPressed dispatch x={} y={}", pos.x, pos.y);
                         return self.dispatch_manual_click(pos);
@@ -2235,15 +2253,57 @@ impl App {
         _muted: Color,
         _accent: Color,
     ) -> Element<'a, Message> {
-        // Iced 0.13 nao tem overlay nativo fora de custom widgets.
-        // Empilhamos o menu como coluna abaixo da base view.
+        // W36: posiciona menu na coordenada do clique via stack + padding.
+        // stack! empilha layers com z-order: base < dismiss < menu.
         let rename_msg = if let Some(&idx) = self.current_tab().file_list.selected.iter().next() {
             Message::RenameStart(idx)
         } else {
             Message::ContextMenuClose
         };
         let menu = ctxmenu::view(&self.theme, ctx, rename_msg);
-        column![base, menu].into()
+
+        let (mx, my) = match ctx {
+            ContextMenu::Item { x, y } => (*x, *y),
+            ContextMenu::Area { x, y } => (*x, *y),
+        };
+
+        // Clamp para nao sair da tela (240px largura, 200px altura estimada).
+        let menu_w = 240.0_f32;
+        let menu_h = 200.0_f32;
+        // Fallback resolucao Galaxy Book 4 (1920x1080 scaled).
+        let win_w = 1366.0_f32;
+        let win_h = 768.0_f32;
+        let px = mx.min(win_w - menu_w - 4.0).max(0.0);
+        let py = my.min(win_h - menu_h - 4.0).max(0.0);
+
+        // Menu posicionado com padding a partir do canto superior-esquerdo.
+        let positioned_menu = container(container(menu).width(Length::Fixed(menu_w)))
+            .padding(iced::Padding {
+                top: py,
+                left: px,
+                bottom: 0.0,
+                right: 0.0,
+            })
+            .width(Length::Fill)
+            .height(Length::Fill);
+
+        // Camada dismiss transparente: fecha ao clicar fora do menu.
+        let dismiss_btn = button(
+            container(iced::widget::horizontal_space())
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .on_press(Message::ContextMenuClose)
+        .padding(0)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(|_, _| iced::widget::button::Style {
+            background: Some(iced::Background::Color(Color::TRANSPARENT)),
+            ..Default::default()
+        });
+
+        // stack! empilha: base -> dismiss -> menu posicionado.
+        iced::widget::stack![base, dismiss_btn, positioned_menu].into()
     }
 
     // -----------------------------------------------------------------------
