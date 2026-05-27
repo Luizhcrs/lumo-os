@@ -49,11 +49,6 @@ lumo-error = { path = "../../foundation/lumo-error" }
 # A19: wallpaper decode (jpeg+png minimo, sem default features pra evitar bloat).
 libc = "0.2"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
-# SSD title text rendering (M2): cosmic-text shape + swash glyph cache,
-# tiny-skia ARGB buffer, fontdb pra carregar Inter system-wide.
-cosmic-text = "0.12"
-tiny-skia = "0.11"
-fontdb = "0.18"
 
 
 # DRM backend optional deps (so puxados com --features drm-backend).

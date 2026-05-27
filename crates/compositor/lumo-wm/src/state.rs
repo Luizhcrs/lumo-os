@@ -135,8 +135,6 @@ pub struct LumoState {
     pub degraded: crate::degraded::DegradedTracker,
     /// UX3: tracker de freeze por ping/pong.
     pub freeze: crate::freeze::FreezeTracker,
-    /// SSD title text render cache (M2 visual identity).
-    pub title_text_cache: crate::backend::text_render::TitleTextCache,
 
     // B2: keybindings configuracao carregada de TOML.
     pub keyboard_config: KeyboardConfig,
@@ -364,7 +362,6 @@ impl LumoState {
             clock,
             degraded: crate::degraded::DegradedTracker::new(),
             freeze: crate::freeze::FreezeTracker::new(),
-            title_text_cache: crate::backend::text_render::TitleTextCache::new(),
             compositor_state,
             xdg_shell_state,
             xdg_decoration_state: None,
