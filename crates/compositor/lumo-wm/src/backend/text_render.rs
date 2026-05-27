@@ -107,13 +107,14 @@ pub fn render_title_to_argb(title: &str, width: u32, height: u32) -> Option<Vec<
 
     FONT_SYSTEM.with(|fs| {
         let mut fs = fs.borrow_mut();
-        let metrics = Metrics::new(13.0, 18.0);
+        let metrics = Metrics::new(13.0, 16.0);
         let mut buf = Buffer::new(&mut fs, metrics);
         buf.set_size(&mut fs, Some(width as f32), Some(height as f32));
         let attrs = Attrs::new().family(Family::SansSerif);
         buf.set_text(&mut fs, title, attrs, Shaping::Advanced);
-        // Centraliza vertical: line_y absoluto sobre height/2 do ascent.
-        let line_y_offset = ((height as f32 - metrics.line_height) / 2.0).max(0.0);
+        // Vertical centering: baseline empurra glifos para baixo do top-of-buffer.
+        // cosmic-text line_y inclui ascent; ajuste min pra centralizar visualmente.
+        let line_y_offset = 4.0_f32;
 
         SWASH_CACHE.with(|sc| {
             let mut sc = sc.borrow_mut();
@@ -134,13 +135,18 @@ pub fn render_title_to_argb(title: &str, width: u32, height: u32) -> Option<Vec<
                         }
                         let idx = ((py as u32) * width + (px as u32)) as usize * 4;
                         let pixels = pixmap.data_mut();
-                        let a = c.a() as u32;
-                        // tiny-skia usa RGBA premultiplied. Fourcc::Argb8888
-                        // wayland = ARGB little-endian = B G R A em memoria.
-                        pixels[idx] = (c.b() as u32 * a / 255) as u8;
-                        pixels[idx + 1] = (c.g() as u32 * a / 255) as u8;
-                        pixels[idx + 2] = (c.r() as u32 * a / 255) as u8;
-                        pixels[idx + 3] = a as u8;
+                        let a = c.a();
+                        if a == 0 {
+                            return;
+                        }
+                        // Wayland Fourcc::Argb8888 = little-endian ARGB =
+                        // byte order B G R A em memoria. Pre-multiplicado
+                        // pelo alpha (compositor compose com SrcOver).
+                        let pre = |ch: u8| ((ch as u32 * a as u32) / 255) as u8;
+                        pixels[idx] = pre(c.b());
+                        pixels[idx + 1] = pre(c.g());
+                        pixels[idx + 2] = pre(c.r());
+                        pixels[idx + 3] = a;
                     });
                 }
             }
