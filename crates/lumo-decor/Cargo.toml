@@ -1,0 +1,16 @@
+[package]
+name = "lumo-decor"
+version = "0.1.0"
+edition = "2021"
+description = "Lumo OS libdecor plugin — titlebar SSD-style identica em apps libdecor (GTK4/libadwaita/Firefox/mpv/Blender)."
+
+[lib]
+name = "lumo_decor"
+# cdylib produz liblumo_decor.so instalavel em /usr/lib/libdecor/plugins-1/
+crate-type = ["cdylib"]
+
+[dependencies]
+
+[build-dependencies]
+cc = "1.0"
+pkg-config = "0.3"
