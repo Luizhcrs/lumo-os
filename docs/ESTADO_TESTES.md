@@ -1,20 +1,35 @@
 # Estado dos Testes — Lumo OS
 
-> Ultima verificacao: 2026-05-27 (pos W37.18 Chromium fix)
+> Ultima verificacao: 2026-05-27 (pos W37.20 telemetry + style tests)
 
 ## Resumo
 
 | Categoria | Testes | Passando | Falhando | Cobertura |
 |-----------|--------|----------|----------|-----------|
-| lumo-foundation | 53 | 53 | 0 | Alta (tokens, cores, tema) |
-| lumo-wm | 189 | 189 | 0 | Alta (W37.11-18 +4 testes gating protocols) |
+| lumo-foundation | 53 | 53 | 0 | Alta (tokens, cores, tema, i18n, a11y) |
+| lumo-wm | 194 | 194 | 0 | Alta (W37.19 +5 truthy parsing) |
 | lumo-shell | 36 | 36 | 0 | Media (W37.6 menu unificado) |
 | lumo-files | 66 | 66 | 0 | Alta (W37 ctx menu) |
 | lumo-animation | 43 | 43 | 0 | Alta (spring, easing, interpolate) |
 | lumo-ipc | 10 | 10 | 0 | Alta (mensagens, roundtrip) |
 | lumo-sensors | 37 | 37 | 0 | Alta (thermal, platform, battery) |
-| lumo-telemetry | 0 | 0 | 0 | Nenhuma |
-| **Total** | **434** | **434** | **0** | **Media-Alta** |
+| lumo-style | 24 | 24 | 0 | Media (W37.20 +20 model.rs) |
+| lumo-telemetry | 28 | 28 | 0 | Alta (W37.20 +28 event/histogram/store/lib/init) |
+| **Total** | **491** | **491** | **0** | **Alta** |
+
+## W37.20 — Telemetry + Style test coverage (2026-05-27)
+
+48 testes novos pra cobrir crates antes sem cobertura:
+
+**lumo-telemetry (0 → 28)**:
+- event.rs (5): EventKind display/serde, Event::new timestamp, meta preserve, eq+hash
+- histogram.rs (8): record clamp/saturate, percentiles monotonic, reset, snapshot json, default
+- store.rs (8): ring eviction, lazy histogram, per-kind counts, rfc3339, empty snapshot, capacity
+- lib.rs (5): no-op sem init, time closure result, panic propagation
+- init.rs (2): idempotent, global available
+
+**lumo-style (4 → 24)**:
+- model.rs (20): Selector specificity/matches, parse_px (px/pt/no-suffix/fractional/trim/invalid), parse_color (RGB+alpha/RGBA/invalid lengths/missing hash/bad hex), Stylesheet.get cascade, resolve_var
 
 ## W37 — Chromium broken pipe (RESOLVIDO 2026-05-27)
 
@@ -45,7 +60,7 @@ Tests novos lumo-files (W37.0 / 3):
 
 ## Testes quebrados
 
-Nenhum. Todos os 434 testes passam.
+Nenhum. Todos os 491 testes passam.
 
 ## Crates sem testes
 

@@ -129,3 +129,171 @@ pub fn parse_color_literal(s: &str) -> Option<u32> {
         _ => return None,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sel(classes: &[&str]) -> Selector {
+        Selector {
+            classes: classes.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    // --- Selector ---
+
+    #[test]
+    fn specificity_equals_class_count() {
+        assert_eq!(sel(&[]).specificity(), 0);
+        assert_eq!(sel(&["pill"]).specificity(), 1);
+        assert_eq!(sel(&["pill", "lumo", "dark"]).specificity(), 3);
+    }
+
+    #[test]
+    fn matches_when_all_selector_classes_in_set() {
+        assert!(sel(&["pill"]).matches(&["pill", "lumo"]));
+        assert!(sel(&["pill", "lumo"]).matches(&["lumo", "pill", "extra"]));
+    }
+
+    #[test]
+    fn matches_false_when_class_missing() {
+        assert!(!sel(&["pill", "missing"]).matches(&["pill"]));
+        assert!(!sel(&["nope"]).matches(&["pill", "lumo"]));
+    }
+
+    #[test]
+    fn empty_selector_matches_everything() {
+        // Selector :root style sem classes deve matchar qualquer set.
+        assert!(sel(&[]).matches(&[]));
+        assert!(sel(&[]).matches(&["pill"]));
+    }
+
+    // --- parse_px_literal ---
+
+    #[test]
+    fn parse_px_with_px_suffix() {
+        assert_eq!(parse_px_literal("14px"), Some(14.0));
+    }
+
+    #[test]
+    fn parse_px_with_pt_suffix() {
+        assert_eq!(parse_px_literal("13pt"), Some(13.0));
+    }
+
+    #[test]
+    fn parse_px_no_suffix() {
+        assert_eq!(parse_px_literal("8"), Some(8.0));
+    }
+
+    #[test]
+    fn parse_px_trim_whitespace() {
+        assert_eq!(parse_px_literal("  16px  "), Some(16.0));
+    }
+
+    #[test]
+    fn parse_px_fractional() {
+        assert_eq!(parse_px_literal("1.5px"), Some(1.5));
+    }
+
+    #[test]
+    fn parse_px_invalid_returns_none() {
+        assert_eq!(parse_px_literal("abc"), None);
+        assert_eq!(parse_px_literal("12emm"), None);
+    }
+
+    // --- parse_color_literal ---
+
+    #[test]
+    fn parse_color_rrggbb_adds_full_alpha() {
+        assert_eq!(parse_color_literal("#FF0000"), Some(0xFF0000_FF));
+        assert_eq!(parse_color_literal("#00ff00"), Some(0x00FF00_FF));
+    }
+
+    #[test]
+    fn parse_color_rrggbbaa_preserves_alpha() {
+        assert_eq!(parse_color_literal("#11223344"), Some(0x11223344));
+        assert_eq!(parse_color_literal("#FF000080"), Some(0xFF000080));
+    }
+
+    #[test]
+    fn parse_color_invalid_length_none() {
+        assert_eq!(parse_color_literal("#F00"), None); // 3-digit nao suportado
+        assert_eq!(parse_color_literal("#FF000"), None);
+        assert_eq!(parse_color_literal("#FF000000F"), None);
+    }
+
+    #[test]
+    fn parse_color_missing_hash_none() {
+        assert_eq!(parse_color_literal("FF0000"), None);
+    }
+
+    #[test]
+    fn parse_color_invalid_hex_none() {
+        assert_eq!(parse_color_literal("#XX0000"), None);
+    }
+
+    // --- Stylesheet.get + cascade ---
+
+    fn make_sheet() -> Stylesheet {
+        Stylesheet {
+            vars: {
+                let mut m = HashMap::new();
+                m.insert("accent".into(), "#00AAFF".into());
+                m.insert("pad".into(), "8px".into());
+                m
+            },
+            rules: vec![
+                Rule {
+                    selector: sel(&["pill"]),
+                    props: vec![
+                        ("bg".into(), PropertyValue::Color(0xAA0000_FF)),
+                        ("pad-x".into(), PropertyValue::Px(10.0)),
+                    ],
+                },
+                Rule {
+                    selector: sel(&["pill", "lumo"]),
+                    props: vec![("bg".into(), PropertyValue::Color(0x00AA00_FF))],
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn get_returns_higher_specificity() {
+        let s = make_sheet();
+        let v = s.get(&["pill", "lumo"], "bg");
+        match v {
+            Some(PropertyValue::Color(c)) => assert_eq!(*c, 0x00AA00_FF),
+            _ => panic!("expected color"),
+        }
+    }
+
+    #[test]
+    fn get_falls_back_to_lower_specificity() {
+        let s = make_sheet();
+        let v = s.get(&["pill"], "bg");
+        match v {
+            Some(PropertyValue::Color(c)) => assert_eq!(*c, 0xAA0000_FF),
+            _ => panic!("expected color"),
+        }
+    }
+
+    #[test]
+    fn get_returns_none_for_unmatched_prop() {
+        let s = make_sheet();
+        assert!(s.get(&["pill"], "border").is_none());
+    }
+
+    #[test]
+    fn get_px_resolves_direct() {
+        let s = make_sheet();
+        assert_eq!(s.get_px(&["pill"], "pad-x"), Some(10.0));
+    }
+
+    #[test]
+    fn resolve_var_returns_value() {
+        let s = make_sheet();
+        assert_eq!(s.resolve_var("accent"), Some("#00AAFF"));
+        assert_eq!(s.resolve_var("missing"), None);
+    }
+}

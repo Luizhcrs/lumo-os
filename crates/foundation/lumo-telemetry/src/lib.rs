@@ -58,3 +58,42 @@ where
     histogram(name, elapsed_us);
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn record_event_noop_when_not_initialized() {
+        // Sem init(), nenhum panic. Resultado: no-op silencioso.
+        record_event(EventKind::Click, HashMap::new());
+    }
+
+    #[test]
+    fn histogram_noop_when_not_initialized() {
+        histogram("test_metric", 100);
+    }
+
+    #[test]
+    fn time_returns_closure_result_even_without_init() {
+        let r = time("test_op", || 42);
+        assert_eq!(r, 42);
+    }
+
+    #[test]
+    fn time_returns_string_result() {
+        let r = time("test_op", || String::from("ok"));
+        assert_eq!(r, "ok");
+    }
+
+    #[test]
+    fn time_propagates_panic() {
+        // Closure que panica deve panicar fora de time(); histograma nao registra.
+        let result = std::panic::catch_unwind(|| {
+            time::<_, ()>("test_panic", || {
+                panic!("expected");
+            })
+        });
+        assert!(result.is_err());
+    }
+}
