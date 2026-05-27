@@ -309,8 +309,10 @@ pub fn titlebar_text_for_window(
     }
     let surface_owned = (&*surface).clone();
     let cached = cache.get_or_render(&surface_owned, &title, text_w as u32, TITLE_TEXT_H)?;
+    // Convencao Lumo: physical render Y = loc.y (top do SSD, ja anticipado).
+    // Logical hit-test seria loc.y - TITLEBAR_H. Sync com close_btn_rect.
     let text_x = loc.x + TITLE_TEXT_PAD_LEFT;
-    let text_y = loc.y - TITLEBAR_H + (TITLEBAR_H - TITLE_TEXT_H as i32) / 2;
+    let text_y = loc.y + (TITLEBAR_H - TITLE_TEXT_H as i32) / 2;
     let location_phys: Point<f64, Physical> = Point::from((text_x as f64, text_y as f64));
     MemoryRenderBufferRenderElement::from_buffer(
         renderer,
