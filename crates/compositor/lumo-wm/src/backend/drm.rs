@@ -1066,6 +1066,8 @@ fn render_drm(state: &mut LumoState) {
         ref splash_buffer,
         splash_alpha,
         frame_counter,
+        ref mut ipc,
+        ref mut degraded,
         ..
     } = *state;
     let splash_alpha_val = splash_alpha;
@@ -1268,7 +1270,10 @@ fn render_drm(state: &mut LumoState) {
                         // anterior nao mascara estado real (review B1).
                         if surface.queue_frame_fail_count > 0 {
                             surface.queue_frame_fail_count = 0;
-                            state.report_degraded_cleared("WM-RENDER-002");
+                            if let Some(ev) = degraded.clear("WM-RENDER-002") {
+                                tracing::info!(code = "WM-RENDER-002", "degraded mode CLEARED");
+                                ipc.broadcast(&ev);
+                            }
                         }
                         let now = Instant::now();
                         // L2: coleta duracao deste frame.
@@ -1329,7 +1334,11 @@ fn render_drm(state: &mut LumoState) {
                             "queue_frame falhou"
                         );
                         if surface.queue_frame_fail_count == 3 {
-                            state.report_degraded("WM-RENDER-002", "Vsync off");
+                            if let Some(ev) = degraded.set("WM-RENDER-002", "Vsync off") {
+                                tracing::warn!(code = "WM-RENDER-002", "degraded mode ON");
+                                ipc.broadcast(&ev);
+                                lumo_telemetry::record_error("WM-RENDER-002", "degraded");
+                            }
                         }
                     }
                 }
