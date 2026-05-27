@@ -203,6 +203,18 @@ pub fn init(loop_handle: LoopHandle<'static, LumoState>) -> Result<IpcServer> {
                                         let _ = last.drain_tx();
                                     }
                                 }
+                                // UX2 (review B5): replay degraded set ativo
+                                // pro novo client. Sem isso bar perde pills se
+                                // conectou apos emit_initial_degraded.
+                                let snap = state.degraded.snapshot();
+                                for (code, label) in snap {
+                                    let ev = LumoEvent::DegradedFeature { code, label };
+                                    let bytes = encode_event(&ev).into_bytes();
+                                    if let Some(last) = state.ipc.clients.last_mut() {
+                                        last.enqueue(bytes);
+                                        let _ = last.drain_tx();
+                                    }
+                                }
                                 tracing::info!(
                                     "IPC client conectado (total={})",
                                     state.ipc.clients.len()
