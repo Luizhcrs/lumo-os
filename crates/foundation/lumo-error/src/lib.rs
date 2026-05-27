@@ -22,6 +22,11 @@ pub enum Severity {
     Degraded,
     Recoverable,
     UserError,
+    /// Config opt-out PERMANENTE por design (ADR). Nao e bug nem runtime
+    /// drop. Exemplo: ADR-002 (color-mgmt OFF default) + ADR-003 (toplevel-icon
+    /// OFF default). Bar NAO mostra pill amber pra ConfigInfo — visivel
+    /// apenas via lumoctl diag.
+    ConfigInfo,
 }
 
 impl Severity {
@@ -31,7 +36,14 @@ impl Severity {
             Severity::Degraded => "degraded",
             Severity::Recoverable => "recoverable",
             Severity::UserError => "user_error",
+            Severity::ConfigInfo => "config_info",
         }
+    }
+
+    /// True se Severity merece UI pill (degraded runtime).
+    /// False = silencioso (config_info, recoverable, user_error).
+    pub fn warrants_pill(self) -> bool {
+        matches!(self, Severity::Degraded | Severity::Fatal)
     }
 }
 
@@ -240,5 +252,23 @@ mod tests {
         assert_eq!(Severity::Degraded.as_str(), "degraded");
         assert_eq!(Severity::Recoverable.as_str(), "recoverable");
         assert_eq!(Severity::UserError.as_str(), "user_error");
+        assert_eq!(Severity::ConfigInfo.as_str(), "config_info");
+    }
+
+    #[test]
+    fn warrants_pill_only_for_fatal_and_degraded() {
+        assert!(Severity::Fatal.warrants_pill());
+        assert!(Severity::Degraded.warrants_pill());
+        assert!(!Severity::Recoverable.warrants_pill());
+        assert!(!Severity::UserError.warrants_pill());
+        assert!(!Severity::ConfigInfo.warrants_pill(), "config_info silencioso");
+    }
+
+    #[test]
+    fn config_info_serializes_roundtrip() {
+        let e = LumoError::new(Domain::Compositor, Severity::ConfigInfo, "WM-COLOR-OFF", "off by design");
+        let json = serde_json::to_string(&e).unwrap();
+        let back: LumoError = serde_json::from_str(&json).unwrap();
+        assert!(matches!(back.severity, Severity::ConfigInfo));
     }
 }

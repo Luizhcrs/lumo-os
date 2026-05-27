@@ -243,15 +243,9 @@ fn main() -> Result<()> {
     lumo_wm::state::init_xdg_decoration(&mut state);
     lumo_wm::state::init_modern_protocols(&mut state);
 
-    // ADR-002/003: protocolos OFF por design. Apenas log info, NAO pill.
-    // emit_initial_degraded() removido — pill amber e pra DEGRADED runtime
-    // (vsync drop, GPU lost), nao config opt-out permanente.
-    if !state.color_manager.is_some() {
-        tracing::info!(code = "WM-COLOR-OFF", "color management disabled by default (ADR-002)");
-    }
-    if !state.xdg_toplevel_icon_manager.is_some() {
-        tracing::info!(code = "WM-ICON-OFF", "xdg-toplevel-icon disabled by default (ADR-003)");
-    }
+    // ADR-002/003: protocolos OFF por design. Severity::ConfigInfo emit
+    // sem pill — visivel via lumoctl diag e tracing log.
+    state.emit_initial_config_info();
 
     // W8.A: screencopy global.
     state.screencopy = Some(lumo_wm::handlers::screencopy::ScreencopyState::new(

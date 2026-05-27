@@ -441,16 +441,11 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
             // appmenu nativo + ctx menu desktop/files. Hover accent solido,
             // radius 10, fonte Inter — mesma identidade visual.
             if let Some((rx, ry, rw, rh)) = result.appmenu_fallback_rect {
-                use crate::menu::{draw_menu_dyn, hit_test_dyn, menu_height_dyn, DynMenuItem};
-                let items = [
-                    DynMenuItem::action("Sobre"),
-                    DynMenuItem::action("Versao"),
-                    DynMenuItem::action("Ajuda"),
-                    DynMenuItem::separator(),
-                    DynMenuItem::action("Fechar"),
-                ];
+                use crate::menu::{draw_menu_dyn, hit_test_dyn, menu_height_dyn};
+                let items = crate::bar::status_pills::fallback_menu_items();
+                let items = items.as_slice();
                 let dropdown_w = 200.0f32;
-                let dropdown_h = menu_height_dyn(&items);
+                let dropdown_h = menu_height_dyn(items);
                 let want_x = rx;
                 let max_x = snap.width as f32 - pill_margin - dropdown_w;
                 let dropdown_x = want_x.max(pill_margin).min(max_x.max(pill_margin));
@@ -464,7 +459,7 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                             0.0,
                             0.0,
                             dropdown_w,
-                            &items,
+                            items,
                             hover,
                             palette,
                             |c, x, y, w, h, r, color| {
@@ -477,21 +472,20 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
                     }
                     // Hit-rects via hit_test_dyn pattern — calc rect por item.
                     let mut fb_rects: Vec<(usize, (f32, f32, f32, f32))> = Vec::new();
-                    for i in 0..items.len() {
-                        if !items[i].is_clickable() {
+                    for (i, item) in items.iter().enumerate() {
+                        if !item.is_clickable() {
                             continue;
                         }
-                        // Bbox approximate: hit_test_dyn da idx via py,
-                        // mas pra rect preciso de offset. Itera y manual.
-                        if let Some(_) = hit_test_dyn(
-                            &items,
+                        if hit_test_dyn(
+                            items,
                             0.0,
                             0.0,
                             dropdown_w,
                             dropdown_w / 2.0,
-                            // probe y center do item i
                             4.0 + 28.0 * i as f32 + 14.0,
-                        ) {
+                        )
+                        .is_some()
+                        {
                             fb_rects.push((
                                 i,
                                 (

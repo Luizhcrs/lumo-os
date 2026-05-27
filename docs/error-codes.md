@@ -10,6 +10,15 @@ Mapa central de codigos `<DOMAIN>-<SUBSYS>-<NNN>`. Adicionar novo: append + bump
 
 Codigos sao **append-only**. Removido = reserved (nunca reusar). Mudou semantica = novo codigo + deprecate antigo.
 
+## Severity vs UI pill
+
+Bar Lumo so renderiza pill amber pra `Severity::Degraded` ou `Severity::Fatal`. Codigos com severity:
+- `Severity::ConfigInfo` (opt-out por design — ADR documentado) — SEM pill, visivel via `lumoctl diag`.
+- `Severity::Recoverable` (transient retry) — SEM pill, log warn.
+- `Severity::UserError` (input invalido) — SEM pill, log info.
+- `Severity::Degraded` (runtime drop real) — **PILL** amber + log warn.
+- `Severity::Fatal` (sessao terminando) — **PILL** vermelho + crash dump.
+
 ## Codigos reservados
 
 ### Generico
@@ -27,6 +36,8 @@ Codigos sao **append-only**. Removido = reserved (nunca reusar). Mudou semantica
 | `WM-RENDER-002` | degraded | page-flip falhou 3x consecutivos | Disable vsync, retry |
 | `WM-PROTOCOL-001` | recoverable | Cliente Wayland violou protocolo | Kill client, manter compositor |
 | `WM-CONFIG-001` | degraded | `~/.config/lumo/displays.toml` parse falhou | Fallback default |
+| `WM-COLOR-OFF` | **config_info** | wp-color-manager-v1 OFF por design (ADR-002). Visivel via lumoctl diag. NAO gera pill | Set `LUMO_ENABLE_COLOR_MGMT=1` se quiser |
+| `WM-ICON-OFF` | **config_info** | xdg-toplevel-icon-v1 OFF por design (ADR-003). Sem pill | Set `LUMO_ENABLE_TOPLEVEL_ICON=1` se quiser |
 
 ### IPC
 

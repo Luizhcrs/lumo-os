@@ -809,12 +809,34 @@ impl LumoState {
 
     /// UX2: emit pills iniciais para subsystems OFF por default.
     /// Chamar apos init de protocolos opt-in (ADR-002, ADR-003).
+    /// DEPRECATED: emit_initial_degraded virava pill amber permanente
+    /// pra config opt-out por design. Substituido por emit_initial_config_info
+    /// que loga sem broadcast pill (Severity::ConfigInfo). Mantido pra
+    /// compatibilidade testes legados.
+    #[deprecated(note = "use emit_initial_config_info; ConfigInfo nao gera pill")]
     pub fn emit_initial_degraded(&mut self) {
+        self.emit_initial_config_info();
+    }
+
+    /// UX2 v2: emit log info pra subsystems OFF por design (ADR-002/003).
+    /// NAO broadcast event de pill (ConfigInfo nao warrants pill).
+    /// Visivel via lumoctl diag + tracing log.
+    pub fn emit_initial_config_info(&mut self) {
         if self.color_manager.is_none() {
-            self.report_degraded("WM-COLOR-OFF", "Color mgmt off");
+            tracing::info!(
+                code = "WM-COLOR-OFF",
+                severity = "config_info",
+                "wp-color-manager-v1 OFF by design (ADR-002)"
+            );
+            lumo_telemetry::record_error("WM-COLOR-OFF", "config_info");
         }
         if self.xdg_toplevel_icon_manager.is_none() {
-            self.report_degraded("WM-ICON-OFF", "Icons disabled");
+            tracing::info!(
+                code = "WM-ICON-OFF",
+                severity = "config_info",
+                "xdg-toplevel-icon-v1 OFF by design (ADR-003)"
+            );
+            lumo_telemetry::record_error("WM-ICON-OFF", "config_info");
         }
     }
 
