@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 iced = { version = "0.13", features = ["tokio", "svg"] }
 lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
+lumo-error = { path = "../../crates/foundation/lumo-error" }
 lumo-sensors = { path = "../../crates/system/lumo-sensors" }
 zbus = { version = "5", default-features = false, features = ["blocking-api", "tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread", "process", "fs", "time"] }

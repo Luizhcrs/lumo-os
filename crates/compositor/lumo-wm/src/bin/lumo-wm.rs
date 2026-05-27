@@ -212,6 +212,9 @@ fn main() -> Result<()> {
         )
         .init();
 
+    // Crash dump JSON em ~/.local/state/lumo/crashes/ se panic nao tratado.
+    lumo_error::hook::install_panic_hook("lumo-wm", lumo_error::Domain::Compositor);
+
     lumo_telemetry::init();
 
     let backend = pick_backend();

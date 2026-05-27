@@ -113,6 +113,8 @@ pub fn build_router_with_limiter(state: AppState, limiter: Arc<RateLimiter>) -> 
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    lumo_error::hook::install_panic_hook("lumo-bridge", lumo_error::Domain::Bridge);
+
     // Log writer pra arquivo + stdout
     let log_file = std::fs::OpenOptions::new()
         .create(true)

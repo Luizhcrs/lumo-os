@@ -100,6 +100,7 @@ fn install_theme(path: &PathBuf) {
 }
 
 fn main() {
+    lumo_error::hook::install_panic_hook("lumo-term", lumo_error::Domain::App);
     let config = theme_path();
     if !config.exists() {
         install_theme(&config);

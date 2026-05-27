@@ -179,9 +179,23 @@ fn do_copy(
     data: &Arc<FrameUserData>,
     buffer: WlBuffer,
 ) {
-    let frame_data = match data.data.lock().unwrap().take() {
-        Some(d) => d,
-        None => {
+    // Lock pode envenenar so se outra thread panicou dentro do mutex.
+    // Em screencopy isso significaria estado corrompido — falhamos frame
+    // e seguimos. Codigo: WM-RENDER-002 (degraded screencopy).
+    let frame_data = match data.data.lock() {
+        Ok(mut guard) => match guard.take() {
+            Some(d) => d,
+            None => {
+                frame.failed();
+                return;
+            }
+        },
+        Err(poison) => {
+            tracing::warn!(
+                code = "WM-RENDER-002",
+                "[screencopy] mutex envenenado, abortando frame: {}",
+                poison
+            );
             frame.failed();
             return;
         }

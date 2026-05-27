@@ -20,4 +20,5 @@ libc = "0.2"
 fuzzy-matcher = "0.3"
 meval = "0.2"
 lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
+lumo-error = { path = "../../crates/foundation/lumo-error" }
 lumo-animation = { path = "../../crates/graphics/lumo-animation" }

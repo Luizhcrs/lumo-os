@@ -37,6 +37,7 @@ mod tests;
 pub use render::paint_lock;
 
 fn main() {
+    lumo_error::hook::install_panic_hook("lumo-lock", lumo_error::Domain::App);
     let conn = Connection::connect_to_env().expect("lumo-lock: no Wayland display");
     let (globals, mut queue) = registry_queue_init::<LumoLock>(&conn).expect("registry");
     let qh = queue.handle();

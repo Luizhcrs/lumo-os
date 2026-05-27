@@ -1172,12 +1172,40 @@ fn render_drm(state: &mut LumoState) {
     // intervalo de frame (last_frame_time delta = vsync 16.67ms, NAO duracao).
     // Acumula em state.perf via record_render_duration; log a cada 60s.
     let _render_t0 = Instant::now();
-    let render_result = surface.drm_output.render_frame::<_, LumoCustomElement>(
-        &mut backend.renderer,
-        &all_elements,
-        Color32F::new(clear[0], clear[1], clear[2], clear[3]),
-        FrameFlags::DEFAULT,
-    );
+    // S3: catch_unwind ao redor de render_frame. Crash dentro de driver GPU ou
+    // shader nao mata compositor. Em panic: log codigo WM-RENDER-PANIC e
+    // skip frame (proximo tick tenta de novo). Crash dump escrito por panic_hook.
+    let clear_color = Color32F::new(clear[0], clear[1], clear[2], clear[3]);
+    let render_result = {
+        let renderer = &mut backend.renderer;
+        let elements = &all_elements;
+        let drm_out = &mut surface.drm_output;
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            drm_out.render_frame::<_, LumoCustomElement>(
+                renderer,
+                elements,
+                clear_color,
+                FrameFlags::DEFAULT,
+            )
+        })) {
+            Ok(r) => r,
+            Err(payload) => {
+                let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+                    (*s).to_string()
+                } else if let Some(s) = payload.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "<unknown panic in render_frame>".to_string()
+                };
+                tracing::error!(
+                    code = "WM-RENDER-PANIC",
+                    msg = %msg,
+                    "render_frame panicou; skipping frame, compositor continua"
+                );
+                return;
+            }
+        }
+    };
     let render_elapsed = _render_t0.elapsed();
     // Telemetry: record frame render duration.
     lumo_telemetry::histogram("frame_render_us", render_elapsed.as_micros() as u64);

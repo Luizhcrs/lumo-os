@@ -7,3 +7,6 @@ description = "Lumo Terminal — thin wrapper que lanca alacritty com tema Lumo.
 [[bin]]
 name = "lumo-term"
 path = "src/main.rs"
+
+[dependencies]
+lumo-error = { path = "../../crates/foundation/lumo-error" }

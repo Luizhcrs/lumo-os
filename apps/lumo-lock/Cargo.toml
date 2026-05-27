@@ -15,6 +15,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 nix = { version = "0.30", features = ["poll"] }
 pam = { version = "0.8", optional = true }
 lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
+lumo-error = { path = "../../crates/foundation/lumo-error" }
 cosmic-text = "0.12"
 fontdb = "0.18"
 

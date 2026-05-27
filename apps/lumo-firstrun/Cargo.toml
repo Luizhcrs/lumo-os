@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 iced = { version = "0.13", features = ["tokio"] }
 lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
+lumo-error = { path = "../../crates/foundation/lumo-error" }
 tokio = { version = "1", features = ["rt-multi-thread", "process", "fs"] }
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"

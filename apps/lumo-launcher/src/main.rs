@@ -41,6 +41,7 @@ pub const PANEL_RADIUS: f32 = 16.0;
 pub const SEARCH_BOX_H: f32 = 48.0;
 
 fn main() {
+    lumo_error::hook::install_panic_hook("lumo-launcher", lumo_error::Domain::App);
     let entries = desktop::load_desktop_entries();
     let recent = recent::RecentApps::load();
     let conn = Connection::connect_to_env().expect("wayland connect");

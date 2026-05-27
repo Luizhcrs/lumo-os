@@ -20,6 +20,7 @@ use iced::{Settings, Size};
 pub const FIRST_RUN_FLAG: &str = "/var/lib/lumo/first-run-done";
 
 fn main() -> iced::Result {
+    lumo_error::hook::install_panic_hook("lumo-firstrun", lumo_error::Domain::App);
     // Se o flag ja existe, nao exibir wizard.
     if std::path::Path::new(FIRST_RUN_FLAG).exists() {
         return Ok(());

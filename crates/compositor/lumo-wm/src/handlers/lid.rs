@@ -27,12 +27,13 @@ pub enum LidEvent {
 /// Registers a calloop channel that delivers LidEvent to the compositor event loop.
 pub fn register_lid_watcher(loop_handle: &LoopHandle<'static, LumoState>) {
     let (tx, rx) = channel::channel::<LidEvent>();
-    let state_path = find_lid_state_path();
-    if state_path.is_none() {
-        tracing::warn!("[lid] ACPI lid state not found, handler disabled");
+    let Some(state_path) = find_lid_state_path() else {
+        tracing::warn!(
+            code = "SENSOR-MISSING-001",
+            "[lid] ACPI lid state not found, handler disabled"
+        );
         return;
-    }
-    let state_path = state_path.unwrap();
+    };
 
     std::thread::spawn(move || {
         let mut last = LidEvent::Open;

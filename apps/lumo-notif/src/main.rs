@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 
 #[tokio::main]
 async fn main() {
+    lumo_error::hook::install_panic_hook("lumo-notif", lumo_error::Domain::App);
     let (tx, rx) = mpsc::channel::<dbus::NotifEvent>(64);
     let tx2 = tx.clone();
     tokio::spawn(async move {

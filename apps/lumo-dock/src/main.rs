@@ -41,6 +41,7 @@ pub const SEPARATOR_H: f32 = 28.0;
 pub const DOCK_RADIUS: f32 = 16.0;
 
 fn main() {
+    lumo_error::hook::install_panic_hook("lumo-dock", lumo_error::Domain::App);
     let cfg = config::DockConfig::load();
     let conn = Connection::connect_to_env().expect("wayland connect");
     let (globals, mut queue) = registry_queue_init::<LumoDock>(&conn).expect("registry init");

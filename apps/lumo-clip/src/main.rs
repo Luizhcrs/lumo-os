@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
+    lumo_error::hook::install_panic_hook("lumo-clip", lumo_error::Domain::App);
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()

@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 iced = { version = "0.13", features = ["tokio", "image", "svg"] }
 lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
+lumo-error = { path = "../../crates/foundation/lumo-error" }
 lumo-telemetry = { path = "../../crates/foundation/lumo-telemetry" }
 trash = "5"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }

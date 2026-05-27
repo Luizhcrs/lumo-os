@@ -4471,6 +4471,7 @@ name = "lumo-about"
 version = "0.1.0"
 dependencies = [
  "iced",
+ "lumo-error",
  "lumo-foundation",
 ]
 
@@ -4535,6 +4536,7 @@ dependencies = [
  "axum",
  "bytes",
  "http-body-util",
+ "lumo-error",
  "lumo-ipc",
  "once_cell",
  "serde",
@@ -4553,6 +4555,7 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "iced",
+ "lumo-error",
  "lumo-foundation",
  "meval",
  "tokio",
@@ -4565,6 +4568,7 @@ version = "0.1.0"
 dependencies = [
  "libc",
  "lumo-animation",
+ "lumo-error",
  "lumo-foundation",
  "nix 0.30.1",
  "serde",
@@ -4582,6 +4586,7 @@ version = "0.1.0"
 dependencies = [
  "libc",
  "lumo-animation",
+ "lumo-error",
  "lumo-foundation",
  "nix 0.30.1",
  "serde",
@@ -4596,6 +4601,7 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "iced",
+ "lumo-error",
  "lumo-foundation",
  "tempfile",
  "tokio",
@@ -4620,6 +4626,7 @@ dependencies = [
  "futures",
  "iced",
  "image 0.24.9",
+ "lumo-error",
  "lumo-foundation",
  "lumo-telemetry",
  "mime_guess",
@@ -4635,6 +4642,7 @@ name = "lumo-firstrun"
 version = "0.1.0"
 dependencies = [
  "iced",
+ "lumo-error",
  "lumo-foundation",
  "serde",
  "tempfile",
@@ -4718,6 +4726,7 @@ dependencies = [
  "fuzzy-matcher",
  "libc",
  "lumo-animation",
+ "lumo-error",
  "lumo-foundation",
  "meval",
  "nix 0.30.1",
@@ -4734,6 +4743,7 @@ dependencies = [
  "chrono",
  "cosmic-text 0.12.1",
  "fontdb 0.18.0",
+ "lumo-error",
  "lumo-foundation",
  "nix 0.30.1",
  "pam",
@@ -4748,6 +4758,7 @@ dependencies = [
  "futures",
  "iced",
  "libc",
+ "lumo-error",
  "lumo-foundation",
  "tokio",
  "zbus 5.15.0",
@@ -4760,6 +4771,7 @@ dependencies = [
  "chrono",
  "futures",
  "iced",
+ "lumo-error",
  "lumo-foundation",
  "tempfile",
  "tokio",
@@ -4771,6 +4783,7 @@ name = "lumo-notif"
 version = "0.1.0"
 dependencies = [
  "lumo-animation",
+ "lumo-error",
  "lumo-foundation",
  "nix 0.30.1",
  "serde",
@@ -4794,6 +4807,7 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "iced",
+ "lumo-error",
  "lumo-foundation",
  "lumo-sensors",
  "serde",
@@ -4814,6 +4828,7 @@ dependencies = [
  "gpui_platform",
  "libc",
  "lumo-animation",
+ "lumo-error",
  "lumo-foundation",
  "lumo-ipc",
  "lumo-sensors",
@@ -4831,6 +4846,7 @@ name = "lumo-store"
 version = "0.1.0"
 dependencies = [
  "iced",
+ "lumo-error",
  "lumo-foundation",
  "serde",
  "tempfile",
@@ -4861,6 +4877,9 @@ dependencies = [
 [[package]]
 name = "lumo-term"
 version = "0.1.0"
+dependencies = [
+ "lumo-error",
+]
 
 [[package]]
 name = "lumo-text"
@@ -4883,6 +4902,7 @@ dependencies = [
  "input",
  "libc",
  "libseat",
+ "lumo-error",
  "lumo-foundation",
  "lumo-ipc",
  "lumo-sensors",

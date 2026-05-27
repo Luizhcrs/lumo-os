@@ -45,6 +45,7 @@ lumo-ipc = { path = "../lumo-ipc" }
 lumo-foundation = { path = "../../foundation/lumo-foundation" }
 lumo-sensors = { path = "../../system/lumo-sensors" }
 lumo-telemetry = { path = "../../foundation/lumo-telemetry" }
+lumo-error = { path = "../../foundation/lumo-error" }
 # A19: wallpaper decode (jpeg+png minimo, sem default features pra evitar bloat).
 libc = "0.2"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }

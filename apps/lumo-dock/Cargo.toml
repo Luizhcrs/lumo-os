@@ -16,4 +16,5 @@ toml = { version = "0.8", features = ["parse"] }
 nix = { version = "0.30", features = ["poll"] }
 libc = "0.2"
 lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
+lumo-error = { path = "../../crates/foundation/lumo-error" }
 lumo-animation = { path = "../../crates/graphics/lumo-animation" }

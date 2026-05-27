@@ -314,9 +314,20 @@ impl LumoState {
         let titlebar_bg_shader: Option<crate::backend::corner_shader::TitlebarBgShader> = None;
 
         let mut seat = seat_state.new_wl_seat(&display_handle, "lumo-seat-0");
+        // WM-INIT-001: fatal cedo. add_keyboard so falha se xkb runtime
+        // ausente (sistema sem libxkbcommon). Mensagem aponta pra fix.
         let keyboard = seat
             .add_keyboard(Default::default(), 200, 25)
-            .expect("falha ao adicionar keyboard");
+            .unwrap_or_else(|e| {
+                let err = lumo_error::lumo_err!(
+                    lumo_error::Domain::Compositor,
+                    lumo_error::Severity::Fatal,
+                    "WM-INIT-001",
+                    "add_keyboard falhou (xkb ausente?): {e}"
+                );
+                tracing::error!(code = "WM-INIT-001", "{}", err);
+                panic!("{err}");
+            });
         let pointer = seat.add_pointer();
         // W10.B: must create before display_handle moves into Self.
         let idle_notifier_state = IdleNotifierState::new(&display_handle, loop_handle.clone());

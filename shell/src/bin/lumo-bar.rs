@@ -4,5 +4,6 @@
 //! em `shell/src/bar/`. Este arquivo so chama `lumo_shell::bar::run()`.
 
 fn main() {
+    lumo_error::hook::install_panic_hook("lumo-bar", lumo_error::Domain::Shell);
     lumo_shell::bar::run();
 }

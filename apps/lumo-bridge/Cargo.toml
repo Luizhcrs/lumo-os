@@ -22,6 +22,7 @@ anyhow = "1"
 uuid = { version = "1", features = ["v4"] }
 once_cell = "1"
 lumo-ipc = { path = "../../crates/compositor/lumo-ipc" }
+lumo-error = { path = "../../crates/foundation/lumo-error" }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
