@@ -1260,12 +1260,16 @@ fn render_drm(state: &mut LumoState) {
                             let p50 = durs[n / 2].as_millis();
                             let p95 = durs[(n * 95 / 100).min(n - 1)].as_millis();
                             let p99 = durs[(n * 99 / 100).min(n - 1)].as_millis();
+                            // NOTA: p50/p95/p99 aqui sao INTERVALOS entre frames
+                            // (idle gap incluido), nao tempo de trabalho do compositor.
+                            // Pra duracao real de render ver histogram `frame_render_us`
+                            // logado por record_render_duration em perf.rs.
                             tracing::info!(
                                 samples = n,
-                                p50_ms = p50,
-                                p95_ms = p95,
-                                p99_ms = p99,
-                                "L2: frame timing 60s window"
+                                interval_p50_ms = p50,
+                                interval_p95_ms = p95,
+                                interval_p99_ms = p99,
+                                "L2: frame interval 60s window (idle gap incluido, NAO trabalho)"
                             );
                             surface.frame_durations.clear();
                             surface.last_timing_log = Instant::now();

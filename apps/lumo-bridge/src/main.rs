@@ -25,7 +25,10 @@ use tracing_subscriber::EnvFilter;
 mod auth;
 mod exec;
 mod lumo_ipc;
+mod rate_limit;
 mod routes;
+
+pub use rate_limit::RateLimiter;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -77,6 +80,10 @@ async fn healthz(Extension(state): Extension<AppState>) -> (StatusCode, Json<ser
 }
 
 pub fn build_router(state: AppState) -> Router {
+    build_router_with_limiter(state, Arc::new(RateLimiter::from_env()))
+}
+
+pub fn build_router_with_limiter(state: AppState, limiter: Arc<RateLimiter>) -> Router {
     let protected = Router::new()
         .route("/state", get(routes::state::get_state))
         .route("/screenshot", get(routes::screenshot::get_screenshot))
@@ -89,6 +96,7 @@ pub fn build_router(state: AppState) -> Router {
         .route("/log/tail", get(routes::log::tail))
         .route("/state/dump", get(routes::state::dump))
         .route("/procs", get(routes::state::procs))
+        .layer(middleware::from_fn(rate_limit::require_rate_limit))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_bearer,
@@ -99,6 +107,7 @@ pub fn build_router(state: AppState) -> Router {
         .merge(protected)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
+        .layer(Extension(limiter))
         .layer(Extension(state))
 }
 
@@ -139,7 +148,7 @@ async fn main() -> Result<()> {
     let addr: SocketAddr = BIND_ADDR.parse()?;
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("listening on {}", addr);
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())
 }
 

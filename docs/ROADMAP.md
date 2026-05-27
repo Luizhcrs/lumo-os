@@ -45,6 +45,15 @@ Pipeline grafica e cor completas. IPC operacional. Sensores basicos implementado
 - Benchmark documentado: latencia input, frame time, consumo RAM
 - Proposta white-label: integracao com Samsung Knox / One UI coexistence
 
+## Backlog Tecnico (post-W37)
+
+Gargalos identificados na analise da pipeline 2026-05-27. Numerados pra referencia.
+
+- **#5 XWayland**: smithay `XWaylandShell` + binario `Xwayland`. Spec ~500 LOC. Apps Discord/GIMP/Steam/LibreOffice voltam a funcionar. Risco: override-redirect + focus-stealing quirks. Estimativa 1 semana.
+- **#6 Migracao multibinary**: ver ADR-001. Mover `lumo-appsd` + `lumo-appctl` pra `archive/`, criar symlinks no install. Esforco 1 dia.
+- **#7 shell tests +150**: bar/render, dropdowns por categoria, desktop/input state machine, paint_ctx_menu. Target 47 -> 200. Esforco 2 dias.
+- **#9 focus debounce 50ms**: state.focus_debounce_timer + calloop schedule. Evita pills piscando + flood IPC em transicoes rapidas. Esforco 4h.
+
 ## Itens Descartados
 
 | Feature | Motivo |

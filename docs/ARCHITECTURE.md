@@ -77,4 +77,16 @@ Daemon DBus `com.canonical.AppMenu.Registrar` implantado no compositor. Apps GTK
 
 ## Wayland Protocols Suportados
 
-xdg_shell, wlr-layer-shell, wl_shm, linux-dmabuf-v1, xdg-decoration, presentation-time, relative-pointer-v1, pointer-constraints-v1, pointer-gestures-v1, primary-selection, xdg-activation, fractional-scale, cursor-shape, xdg-toplevel-icon.
+xdg_shell, wlr-layer-shell, wl_shm, linux-dmabuf-v1, xdg-decoration, presentation-time, relative-pointer-v1, pointer-constraints-v1, pointer-gestures-v1, primary-selection, xdg-activation, fractional-scale, cursor-shape, wp-viewporter, wp-single-pixel-buffer, wp-presentation.
+
+**Opt-in via env (ver ADRs)**:
+- `xdg-toplevel-icon-v1` — `LUMO_ENABLE_TOPLEVEL_ICON=1` (ADR-003).
+- `wp-color-manager-v1` — `LUMO_ENABLE_COLOR_MGMT=1` (ADR-002).
+
+## ADRs
+
+Decisoes arquiteturais em `docs/adr/`. Index e criterio em `docs/adr/README.md`.
+
+## Bridge HTTP (apps/lumo-bridge)
+
+Controle remoto via HTTP em `0.0.0.0:7778`. Auth Bearer token + rate limit per-peer (token bucket, 100rps/burst 50 default). Tuning via env `LUMO_BRIDGE_RPS` / `LUMO_BRIDGE_BURST`.

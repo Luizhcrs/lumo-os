@@ -3,6 +3,7 @@ name = "lumo-appctl"
 version = "0.1.0"
 edition = "2021"
 description = "Lumo Apps CLI - cliente thin pra lumo-appsd daemon (W34.1)."
+# DEPRECATED: ver docs/adr/001-multibinary-app-canonical.md
 
 [[bin]]
 name = "lumo-appctl"

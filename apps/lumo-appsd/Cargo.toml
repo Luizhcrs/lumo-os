@@ -2,6 +2,8 @@
 name = "lumo-appsd"
 version = "0.1.0"
 edition = "2021"
+# DEPRECATED: ver docs/adr/001-multibinary-app-canonical.md
+# Migrar pra symlinks lumo-X via crate lumo-apps. Manter ate switch completo.
 
 [[bin]]
 name = "lumo-appsd"
