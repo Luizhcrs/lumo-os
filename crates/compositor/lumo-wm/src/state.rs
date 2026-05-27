@@ -80,7 +80,7 @@ pub struct LumoState {
     pub fractional_scale_state: FractionalScaleManagerState,
     pub cursor_shape_state: CursorShapeManagerState,
     #[allow(dead_code)]
-    pub xdg_toplevel_icon_manager: XdgToplevelIconManager,
+    pub xdg_toplevel_icon_manager: Option<XdgToplevelIconManager>,
 
     // A10 frente 1: linux-dmabuf-v1.
     //
@@ -277,7 +277,18 @@ impl LumoState {
         let xdg_activation_state = XdgActivationState::new::<Self>(&display_handle);
         let fractional_scale_state = FractionalScaleManagerState::new::<Self>(&display_handle);
         let cursor_shape_state = CursorShapeManagerState::new::<Self>(&display_handle);
-        let xdg_toplevel_icon_manager = XdgToplevelIconManager::new::<Self>(&display_handle);
+        // W37.18: xdg_toplevel_icon_manager_v1 DESABILITADO por default.
+        // Smithay 0.7.0 tem bug em register_buffer_destruction_hook que NAO
+        // desregistra ao destruir icon. Chromium sequencia (icon.destroy ->
+        // buffer.destroy) e SPEC-COMPLIANT mas smithay emite protocol error
+        // "buffer destroyed before icon" -> Chromium fecha conexao = broken
+        // pipe. Sem global, Chromium pula icon support gracefully.
+        let xdg_toplevel_icon_manager: Option<XdgToplevelIconManager> =
+            if std::env::var("LUMO_ENABLE_TOPLEVEL_ICON").is_ok() {
+                Some(XdgToplevelIconManager::new::<Self>(&display_handle))
+            } else {
+                None
+            };
 
         // DmabufState criado vazio. Global so registrado quando renderer
         // GPU sobe (winit::init OU drm::run).
