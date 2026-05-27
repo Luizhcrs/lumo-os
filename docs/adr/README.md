@@ -17,6 +17,7 @@ Status: `proposed` | `accepted` | `superseded by ADR-XXX` | `deprecated`.
 | 003 | xdg-toplevel-icon-v1 OFF por default | accepted | 2026-05-27 |
 | 004 | smithay fork com sRGB patches em vendor/ | accepted | 2026-05-XX |
 | 005 | Shell em 3 processos (bar/desktop/dock) | accepted | 2026-05-XX |
+| 006 | Error handling strategy | accepted | 2026-05-27 |
 
 ## Quando criar ADR
 

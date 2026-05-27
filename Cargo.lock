@@ -4603,6 +4603,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumo-error"
+version = "0.1.0"
+dependencies = [
+ "backtrace",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lumo-files"
 version = "0.1.0"
 dependencies = [
