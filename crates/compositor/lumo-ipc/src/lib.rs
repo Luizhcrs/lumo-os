@@ -73,6 +73,25 @@ pub enum LumoEvent {
         name: String,
         index: u32,
     },
+    /// UX2: subsystem entrou em modo degradado. Bar mostra pill warning.
+    /// Compositor emite quando feature off (vsync off, color mgmt off, etc).
+    DegradedFeature {
+        code: String,
+        label: String,
+    },
+    /// UX2: subsystem voltou ao normal. Bar remove pill.
+    DegradedFeatureCleared {
+        code: String,
+    },
+    /// UX3: app freeze detectado (sem Pong em 2s). Bar marca cursor wait.
+    AppFreeze {
+        pid: u32,
+        app_id: String,
+    },
+    /// UX3: app respondeu, freeze cleared.
+    AppFreezeCleared {
+        pid: u32,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -353,5 +372,29 @@ mod tests {
         let s = encode_event(&ev);
         assert!(!s.is_empty());
         assert!(s.ends_with('\n'));
+    }
+
+    #[test]
+    fn degraded_feature_event_roundtrip() {
+        let ev = LumoEvent::DegradedFeature {
+            code: "WM-RENDER-002".into(),
+            label: "Vsync off".into(),
+        };
+        let s = try_encode_event(&ev).unwrap();
+        let line = s.trim();
+        let back: LumoEvent = serde_json::from_str(line).unwrap();
+        assert!(matches!(back, LumoEvent::DegradedFeature { .. }));
+    }
+
+    #[test]
+    fn app_freeze_event_roundtrip() {
+        let ev = LumoEvent::AppFreeze {
+            pid: 42,
+            app_id: "lumo-files".into(),
+        };
+        let s = try_encode_event(&ev).unwrap();
+        let line = s.trim();
+        let back: LumoEvent = serde_json::from_str(line).unwrap();
+        assert!(matches!(back, LumoEvent::AppFreeze { pid: 42, .. }));
     }
 }

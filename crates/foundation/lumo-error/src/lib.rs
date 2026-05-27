@@ -123,6 +123,14 @@ impl LumoError {
     pub fn is_fatal(&self) -> bool {
         matches!(self.severity, Severity::Fatal)
     }
+
+    /// Tupla (code, severity_str) pra passar a sistemas de telemetria.
+    /// Evita dep circular lumo-error <-> lumo-telemetry; caller faz:
+    ///   let (c, s) = err.telemetry_key();
+    ///   lumo_telemetry::record_error(c, s);
+    pub fn telemetry_key(&self) -> (&str, &'static str) {
+        (self.code.as_ref(), self.severity.as_str())
+    }
 }
 
 impl fmt::Display for LumoError {

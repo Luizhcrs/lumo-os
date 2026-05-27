@@ -14,6 +14,10 @@ use std::os::unix::net::UnixStream;
 use lumo_foundation::{LumoTheme, LumoTokens};
 use lumo_ipc::{default_socket_path, LumoCommand};
 
+mod crash;
+mod diag;
+mod logs;
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() {
@@ -21,12 +25,18 @@ fn main() {
         eprintln!("  theme set --accent #RRGGBB");
         eprintln!("  theme mode light|dark");
         eprintln!("  theme reset");
+        eprintln!("  crash list | crash show <id>");
+        eprintln!("  diag [--json]");
+        eprintln!("  logs [--subsystem <name>] [-n <lines>]");
         std::process::exit(1);
     }
 
     match args[0].as_str() {
         "theme" => cmd_theme(&args[1..]),
         "layout" => cmd_layout(&args[1..]),
+        "crash" => crash::run(&args[1..]),
+        "diag" => diag::run(&args[1..]),
+        "logs" => logs::run(&args[1..]),
         other => {
             eprintln!("subcomando desconhecido: {other}");
             std::process::exit(1);

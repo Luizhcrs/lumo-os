@@ -46,6 +46,15 @@ pub fn histogram(name: &str, value_us: u64) {
     }
 }
 
+/// Increment errors_total{code, severity}. No-op se init() nao foi chamado.
+pub fn record_error(code: &str, severity: &str) {
+    if let Some(s) = store() {
+        if let Ok(mut guard) = s.lock() {
+            guard.record_error(code, severity);
+        }
+    }
+}
+
 /// Time a closure and record the duration in a named histogram.
 /// Returns the closure result regardless of init() status.
 pub fn time<F, R>(name: &str, f: F) -> R

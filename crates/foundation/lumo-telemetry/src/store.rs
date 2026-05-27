@@ -15,11 +15,14 @@ pub struct Snapshot {
     pub ts: String,
     pub events_per_kind: HashMap<String, usize>,
     pub histograms: HashMap<String, SnapshotJson>,
+    pub errors: HashMap<String, u64>,
 }
 
 pub struct TelemetryStore {
     ring: VecDeque<Event>,
     histograms: HashMap<String, LumoHistogram>,
+    /// errors_total{code, severity}. Key = "CODE/severity".
+    errors: HashMap<String, u64>,
 }
 
 impl TelemetryStore {
@@ -27,7 +30,13 @@ impl TelemetryStore {
         Self {
             ring: VecDeque::with_capacity(RING_CAPACITY),
             histograms: HashMap::new(),
+            errors: HashMap::new(),
         }
+    }
+
+    pub fn record_error(&mut self, code: &str, severity: &str) {
+        let key = format!("{}/{}", code, severity);
+        *self.errors.entry(key).or_insert(0) += 1;
     }
 
     pub fn push_event(&mut self, event: Event) {
@@ -62,6 +71,7 @@ impl TelemetryStore {
             ts,
             events_per_kind,
             histograms,
+            errors: self.errors.clone(),
         }
     }
 }
@@ -149,5 +159,23 @@ mod tests {
     fn ring_capacity_constant_matches_spec() {
         // Galaxy Book 4 fast SSD: 1000 events e sweet spot RAM/duration.
         assert_eq!(RING_CAPACITY, 1000);
+    }
+
+    #[test]
+    fn record_error_creates_and_increments_key() {
+        let mut s = TelemetryStore::new();
+        s.record_error("WM-RENDER-002", "degraded");
+        s.record_error("WM-RENDER-002", "degraded");
+        s.record_error("IPC-CONN-001", "recoverable");
+        let snap = s.build_snapshot();
+        assert_eq!(snap.errors.get("WM-RENDER-002/degraded"), Some(&2));
+        assert_eq!(snap.errors.get("IPC-CONN-001/recoverable"), Some(&1));
+    }
+
+    #[test]
+    fn snapshot_includes_errors_map() {
+        let mut s = TelemetryStore::new();
+        let snap = s.build_snapshot();
+        assert!(snap.errors.is_empty());
     }
 }

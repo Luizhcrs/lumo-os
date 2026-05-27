@@ -12,3 +12,4 @@ path = "src/main.rs"
 lumo-ipc = { path = "../../compositor/lumo-ipc" }
 lumo-foundation = { path = "../../foundation/lumo-foundation" }
 serde_json = "1"
+serde = { version = "1", features = ["derive"] }
