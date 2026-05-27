@@ -910,6 +910,14 @@ impl XdgDecorationHandler for LumoState {
 
 smithay::delegate_xdg_decoration!(LumoState);
 
+// W37.11: protocols modernos pra apps Chromium/Kate/Firefox.
+// Deps: wp_viewporter (HiDPI surface scaling),
+// wp_single_pixel_buffer_v1 (Chromium 113+ hard requires),
+// wp_presentation_time (vsync/frame callbacks).
+smithay::delegate_viewporter!(LumoState);
+smithay::delegate_single_pixel_buffer!(LumoState);
+smithay::delegate_presentation!(LumoState);
+
 #[cfg(test)]
 mod decoration_decision_tests {
     use super::decide_decoration_mode;
@@ -937,6 +945,21 @@ pub fn init_xdg_decoration(state: &mut LumoState) {
     use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
     state.xdg_decoration_state = Some(XdgDecorationState::new::<LumoState>(&state.display_handle));
     tracing::info!("M1: xdg_decoration global registrado");
+}
+
+/// W37.11: registra globals dos protocols modernos no compositor.
+/// Destrava Chromium/Kate/Firefox + apps que dependem de HiDPI scaling,
+/// single-pixel buffers e presentation feedback.
+pub fn init_modern_protocols(state: &mut LumoState) {
+    use smithay::wayland::presentation::PresentationState;
+    use smithay::wayland::single_pixel_buffer::SinglePixelBufferState;
+    use smithay::wayland::viewporter::ViewporterState;
+    let dh = &state.display_handle;
+    let _ = ViewporterState::new::<LumoState>(dh);
+    let _ = SinglePixelBufferState::new::<LumoState>(dh);
+    // CLOCK_MONOTONIC = 1 (POSIX). Smithay usa pra timestamps de frame.
+    let _ = PresentationState::new::<LumoState>(dh, 1);
+    tracing::info!("W37.11: viewporter + single_pixel_buffer + presentation registrados");
 }
 
 /// Estado por-cliente exigido pelo CompositorHandler.

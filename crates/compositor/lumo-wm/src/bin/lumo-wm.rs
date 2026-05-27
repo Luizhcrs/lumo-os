@@ -238,6 +238,7 @@ fn main() -> Result<()> {
     let mut state = LumoState::new(display_handle, event_loop.handle(), socket_name.clone());
 
     lumo_wm::state::init_xdg_decoration(&mut state);
+    lumo_wm::state::init_modern_protocols(&mut state);
 
     // W8.A: screencopy global.
     state.screencopy = Some(lumo_wm::handlers::screencopy::ScreencopyState::new(
