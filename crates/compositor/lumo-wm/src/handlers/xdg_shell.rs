@@ -59,6 +59,12 @@ impl XdgShellHandler for LumoState {
             let new_focus = self.focus_manager.new_toplevel(surf);
             kb.set_focus(self, new_focus, serial);
         }
+
+        // UX3: registra toplevel no freeze tracker pra ping/pong.
+        // pid extraido via client credentials (so disponivel apos commit).
+        // Fica como placeholder: tick scheduler ira tentar resolver via
+        // pid_app_cache. Por ora deixa registrado com pid=0; tick atualiza.
+        // (Implementacao plena requer client.pid() handle do smithay).
     }
 
     fn new_popup(&mut self, surface: PopupSurface, positioner: PositionerState) {

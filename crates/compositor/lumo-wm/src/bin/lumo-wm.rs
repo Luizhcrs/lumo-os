@@ -243,6 +243,9 @@ fn main() -> Result<()> {
     lumo_wm::state::init_xdg_decoration(&mut state);
     lumo_wm::state::init_modern_protocols(&mut state);
 
+    // UX2: pills iniciais para features OFF (ADR-002 color, ADR-003 icon).
+    state.emit_initial_degraded();
+
     // W8.A: screencopy global.
     state.screencopy = Some(lumo_wm::handlers::screencopy::ScreencopyState::new(
         &state.display_handle.clone(),

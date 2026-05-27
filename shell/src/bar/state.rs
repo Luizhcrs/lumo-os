@@ -76,6 +76,10 @@ pub(crate) struct BarSnapshot {
     pub bar_alpha: f32,
     // A31.3: estado do modal de senha wifi.
     pub password_modal: PasswordModalState,
+    /// UX2: pills warning por feature degradada (code -> label).
+    pub degraded: std::collections::BTreeMap<String, String>,
+    /// UX3: apps em freeze (pid -> app_id). Title bar mostra "(Nao responde)".
+    pub frozen: std::collections::BTreeMap<u32, String>,
 }
 
 /// Resultado de paint_frame: posicoes calculadas pra hit-test no proximo frame.
@@ -943,4 +947,8 @@ pub(crate) struct LumoBar {
     pub pwd_cancel_rect: Option<(f32, f32, f32, f32)>,
     // A31.3: receiver do thread nm_connect (None = sem conexao pendente).
     pub nm_connect_rx: Option<std::sync::mpsc::Receiver<crate::bar::system_info::NmConnectResult>>,
+    /// UX2: pills warning. code -> label.
+    pub degraded: std::collections::BTreeMap<String, String>,
+    /// UX3: apps em freeze. pid -> app_id.
+    pub frozen: std::collections::BTreeMap<u32, String>,
 }

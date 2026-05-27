@@ -31,6 +31,7 @@ pub mod password_modal;
 pub mod pills;
 pub mod registrar;
 pub mod state;
+pub mod status_pills;
 pub mod system_info;
 pub mod tokens;
 

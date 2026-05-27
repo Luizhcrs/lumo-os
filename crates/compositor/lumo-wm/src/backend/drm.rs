@@ -161,6 +161,8 @@ pub struct DrmSurfaceData {
     pub output: Output,
     pub drm_output: LumoDrmOutput,
     pub pending_flip: bool,
+    /// UX2: queue_frame falhas consecutivas. 3 = WM-RENDER-002 degraded.
+    pub queue_frame_fail_count: u32,
     pub last_frame_time: Instant,
     // L2: frame timing log p50/p95/p99 a cada 60s.
     pub frame_durations: Vec<Duration>,
@@ -687,6 +689,7 @@ pub fn run(
             output: output.clone(),
             drm_output,
             pending_flip: false,
+            queue_frame_fail_count: 0,
             last_frame_time: Instant::now(),
             // L2: frame timing log.
             frame_durations: Vec::with_capacity(512),
@@ -1309,7 +1312,26 @@ fn render_drm(state: &mut LumoState) {
                         }
                     }
                     Err(err) => {
-                        tracing::warn!(?err, "queue_frame falhou");
+                        // S3 + UX2: contador de falhas consecutivas pra triggerar degraded.
+                        // 3 falhas seguidas = vsync degraded (broadcast pill).
+                        surface.queue_frame_fail_count += 1;
+                        tracing::warn!(
+                            code = "WM-RENDER-002",
+                            ?err,
+                            fail_count = surface.queue_frame_fail_count,
+                            "queue_frame falhou"
+                        );
+                        if surface.queue_frame_fail_count == 3 {
+                            state.report_degraded("WM-RENDER-002", "Vsync off");
+                        }
+                    }
+                }
+                // Reset contador em frame de sucesso (queue_frame Ok path).
+                // Path Ok ja atualizou pending_flip = true.
+                if surface.pending_flip {
+                    if surface.queue_frame_fail_count > 0 {
+                        surface.queue_frame_fail_count = 0;
+                        state.report_degraded_cleared("WM-RENDER-002");
                     }
                 }
             } else if trace {

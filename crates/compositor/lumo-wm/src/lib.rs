@@ -14,7 +14,9 @@
 
 pub mod backend;
 pub mod cursor;
+pub mod degraded;
 pub mod focus;
+pub mod freeze;
 pub mod handlers;
 pub mod hardware;
 pub mod input;

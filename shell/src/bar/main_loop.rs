@@ -218,6 +218,8 @@ pub fn run() {
         pwd_confirm_rect: None,
         pwd_cancel_rect: None,
         nm_connect_rx: None,
+        degraded: std::collections::BTreeMap::new(),
+        frozen: std::collections::BTreeMap::new(),
     };
 
     let mut last_tick = Instant::now();
@@ -332,6 +334,24 @@ pub fn run() {
                         },
                     );
                     state.refresh_animating = true;
+                }
+                // UX2/UX3: aplica degraded + freeze trackers.
+                let had_change = !res.degraded_set.is_empty()
+                    || !res.degraded_cleared.is_empty()
+                    || !res.freeze_set.is_empty()
+                    || !res.freeze_cleared.is_empty();
+                crate::bar::ipc::apply_degraded(
+                    &mut state.degraded,
+                    res.degraded_set,
+                    res.degraded_cleared,
+                );
+                crate::bar::ipc::apply_freeze(
+                    &mut state.frozen,
+                    res.freeze_set,
+                    res.freeze_cleared,
+                );
+                if had_change {
+                    state.update_size_and_redraw(&qh);
                 }
             }
         }

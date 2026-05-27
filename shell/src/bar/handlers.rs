@@ -191,6 +191,9 @@ impl LumoBar {
             },
             // A31.3: modal de senha wifi.
             password_modal: self.password_modal.clone(),
+            // UX2/UX3: degraded + freeze trackers vindos do IPC.
+            degraded: self.degraded.clone(),
+            frozen: self.frozen.clone(),
         };
 
         let stride = self.width as i32 * 4;

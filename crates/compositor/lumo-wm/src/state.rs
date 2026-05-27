@@ -131,6 +131,10 @@ pub struct LumoState {
     /// W34.13: cache pid -> (app_id, title) populado por AppActivated.
     /// focus_changed resolve app_id vazio (Iced lifecycle bug) via lookup.
     pub pid_app_cache: std::collections::HashMap<u32, (String, String)>,
+    /// UX2: tracker de features degradadas.
+    pub degraded: crate::degraded::DegradedTracker,
+    /// UX3: tracker de freeze por ping/pong.
+    pub freeze: crate::freeze::FreezeTracker,
 
     // B2: keybindings configuracao carregada de TOML.
     pub keyboard_config: KeyboardConfig,
@@ -356,6 +360,8 @@ impl LumoState {
             socket_name,
             running: true,
             clock,
+            degraded: crate::degraded::DegradedTracker::new(),
+            freeze: crate::freeze::FreezeTracker::new(),
             compositor_state,
             xdg_shell_state,
             xdg_decoration_state: None,
@@ -782,6 +788,44 @@ impl LumoState {
     /// o icone selecionado via xdg-open.
     pub fn broadcast_desktop_open_selected(&mut self) {
         self.ipc.broadcast(&LumoEvent::DesktopOpenSelected);
+    }
+
+    /// UX2: marca feature degradada + emit IPC se transicao.
+    pub fn report_degraded(&mut self, code: &str, label: &str) {
+        if let Some(ev) = self.degraded.set(code, label) {
+            tracing::warn!(code = code, label = label, "degraded mode ON");
+            self.ipc.broadcast(&ev);
+            lumo_telemetry::record_error(code, "degraded");
+        }
+    }
+
+    /// UX2: marca feature recuperada + emit IPC se transicao.
+    pub fn report_degraded_cleared(&mut self, code: &str) {
+        if let Some(ev) = self.degraded.clear(code) {
+            tracing::info!(code = code, "degraded mode CLEARED");
+            self.ipc.broadcast(&ev);
+        }
+    }
+
+    /// UX2: emit pills iniciais para subsystems OFF por default.
+    /// Chamar apos init de protocolos opt-in (ADR-002, ADR-003).
+    pub fn emit_initial_degraded(&mut self) {
+        if self.color_manager.is_none() {
+            self.report_degraded("WM-COLOR-OFF", "Color mgmt off");
+        }
+        if self.xdg_toplevel_icon_manager.is_none() {
+            self.report_degraded("WM-ICON-OFF", "Icons disabled");
+        }
+    }
+
+    /// UX3: aplica tick freeze. Broadcasta eventos resultantes.
+    pub fn freeze_tick(&mut self) {
+        let now = std::time::Instant::now();
+        let events = self.freeze.tick(now);
+        for ev in events {
+            self.ipc.broadcast(&ev);
+            lumo_telemetry::record_error("APP-FREEZE-001", "recoverable");
+        }
     }
 
     /// Troca workspace ativo. Validacao + broadcast IPC.
