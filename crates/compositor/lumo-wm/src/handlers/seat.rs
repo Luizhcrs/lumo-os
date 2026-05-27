@@ -156,6 +156,19 @@ impl SeatHandler for LumoState {
                 );
             }
         }
+        // F1: apps GTK/Qt em Wayland puro (Mousepad/Kate/Chromium) nao
+        // registram via appmenu Registrar e podem nao popular xdg_toplevel
+        // app_id/title imediatamente. Fallback final: le /proc/<pid>/comm
+        // pra ter pelo menos label do binario na bar.
+        if app_id.is_empty() && title.is_empty() && pid != 0 {
+            let comm_path = format!("/proc/{}/comm", pid);
+            if let Ok(comm) = std::fs::read_to_string(&comm_path) {
+                let c = comm.trim();
+                if !c.is_empty() {
+                    title = capitalize_first(c);
+                }
+            }
+        }
         tracing::debug!(%app_id, %title, pid, "C5: focus_changed -> ActiveApp broadcast");
         eprintln!(
             "[wm] focus_changed -> ActiveApp app_id={:?} title={:?} pid={} focused_some={}",
@@ -321,6 +334,47 @@ pub fn cursor_icon_to_xcursor_name(icon: smithay::input::pointer::CursorIcon) ->
         CursorIcon::NeswResize => "nesw-resize",
         CursorIcon::NwseResize => "nwse-resize",
         _ => "default",
+    }
+}
+
+/// F1: capitaliza primeira letra. Usado como fallback de display
+/// quando xdg_toplevel app_id/title vazios — le /proc/<pid>/comm
+/// "mousepad" -> "Mousepad".
+fn capitalize_first(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().chain(chars).collect(),
+    }
+}
+
+#[cfg(test)]
+mod capitalize_tests {
+    use super::capitalize_first;
+
+    #[test]
+    fn empty_returns_empty() {
+        assert_eq!(capitalize_first(""), "");
+    }
+
+    #[test]
+    fn lowercase_first_capitalized() {
+        assert_eq!(capitalize_first("mousepad"), "Mousepad");
+    }
+
+    #[test]
+    fn already_uppercase_unchanged() {
+        assert_eq!(capitalize_first("Kate"), "Kate");
+    }
+
+    #[test]
+    fn unicode_first_capitalized() {
+        assert_eq!(capitalize_first("agua"), "Agua");
+    }
+
+    #[test]
+    fn single_char_capitalized() {
+        assert_eq!(capitalize_first("a"), "A");
     }
 }
 

@@ -186,7 +186,12 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
         ));
 
         // S2: pill fallback AppName ▾ apos pill Lumo se nao ha dbusmenu items.
-        if snap.appmenu_items.is_empty() && !snap.appmenu_app_id.is_empty() {
+        // Apps nao-nativos em Wayland puro (Mousepad/Kate/Chromium) nao
+        // registram via Registrar (appmenu-gtk-module nao porta pra Wayland).
+        // Aceita app_id OU title nao vazios pra mostrar fallback.
+        if snap.appmenu_items.is_empty()
+            && (!snap.appmenu_app_id.is_empty() || !snap.appmenu_title.is_empty())
+        {
             // UX3: sufixo " (Nao responde)" se pid em foco esta frozen.
             // Resolve via cache foco -> pid via state.degraded nao serve;
             // usamos snap.frozen direto procurando se algum pid existe.
