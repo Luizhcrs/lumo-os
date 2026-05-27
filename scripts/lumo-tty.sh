@@ -169,6 +169,15 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 ENV_FILE="$HOME/.config/lumo/env.conf"
 [ -f "$ENV_FILE" ] || ENV_FILE="$REPO/scripts/install/lumo-env.conf"
 set -a; source "$ENV_FILE"; set +a
+
+# CSD suppression: source ~/.config/environment.d/lumo-csd.conf
+# se existe. Aplica LD_PRELOAD/GTK_CSD/MOZ_GTK/QT_QPA pra todos
+# childs subsequentes (lumo-wm + clients + apps spawned via launcher).
+CSD_CONF="$HOME/.config/environment.d/lumo-csd.conf"
+if [ -f "$CSD_CONF" ]; then
+    set -a; source "$CSD_CONF"; set +a
+    echo "[lumo-tty] CSD suppress env loaded from $CSD_CONF"
+fi
 # A13: LUMO_THEME default light; override: LUMO_THEME=dark ./scripts/lumo-tty.sh
 export LUMO_THEME="${LUMO_THEME:-dark}"
 
