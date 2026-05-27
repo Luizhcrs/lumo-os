@@ -27,16 +27,18 @@ fn main() {
     }
     build.compile("lumo_decor_c");
 
-    // Symbols do .a sao puxados via --whole-archive pra preservar
-    // libdecor_plugin_description (nao referenciado por Rust mas
-    // necessario pro loader libdecor).
-    println!("cargo:rustc-link-arg=-Wl,--whole-archive");
-    println!("cargo:rustc-link-arg=-llumo_decor_c");
-    println!("cargo:rustc-link-arg=-Wl,--no-whole-archive");
+    // Linker tem que puxar libdecor_plugin_description (referenciado so
+    // por loader libdecor via dlsym, sem caller estatico em Rust).
+    // Uso --undefined pra forcar symbol resolve + --version-script pra
+    // explicitar export. Mais robusto que --whole-archive (que tem
+    // ordem-dependente entre rustc-link-lib e rustc-link-arg).
+    println!("cargo:rustc-link-arg=-Wl,--undefined=libdecor_plugin_description");
+    let ver_script = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("c-src/lumo-decor.ver");
+    println!("cargo:rustc-link-arg=-Wl,--version-script={}", ver_script.display());
+    println!("cargo:rerun-if-changed=c-src/lumo-decor.ver");
 
     for lib in &wayland.libs {
         println!("cargo:rustc-link-lib={}", lib);
     }
-    // Forca export explicito do symbol que loader procura via dlsym.
-    println!("cargo:rustc-link-arg=-Wl,--export-dynamic-symbol=libdecor_plugin_description");
 }

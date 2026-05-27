@@ -1,0 +1,6 @@
+LUMO_DECOR_1 {
+    global:
+        libdecor_plugin_description;
+    local:
+        *;
+};
