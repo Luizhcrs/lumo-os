@@ -19,6 +19,7 @@ use smithay::reexports::wayland_protocols::wp::color_management::v1::server::{
     wp_color_manager_v1::{self, WpColorManagerV1},
     wp_image_description_creator_icc_v1::{self, WpImageDescriptionCreatorIccV1},
     wp_image_description_creator_params_v1::{self, WpImageDescriptionCreatorParamsV1},
+    wp_image_description_info_v1::WpImageDescriptionInfoV1,
     wp_image_description_v1::{self, WpImageDescriptionV1},
 };
 use smithay::reexports::wayland_server::{
@@ -26,6 +27,16 @@ use smithay::reexports::wayland_server::{
 };
 
 use crate::state::LumoState;
+
+/// W37.12: gerador de image_description IDs unicos.
+/// Spec wp-color-management-v1: "Zero is reserved as an invalid id number.
+/// A compositor shall not send an invalid id number." Antes enviavamos
+/// `ready(0)` -> Chromium fechava conexao com broken pipe pos handshake.
+fn next_image_description_id() -> u32 {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static COUNTER: AtomicU32 = AtomicU32::new(1);
+    COUNTER.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Gerencia o global wp_color_manager_v1.
 pub struct ColorManagerState {
@@ -108,7 +119,7 @@ impl Dispatch<WpColorManagementOutputV1, ()> for LumoState {
         match request {
             wp_color_management_output_v1::Request::GetImageDescription { image_description } => {
                 let desc = data_init.init(image_description, ImageDescriptionKind::Srgb);
-                desc.ready(0);
+                desc.ready(next_image_description_id());
                 tracing::debug!("W13.A: output get_image_description -> sRGB ready");
             }
             wp_color_management_output_v1::Request::Destroy => {}
@@ -159,14 +170,14 @@ impl Dispatch<WpColorManagementSurfaceFeedbackV1, ()> for LumoState {
                 image_description,
             } => {
                 let desc = data_init.init(image_description, ImageDescriptionKind::Srgb);
-                desc.ready(0);
+                desc.ready(next_image_description_id());
                 tracing::debug!("W13.A: surface_feedback get_preferred -> sRGB");
             }
             wp_color_management_surface_feedback_v1::Request::GetPreferredParametric {
                 image_description,
             } => {
                 let desc = data_init.init(image_description, ImageDescriptionKind::Srgb);
-                desc.ready(0);
+                desc.ready(next_image_description_id());
             }
             wp_color_management_surface_feedback_v1::Request::Destroy => {}
             _ => {}
@@ -193,15 +204,45 @@ impl Dispatch<WpImageDescriptionV1, ImageDescriptionKind> for LumoState {
         request: wp_image_description_v1::Request,
         _data: &ImageDescriptionKind,
         _dh: &DisplayHandle,
-        _data_init: &mut DataInit<'_, LumoState>,
+        data_init: &mut DataInit<'_, LumoState>,
     ) {
         match request {
             wp_image_description_v1::Request::Destroy => {}
-            wp_image_description_v1::Request::GetInformation { information: _ } => {
-                tracing::debug!("W13.A: get_information nao implementado (sRGB-only minima)");
+            wp_image_description_v1::Request::GetInformation { information } => {
+                eprintln!("[wm] W37.13 get_information chamado");
+                let info = data_init.init(information, ());
+                eprintln!("[wm] W37.13 info inicializado");
+                use smithay::reexports::wayland_protocols::wp::color_management::v1::server::wp_color_manager_v1::{Primaries, TransferFunction};
+                // sRGB primaries (BT.709) coords * 1e6
+                info.primaries(640_000, 330_000, 300_000, 600_000, 150_000, 60_000, 312_700, 329_000);
+                info.primaries_named(Primaries::Srgb);
+                info.tf_named(TransferFunction::Srgb);
+                // Min luminance 0.2 cd/m2 (* 10000), max 80 cd/m2, ref white 80.
+                info.luminances(2_000, 80, 80);
+                // W37.13: spec exige target_primaries MANDATORY pra parametric.
+                // Antes omitido por leitura errada da spec -> Chromium fechava
+                // conexao com Broken pipe apos get_information.
+                info.target_primaries(640_000, 330_000, 300_000, 600_000, 150_000, 60_000, 312_700, 329_000);
+                info.target_luminance(0, 80);
+                info.done();
+                eprintln!("[wm] W37.13 get_information -> done() enviado");
             }
             _ => {}
         }
+    }
+}
+
+impl Dispatch<WpImageDescriptionInfoV1, ()> for LumoState {
+    fn request(
+        _state: &mut LumoState,
+        _client: &Client,
+        _obj: &WpImageDescriptionInfoV1,
+        _request: smithay::reexports::wayland_protocols::wp::color_management::v1::server::wp_image_description_info_v1::Request,
+        _data: &(),
+        _dh: &DisplayHandle,
+        _data_init: &mut DataInit<'_, LumoState>,
+    ) {
+        // info_v1 nao tem requests (so eventos). Stub.
     }
 }
 
@@ -219,7 +260,7 @@ impl Dispatch<WpImageDescriptionCreatorParamsV1, ()> for LumoState {
             wp_image_description_creator_params_v1::Request::Create { image_description } => {
                 let desc =
                     data_init.init(image_description, ImageDescriptionKind::ClientParametric);
-                desc.ready(0);
+                desc.ready(next_image_description_id());
                 tracing::debug!("W13.A: parametric creator: create -> ClientParametric ready");
             }
             wp_image_description_creator_params_v1::Request::SetTfNamed { .. }
