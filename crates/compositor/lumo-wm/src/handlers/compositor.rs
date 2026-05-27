@@ -71,7 +71,12 @@ impl CompositorHandler for LumoState {
                         size_changed = true;
                     }
 
-                    if size_changed {
+                    // W37.16: send_configure so se size realmente OVERFLOWING +
+                    // a janela ja foi inicialmente configurada (size > 0).
+                    // Antes: send_configure no PRIMEIRO commit (size=0,0 do
+                    // initial) acionava loop racy em clientes Chromium que
+                    // matava conexao com broken pipe.
+                    if size_changed && geo.size.w > 0 && geo.size.h > 0 {
                         if let Some(tl) = window.toplevel() {
                             tl.with_pending_state(|state| {
                                 state.size = Some(smithay::utils::Size::from((new_w, new_h)));
