@@ -309,7 +309,14 @@ impl LumoState {
         // W10.B: must create before display_handle moves into Self.
         let idle_notifier_state = IdleNotifierState::new(&display_handle, loop_handle.clone());
         // W13.A: color management global.
-        let color_manager = ColorManagerState::new(&display_handle);
+        // W37.14: env LUMO_DISABLE_COLOR_MGMT=1 desabilita o global pra
+        // workaround Chromium (color_management bug latente).
+        let color_manager = if std::env::var("LUMO_DISABLE_COLOR_MGMT").is_ok() {
+            tracing::warn!("W37.14: wp_color_manager_v1 DESABILITADO via env");
+            None
+        } else {
+            Some(ColorManagerState::new(&display_handle))
+        };
         // W13.C: fifo + commit-timing.
         let fifo_manager_state = FifoManagerState::new::<Self>(&display_handle);
         let commit_timing_manager_state = CommitTimingManagerState::new::<Self>(&display_handle);
@@ -351,7 +358,7 @@ impl LumoState {
             last_active_app: None,
             pid_app_cache: std::collections::HashMap::new(),
             screencopy: None,
-            color_manager: Some(color_manager),
+            color_manager,
             fifo_manager_state,
             commit_timing_manager_state,
             workspace_vault: WorkspaceVault::new(),
