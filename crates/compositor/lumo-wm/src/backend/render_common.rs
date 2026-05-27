@@ -301,21 +301,20 @@ pub fn titlebar_text_for_window(
     }
     let loc = space.element_location(window).unwrap_or_default();
     let win_w = window.geometry().size.w;
-    // Reserva pra 3 botoes lado direito (3*12 + 2*8 + margem = ~60).
-    let btns_reserve = CLOSE_BTN_SIZE * 3 + 8 * 2 + CLOSE_BTN_MARGIN;
-    let text_w = win_w - TITLE_TEXT_PAD_LEFT - btns_reserve;
-    if text_w < 40 {
-        return None;
-    }
+    // Buffer = metade da janela, centralizado. Evita conflito botoes/pads.
+    let text_w = (win_w / 2).max(120).min(600);
     let surface_owned = (&*surface).clone();
     let cached = cache.get_or_render(&surface_owned, &title, text_w as u32, TITLE_TEXT_H)?;
-    // Convencao Lumo: physical render Y = loc.y (top do SSD, ja anticipado).
-    // Logical hit-test seria loc.y - TITLEBAR_H. Sync com close_btn_rect.
-    let text_x = loc.x + TITLE_TEXT_PAD_LEFT;
+    // Centraliza horizontal igual macOS / app HeaderBar: title em x = win_w/2.
+    let text_x = loc.x + win_w / 2 - (text_w / 2);
     let text_y = loc.y + (TITLEBAR_H - TITLE_TEXT_H as i32) / 2;
     let logical_pt: Point<i32, smithay::utils::Logical> = Point::from((text_x, text_y));
     let phys_i32: Point<i32, Physical> = logical_pt.to_physical_precise_round(1.0);
     let location_phys: Point<f64, Physical> = Point::from((phys_i32.x as f64, phys_i32.y as f64));
+    tracing::debug!(
+        loc_x = loc.x, loc_y = loc.y, win_w, text_w, text_x, text_y,
+        "SSD title render position"
+    );
     MemoryRenderBufferRenderElement::from_buffer(
         renderer,
         location_phys,
