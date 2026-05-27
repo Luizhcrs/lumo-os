@@ -309,13 +309,15 @@ impl LumoState {
         // W10.B: must create before display_handle moves into Self.
         let idle_notifier_state = IdleNotifierState::new(&display_handle, loop_handle.clone());
         // W13.A: color management global.
-        // W37.14: env LUMO_DISABLE_COLOR_MGMT=1 desabilita o global pra
-        // workaround Chromium (color_management bug latente).
-        let color_manager = if std::env::var("LUMO_DISABLE_COLOR_MGMT").is_ok() {
-            tracing::warn!("W37.14: wp_color_manager_v1 DESABILITADO via env");
-            None
-        } else {
+        // W37.15: DESABILITADO por default ate fix completo do bug Chromium
+        // broken pipe pos info events. Apps Lumo nao usam color_management.
+        // Reativar via env LUMO_ENABLE_COLOR_MGMT=1 quando bug resolvido.
+        let color_manager = if std::env::var("LUMO_ENABLE_COLOR_MGMT").is_ok() {
+            tracing::info!("W37.15: wp_color_manager_v1 habilitado via env");
             Some(ColorManagerState::new(&display_handle))
+        } else {
+            tracing::info!("W37.15: wp_color_manager_v1 desabilitado (default, workaround Chromium)");
+            None
         };
         // W13.C: fifo + commit-timing.
         let fifo_manager_state = FifoManagerState::new::<Self>(&display_handle);
