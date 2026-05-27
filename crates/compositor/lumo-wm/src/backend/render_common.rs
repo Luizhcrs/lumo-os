@@ -313,7 +313,9 @@ pub fn titlebar_text_for_window(
     // Logical hit-test seria loc.y - TITLEBAR_H. Sync com close_btn_rect.
     let text_x = loc.x + TITLE_TEXT_PAD_LEFT;
     let text_y = loc.y + (TITLEBAR_H - TITLE_TEXT_H as i32) / 2;
-    let location_phys: Point<f64, Physical> = Point::from((text_x as f64, text_y as f64));
+    let logical_pt: Point<i32, smithay::utils::Logical> = Point::from((text_x, text_y));
+    let phys_i32: Point<i32, Physical> = logical_pt.to_physical_precise_round(1.0);
+    let location_phys: Point<f64, Physical> = Point::from((phys_i32.x as f64, phys_i32.y as f64));
     MemoryRenderBufferRenderElement::from_buffer(
         renderer,
         location_phys,
