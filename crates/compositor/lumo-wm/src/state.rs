@@ -938,6 +938,44 @@ smithay::delegate_viewporter!(LumoState);
 smithay::delegate_single_pixel_buffer!(LumoState);
 smithay::delegate_presentation!(LumoState);
 
+/// W37.18: helper testavel - decide se xdg_toplevel_icon_manager_v1 sera
+/// criado. Default: NAO (workaround bug smithay 0.7.0). Opt-in via env.
+pub fn should_enable_toplevel_icon_manager(env_var: Option<&str>) -> bool {
+    env_var.is_some()
+}
+
+/// W37.15: helper testavel - decide se wp_color_manager_v1 sera criado.
+/// Default: NAO. Opt-in via env.
+pub fn should_enable_color_manager(env_var: Option<&str>) -> bool {
+    env_var.is_some()
+}
+
+#[cfg(test)]
+mod w37_protocol_gating_tests {
+    use super::{should_enable_color_manager, should_enable_toplevel_icon_manager};
+
+    #[test]
+    fn w37_18_toplevel_icon_disabled_by_default() {
+        assert!(!should_enable_toplevel_icon_manager(None));
+    }
+
+    #[test]
+    fn w37_18_toplevel_icon_enabled_via_env() {
+        assert!(should_enable_toplevel_icon_manager(Some("1")));
+        assert!(should_enable_toplevel_icon_manager(Some("yes")));
+    }
+
+    #[test]
+    fn w37_15_color_manager_disabled_by_default() {
+        assert!(!should_enable_color_manager(None));
+    }
+
+    #[test]
+    fn w37_15_color_manager_enabled_via_env() {
+        assert!(should_enable_color_manager(Some("1")));
+    }
+}
+
 #[cfg(test)]
 mod decoration_decision_tests {
     use super::decide_decoration_mode;
