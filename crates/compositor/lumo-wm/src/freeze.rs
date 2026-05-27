@@ -118,6 +118,43 @@ impl FreezeTracker {
             .map(|(pid, _)| *pid)
             .collect()
     }
+
+    /// Forca estado freeze pra pid via observador externo (ex: /proc state=T).
+    /// Bypassa ping/pong. Retorna evento se transicao.
+    pub fn set_frozen_external(&mut self, pid: u32, app_id: &str, frozen: bool) -> Option<LumoEvent> {
+        let c = self.clients.entry(pid).or_insert_with(|| ClientState {
+            app_id: app_id.to_string(),
+            last_pong: Instant::now(),
+            pending_ping_at: None,
+            frozen: false,
+        });
+        if frozen && !c.frozen {
+            c.frozen = true;
+            c.app_id = app_id.to_string();
+            return Some(LumoEvent::AppFreeze {
+                pid,
+                app_id: app_id.to_string(),
+            });
+        }
+        if !frozen && c.frozen {
+            c.frozen = false;
+            return Some(LumoEvent::AppFreezeCleared { pid });
+        }
+        None
+    }
+}
+
+/// Checa /proc/<pid>/status State field. Retorna 'T' (stopped),
+/// 'R'/'S'/'D'/'Z' etc, ou None se path nao existe (process morto).
+pub fn proc_state(pid: u32) -> Option<char> {
+    let path = format!("/proc/{}/status", pid);
+    let content = std::fs::read_to_string(&path).ok()?;
+    for line in content.lines() {
+        if let Some(rest) = line.strip_prefix("State:") {
+            return rest.trim().chars().next();
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -223,5 +260,41 @@ mod tests {
         t.register(1, "x");
         let due = t.pids_due_for_ping(Instant::now() + PING_INTERVAL + Duration::from_millis(50));
         assert_eq!(due, vec![1]);
+    }
+
+    #[test]
+    fn set_frozen_external_marks_and_emits() {
+        let mut t = FreezeTracker::new();
+        let ev = t.set_frozen_external(42, "lumo-x", true).expect("ev");
+        assert!(matches!(ev, LumoEvent::AppFreeze { pid: 42, .. }));
+        assert!(t.is_frozen(42));
+    }
+
+    #[test]
+    fn set_frozen_external_idempotent() {
+        let mut t = FreezeTracker::new();
+        t.set_frozen_external(1, "x", true).unwrap();
+        assert!(t.set_frozen_external(1, "x", true).is_none());
+    }
+
+    #[test]
+    fn set_frozen_external_clear_emits() {
+        let mut t = FreezeTracker::new();
+        t.set_frozen_external(1, "x", true).unwrap();
+        let ev = t.set_frozen_external(1, "x", false).expect("clear ev");
+        assert!(matches!(ev, LumoEvent::AppFreezeCleared { pid: 1 }));
+    }
+
+    #[test]
+    fn proc_state_self_returns_running() {
+        // proprio processo sempre R em runtime.
+        let s = proc_state(std::process::id());
+        assert!(s.is_some());
+    }
+
+    #[test]
+    fn proc_state_unknown_pid_none() {
+        // PID 999999 quase certo nao existe.
+        assert!(proc_state(999999).is_none());
     }
 }

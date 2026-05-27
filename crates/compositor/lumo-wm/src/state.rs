@@ -828,6 +828,32 @@ impl LumoState {
         }
     }
 
+    /// UX3 (atalho /proc): varre pid_app_cache e checa /proc/<pid>/status.
+    /// State == 'T' (SIGSTOP) ou 'D' (uninterruptible) = freeze.
+    /// Bypassa ping/pong xdg (scheduler nao integrado ainda).
+    pub fn freeze_check_via_proc(&mut self) {
+        let pids: Vec<(u32, String)> = self
+            .pid_app_cache
+            .iter()
+            .map(|(pid, (app_id, _title))| (*pid, app_id.clone()))
+            .collect();
+        for (pid, app_id) in pids {
+            let frozen = match crate::freeze::proc_state(pid) {
+                Some(c) => c == 'T' || c == 'D',
+                None => continue, // pid morto, ignora
+            };
+            if let Some(ev) = self.freeze.set_frozen_external(pid, &app_id, frozen) {
+                self.ipc.broadcast(&ev);
+                if frozen {
+                    lumo_telemetry::record_error("APP-FREEZE-001", "recoverable");
+                    tracing::warn!(pid, app_id = %app_id, "APP-FREEZE-001 detectado");
+                } else {
+                    tracing::info!(pid, app_id = %app_id, "freeze CLEARED");
+                }
+            }
+        }
+    }
+
     /// Troca workspace ativo. Validacao + broadcast IPC.
     /// Memory feedback_input_feedback_imediato: aplicar no
     /// proximo frame (state muda; redraw da bar acontece no
