@@ -187,11 +187,22 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
 
         // S2: pill fallback AppName ▾ apos pill Lumo se nao ha dbusmenu items.
         if snap.appmenu_items.is_empty() && !snap.appmenu_app_id.is_empty() {
-            let label: String = if !snap.appmenu_title.is_empty() {
+            // UX3: sufixo " (Nao responde)" se pid em foco esta frozen.
+            // Resolve via cache foco -> pid via state.degraded nao serve;
+            // usamos snap.frozen direto procurando se algum pid existe.
+            // Sem pid em snap fallback, marcamos se freeze set nao vazio
+            // (compositor ja garante so emite freeze pro app em foco).
+            let freeze_sfx = if !snap.frozen.is_empty() {
+                " (Nao responde)"
+            } else {
+                ""
+            };
+            let base: String = if !snap.appmenu_title.is_empty() {
                 snap.appmenu_title.chars().take(24).collect()
             } else {
                 snap.appmenu_app_id.chars().take(24).collect()
             };
+            let label = format!("{}{}", base, freeze_sfx);
             let label_w = measure_text(&label, FONT_PILL, false);
             let fb_w = label_w + pill_pad_x * 2.0 + 18.0;
             let fb_x = pill_l_x + pill_l_w + pill_gap;
@@ -282,6 +293,17 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     }
 
     // ============================================================
+    // PILL DEGRADED (UX2): pill amber a esquerda da pill direita
+    // quando ha codigos degraded ativos. Texto: label se 1, "N issues" se 2+.
+    // ============================================================
+    let degraded_text =
+        crate::bar::status_pills::compute_degraded_text(&snap.degraded);
+    let degraded_pill_w_calc: Option<f32> = degraded_text.as_deref().map(|t| {
+        let w = measure_text(t, FONT_PILL, false);
+        w + pill_pad_x * 2.0 + 8.0
+    });
+
+    // ============================================================
     // PILL DIREITA: [wifi] [bat icone] HH:MM (A19.8: removido texto %)
     // ============================================================
     let bat_icon_w = bat_w_override.unwrap_or_else(battery_total_width);
@@ -303,6 +325,27 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
         + clock_w;
     let pill_r_w = pill_r_content_w + pill_pad_x * 2.0;
     let pill_r_x = snap.width as f32 - pill_margin - pill_r_w;
+
+    // UX2: render pill degraded amber a esquerda da pill direita.
+    if let (Some(text), Some(deg_w)) = (degraded_text.as_deref(), degraded_pill_w_calc) {
+        let deg_x = pill_r_x - pill_gap - deg_w;
+        // Amber warning bg: #FFA500 com alpha similar pill_bg.
+        let amber_bg = rgba_hex(0xFFA500, palette.pill_bg_alpha);
+        let amber_fg = opaque(0x1A1A1A); // texto escuro pra contraste em amber
+        let mut canvas = pixmap.as_mut();
+        draw_pill_bg(&mut canvas, deg_x, pill_y, deg_w, pill_h, amber_bg, 0);
+        // Dot warning antes texto.
+        draw_brand_dot(&mut canvas, deg_x + pill_pad_x + BRAND_DOT_RADIUS, pill_cy, opaque(0xCC4400));
+        draw_text(
+            &mut canvas,
+            deg_x + pill_pad_x + BRAND_DOT_RADIUS * 2.0 + 4.0,
+            text_top,
+            text,
+            FONT_PILL,
+            amber_fg,
+            true,
+        );
+    }
 
     {
         let mut canvas = pixmap.as_mut();
