@@ -1,3 +1,10 @@
 target/
 *.bak
 tests/e2e/__pycache__
+
+# Harness state (per-machine)
+.claude/
+
+# Screenshots ad-hoc no root (gerados durante debug)
+/*.png
+!docs/**/*.png

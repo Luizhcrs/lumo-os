@@ -283,12 +283,13 @@ impl LumoState {
         // buffer.destroy) e SPEC-COMPLIANT mas smithay emite protocol error
         // "buffer destroyed before icon" -> Chromium fecha conexao = broken
         // pipe. Sem global, Chromium pula icon support gracefully.
-        let xdg_toplevel_icon_manager: Option<XdgToplevelIconManager> =
-            if std::env::var("LUMO_ENABLE_TOPLEVEL_ICON").is_ok() {
-                Some(XdgToplevelIconManager::new::<Self>(&display_handle))
-            } else {
-                None
-            };
+        let xdg_toplevel_icon_manager: Option<XdgToplevelIconManager> = if should_enable_toplevel_icon_manager(
+            std::env::var("LUMO_ENABLE_TOPLEVEL_ICON").ok().as_deref(),
+        ) {
+            Some(XdgToplevelIconManager::new::<Self>(&display_handle))
+        } else {
+            None
+        };
 
         // DmabufState criado vazio. Global so registrado quando renderer
         // GPU sobe (winit::init OU drm::run).
@@ -323,13 +324,16 @@ impl LumoState {
         // W37.15: DESABILITADO por default ate fix completo do bug Chromium
         // broken pipe pos info events. Apps Lumo nao usam color_management.
         // Reativar via env LUMO_ENABLE_COLOR_MGMT=1 quando bug resolvido.
-        let color_manager = if std::env::var("LUMO_ENABLE_COLOR_MGMT").is_ok() {
-            tracing::info!("W37.15: wp_color_manager_v1 habilitado via env");
-            Some(ColorManagerState::new(&display_handle))
-        } else {
-            tracing::info!("W37.15: wp_color_manager_v1 desabilitado (default, workaround Chromium)");
-            None
-        };
+        let color_manager =
+            if should_enable_color_manager(std::env::var("LUMO_ENABLE_COLOR_MGMT").ok().as_deref()) {
+                tracing::info!("W37.15: wp_color_manager_v1 habilitado via env");
+                Some(ColorManagerState::new(&display_handle))
+            } else {
+                tracing::info!(
+                    "W37.15: wp_color_manager_v1 desabilitado (default, workaround Chromium)"
+                );
+                None
+            };
         // W13.C: fifo + commit-timing.
         let fifo_manager_state = FifoManagerState::new::<Self>(&display_handle);
         let commit_timing_manager_state = CommitTimingManagerState::new::<Self>(&display_handle);
@@ -939,20 +943,34 @@ smithay::delegate_single_pixel_buffer!(LumoState);
 smithay::delegate_presentation!(LumoState);
 
 /// W37.18: helper testavel - decide se xdg_toplevel_icon_manager_v1 sera
-/// criado. Default: NAO (workaround bug smithay 0.7.0). Opt-in via env.
+/// criado. Default: NAO (workaround bug smithay 0.7.0). Opt-in via env
+/// aceita apenas valores truthy ("1", "true", "yes" case-insensitive).
 pub fn should_enable_toplevel_icon_manager(env_var: Option<&str>) -> bool {
-    env_var.is_some()
+    is_env_truthy(env_var)
 }
 
 /// W37.15: helper testavel - decide se wp_color_manager_v1 sera criado.
-/// Default: NAO. Opt-in via env.
+/// Default: NAO. Opt-in via env aceita apenas valores truthy.
 pub fn should_enable_color_manager(env_var: Option<&str>) -> bool {
-    env_var.is_some()
+    is_env_truthy(env_var)
+}
+
+/// W37.19: parsing comum de env vars boolean.
+/// Aceita: "1", "true", "yes", "on" (case-insensitive).
+/// Rejeita: None, "", "0", "false", "no", "off", outros.
+fn is_env_truthy(env_var: Option<&str>) -> bool {
+    match env_var {
+        Some(v) => matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        ),
+        None => false,
+    }
 }
 
 #[cfg(test)]
 mod w37_protocol_gating_tests {
-    use super::{should_enable_color_manager, should_enable_toplevel_icon_manager};
+    use super::{is_env_truthy, should_enable_color_manager, should_enable_toplevel_icon_manager};
 
     #[test]
     fn w37_18_toplevel_icon_disabled_by_default() {
@@ -963,6 +981,16 @@ mod w37_protocol_gating_tests {
     fn w37_18_toplevel_icon_enabled_via_env() {
         assert!(should_enable_toplevel_icon_manager(Some("1")));
         assert!(should_enable_toplevel_icon_manager(Some("yes")));
+        assert!(should_enable_toplevel_icon_manager(Some("true")));
+    }
+
+    #[test]
+    fn w37_18_toplevel_icon_falsy_strings_stay_disabled() {
+        // Bugfix W37.19: env vazia ou "0" nao deve ativar.
+        assert!(!should_enable_toplevel_icon_manager(Some("")));
+        assert!(!should_enable_toplevel_icon_manager(Some("0")));
+        assert!(!should_enable_toplevel_icon_manager(Some("false")));
+        assert!(!should_enable_toplevel_icon_manager(Some("no")));
     }
 
     #[test]
@@ -973,6 +1001,25 @@ mod w37_protocol_gating_tests {
     #[test]
     fn w37_15_color_manager_enabled_via_env() {
         assert!(should_enable_color_manager(Some("1")));
+    }
+
+    #[test]
+    fn w37_15_color_manager_falsy_strings_stay_disabled() {
+        assert!(!should_enable_color_manager(Some("")));
+        assert!(!should_enable_color_manager(Some("0")));
+    }
+
+    #[test]
+    fn w37_19_is_env_truthy_case_insensitive() {
+        assert!(is_env_truthy(Some("YES")));
+        assert!(is_env_truthy(Some("True")));
+        assert!(is_env_truthy(Some("ON")));
+    }
+
+    #[test]
+    fn w37_19_is_env_truthy_trim_whitespace() {
+        assert!(is_env_truthy(Some(" 1 ")));
+        assert!(is_env_truthy(Some("\tyes\n")));
     }
 }
 
