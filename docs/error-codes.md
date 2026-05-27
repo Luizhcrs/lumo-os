@@ -56,6 +56,23 @@ Codigos sao **append-only**. Removido = reserved (nunca reusar). Mudou semantica
 |--------|----------|--------|---------------|
 | `APP-CRASH-001` | recoverable | App Iced panicou | Toast + reopen offer |
 | `APP-FREEZE-001` | recoverable | App nao respondeu ping em 2s | Force quit dialog |
+| `APP-MENU-001` | fatal | init_channel called twice (bug nosso) | Restart app |
+| `APP-MENU-002` | fatal | init_channel tx called twice | Restart app |
+| `APP-MENU-003` | fatal | spawn appmenu-bridge thread falhou | Sem memoria / OS limit |
+
+### Lock screen (critico — crash deixa sessao destravada)
+
+| Codigo | Severity | Quando | Recovery hint |
+|--------|----------|--------|---------------|
+| `LOCK-INIT-001` | fatal | Wayland connect falhou | Check WAYLAND_DISPLAY |
+| `LOCK-INIT-002` | fatal | registry init falhou | Compositor missing protocols |
+| `LOCK-INIT-003` | fatal | wl_compositor ausente | - |
+| `LOCK-INIT-004` | fatal | wl_shm ausente | - |
+| `LOCK-INIT-005` | fatal | wlr-layer-shell ausente | - |
+| `LOCK-INIT-006` | fatal | shm pool alloc falhou | Memoria insuficiente |
+| `LOCK-RUNTIME-001` | fatal | blocking_dispatch falhou | Compositor disconnect |
+| `LOCK-RUNTIME-002` | fatal | create_buffer falhou | Pool exhausted |
+| `LOCK-RUNTIME-003` | fatal | PixmapMut from_bytes falhou | Buffer corrupt |
 
 ### Bridge HTTP
 

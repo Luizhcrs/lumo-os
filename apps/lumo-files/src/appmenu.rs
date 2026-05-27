@@ -1,5 +1,13 @@
 //! appmenu.rs -- Exporta menu via com.canonical.dbusmenu + registra no AppMenu.Registrar.
 //!
+//! Panic policy:
+//! - OwnedValue::try_from(Value::from(str)) panic mathematically impossible
+//!   pra strings/structures bem-formados (variant valido). Mantemos .unwrap()
+//!   sem codigo.
+//! - OnceLock.set(...).unwrap() panic so se chamado >1x (codigo bug). Init-
+//!   time, capturado por panic_hook (S1).
+//! - .expect("[APP-MENU-NNN] ...") = fatal init com codigo.
+//!
 //! A bar Lumo busca o menu pelo PID via GetMenuForWindow(pid).
 //! Thread dedicada serve o menu e encaminha clicks como MenuAction pro loop iced.
 
@@ -429,10 +437,10 @@ pub fn init_channel() -> std::sync::mpsc::Sender<MenuAction> {
     let (tok_tx, tok_rx) = tokio::sync::mpsc::unbounded_channel::<MenuAction>();
     MENU_RX
         .set(tokio::sync::Mutex::new(tok_rx))
-        .expect("init_channel called twice");
+        .expect("[APP-MENU-001] init_channel called twice");
     MENU_TOK_TX
         .set(tok_tx)
-        .expect("init_channel tx called twice");
+        .expect("[APP-MENU-002] init_channel tx called twice");
     // Bridge: forward std mpsc -> tokio unbounded
     std::thread::Builder::new()
         .name("appmenu-bridge".into())
@@ -443,7 +451,7 @@ pub fn init_channel() -> std::sync::mpsc::Sender<MenuAction> {
                 }
             }
         })
-        .expect("spawn appmenu-bridge");
+        .expect("[APP-MENU-003] spawn appmenu-bridge");
     std_tx
 }
 

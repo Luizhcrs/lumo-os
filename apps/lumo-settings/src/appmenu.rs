@@ -1,4 +1,12 @@
 //! appmenu.rs -- DBus appmenu para lumo-settings.
+//!
+//! Panic policy:
+//! - OwnedValue::try_from(Value::from(str)) panic mathematically impossible
+//!   pra strings/structures bem-formados (variant valido). Mantemos .unwrap()
+//!   sem codigo.
+//! - OnceLock.set(...).unwrap() panic so se chamado >1x (codigo bug). Init-
+//!   time, capturado por panic_hook (S1).
+//! - .expect("[APP-MENU-NNN] ...") = fatal init com codigo.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -261,10 +269,10 @@ pub fn init_channel() -> std::sync::mpsc::Sender<MenuAction> {
     let (tok_tx, tok_rx) = tokio::sync::mpsc::unbounded_channel::<MenuAction>();
     MENU_RX
         .set(tokio::sync::Mutex::new(tok_rx))
-        .expect("init_channel called twice");
+        .expect("[APP-MENU-001] init_channel called twice");
     MENU_TOK_TX
         .set(tok_tx)
-        .expect("init_channel tx called twice");
+        .expect("[APP-MENU-002] init_channel tx called twice");
     std::thread::Builder::new()
         .name("settings-appmenu-bridge".into())
         .spawn(move || {

@@ -121,16 +121,23 @@ impl TouchpadConfig {
             return;
         }
 
-        // Aceleracao.
+        // Aceleracao. SENSOR-MISSING-001: device sem feature retorna Err, OK ignorar
+        // (hardware nao suporta), so logamos em debug pra diagnostico.
         let profile = match self.accel_profile {
             AccelProfileCfg::Adaptive => li::AccelProfile::Adaptive,
             AccelProfileCfg::Flat => li::AccelProfile::Flat,
         };
-        let _ = device.config_accel_set_profile(profile);
-        let _ = device.config_accel_set_speed(self.accel_speed);
+        if let Err(e) = device.config_accel_set_profile(profile) {
+            tracing::debug!(?e, "touchpad: accel_profile unsupported");
+        }
+        if let Err(e) = device.config_accel_set_speed(self.accel_speed) {
+            tracing::debug!(?e, "touchpad: accel_speed unsupported");
+        }
 
         // Tap to click + button map.
-        let _ = device.config_tap_set_enabled(self.tap_enabled);
+        if let Err(e) = device.config_tap_set_enabled(self.tap_enabled) {
+            tracing::debug!(?e, "touchpad: tap_enabled unsupported");
+        }
         if self.tap_enabled {
             let _ = device.config_tap_set_button_map(li::TapButtonMap::LeftRightMiddle);
             let _ = device.config_tap_set_drag_enabled(self.tap_drag);

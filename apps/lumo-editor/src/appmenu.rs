@@ -1,4 +1,12 @@
 //! appmenu.rs -- DBus appmenu para lumo-text.
+//!
+//! Panic policy:
+//! - OwnedValue::try_from(Value::from(str)) panic mathematically impossible
+//!   pra strings/structures bem-formados (variant valido). Mantemos .unwrap()
+//!   sem codigo.
+//! - OnceLock.set(...).unwrap() panic so se chamado >1x (codigo bug). Init-
+//!   time, capturado por panic_hook (S1).
+//! - .expect("[APP-MENU-NNN] ...") = fatal init com codigo.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;

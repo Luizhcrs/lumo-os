@@ -50,12 +50,26 @@ Snapshot 2026-05-27.
 
 ## Silent ignores
 
-227 sites `let _ =`. Sample manual sugere:
-- ~60% spawn de processo (OK, fire-and-forget).
-- ~30% socket write/flush (perda baixa).
-- ~10% **suspeitos** — perdem erro relevante (config write, sensor read).
+227 sites `let _ =`. Auditoria 2026-05-27:
 
-Acao: scan dirigido por crate, decidir caso a caso. Substituir suspeitos por `if let Err(e) = ... { tracing::warn!(?e, "..."); }`.
+### Categorias
+
+| Categoria | Politica | Sites |
+|---|---|---|
+| Hardware feature unsupported (libinput config_*_set) | Manter mas log debug | ~30 |
+| spawn fire-and-forget (Command::spawn) | Manter — proc desacoplado | ~40 |
+| IPC tx.send (receiver pode dropar) | Manter — broadcast best-effort | ~50 |
+| socket write/flush em handler | Manter — proximo tick re-envia | ~30 |
+| Init secondary (set_app_id, etc.) | Manter — falha estetica | ~30 |
+| **Erro suspeito** (config write, sensor read) | **Refatorar pra log warn** | ~50 |
+
+### Refatoracoes nesta sessao
+
+- `crates/compositor/lumo-wm/src/input/touchpad.rs`: config_accel_set_profile/speed/tap_set_enabled — `let _ =` → `if let Err(e) = ... { tracing::debug!(?e, ...) }`. Restantes tap_set_button_map/drag mantidos pois sub-features (gating ja em `if self.tap_enabled`).
+
+### Sprint futuro
+
+Restantes ~50 sites suspeitos. Trabalho individual por arquivo. Nao escala bulk-sed.
 
 ## Plano de migracao gradual
 

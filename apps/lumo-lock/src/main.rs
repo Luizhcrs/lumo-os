@@ -38,12 +38,12 @@ pub use render::paint_lock;
 
 fn main() {
     lumo_error::hook::install_panic_hook("lumo-lock", lumo_error::Domain::App);
-    let conn = Connection::connect_to_env().expect("lumo-lock: no Wayland display");
-    let (globals, mut queue) = registry_queue_init::<LumoLock>(&conn).expect("registry");
+    let conn = Connection::connect_to_env().expect("[LOCK-INIT-001] no Wayland display");
+    let (globals, mut queue) = registry_queue_init::<LumoLock>(&conn).expect("[LOCK-INIT-002] registry init");
     let qh = queue.handle();
-    let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor");
-    let shm = Shm::bind(&globals, &qh).expect("wl_shm");
-    let layer_shell = LayerShell::bind(&globals, &qh).expect("zwlr_layer_shell_v1");
+    let compositor = CompositorState::bind(&globals, &qh).expect("[LOCK-INIT-003] wl_compositor");
+    let shm = Shm::bind(&globals, &qh).expect("[LOCK-INIT-004] wl_shm");
+    let layer_shell = LayerShell::bind(&globals, &qh).expect("[LOCK-INIT-005] zwlr_layer_shell_v1");
     let surface = compositor.create_surface(&qh);
     let layer =
         layer_shell.create_layer_surface(&qh, surface, Layer::Overlay, Some("lumo-lock"), None);
@@ -52,7 +52,7 @@ fn main() {
     layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
     layer.set_size(0, 0);
     layer.commit();
-    let pool = SlotPool::new(1920 * 1080 * 4, &shm).expect("shm pool");
+    let pool = SlotPool::new(1920 * 1080 * 4, &shm).expect("[LOCK-INIT-006] shm pool alloc");
     let mut state = LumoLock {
         registry: RegistryState::new(&globals),
         output_state: OutputState::new(&globals, &qh),
@@ -73,7 +73,7 @@ fn main() {
         auth_pending: false,
     };
     loop {
-        queue.blocking_dispatch(&mut state).expect("dispatch");
+        queue.blocking_dispatch(&mut state).expect("[LOCK-RUNTIME-001] dispatch");
         if !state.running {
             break;
         }
@@ -116,8 +116,8 @@ impl LumoLock {
                 stride as i32,
                 wl_shm::Format::Argb8888,
             )
-            .expect("create buffer");
-        let mut pixmap = PixmapMut::from_bytes(canvas, self.width, self.height).expect("pixmap");
+            .expect("[LOCK-RUNTIME-002] create buffer");
+        let mut pixmap = PixmapMut::from_bytes(canvas, self.width, self.height).expect("[LOCK-RUNTIME-003] pixmap from canvas");
         paint_lock(
             &mut pixmap,
             self.width,
