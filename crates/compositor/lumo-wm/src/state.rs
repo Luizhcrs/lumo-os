@@ -832,11 +832,42 @@ impl LumoState {
     /// State == 'T' (SIGSTOP) ou 'D' (uninterruptible) = freeze.
     /// Bypassa ping/pong xdg (scheduler nao integrado ainda).
     pub fn freeze_check_via_proc(&mut self) {
-        let pids: Vec<(u32, String)> = self
+        let mut pids: Vec<(u32, String)> = self
             .pid_app_cache
             .iter()
             .map(|(pid, (app_id, _title))| (*pid, app_id.clone()))
             .collect();
+        // Fallback: cache vazio em alguns spawns. Inclui last_active_app pid
+        // se disponivel.
+        if let Some((app_id, _, pid)) = self.last_active_app.clone() {
+            if !pids.iter().any(|(p, _)| *p == pid) && pid > 0 {
+                pids.push((pid, app_id));
+            }
+        }
+        // Fallback adicional: scan /proc por lumo-* processes (limita custo).
+        if pids.is_empty() {
+            if let Ok(entries) = std::fs::read_dir("/proc") {
+                for ent in entries.flatten().take(2000) {
+                    let Some(name) = ent.file_name().to_str().map(String::from) else {
+                        continue;
+                    };
+                    let Ok(pid) = name.parse::<u32>() else {
+                        continue;
+                    };
+                    let comm_path = format!("/proc/{}/comm", pid);
+                    if let Ok(comm) = std::fs::read_to_string(&comm_path) {
+                        let c = comm.trim();
+                        if c.starts_with("lumo-") && c != "lumo-wm" && c != "lumo-bar"
+                            && c != "lumo-desktop" && c != "lumo-osd"
+                            && c != "lumo-power" && c != "lumo-bridge"
+                            && c != "lumo-notif"
+                        {
+                            pids.push((pid, c.to_string()));
+                        }
+                    }
+                }
+            }
+        }
         for (pid, app_id) in pids {
             let frozen = match crate::freeze::proc_state(pid) {
                 Some(c) => c == 'T' || c == 'D',
