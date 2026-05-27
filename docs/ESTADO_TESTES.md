@@ -1,6 +1,6 @@
 # Estado dos Testes — Lumo OS
 
-> Ultima verificacao: 2026-05-27 (pos W37.21 shell/launcher/dock tests)
+> Ultima verificacao: 2026-05-27 (pos W37.22 integration tests)
 
 ## Resumo
 
@@ -17,7 +17,8 @@
 | lumo-telemetry | 28 | 28 | 0 | Alta (W37.20 +28 event/histogram/store/lib/init) |
 | lumo-launcher | 25 | 25 | 0 | Media (W37.21 math/fuzzy/desktop) |
 | lumo-dock | 7 | 7 | 0 | Media (W37.21 config.rs) |
-| **Total** | **534** | **534** | **0** | **Alta** |
+| _integration tests_ | 24 | 24 | 0 | W37.22 cross-module flows |
+| **Total** | **558** | **558** | **0** | **Alta** |
 
 ## W37.21 — Shell + Launcher + Dock test coverage (2026-05-27)
 
@@ -87,7 +88,39 @@ Tests novos lumo-files (W37.0 / 3):
 
 ## Testes quebrados
 
-Nenhum. Todos os 534 testes passam.
+Nenhum. Todos os 558 testes passam.
+
+## W37.22 — Integration tests (cross-module flows)
+
+24 testes integration novos cobrindo casos de uso reais entre modulos.
+
+**apps/lumo-files/tests/navigation_flow.rs** (9 tests):
+- fresh app empty history
+- Navigate pushes back / clears forward
+- Back pushes forward
+- Forward pushes back
+- Back/Forward empty stack = noop
+- Navigate apos Back limpa forward (regra browser)
+- back_stack capped at 50
+- Round-trip back+forward preserva path
+
+**crates/compositor/lumo-ipc/tests/event_sequence.rs** (7 tests):
+- Multiple events concatenated round-trip
+- LumoCommand close_dropdowns round-trip
+- LumoEvent close_desktop_menu round-trip
+- Drain partial line no panic
+- Empty lines skipped
+- Corrupted line doesnt break subsequent
+- 50 events preserve ordem
+
+**shell/tests/desktop_ctx_state.rs** (8 tests):
+- CloseDesktopMenu triggers close
+- CloseDropdowns NAO triggers close (W37.5 regra)
+- DesktopOpenSelected sets flag
+- Unrelated event no side effects
+- ctx_menu_hit acima/esquerda do origin = None
+- ctx_menu_hit dentro = Some
+- ctx_menu_h positivo
 
 ## Crates sem testes
 
