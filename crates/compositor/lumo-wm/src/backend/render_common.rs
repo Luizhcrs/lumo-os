@@ -61,6 +61,21 @@ render_elements! {
 // M1: SSD titlebar dimensions.
 /// Altura da titlebar SSD em pixels logicos.
 pub const TITLEBAR_H: i32 = 30;
+/// Altura do glyph render buffer (centraliza vertical na titlebar).
+pub const TITLE_TEXT_H: u32 = 22;
+/// Padding esquerdo do title text dentro da titlebar.
+pub const TITLE_TEXT_PAD_LEFT: i32 = 12;
+
+/// Le title do xdg_toplevel via XdgToplevelSurfaceData.
+pub fn read_xdg_title(surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface) -> Option<String> {
+    use smithay::wayland::compositor as wl_compositor;
+    use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
+    wl_compositor::with_states(surface, |states| {
+        states.data_map.get::<XdgToplevelSurfaceData>().and_then(|d| {
+            d.lock().ok().and_then(|lock| lock.title.clone())
+        })
+    })
+}
 /// Cor de fundo da titlebar: #1a1a1c (dark neutral).
 pub const TITLEBAR_BG: [f32; 4] = [0.098, 0.098, 0.106, 1.0];
 /// Cor do botao close: vermelho #c0392b (sem glow — sombra neutra).
@@ -262,6 +277,51 @@ pub fn titlebar_btns_for_window(
         ));
     }
     out
+}
+
+/// M2: render title text element pra UMA SSD window.
+/// Cache invalidado quando title muda. Posicao logica = (loc.x + pad, loc.y - TITLEBAR_H).
+/// Width disponivel = win_w - 3 botoes - margens.
+pub fn titlebar_text_for_window(
+    renderer: &mut GlesRenderer,
+    window: &Window,
+    space: &Space<Window>,
+    ssd_windows: &std::collections::HashSet<
+        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    >,
+    cache: &mut crate::backend::text_render::TitleTextCache,
+) -> Option<MemoryRenderBufferRenderElement<GlesRenderer>> {
+    let surface = window.wl_surface()?;
+    if !ssd_windows.contains(&*surface) {
+        return None;
+    }
+    let title = read_xdg_title(&surface)?;
+    if title.is_empty() {
+        return None;
+    }
+    let loc = space.element_location(window).unwrap_or_default();
+    let win_w = window.geometry().size.w;
+    // Reserva pra 3 botoes lado direito (3*12 + 2*8 + margem = ~60).
+    let btns_reserve = CLOSE_BTN_SIZE * 3 + 8 * 2 + CLOSE_BTN_MARGIN;
+    let text_w = win_w - TITLE_TEXT_PAD_LEFT - btns_reserve;
+    if text_w < 40 {
+        return None;
+    }
+    let surface_owned = (&*surface).clone();
+    let cached = cache.get_or_render(&surface_owned, &title, text_w as u32, TITLE_TEXT_H)?;
+    let text_x = loc.x + TITLE_TEXT_PAD_LEFT;
+    let text_y = loc.y - TITLEBAR_H + (TITLEBAR_H - TITLE_TEXT_H as i32) / 2;
+    let location_phys: Point<f64, Physical> = Point::from((text_x as f64, text_y as f64));
+    MemoryRenderBufferRenderElement::from_buffer(
+        renderer,
+        location_phys,
+        &cached.buffer,
+        None,
+        None,
+        None,
+        Kind::Unspecified,
+    )
+    .ok()
 }
 
 /// W29.4: titlebar bg shader pra UMA window. Per-window helper.
@@ -1034,6 +1094,7 @@ pub struct DrmCollectInputs<'a> {
 pub fn collect_drm_elements(
     renderer: &mut GlesRenderer,
     inputs: &DrmCollectInputs<'_>,
+    title_text_cache: &mut crate::backend::text_render::TitleTextCache,
 ) -> Vec<LumoCustomElement> {
     let mut out: Vec<LumoCustomElement> = Vec::with_capacity(64);
 
@@ -1172,6 +1233,16 @@ pub fn collect_drm_elements(
         // SSD btns
         for btn in titlebar_btns_for_window(window, inputs.space, inputs.ssd_windows) {
             out.push(LumoCustomElement::Solid(btn));
+        }
+        // M2: SSD title text (entre btns ON TOP e bg shader).
+        if let Some(text_elem) = titlebar_text_for_window(
+            renderer,
+            window,
+            inputs.space,
+            inputs.ssd_windows,
+            title_text_cache,
+        ) {
+            out.push(LumoCustomElement::Memory(text_elem));
         }
         // SSD bg shader
         if let Some(bg) = titlebar_bg_for_window(

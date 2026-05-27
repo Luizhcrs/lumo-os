@@ -9,6 +9,7 @@
 pub mod corner_shader;
 pub mod damage;
 pub mod render_common;
+pub mod text_render;
 pub mod wallpaper;
 pub mod winit;
 

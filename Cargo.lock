@@ -4907,6 +4907,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "calloop 0.14.4",
+ "cosmic-text 0.12.1",
+ "fontdb 0.18.0",
  "image 0.25.10",
  "input",
  "libc",
@@ -4918,6 +4920,7 @@ dependencies = [
  "lumo-telemetry",
  "serde",
  "smithay",
+ "tiny-skia",
  "toml 0.8.23",
  "tracing",
  "tracing-subscriber",
