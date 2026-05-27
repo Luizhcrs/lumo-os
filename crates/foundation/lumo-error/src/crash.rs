@@ -114,12 +114,38 @@ impl CrashReport {
 
     /// Escreve report em crash_dir(). Cria dir se ausente.
     /// Retorna path ou erro nao-panicante.
+    ///
+    /// Permissions:
+    /// - Dir: 0700 (so owner pode listar/entrar)
+    /// - File: 0600 (so owner pode ler)
+    /// Razao: crash dumps contem env vars (WAYLAND_DISPLAY, paths) +
+    /// backtrace simbolicado. Em sistema multi-user nao expor a outros UIDs.
     pub fn write(&self, dir: &Path) -> std::io::Result<PathBuf> {
         fs::create_dir_all(dir)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o700));
+        }
         let path = dir.join(self.filename());
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        fs::write(&path, json)?;
+        #[cfg(unix)]
+        {
+            use std::io::Write as _;
+            use std::os::unix::fs::OpenOptionsExt;
+            let mut f = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&path)?;
+            f.write_all(json.as_bytes())?;
+        }
+        #[cfg(not(unix))]
+        {
+            fs::write(&path, json)?;
+        }
         Ok(path)
     }
 
@@ -174,5 +200,20 @@ mod tests {
         let r = CrashReport::new("x", Domain::App, Severity::Fatal, "X-1", "")
             .with_location("foo.rs", 42);
         assert_eq!(r.location.as_deref(), Some("foo.rs:42"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_sets_dir_0700_and_file_0600() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = std::env::temp_dir().join(format!("lumo-perm-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        let r = CrashReport::new("x", Domain::App, Severity::Fatal, "X-1", "");
+        let path = r.write(&tmp).expect("write");
+        let dir_mode = fs::metadata(&tmp).expect("dir").permissions().mode() & 0o777;
+        let file_mode = fs::metadata(&path).expect("file").permissions().mode() & 0o777;
+        assert_eq!(dir_mode, 0o700, "dir deve ser 0700, got {:o}", dir_mode);
+        assert_eq!(file_mode, 0o600, "file deve ser 0600, got {:o}", file_mode);
+        fs::remove_dir_all(&tmp).ok();
     }
 }

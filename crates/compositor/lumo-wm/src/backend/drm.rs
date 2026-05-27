@@ -1263,6 +1263,13 @@ fn render_drm(state: &mut LumoState) {
                 // Damage existe -> queue page-flip.
                 match surface.drm_output.queue_frame(()) {
                     Ok(()) => {
+                        // S3 + UX2: queue OK = recovery. Clear pill se estava degraded.
+                        // Logica DENTRO do Ok arm garante que pending_flip=true do frame
+                        // anterior nao mascara estado real (review B1).
+                        if surface.queue_frame_fail_count > 0 {
+                            surface.queue_frame_fail_count = 0;
+                            state.report_degraded_cleared("WM-RENDER-002");
+                        }
                         let now = Instant::now();
                         // L2: coleta duracao deste frame.
                         let frame_dur = now.duration_since(surface.last_frame_time);
@@ -1324,14 +1331,6 @@ fn render_drm(state: &mut LumoState) {
                         if surface.queue_frame_fail_count == 3 {
                             state.report_degraded("WM-RENDER-002", "Vsync off");
                         }
-                    }
-                }
-                // Reset contador em frame de sucesso (queue_frame Ok path).
-                // Path Ok ja atualizou pending_flip = true.
-                if surface.pending_flip {
-                    if surface.queue_frame_fail_count > 0 {
-                        surface.queue_frame_fail_count = 0;
-                        state.report_degraded_cleared("WM-RENDER-002");
                     }
                 }
             } else if trace {

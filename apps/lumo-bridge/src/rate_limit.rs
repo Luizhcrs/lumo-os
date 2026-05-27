@@ -64,9 +64,17 @@ impl RateLimiter {
     }
 
     /// Tenta consumir 1 token. Retorna true se permitido.
+    /// Resilient a mutex poison (review R3): se outra thread panicou
+    /// dentro do lock, recovery via into_inner em vez de propagar panic.
     pub fn check(&self, peer: SocketAddr) -> bool {
         let now = Instant::now();
-        let mut buckets = self.buckets.lock().expect("rate-limit mutex poisoned");
+        let mut buckets = match self.buckets.lock() {
+            Ok(g) => g,
+            Err(poison) => {
+                tracing::warn!("rate-limit mutex envenenado, recovering inner");
+                poison.into_inner()
+            }
+        };
         let bucket = buckets.entry(peer).or_insert_with(|| Bucket {
             tokens: self.burst,
             last_refill: now,
@@ -168,5 +176,21 @@ mod tests {
         let rl = RateLimiter::from_env();
         let p = peer(1005);
         assert!(rl.check(p));
+    }
+
+    #[test]
+    fn check_recovers_from_poisoned_mutex() {
+        use std::sync::Arc;
+        let rl = Arc::new(RateLimiter::new(10.0, 2.0));
+        // Forca poison: thread panica enquanto segura lock.
+        let rl_clone = Arc::clone(&rl);
+        let _ = std::thread::spawn(move || {
+            let _guard = rl_clone.buckets.lock().expect("first lock");
+            panic!("envenena");
+        })
+        .join();
+        // Apos poison, check ainda funciona via into_inner recovery.
+        let p = peer(1006);
+        assert!(rl.check(p), "check apos poison deve continuar funcionando");
     }
 }
