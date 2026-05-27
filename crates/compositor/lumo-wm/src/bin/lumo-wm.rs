@@ -285,6 +285,23 @@ fn main() -> Result<()> {
     // do main pos-init) e path DRM (timer dentro do run).
     let display = Rc::new(RefCell::new(display));
 
+    // UX3: timer freeze check via /proc DEVE ser registrado ANTES do
+    // backend dispatch porque DRM backend bloqueia em drm::run() e
+    // codigo apos match nunca executa em DRM mode.
+    event_loop
+        .handle()
+        .insert_source(
+            Timer::from_duration(Duration::from_secs(1)),
+            move |_, _, state: &mut LumoState| {
+                if !state.running {
+                    return TimeoutAction::Drop;
+                }
+                state.freeze_check_via_proc();
+                TimeoutAction::ToDuration(Duration::from_secs(1))
+            },
+        )
+        .map_err(|e| anyhow::anyhow!("falha ao registrar timer freeze: {e}"))?;
+
     // Backend dispatch.
     match backend {
         BackendChoice::Winit => {
@@ -341,23 +358,6 @@ fn main() -> Result<()> {
             },
         )
         .map_err(|e| anyhow::anyhow!("falha ao registrar timer dispatch: {e}"))?;
-
-    // UX3: timer 1s pra freeze check via /proc/<pid>/status.
-    // Detecta SIGSTOP (state=T) e uninterruptible disk wait (D).
-    // Bypassa xdg ping/pong (scheduler nao integrado).
-    event_loop
-        .handle()
-        .insert_source(
-            Timer::from_duration(Duration::from_secs(1)),
-            move |_, _, state: &mut LumoState| {
-                if !state.running {
-                    return TimeoutAction::Drop;
-                }
-                state.freeze_check_via_proc();
-                TimeoutAction::ToDuration(Duration::from_secs(1))
-            },
-        )
-        .map_err(|e| anyhow::anyhow!("falha ao registrar timer freeze: {e}"))?;
 
     let display_for_loop = display.clone();
     event_loop.run(None, &mut state, move |state| {
