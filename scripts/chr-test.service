@@ -1,0 +1,21 @@
+[Unit]
+Description=Chromium test via Lumo Wayland
+Documentation=Test Chromium spawn no broken pipe (W37.11-16)
+
+[Service]
+Type=simple
+Environment=WAYLAND_DISPLAY=wayland-1
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+# Habilitar WAYLAND_DEBUG=client pra inspecionar protocol via /tmp/chr_dbg.log
+# Environment=WAYLAND_DEBUG=client
+ExecStart=/usr/bin/chromium --enable-features=UseOzonePlatform --ozone-platform=wayland --no-sandbox --no-first-run about:blank
+StandardOutput=append:/tmp/chr_dbg.log
+StandardError=append:/tmp/chr_dbg.log
+
+# Install:
+#   cp scripts/chr-test.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+# Run:
+#   systemctl --user start chr-test
+# Logs:
+#   tail -f /tmp/chr_dbg.log
