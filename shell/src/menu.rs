@@ -480,4 +480,130 @@ mod tests {
         assert_eq!(MENU_ROW_HOVER_RADIUS, 6.0);
         assert_eq!(MENU_PAD_X, 14.0);
     }
+
+    // --- W37.21 +tests: static fns nao cobertos ---
+
+    fn menu_static(items: &[(&'static str, MenuItemKind)]) -> Vec<MenuItem> {
+        items
+            .iter()
+            .map(|(l, k)| MenuItem {
+                label: l,
+                kind: *k,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn menu_height_static_matches_dyn() {
+        let static_items =
+            menu_static(&[("A", MenuItemKind::Action), ("B", MenuItemKind::Action)]);
+        let dyn_items = vec![DynMenuItem::action("A"), DynMenuItem::action("B")];
+        assert_eq!(menu_height(&static_items), menu_height_dyn(&dyn_items));
+    }
+
+    #[test]
+    fn item_y_offset_action_only() {
+        let items = menu_static(&[
+            ("A", MenuItemKind::Action),
+            ("B", MenuItemKind::Action),
+            ("C", MenuItemKind::Action),
+        ]);
+        assert_eq!(item_y_offset(&items, 0), 0.0);
+        assert_eq!(item_y_offset(&items, 1), MENU_ROW_H);
+        assert_eq!(item_y_offset(&items, 2), MENU_ROW_H * 2.0);
+    }
+
+    #[test]
+    fn item_y_offset_with_separator() {
+        let items = menu_static(&[
+            ("A", MenuItemKind::Action),
+            ("", MenuItemKind::Separator),
+            ("B", MenuItemKind::Action),
+        ]);
+        assert_eq!(item_y_offset(&items, 2), MENU_ROW_H + MENU_SEPARATOR_BLOCK_H);
+    }
+
+    #[test]
+    fn hit_test_static_skip_separator() {
+        let items = menu_static(&[
+            ("A", MenuItemKind::Action),
+            ("", MenuItemKind::Separator),
+            ("B", MenuItemKind::Action),
+        ]);
+        // py em area do separator deve retornar None.
+        let sep_y = 10.0 + MENU_PAD_Y + MENU_ROW_H + 2.0;
+        assert_eq!(hit_test(&items, 10.0, 10.0, 200.0, 50.0, sep_y), None);
+        // py em item 0
+        let item0_y = 10.0 + MENU_PAD_Y + 5.0;
+        assert_eq!(hit_test(&items, 10.0, 10.0, 200.0, 50.0, item0_y), Some(0));
+    }
+
+    #[test]
+    fn clamp_origin_inside_screen_no_change() {
+        let items = menu_static(&[("A", MenuItemKind::Action)]);
+        let (x, y) = clamp_menu_origin(&items, 100.0, 100.0, 200.0, 1920, 1080, 0.0);
+        assert_eq!(x, 100.0);
+        assert_eq!(y, 100.0);
+    }
+
+    #[test]
+    fn clamp_origin_overflow_right_flips() {
+        let items = menu_static(&[("A", MenuItemKind::Action)]);
+        // desired_x=1850 + width 200 = 2050 > 1920 -> flip esq.
+        let (x, _) = clamp_menu_origin(&items, 1850.0, 100.0, 200.0, 1920, 1080, 0.0);
+        // desired_x - width = 1650
+        assert_eq!(x, 1650.0);
+    }
+
+    #[test]
+    fn clamp_origin_overflow_bottom_flips() {
+        let items = menu_static(&[
+            ("A", MenuItemKind::Action),
+            ("B", MenuItemKind::Action),
+            ("C", MenuItemKind::Action),
+        ]);
+        let mh = menu_height(&items);
+        // desired_y muito proximo da base -> flip pra cima.
+        let (_, y) = clamp_menu_origin(&items, 100.0, 1070.0, 200.0, 1920, 1080, 0.0);
+        // Espera y < 1070 (flipped)
+        assert!(y < 1070.0);
+        let _ = mh;
+    }
+
+    #[test]
+    fn rgba_hex_full_components() {
+        let c = rgba_hex(0x112233, 0xFF);
+        // tiny_skia Color usa f32 [0,1]; verifica reverso pra u8.
+        // r=0x11, g=0x22, b=0x33, a=0xFF
+        assert!((c.red() - 0x11 as f32 / 255.0).abs() < 1e-4);
+        assert!((c.green() - 0x22 as f32 / 255.0).abs() < 1e-4);
+        assert!((c.blue() - 0x33 as f32 / 255.0).abs() < 1e-4);
+        assert!((c.alpha() - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn opaque_helper_returns_full_alpha() {
+        let c = opaque(0xFF0000);
+        assert!((c.alpha() - 1.0).abs() < 1e-4);
+        assert!((c.red() - 1.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn menu_item_constructors() {
+        let act = MenuItem::action("Open");
+        assert!(act.is_clickable());
+        assert_eq!(act.label, "Open");
+
+        let sep = MenuItem::separator();
+        assert!(!sep.is_clickable());
+
+        let tog_on = MenuItem::toggle("Bold", true);
+        assert!(tog_on.is_clickable());
+    }
+
+    #[test]
+    fn menu_height_empty_is_pad_only() {
+        let items: Vec<MenuItem> = vec![];
+        assert_eq!(menu_height(&items), MENU_PAD_Y * 2.0);
+    }
 }

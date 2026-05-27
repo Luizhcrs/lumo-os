@@ -83,3 +83,75 @@ impl DockConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_has_six_slots() {
+        let c = DockConfig::default();
+        assert_eq!(c.slots.len(), 6);
+    }
+
+    #[test]
+    fn default_autohide_off() {
+        let c = DockConfig::default();
+        assert!(!c.autohide);
+    }
+
+    #[test]
+    fn default_slots_have_known_apps() {
+        let c = DockConfig::default();
+        let labels: Vec<&str> = c.slots.iter().map(|s| s.label.as_str()).collect();
+        assert!(labels.contains(&"Home"));
+        assert!(labels.contains(&"Calculator"));
+        assert!(labels.contains(&"Settings"));
+        assert!(labels.contains(&"Browser"));
+        assert!(labels.contains(&"Terminal"));
+        assert!(labels.contains(&"Calendar"));
+    }
+
+    #[test]
+    fn default_slots_have_non_empty_exec() {
+        let c = DockConfig::default();
+        for slot in &c.slots {
+            assert!(!slot.exec.is_empty(), "slot {} sem exec", slot.label);
+        }
+    }
+
+    #[test]
+    fn parse_toml_with_autohide() {
+        let toml_src = r#"
+            autohide = true
+            [[slots]]
+            label = "MyApp"
+            exec = "myapp"
+            process = "myapp"
+            icon = "app"
+        "#;
+        let c: DockConfig = toml::from_str(toml_src).expect("parse");
+        assert!(c.autohide);
+        assert_eq!(c.slots.len(), 1);
+        assert_eq!(c.slots[0].label, "MyApp");
+    }
+
+    #[test]
+    fn parse_toml_empty_uses_default_slots() {
+        let c: DockConfig = toml::from_str("").expect("parse empty");
+        assert_eq!(c.slots.len(), 6);
+        assert!(!c.autohide);
+    }
+
+    #[test]
+    fn slot_config_defaults_process_and_icon_to_empty() {
+        let toml_src = r#"
+            [[slots]]
+            label = "X"
+            exec = "x-cmd"
+        "#;
+        let c: DockConfig = toml::from_str(toml_src).expect("parse");
+        assert_eq!(c.slots[0].process, "");
+        assert_eq!(c.slots[0].icon, "");
+    }
+}

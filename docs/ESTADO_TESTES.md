@@ -1,6 +1,6 @@
 # Estado dos Testes — Lumo OS
 
-> Ultima verificacao: 2026-05-27 (pos W37.20 telemetry + style tests)
+> Ultima verificacao: 2026-05-27 (pos W37.21 shell/launcher/dock tests)
 
 ## Resumo
 
@@ -8,14 +8,41 @@
 |-----------|--------|----------|----------|-----------|
 | lumo-foundation | 53 | 53 | 0 | Alta (tokens, cores, tema, i18n, a11y) |
 | lumo-wm | 194 | 194 | 0 | Alta (W37.19 +5 truthy parsing) |
-| lumo-shell | 36 | 36 | 0 | Media (W37.6 menu unificado) |
+| lumo-shell | 47 | 47 | 0 | Media (W37.21 +11 menu.rs static fns) |
 | lumo-files | 66 | 66 | 0 | Alta (W37 ctx menu) |
 | lumo-animation | 43 | 43 | 0 | Alta (spring, easing, interpolate) |
 | lumo-ipc | 10 | 10 | 0 | Alta (mensagens, roundtrip) |
 | lumo-sensors | 37 | 37 | 0 | Alta (thermal, platform, battery) |
 | lumo-style | 24 | 24 | 0 | Media (W37.20 +20 model.rs) |
 | lumo-telemetry | 28 | 28 | 0 | Alta (W37.20 +28 event/histogram/store/lib/init) |
-| **Total** | **491** | **491** | **0** | **Alta** |
+| lumo-launcher | 25 | 25 | 0 | Media (W37.21 math/fuzzy/desktop) |
+| lumo-dock | 7 | 7 | 0 | Media (W37.21 config.rs) |
+| **Total** | **534** | **534** | **0** | **Alta** |
+
+## W37.21 — Shell + Launcher + Dock test coverage (2026-05-27)
+
+43 testes novos pra reduzir gap em crates de UI shell.
+
+**shell/menu.rs** (4 → 15, +11):
+- menu_height static vs dyn equivalencia
+- item_y_offset action only + with separator
+- hit_test static skip separator
+- clamp_menu_origin (inside, overflow right flip, overflow bottom flip)
+- rgba_hex + opaque color helpers
+- MenuItem constructors (action/separator/toggle)
+- menu_height empty (pad only)
+
+**apps/lumo-launcher** (0 → 25):
+- math.rs (12): try_eval add/mul/div fractional, power, sqrt/sin/cos/log detection,
+  invalid expression, empty, integer no decimal, negative
+- fuzzy.rs (7): empty query/entries, match by name vs comment, sort by score desc,
+  truncate at MAX_RESULTS
+- desktop.rs (6): clean_exec removes %tokens, preserves args, collapses whitespace,
+  empty handling
+
+**apps/lumo-dock/config.rs** (0 → 7):
+- default 6 slots, autohide off, known apps, non-empty exec,
+- TOML parse with autohide, empty uses defaults, defaults for missing fields
 
 ## W37.20 — Telemetry + Style test coverage (2026-05-27)
 
@@ -60,7 +87,7 @@ Tests novos lumo-files (W37.0 / 3):
 
 ## Testes quebrados
 
-Nenhum. Todos os 491 testes passam.
+Nenhum. Todos os 534 testes passam.
 
 ## Crates sem testes
 

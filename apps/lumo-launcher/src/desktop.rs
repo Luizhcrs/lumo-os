@@ -22,6 +22,58 @@ impl DesktopEntry {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(exec: &str) -> DesktopEntry {
+        DesktopEntry {
+            name: "".into(),
+            exec: exec.into(),
+            comment: "".into(),
+            categories: "".into(),
+        }
+    }
+
+    #[test]
+    fn clean_exec_removes_percent_tokens() {
+        // %f, %F, %u, %U sao XDG field codes que nao queremos no spawn.
+        let e = entry("firefox %u");
+        assert_eq!(e.clean_exec(), "firefox");
+    }
+
+    #[test]
+    fn clean_exec_preserves_args_without_percent() {
+        let e = entry("mousepad /path/to/file.txt");
+        assert_eq!(e.clean_exec(), "mousepad /path/to/file.txt");
+    }
+
+    #[test]
+    fn clean_exec_removes_multiple_percent_tokens() {
+        let e = entry("app %F %i %c %k arg1 arg2");
+        assert_eq!(e.clean_exec(), "app arg1 arg2");
+    }
+
+    #[test]
+    fn clean_exec_empty_returns_empty() {
+        let e = entry("");
+        assert_eq!(e.clean_exec(), "");
+    }
+
+    #[test]
+    fn clean_exec_only_percent_tokens_returns_empty() {
+        let e = entry("%F %U");
+        assert_eq!(e.clean_exec(), "");
+    }
+
+    #[test]
+    fn clean_exec_collapses_whitespace() {
+        // split_whitespace collapsa runs de espaco. join com single space.
+        let e = entry("firefox    %u   --new-window");
+        assert_eq!(e.clean_exec(), "firefox --new-window");
+    }
+}
+
 pub fn load_desktop_entries() -> Vec<DesktopEntry> {
     let mut dirs: Vec<PathBuf> = vec![PathBuf::from("/usr/share/applications")];
     if let Ok(home) = std::env::var("HOME") {
