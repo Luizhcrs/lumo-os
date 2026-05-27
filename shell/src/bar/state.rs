@@ -437,81 +437,73 @@ pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResul
     // ============================================================
     match snap.dropdown {
         DropdownActive::AppFallback => {
+            // UX unificada: usa crate::menu::draw_menu_dyn igual submenu
+            // appmenu nativo + ctx menu desktop/files. Hover accent solido,
+            // radius 10, fonte Inter — mesma identidade visual.
             if let Some((rx, ry, rw, rh)) = result.appmenu_fallback_rect {
+                use crate::menu::{draw_menu_dyn, hit_test_dyn, menu_height_dyn, DynMenuItem};
+                let items = [
+                    DynMenuItem::action("Sobre"),
+                    DynMenuItem::action("Versao"),
+                    DynMenuItem::action("Ajuda"),
+                    DynMenuItem::separator(),
+                    DynMenuItem::action("Fechar"),
+                ];
                 let dropdown_w = 200.0f32;
-                let item_h = 28.0f32;
-                let num_items = 5usize;
-                let labels = ["Sobre", "Versao", "Ajuda", "---", "Fechar"];
-                let dropdown_h = item_h * num_items as f32 + 8.0;
+                let dropdown_h = menu_height_dyn(&items);
                 let want_x = rx;
                 let max_x = snap.width as f32 - pill_margin - dropdown_w;
                 let dropdown_x = want_x.max(pill_margin).min(max_x.max(pill_margin));
                 let dropdown_y = ry + rh + DROPDOWN_GAP;
                 if let Some(mut sub) = Pixmap::new(dropdown_w as u32, dropdown_h as u32) {
-                    let mut fb_rects: Vec<(usize, (f32, f32, f32, f32))> = Vec::new();
                     {
                         let mut canvas = sub.as_mut();
-                        // Fundo.
-                        crate::bar::icons::fill_rrect(
+                        let hover = snap.appmenu_fallback_hover_idx.unwrap_or(usize::MAX);
+                        draw_menu_dyn(
                             &mut canvas,
                             0.0,
                             0.0,
                             dropdown_w,
-                            dropdown_h,
-                            10.0,
-                            rgba_hex(palette.pill_bg, 0xF0),
+                            &items,
+                            hover,
+                            palette,
+                            |c, x, y, w, h, r, color| {
+                                crate::bar::icons::fill_rrect(c, x, y, w, h, r, color);
+                            },
+                            |c, x, y, label, size, color| {
+                                draw_text(c, x, y, label, size, color, false);
+                            },
                         );
-                        for (i, label) in labels.iter().enumerate() {
-                            let iy = 4.0 + item_h * i as f32;
-                            if *label == "---" {
-                                // Separator line
-                                let mid_y = iy + item_h / 2.0;
-                                crate::bar::icons::fill_rrect(
-                                    &mut canvas,
-                                    8.0,
-                                    mid_y,
-                                    dropdown_w - 16.0,
-                                    1.0,
-                                    0.0,
-                                    rgba_hex(palette.pill_sep, 0x60),
-                                );
-                                continue;
-                            }
-                            let is_hover = snap.appmenu_fallback_hover_idx == Some(i);
-                            if is_hover {
-                                crate::bar::icons::fill_rrect(
-                                    &mut canvas,
-                                    4.0,
-                                    iy + 1.0,
-                                    dropdown_w - 8.0,
-                                    item_h - 2.0,
-                                    6.0,
-                                    rgba_hex(palette.pill_fg, 0x15),
-                                );
-                            }
-                            let text_color = if i == 4 {
-                                rgba_hex(0xC0392B, 0xFF)
-                            } else {
-                                opaque(palette.pill_fg)
-                            };
-                            draw_text(
-                                &mut canvas,
-                                12.0,
-                                iy + (item_h - FONT_PILL * 1.2) / 2.0,
-                                label,
-                                FONT_PILL,
-                                text_color,
-                                false,
-                            );
-                            fb_rects.push((i, (0.0, iy, dropdown_w, item_h)));
+                    }
+                    // Hit-rects via hit_test_dyn pattern — calc rect por item.
+                    let mut fb_rects: Vec<(usize, (f32, f32, f32, f32))> = Vec::new();
+                    for i in 0..items.len() {
+                        if !items[i].is_clickable() {
+                            continue;
+                        }
+                        // Bbox approximate: hit_test_dyn da idx via py,
+                        // mas pra rect preciso de offset. Itera y manual.
+                        if let Some(_) = hit_test_dyn(
+                            &items,
+                            0.0,
+                            0.0,
+                            dropdown_w,
+                            dropdown_w / 2.0,
+                            // probe y center do item i
+                            4.0 + 28.0 * i as f32 + 14.0,
+                        ) {
+                            fb_rects.push((
+                                i,
+                                (
+                                    dropdown_x,
+                                    dropdown_y + 4.0 + 28.0 * i as f32,
+                                    dropdown_w,
+                                    28.0,
+                                ),
+                            ));
                         }
                     }
-                    result.appmenu_fallback_dropdown_rects = fb_rects
-                        .into_iter()
-                        .map(|(idx, (bx, by, bw, bh))| {
-                            (idx, (bx + dropdown_x, by + dropdown_y, bw, bh))
-                        })
-                        .collect();
+                    result.appmenu_fallback_dropdown_rects = fb_rects;
                     composite_dropdown(
                         pixmap,
                         &sub,
