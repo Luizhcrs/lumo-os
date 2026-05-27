@@ -111,7 +111,7 @@ pub fn render_title_to_argb(title: &str, width: u32, height: u32) -> Option<Vec<
         let mut buf = Buffer::new(&mut fs, metrics);
         buf.set_size(&mut fs, Some(width as f32), Some(height as f32));
         let attrs = Attrs::new().family(Family::SansSerif);
-        buf.set_text(&mut fs, title, &attrs, Shaping::Advanced);
+        buf.set_text(&mut fs, title, attrs, Shaping::Advanced);
         // Centraliza vertical: line_y absoluto sobre height/2 do ascent.
         let line_y_offset = ((height as f32 - metrics.line_height) / 2.0).max(0.0);
 
