@@ -37,13 +37,13 @@ pub fn run() {
     let _ = font_system();
     let _ = swash_cache();
 
-    let conn = Connection::connect_to_env().expect("conectar wayland");
-    let (globals, mut queue) = registry_queue_init::<LumoDesktop>(&conn).expect("registry init");
+    let conn = Connection::connect_to_env().expect("[SHELL-INIT-001] conectar wayland");
+    let (globals, mut queue) = registry_queue_init::<LumoDesktop>(&conn).expect("[SHELL-INIT-002] registry init");
     let qh = queue.handle();
 
-    let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor nao disponivel");
-    let layer_shell = LayerShell::bind(&globals, &qh).expect("wlr_layer_shell nao disponivel");
-    let shm = Shm::bind(&globals, &qh).expect("wl_shm nao disponivel");
+    let compositor = CompositorState::bind(&globals, &qh).expect("[SHELL-INIT-003] wl_compositor missing");
+    let layer_shell = LayerShell::bind(&globals, &qh).expect("[SHELL-INIT-004] wlr_layer_shell missing");
+    let shm = Shm::bind(&globals, &qh).expect("[SHELL-INIT-005] wl_shm missing");
 
     let surface = compositor.create_surface(&qh);
     let layer = layer_shell.create_layer_surface(
@@ -60,7 +60,7 @@ pub fn run() {
     layer.commit();
 
     let pool =
-        SlotPool::new(OUTPUT_W as usize * OUTPUT_H as usize * 4 * 2, &shm).expect("SlotPool init");
+        SlotPool::new(OUTPUT_W as usize * OUTPUT_H as usize * 4 * 2, &shm).expect("[SHELL-INIT-006] SlotPool alloc");
 
     let mut state = LumoDesktop {
         registry: RegistryState::new(&globals),

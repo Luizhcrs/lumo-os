@@ -40,6 +40,13 @@ Codigos sao **append-only**. Removido = reserved (nunca reusar). Mudou semantica
 
 | Codigo | Severity | Quando | Recovery hint |
 |--------|----------|--------|---------------|
+| `SHELL-INIT-001` | fatal | Wayland connect_to_env falhou | Check WAYLAND_DISPLAY |
+| `SHELL-INIT-002` | fatal | registry_queue_init falhou | Check compositor live |
+| `SHELL-INIT-003` | fatal | wl_compositor global ausente | Compositor sem protocolo basico |
+| `SHELL-INIT-004` | fatal | wlr-layer-shell global ausente | Compositor nao suporta layer-shell |
+| `SHELL-INIT-005` | fatal | wl_shm global ausente | Compositor sem SHM |
+| `SHELL-INIT-006` | fatal | SlotPool alloc falhou | Memoria insuficiente |
+| `SHELL-INIT-007` | fatal | Bar lock file open falhou | Permissao em XDG_RUNTIME_DIR |
 | `SHELL-SPAWN-001` | recoverable | Bar/desktop crashou | Respawn + toast |
 | `SHELL-RENDER-001` | degraded | tiny-skia draw falhou | Skip frame |
 

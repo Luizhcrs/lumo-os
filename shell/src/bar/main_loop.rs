@@ -49,7 +49,7 @@ pub fn run() {
         .write(true)
         .create(true)
         .open(&lock_path)
-        .expect("Falha ao abrir lock file da bar");
+        .expect("[SHELL-INIT-007] bar lock file");
 
     use std::os::unix::io::AsRawFd;
     let fd = lock_file.as_raw_fd();
@@ -74,13 +74,13 @@ pub fn run() {
         });
     }
 
-    let conn = Connection::connect_to_env().expect("conectar wayland");
-    let (globals, mut queue) = registry_queue_init::<LumoBar>(&conn).expect("registry init");
+    let conn = Connection::connect_to_env().expect("[SHELL-INIT-001] conectar wayland");
+    let (globals, mut queue) = registry_queue_init::<LumoBar>(&conn).expect("[SHELL-INIT-002] registry init");
     let qh = queue.handle();
 
-    let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor nao disponivel");
-    let layer_shell = LayerShell::bind(&globals, &qh).expect("wlr_layer_shell nao disponivel");
-    let shm = Shm::bind(&globals, &qh).expect("wl_shm nao disponivel");
+    let compositor = CompositorState::bind(&globals, &qh).expect("[SHELL-INIT-003] wl_compositor missing");
+    let layer_shell = LayerShell::bind(&globals, &qh).expect("[SHELL-INIT-004] wlr_layer_shell missing");
+    let shm = Shm::bind(&globals, &qh).expect("[SHELL-INIT-005] wl_shm missing");
 
     let surface = compositor.create_surface(&qh);
     let layer = layer_shell.create_layer_surface(&qh, surface, Layer::Top, Some("lumo-bar"), None);
@@ -98,7 +98,7 @@ pub fn run() {
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
 
-    let pool = SlotPool::new(1920 * surface_max_h as usize * 4 * 2, &shm).expect("SlotPool init");
+    let pool = SlotPool::new(1920 * surface_max_h as usize * 4 * 2, &shm).expect("[SHELL-INIT-006] SlotPool alloc");
     let active_workspace = Arc::new(AtomicU8::new(1));
     let theme = lumo_foundation::current_theme();
     let palette = lumo_foundation::current_colors();

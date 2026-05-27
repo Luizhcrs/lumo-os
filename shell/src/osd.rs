@@ -407,12 +407,12 @@ delegate_registry!(LumoOsd);
 pub fn run() {
     let _ = font_system();
     let _ = swash_cache();
-    let conn = Connection::connect_to_env().expect("conectar wayland");
-    let (globals, mut queue) = registry_queue_init::<LumoOsd>(&conn).expect("registry init");
+    let conn = Connection::connect_to_env().expect("[SHELL-INIT-001] conectar wayland");
+    let (globals, mut queue) = registry_queue_init::<LumoOsd>(&conn).expect("[SHELL-INIT-002] registry init");
     let qh = queue.handle();
-    let compositor = CompositorState::bind(&globals, &qh).expect("wl_compositor");
-    let layer_shell = LayerShell::bind(&globals, &qh).expect("wlr_layer_shell");
-    let shm = Shm::bind(&globals, &qh).expect("wl_shm");
+    let compositor = CompositorState::bind(&globals, &qh).expect("[SHELL-INIT-003] wl_compositor missing");
+    let layer_shell = LayerShell::bind(&globals, &qh).expect("[SHELL-INIT-004] wlr_layer_shell missing");
+    let shm = Shm::bind(&globals, &qh).expect("[SHELL-INIT-005] wl_shm missing");
     let surface = compositor.create_surface(&qh);
     let layer =
         layer_shell.create_layer_surface(&qh, surface, Layer::Overlay, Some("lumo-osd"), None);
@@ -422,7 +422,7 @@ pub fn run() {
     layer.set_exclusive_zone(0);
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
-    let pool = SlotPool::new((OSD_W * OSD_H * 4 * 2) as usize, &shm).expect("SlotPool");
+    let pool = SlotPool::new((OSD_W * OSD_H * 4 * 2) as usize, &shm).expect("[SHELL-INIT-006] SlotPool alloc");
     let ai = LAAnimator::new(
         0.0f32,
         0.0f32,

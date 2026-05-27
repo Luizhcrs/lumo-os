@@ -143,9 +143,26 @@ pub fn default_socket_path() -> Option<std::path::PathBuf> {
 }
 
 pub fn encode_event(ev: &LumoEvent) -> String {
-    let mut s = serde_json::to_string(ev).expect("LumoEvent sempre serializa");
+    // IPC-FRAME-001: serializacao so falha se LumoEvent for malformado
+    // (variant nao-serializavel), o que e bug nosso. Em prod, evento e
+    // descartado e log warn em vez de panic.
+    match serde_json::to_string(ev) {
+        Ok(mut s) => {
+            s.push('\n');
+            s
+        }
+        Err(e) => {
+            tracing::error!(code = "IPC-FRAME-001", err = %e, ?ev, "encode_event falhou; dropando evento");
+            String::new()
+        }
+    }
+}
+
+/// Variant fallible de encode_event. Use quando caller quer detectar erro.
+pub fn try_encode_event(ev: &LumoEvent) -> Result<String, serde_json::Error> {
+    let mut s = serde_json::to_string(ev)?;
     s.push('\n');
-    s
+    Ok(s)
 }
 
 pub fn parse_command(line: &str) -> Option<Result<LumoCommand, serde_json::Error>> {
@@ -319,5 +336,22 @@ mod tests {
         // mas aqui testamos que ele pelo menos nao causa pânico.
         let result = parse_command(&large).unwrap();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn try_encode_event_returns_ok_for_valid() {
+        let ev = LumoEvent::Workspaces { active: 1, total: 5 };
+        let out = try_encode_event(&ev).expect("encode ok");
+        assert!(out.ends_with('\n'));
+        assert!(out.contains("workspaces") || out.contains("Workspaces"));
+    }
+
+    #[test]
+    fn encode_event_always_returns_string_or_empty() {
+        // encode_event nunca panica mesmo em payload normal.
+        let ev = LumoEvent::Workspaces { active: 0, total: 0 };
+        let s = encode_event(&ev);
+        assert!(!s.is_empty());
+        assert!(s.ends_with('\n'));
     }
 }

@@ -151,6 +151,22 @@ macro_rules! lumo_err {
     };
 }
 
+/// Helper pra init-time fatal. Log codigo + msg, depois panic.
+/// Crash dump escrito por panic_hook. Use no lugar de `.expect("...")`
+/// quando init falha = processo nao pode continuar.
+///
+/// ```ignore
+/// let conn = Connection::connect_to_env()
+///     .unwrap_or_else(|e| lumo_error::fatal_init("SHELL-INIT-001", "Wayland", &e));
+/// ```
+pub fn fatal_init<E: std::fmt::Display>(code: &'static str, what: &str, err: &E) -> ! {
+    eprintln!("[{}] init fatal: {}: {}", code, what, err);
+    // Log via tracing tambem (caso subscriber esteja instalado).
+    // Nao podemos importar tracing aqui (lumo-error nao depende).
+    // Caller deve ter feito tracing::error antes se quiser estruturado.
+    panic!("[{code}] {what}: {err}");
+}
+
 pub mod crash;
 pub mod hook;
 
