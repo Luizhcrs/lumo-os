@@ -55,15 +55,30 @@ impl CompositorHandler for LumoState {
                 // Fullscreen: NAO clampar pra usable. A janela cobre o output
                 // inteiro (0,0)+(ow,oh); o clamp floating empurraria abaixo da
                 // bar e encolheria -> fullscreen nunca cobriria a tela (bug
-                // Chrome F11). set_window_fullscreen ja posicionou em (0,0).
+                // Chrome F11). Checa PENDING + CURRENT: no commit que aplica o
+                // buffer fullscreen, o state Fullscreen ainda pode estar so no
+                // pending (current so atualiza no ack) -> sem checar pending, o
+                // clamp rodava e empurrava a janela pra baixo da bar (~y85).
+                use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgFsState;
                 let is_fullscreen = window
                     .toplevel()
                     .map(|tl| {
-                        tl.current_state().states.contains(
-                            smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State::Fullscreen,
-                        )
+                        let cur = tl.current_state().states.contains(XdgFsState::Fullscreen);
+                        let pend =
+                            tl.with_pending_state(|s| s.states.contains(XdgFsState::Fullscreen));
+                        cur || pend
                     })
                     .unwrap_or(false);
+
+                // Fullscreen: re-assegura posicao (0,0). Chromium pode commitar
+                // o buffer fullscreen antes do nosso map_element estabilizar;
+                // garantir aqui que a janela cobre o output desde o canto.
+                if is_fullscreen {
+                    let cur = self.space.element_location(&window).unwrap_or_default();
+                    if cur.x != 0 || cur.y != 0 {
+                        self.space.map_element(window.clone(), (0, 0), true);
+                    }
+                }
 
                 // LIMITES DE GEOMETRIA: Respeite a usable_geometry() do compositor.
                 // Janelas flutuantes nao devem abrir maiores que o espaco util da tela

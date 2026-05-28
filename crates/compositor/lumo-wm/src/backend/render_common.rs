@@ -1193,9 +1193,24 @@ pub fn collect_drm_elements(
         }
     }
 
-    // 4a. Upper layers (Layer::Top/Overlay) na frente de titlebars.
-    for el in upper_layers {
-        out.push(LumoCustomElement::Space(el));
+    // 4a. Upper layers (Layer::Top/Overlay = bar + dropdowns) na frente de
+    // titlebars. EXCETO em fullscreen: uma janela fullscreen e modo imersivo
+    // e deve cobrir a bar. Sem isto, F11 no Chrome mostrava a bar do Lumo por
+    // cima do conteudo (bug user). Convencao xdg: surface fullscreen fica
+    // acima do layer Top.
+    let has_fullscreen = inputs.space.elements().any(|w| {
+        w.toplevel()
+            .map(|tl| {
+                tl.current_state().states.contains(
+                    smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State::Fullscreen,
+                )
+            })
+            .unwrap_or(false)
+    });
+    if !has_fullscreen {
+        for el in upper_layers {
+            out.push(LumoCustomElement::Space(el));
+        }
     }
 
     // T1.1: menu popup SSD.
