@@ -365,8 +365,10 @@ impl LumoState {
                             }
                         }
 
+                        // Front-first iter pra topmost ganhar hit (bug user
+                        // janela atras "pulando pra frente").
                         let windows: Vec<_> = self.space.elements().cloned().collect();
-                        for window in &windows {
+                        for window in windows.iter().rev() {
                             let surf_opt = window.toplevel().map(|t| t.wl_surface().clone());
                             let surf = match surf_opt {
                                 Some(s) => s,
@@ -1117,8 +1119,12 @@ impl LumoState {
             let ptr_pos = self.pointer_location.to_i32_round();
             let mut ssd_handled = false;
 
+            // Bug user (2026-05): space.elements() retorna back-to-front.
+            // Iter front-first (rev) garante topmost window pega hit
+            // primeiro. Sem rev, click em SSD area onde 2 windows overlap
+            // raisava window de tras (que aparecia "pulando pra frente").
             let windows: Vec<_> = self.space.elements().cloned().collect();
-            for window in &windows {
+            for window in windows.iter().rev() {
                 let surf_opt = window.toplevel().map(|t| t.wl_surface().clone());
                 let surf = match surf_opt {
                     Some(s) => s,
