@@ -33,6 +33,7 @@
 pub mod animator;
 pub mod layout;
 pub mod paint;
+pub mod snapshot;
 
 pub use animator::{OsdAnimator, OsdPhase};
 pub use layout::{OsdLayout, SliderGeom, ToggleGeom};
