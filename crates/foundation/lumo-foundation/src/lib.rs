@@ -1275,3 +1275,7 @@ pub use accessibility::{watch_accessibility, A11yTokens};
 // W11.A
 pub mod i18n;
 pub use i18n::I18n;
+
+// A3 review: Urgency enum compartilhado entre lumo-notif e lumo-osd-framework.
+pub mod urgency;
+pub use urgency::Urgency;

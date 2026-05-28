@@ -13,6 +13,9 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod shell_app;
+pub use shell_app::{ActivationKind, ShellApp, ShellAppEntry, ShellAppRegistry};
+
 pub const SOCKET_BASENAME: &str = "lumo-wm.sock";
 
 pub const MAX_WORKSPACES: u8 = 5;

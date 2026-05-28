@@ -90,6 +90,9 @@ pub enum KeyAction {
     JumpToWindow(u8),
     /// F1.5-C2: Clipboard history picker (Super+Shift+V).
     ClipboardHistory,
+    /// A2 review: invoca ShellApp resolvendo via ShellAppRegistry.
+    /// Sobrepoe `Spawn(String)` hardcoded ao longo do tempo.
+    InvokeApp(lumo_ipc::ShellApp),
 }
 
 /// Keysym como u32 pra serde.

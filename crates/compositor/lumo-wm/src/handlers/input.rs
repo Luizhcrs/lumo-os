@@ -957,10 +957,51 @@ impl LumoState {
             }
             KeyAction::ClipboardHistory => {
                 // F1.5-C2: Super+Shift+V abre lumo-clip picker.
+                // Mantido pra compat; novos bindings usam InvokeApp(Clipboard).
                 tracing::info!("F1.5-C2: ClipboardHistory spawn lumo-clip");
-                self.spawn_cmd("lumo-clip");
+                self.invoke_app(lumo_ipc::ShellApp::Clipboard);
+            }
+            KeyAction::InvokeApp(app) => {
+                // A2 review: resolve via ShellAppRegistry (com defaults).
+                self.invoke_app(app);
             }
         }
+    }
+
+    /// A2 review: resolve ShellApp -> ActivationKind via registry e executa.
+    /// Spawn -> spawn_cmd; Signal/DBus pendentes (TBD).
+    fn invoke_app(&self, app: lumo_ipc::ShellApp) {
+        let registry = self.shell_app_registry();
+        let Some(activation) = registry.lookup(app) else {
+            tracing::warn!(?app, "invoke_app: nao registrado");
+            return;
+        };
+        match activation {
+            lumo_ipc::ActivationKind::Spawn { command } => {
+                let cmd = command.clone();
+                self.spawn_cmd(&cmd);
+            }
+            lumo_ipc::ActivationKind::Signal { pidfile, signal } => {
+                tracing::info!(?app, ?pidfile, ?signal, "Signal activation TBD");
+            }
+            lumo_ipc::ActivationKind::DBus {
+                bus_name,
+                object_path,
+                interface,
+                method,
+            } => {
+                tracing::info!(
+                    ?app, ?bus_name, ?object_path, ?interface, ?method,
+                    "DBus activation TBD"
+                );
+            }
+        }
+    }
+
+    /// A2 review: retorna registry de ShellApps. Default por enquanto;
+    /// carregar de ~/.config/lumo/shell-apps.toml pendente.
+    fn shell_app_registry(&self) -> lumo_ipc::ShellAppRegistry {
+        lumo_ipc::ShellAppRegistry::default()
     }
 
     /// Spawna um processo com o ambiente Wayland correto.

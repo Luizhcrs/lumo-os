@@ -4663,6 +4663,7 @@ name = "lumo-foundation"
 version = "0.1.0"
 dependencies = [
  "notify 6.1.1",
+ "serde",
  "tempfile",
 ]
 
