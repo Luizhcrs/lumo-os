@@ -918,6 +918,43 @@ impl LumoState {
                     tracing::trace!(vt = n, "switch_vt request (no-op fora de DRM)");
                 }
             }
+            KeyAction::HideWindow => {
+                // F1.5-D1: hide window focused (sem fechar).
+                // Iconify protocol nao tem em xdg-shell core; usar workspace
+                // virtual "hidden" como workaround: unmap from space.
+                if let Some(focused) = self.keyboard.current_focus() {
+                    let win = self
+                        .space
+                        .elements()
+                        .find(|w| w.wl_surface().map(|s| *s == focused).unwrap_or(false))
+                        .cloned();
+                    if let Some(w) = win {
+                        self.space.unmap_elem(&w);
+                        tracing::info!("F1.5-D1: HideWindow unmap focused");
+                    }
+                }
+            }
+            KeyAction::ShortcutHelp => {
+                // F1.5-D1: emit IPC pra bar/desktop renderizar overlay help.
+                // Por enquanto so log; full overlay design backlog.
+                tracing::info!("F1.5-D1: ShortcutHelp (overlay TBD)");
+            }
+            KeyAction::JumpToWindow(n) => {
+                // F1.5-D1: focus N-th window (1-indexed) do space.
+                let windows: Vec<_> = self.space.elements().cloned().collect();
+                let idx = (n as usize).saturating_sub(1);
+                if let Some(win) = windows.get(idx) {
+                    if let Some(surf) = win.wl_surface() {
+                        let owned = surf.into_owned();
+                        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+                        self.space.raise_element(win, true);
+                        let new_focus = self.focus_manager.click_toplevel(owned.clone());
+                        let kb = self.keyboard.clone();
+                        kb.set_focus(self, new_focus, serial);
+                        tracing::info!(n, "F1.5-D1: JumpToWindow");
+                    }
+                }
+            }
         }
     }
 

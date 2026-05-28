@@ -81,6 +81,13 @@ pub enum KeyAction {
     Minimize,
     Quit,
     SwitchVt(i32),
+    /// F1.5-D1: Hide window sem fechar (Mac Cmd+H equivalente).
+    HideWindow,
+    /// F1.5-D1: Show shortcut help overlay (Mac Cmd+/).
+    ShortcutHelp,
+    /// F1.5-D1: Jump pra N-th window do workspace (Super+1..9).
+    /// N=0 reserva pra "show all" futuro.
+    JumpToWindow(u8),
 }
 
 /// Keysym como u32 pra serde.
@@ -200,6 +207,22 @@ pub fn default_bindings() -> Vec<KeyBinding> {
         KeyBinding::new(s(), Keysym::L, KeyAction::Lock),
         KeyBinding::new(s(), Keysym::q, KeyAction::CloseWindow),
         KeyBinding::new(s(), Keysym::Q, KeyAction::CloseWindow),
+        // F1.5-D1: Mac-style Cmd+W close window (alias Super+Q).
+        KeyBinding::new(s(), Keysym::w, KeyAction::CloseWindow),
+        KeyBinding::new(s(), Keysym::W, KeyAction::CloseWindow),
+        // F1.5-D1: Cmd+/ shortcut help overlay.
+        KeyBinding::new(s(), Keysym::slash, KeyAction::ShortcutHelp),
+        KeyBinding::new(s(), Keysym::question, KeyAction::ShortcutHelp),
+        // F1.5-D1: Super+1..9 jump pra N-th window.
+        KeyBinding::new(s(), Keysym::_1, KeyAction::JumpToWindow(1)),
+        KeyBinding::new(s(), Keysym::_2, KeyAction::JumpToWindow(2)),
+        KeyBinding::new(s(), Keysym::_3, KeyAction::JumpToWindow(3)),
+        KeyBinding::new(s(), Keysym::_4, KeyAction::JumpToWindow(4)),
+        KeyBinding::new(s(), Keysym::_5, KeyAction::JumpToWindow(5)),
+        KeyBinding::new(s(), Keysym::_6, KeyAction::JumpToWindow(6)),
+        KeyBinding::new(s(), Keysym::_7, KeyAction::JumpToWindow(7)),
+        KeyBinding::new(s(), Keysym::_8, KeyAction::JumpToWindow(8)),
+        KeyBinding::new(s(), Keysym::_9, KeyAction::JumpToWindow(9)),
         KeyBinding::new(s(), Keysym::space, KeyAction::Launcher),
         KeyBinding::new(s(), Keysym::Return, KeyAction::Spawn("foot".to_string())),
         KeyBinding::new(s(), Keysym::Tab, KeyAction::StackPicker),
