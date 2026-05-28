@@ -1106,6 +1106,7 @@ impl LumoState {
     pub fn set_window_maximized(&mut self, window: &smithay::desktop::Window, on: bool) {
         use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
         use smithay::utils::{Point, Size};
+        use smithay::wayland::seat::WaylandFocus;
         const SSD_TITLEBAR_H: i32 = 30;
         let Some(tl) = window.toplevel().cloned() else {
             return;
