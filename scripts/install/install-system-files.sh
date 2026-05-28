@@ -32,23 +32,29 @@ install_file 49-lumo-nm.rules      /etc/polkit-1/rules.d/49-lumo-nm.rules      0
 install_file 49-lumo-power.rules   /etc/polkit-1/rules.d/49-lumo-power.rules   0644
 install_file 49-lumo-sensors.rules /etc/polkit-1/rules.d/49-lumo-sensors.rules 0644
 
-echo "[udev] regras de device (SUBSYSTEM==/KERNEL==) -> /etc/udev/rules.d/"
+echo "[udev] regras de device -> /etc/udev/rules.d/"
+# Brightness + LEDs: GROUP=/MODE= nativo (sem callout externo — funciona no
+# early boot/initramfs onde /usr nao esta montado).
 install_file 90-lumo-backlight.rules /etc/udev/rules.d/90-lumo-backlight.rules 0644
 install_file 99-lumo-leds.rules      /etc/udev/rules.d/99-lumo-leds.rules      0644
+# Bateria charge limit: udev no device-add (substitui lumo-bat.tmpfiles.conf,
+# que falhava resolver group 'power' no early tmpfiles pass).
+install_file 91-lumo-battery.rules   /etc/udev/rules.d/91-lumo-battery.rules   0644
 
-echo "[tmpfiles] -> /etc/tmpfiles.d/"
-# lumo-bat usa group 'power' — garantir que existe ANTES (senao boot acusa
-# "Unknown group 'power'" se tmpfiles roda antes do grupo ser criado).
+echo "[grupo power] necessario pra escrita do charge_control_end_threshold"
 if ! getent group power >/dev/null; then
     groupadd -r power
     echo "  grupo 'power' criado"
 fi
 gpasswd -a "$USER_NAME" power >/dev/null || true
-install_file lumo-bat.tmpfiles.conf  /etc/tmpfiles.d/lumo-bat.conf  0644
-install_file lumo-leds.tmpfiles.conf /etc/tmpfiles.d/lumo-leds.conf 0644
 
-echo "[reload] udev + tmpfiles"
+echo "[tmpfiles] -> /etc/tmpfiles.d/"
+install_file lumo-leds.tmpfiles.conf /etc/tmpfiles.d/lumo-leds.conf 0644
+# lumo-bat.tmpfiles.conf REMOVIDO: virou 91-lumo-battery.rules (udev).
+rm -f /etc/tmpfiles.d/lumo-bat.conf
+
+echo "[reload] udev"
 udevadm control --reload-rules
-systemd-tmpfiles --create /etc/tmpfiles.d/lumo-bat.conf || true
+udevadm trigger --subsystem-match=power_supply --subsystem-match=backlight 2>/dev/null || true
 
 echo "OK. Polkit recarrega sozinho (polkitd observa o dir)."
