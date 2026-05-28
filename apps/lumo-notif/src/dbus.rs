@@ -1,5 +1,6 @@
 //! dbus.rs - implementa org.freedesktop.Notifications via zbus.
 
+use lumo_notif::urgency::Urgency;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
@@ -12,10 +13,22 @@ pub enum NotifEvent {
         summary: String,
         body: String,
         timeout_ms: i32,
+        urgency: Urgency,
     },
     CloseNotification {
         id: u32,
     },
+}
+
+/// F1.5-B1: extrai byte do hint "urgency" -> Urgency enum. Spec freedesktop.
+pub fn parse_urgency_hint(
+    hints: &std::collections::HashMap<String, zbus::zvariant::Value<'_>>,
+) -> Urgency {
+    hints
+        .get("urgency")
+        .and_then(|v| u8::try_from(v).ok())
+        .map(Urgency::from_byte)
+        .unwrap_or_default()
 }
 
 /// Mapa de id -> sender DBus unico (BusName). Usado pra validar replaces_id.
@@ -38,9 +51,10 @@ impl NotificationsServer {
         summary: String,
         body: String,
         _actions: Vec<String>,
-        _hints: std::collections::HashMap<String, zbus::zvariant::Value<'_>>,
+        hints: std::collections::HashMap<String, zbus::zvariant::Value<'_>>,
         expire_timeout: i32,
     ) -> u32 {
+        let urgency = parse_urgency_hint(&hints);
         let sender = hdr.sender().map(|s| s.to_string()).unwrap_or_default();
 
         let id = if replaces_id != 0 {
@@ -68,6 +82,7 @@ impl NotificationsServer {
                 summary,
                 body,
                 timeout_ms: expire_timeout,
+                urgency,
             })
             .await;
         id

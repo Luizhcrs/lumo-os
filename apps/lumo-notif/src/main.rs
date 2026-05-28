@@ -7,6 +7,9 @@ mod history;
 mod paint;
 mod state;
 
+// Re-expor logic puro do lib pra modules do bin acessarem via `crate::urgency`.
+use lumo_notif::{toast_logic, urgency};
+
 use tokio::sync::mpsc;
 
 #[tokio::main]

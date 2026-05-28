@@ -67,7 +67,8 @@ pub async fn run(tx: mpsc::Sender<NotifEvent>) {
                         app_name: "lumo-crash".into(),
                         summary,
                         body,
-                        timeout_ms: 4000,
+                        timeout_ms: 0, // sticky: critical
+                        urgency: lumo_notif::urgency::Urgency::Critical,
                     })
                     .await;
             }

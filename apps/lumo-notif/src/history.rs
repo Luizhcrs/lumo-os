@@ -1,5 +1,6 @@
 //! history.rs - persiste historico de notificacoes (rotating 100 entries).
 
+use lumo_notif::urgency::Urgency;
 use serde::{Deserialize, Serialize};
 use std::fs;
 
@@ -12,6 +13,8 @@ pub struct HistoryEntry {
     pub summary: String,
     pub body: String,
     pub timestamp: u64,
+    #[serde(default)]
+    pub urgency: Urgency,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]

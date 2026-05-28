@@ -3,6 +3,8 @@
 use crate::dbus::NotifEvent;
 use crate::history::{History, HistoryEntry};
 use crate::paint::{self, ToastRender, TOAST_W};
+use lumo_notif::toast_logic::{effective_timeout_ms, should_expire, slot_to_evict_for_critical};
+use lumo_notif::urgency::Urgency;
 use lumo_animation::Spring;
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use smithay_client_toolkit::reexports::client::{globals::registry_queue_init, Connection};
@@ -18,11 +20,10 @@ use smithay_client_toolkit::{
     shm::{slot::SlotPool, Shm},
 };
 use std::collections::VecDeque;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::sync::mpsc;
 
 const MAX_TOASTS: usize = 3;
-const DEFAULT_TIMEOUT_MS: u64 = 5000;
 pub const SURFACE_W: u32 = 380;
 pub const SURFACE_H: u32 = 296;
 
@@ -36,10 +37,18 @@ struct Toast {
     timeout_ms: u64,
     hover: bool,
     dismissing: bool,
+    urgency: Urgency,
 }
 
 impl Toast {
-    fn new(id: u32, app_name: String, summary: String, body: String, timeout_ms: u64) -> Self {
+    fn new(
+        id: u32,
+        app_name: String,
+        summary: String,
+        body: String,
+        timeout_ms: u64,
+        urgency: Urgency,
+    ) -> Self {
         let mut slide = Spring::snappy();
         slide.snap_to(TOAST_W);
         slide.set_target(0.0);
@@ -53,6 +62,7 @@ impl Toast {
             timeout_ms,
             hover: false,
             dismissing: false,
+            urgency,
         }
     }
     fn dismiss(&mut self) {
@@ -63,9 +73,13 @@ impl Toast {
         self.dismissing && self.slide.settled()
     }
     fn expired(&self) -> bool {
-        !self.hover
-            && !self.dismissing
-            && self.created_at.elapsed() >= Duration::from_millis(self.timeout_ms)
+        should_expire(
+            self.urgency,
+            self.timeout_ms,
+            self.created_at.elapsed(),
+            self.hover,
+            self.dismissing,
+        )
     }
 }
 
@@ -97,24 +111,31 @@ impl NotifState {
         summary: String,
         body: String,
         timeout_ms: i32,
+        urgency: Urgency,
     ) {
         self.toasts.retain(|t| t.id != id);
         if self.toasts.len() >= MAX_TOASTS {
-            if let Some(oldest) = self.toasts.front_mut() {
-                oldest.dismiss();
+            // F1.5-B1: criticals nao podem ser deslocados por nao-criticais.
+            // Se entrando um critical, busca slot nao-critical pra evict.
+            // Se entrando nao-critical e fila so tem critical, dismiss oldest mesmo assim.
+            let urgencies: Vec<_> = self.toasts.iter().map(|t| t.urgency).collect();
+            let idx = if matches!(urgency, Urgency::Critical) {
+                slot_to_evict_for_critical(&urgencies).unwrap_or(0)
+            } else {
+                0
+            };
+            if let Some(t) = self.toasts.get_mut(idx) {
+                t.dismiss();
             }
         }
-        let ms = if timeout_ms <= 0 {
-            DEFAULT_TIMEOUT_MS
-        } else {
-            timeout_ms as u64
-        };
+        let ms = effective_timeout_ms(timeout_ms, urgency);
         self.toasts.push_back(Toast::new(
             id,
             app_name.clone(),
             summary.clone(),
             body.clone(),
             ms,
+            urgency,
         ));
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -126,6 +147,7 @@ impl NotifState {
             summary,
             body,
             timestamp: ts,
+            urgency,
         });
     }
     fn close_toast(&mut self, id: u32) {
@@ -174,6 +196,7 @@ impl NotifState {
                 summary: t.summary.clone(),
                 app_name: t.app_name.clone(),
                 body: t.body.clone(),
+                urgency: t.urgency,
             })
             .collect();
         paint::paint_toasts(&mut pm, &renders, w as u32, h as u32);
@@ -334,8 +357,9 @@ pub async fn run(mut rx: mpsc::Receiver<NotifEvent>) {
                     summary,
                     body,
                     timeout_ms,
+                    urgency,
                 } => {
-                    state.push_toast(id, app_name, summary, body, timeout_ms);
+                    state.push_toast(id, app_name, summary, body, timeout_ms, urgency);
                     state.redraw(&qh);
                 }
                 NotifEvent::CloseNotification { id } => {

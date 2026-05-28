@@ -1,5 +1,6 @@
 //! paint.rs - renderiza toasts de notificacao.
 
+use lumo_notif::urgency::Urgency;
 use tiny_skia::{Color, Paint, PathBuilder, PixmapMut, Rect, Transform};
 
 fn rgba(hex: u32, alpha: u8) -> Color {
@@ -67,18 +68,38 @@ pub struct ToastRender {
     pub summary: String,
     pub app_name: String,
     pub body: String,
+    pub urgency: Urgency,
+}
+
+/// F1.5-B1: cor da borda accent + bg conforme urgency.
+/// Critical = red (0xff453a); Low = muted gray; Normal = verde Lumo.
+pub fn accent_color_for(urgency: Urgency) -> Color {
+    match urgency {
+        Urgency::Critical => rgba(0xff453a, 0xFF),
+        Urgency::Low => rgba(0x6e6e73, 0xFF),
+        Urgency::Normal => rgba(0x10b981, 0xFF),
+    }
+}
+
+/// Critical ganha borda externa pra atrair atencao.
+pub fn border_width_for(urgency: Urgency) -> f32 {
+    match urgency {
+        Urgency::Critical => 6.0,
+        _ => 3.0,
+    }
 }
 
 pub fn paint_toasts(canvas: &mut PixmapMut, toasts: &[ToastRender], width: u32, _height: u32) {
     canvas.fill(Color::TRANSPARENT);
     let w = width as f32;
-    let accent = rgba(0x10b981, 0xFF);
     let pearl = rgba(0xf5f5f7, 0xFF);
     let muted = rgba(0x9596a0, 0xCC);
     let toast_bg = rgba(0x1a1a21, 0xF2);
     for (i, toast) in toasts.iter().enumerate() {
         let y = TOAST_MARGIN_TOP + i as f32 * (TOAST_H + TOAST_GAP);
         let tx = w - TOAST_W - TOAST_MARGIN_RIGHT + toast.slide_x;
+        let accent = accent_color_for(toast.urgency);
+        let border_w = border_width_for(toast.urgency);
         for sh in 1..=3u8 {
             fill_rrect(
                 canvas,
@@ -91,7 +112,8 @@ pub fn paint_toasts(canvas: &mut PixmapMut, toasts: &[ToastRender], width: u32, 
             );
         }
         fill_rrect(canvas, tx, y, TOAST_W, TOAST_H, TOAST_RADIUS, toast_bg);
-        fill_rrect(canvas, tx, y + 8.0, 3.0, TOAST_H - 16.0, 2.0, accent);
+        // F1.5-B1: borda accent mais grossa em critical pra atrair atencao.
+        fill_rrect(canvas, tx, y + 8.0, border_w, TOAST_H - 16.0, 2.0, accent);
         for (j, _) in toast.app_name.chars().take(20).enumerate() {
             fill_circle(canvas, tx + 14.0 + j as f32 * 5.5, y + 20.0, 1.5, muted);
         }
@@ -110,5 +132,38 @@ pub fn paint_toasts(canvas: &mut PixmapMut, toasts: &[ToastRender], width: u32, 
         );
         fill_rect_c(canvas, tx + TOAST_W - 25.0, y + 19.0, 10.0, 2.0, muted);
         fill_rect_c(canvas, tx + TOAST_W - 20.5, y + 14.5, 2.0, 10.0, muted);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rgba_eq(a: Color, b: Color) -> bool {
+        a.red() == b.red() && a.green() == b.green() && a.blue() == b.blue()
+    }
+
+    #[test]
+    fn critical_accent_is_red() {
+        let c = accent_color_for(Urgency::Critical);
+        assert!(rgba_eq(c, rgba(0xff453a, 0xFF)));
+    }
+
+    #[test]
+    fn normal_accent_is_green() {
+        let c = accent_color_for(Urgency::Normal);
+        assert!(rgba_eq(c, rgba(0x10b981, 0xFF)));
+    }
+
+    #[test]
+    fn low_accent_is_gray() {
+        let c = accent_color_for(Urgency::Low);
+        assert!(rgba_eq(c, rgba(0x6e6e73, 0xFF)));
+    }
+
+    #[test]
+    fn critical_border_thicker() {
+        assert!(border_width_for(Urgency::Critical) > border_width_for(Urgency::Normal));
+        assert!(border_width_for(Urgency::Critical) > border_width_for(Urgency::Low));
     }
 }
