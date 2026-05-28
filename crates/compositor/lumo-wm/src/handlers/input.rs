@@ -535,24 +535,34 @@ impl LumoState {
                     let new_focus = if let Some((surface, _)) =
                         self.surface_under(self.pointer_location)
                     {
-                        // L1: FocusManager centraliza policy de foco.
+                        // Q2: keyboard focus SEMPRE no root xdg_toplevel.
+                        // Chromium/Firefox usam subsurfaces pra popups multi-process.
+                        // Click em subsurface -> precisa achar root toplevel via
+                        // wl_compositor::get_parent chain.
+                        // Sem isso: foco vai pra None, clicks subsequentes em
+                        // Chrome nao registram (bug user 2026-05).
+                        // Ref: gitlab.freedesktop.org/wayland/wayland/-/issues/294
+                        use smithay::wayland::compositor as wl_compositor;
                         use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
-                        let is_toplevel =
-                            smithay::wayland::compositor::with_states(&surface, |states| {
+                        let mut root = surface.clone();
+                        while let Some(parent) = wl_compositor::get_parent(&root) {
+                            root = parent;
+                        }
+                        let root_is_toplevel =
+                            wl_compositor::with_states(&root, |states| {
                                 states.data_map.get::<XdgToplevelSurfaceData>().is_some()
                             });
-                        if is_toplevel {
-                            // Q1: raise toplevel ao topo no click.
-                            // Coletar antes de mutar (borrow check).
+                        if root_is_toplevel {
+                            // Q1: raise root toplevel ao topo no click.
                             let win_to_raise = self
                                 .space
                                 .elements()
-                                .find(|w| w.wl_surface().map(|s| *s == surface).unwrap_or(false))
+                                .find(|w| w.wl_surface().map(|s| *s == root).unwrap_or(false))
                                 .cloned();
                             if let Some(win) = win_to_raise {
                                 self.space.raise_element(&win, true);
                             }
-                            self.focus_manager.click_toplevel(surface)
+                            self.focus_manager.click_toplevel(root)
                         } else {
                             // Layer-shell (bar, desktop) -> sem foco de teclado.
                             self.focus_manager.click_layer_shell()
