@@ -6,9 +6,9 @@
 //! a acao correspondente.
 
 use smithay::backend::input::{
-    AbsolutePositionEvent, ButtonState, Event as _, GestureBeginEvent, GestureEndEvent,
-    GesturePinchUpdateEvent, GestureSwipeUpdateEvent, InputBackend, InputEvent, KeyState,
-    KeyboardKeyEvent, PointerButtonEvent, PointerMotionEvent,
+    AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event as _, GestureBeginEvent,
+    GestureEndEvent, GesturePinchUpdateEvent, GestureSwipeUpdateEvent, InputBackend, InputEvent,
+    KeyState, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
 };
 use smithay::input::keyboard::FilterResult;
 use smithay::input::pointer::{ButtonEvent, MotionEvent};
@@ -625,6 +625,47 @@ impl LumoState {
                     if !self.drm_force_repaint {
                         self.drm_force_repaint = true;
                     }
+                }
+            }
+
+            InputEvent::PointerAxis { event } => {
+                // Q3: scroll universal (wheel mouse + touchpad 2-finger).
+                // Antes: branch ausente, axis events caiam em _ => {} =
+                // apps nao recebiam scroll. Bug user 2026-05.
+                use smithay::input::pointer::AxisFrame;
+                let time = event.time_msec();
+                let source = event.source();
+                let mut frame = AxisFrame::new(time).source(source);
+                let h = event.amount(Axis::Horizontal).unwrap_or(0.0);
+                let v = event.amount(Axis::Vertical).unwrap_or(0.0);
+                if v != 0.0 {
+                    frame = frame.value(Axis::Vertical, v);
+                }
+                if h != 0.0 {
+                    frame = frame.value(Axis::Horizontal, h);
+                }
+                // V120 (alta resolucao): wheel mouse gera passos discretos
+                // 120-unit. Touchpad continuous nao tem v120.
+                if matches!(source, AxisSource::Wheel | AxisSource::WheelTilt) {
+                    if let Some(v120_h) = event.amount_v120(Axis::Horizontal) {
+                        frame = frame.v120(Axis::Horizontal, v120_h as i32);
+                    }
+                    if let Some(v120_v) = event.amount_v120(Axis::Vertical) {
+                        frame = frame.v120(Axis::Vertical, v120_v as i32);
+                    }
+                }
+                // libinput stop event = amount 0 em todos eixos.
+                if v == 0.0 && h == 0.0 && matches!(source, AxisSource::Finger) {
+                    frame = frame.stop(Axis::Vertical).stop(Axis::Horizontal);
+                }
+                let pointer = self.pointer.clone();
+                pointer.axis(self, frame);
+                pointer.frame(self);
+                self.should_render = true;
+                self.record_user_gesture();
+                #[cfg(feature = "drm-backend")]
+                {
+                    self.drm_force_repaint = true;
                 }
             }
 
