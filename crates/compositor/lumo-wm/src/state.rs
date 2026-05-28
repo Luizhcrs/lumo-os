@@ -267,6 +267,12 @@ pub struct LumoState {
     pub last_input_ts: Option<std::time::Instant>,
     /// W23.5: timestamp ultimo PointerMotion/Button. Sticky 200ms = active mode.
     pub cursor_last_motion_ts: Option<std::time::Instant>,
+    /// Double-click na titlebar SSD = maximize toggle. Guarda (surface, ts)
+    /// do ultimo click na titlebar pra detectar o segundo dentro de 400ms.
+    pub last_titlebar_click: Option<(
+        smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+        std::time::Instant,
+    )>,
     /// R1: posicao do cursor no ultimo frame renderizado. Bypass pending_flip
     /// quando cursor se moveu pra eliminar delay visual.
     #[cfg(feature = "drm-backend")]
@@ -452,6 +458,7 @@ impl LumoState {
             titlebar_bg_shader,
             last_input_ts: None,
             cursor_last_motion_ts: None,
+            last_titlebar_click: None,
             #[cfg(feature = "drm-backend")]
             last_rendered_cursor_pos: (0.0, 0.0).into(),
         }

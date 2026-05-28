@@ -459,6 +459,31 @@ impl LumoState {
                                 break;
                             }
                             if button == 0x110 && title_rect.contains(ptr_pos) {
+                                // Double-click na titlebar SSD = toggle maximize
+                                // (gesto universal estilo Win/macOS). 2 clicks no
+                                // mesmo window dentro de 400ms.
+                                let now = std::time::Instant::now();
+                                let surf_now = window.wl_surface().map(|s| s.into_owned());
+                                let is_double = match (&self.last_titlebar_click, &surf_now) {
+                                    (Some((prev, ts)), Some(cur)) => {
+                                        prev == cur
+                                            && now.duration_since(*ts).as_millis() <= 400
+                                    }
+                                    _ => false,
+                                };
+                                if is_double {
+                                    self.last_titlebar_click = None;
+                                    let win = window.clone();
+                                    let is_max = self.window_is_maximized(&win);
+                                    self.set_window_maximized(&win, !is_max);
+                                    tracing::info!(
+                                        was_max = is_max,
+                                        "double-click titlebar -> maximize toggle"
+                                    );
+                                    ssd_handled = true;
+                                    break;
+                                }
+                                self.last_titlebar_click = surf_now.map(|s| (s, now));
                                 self.space.raise_element(window, true);
                                 if let Some(tl) = window.toplevel() {
                                     let surf_raise = tl.wl_surface().clone();
