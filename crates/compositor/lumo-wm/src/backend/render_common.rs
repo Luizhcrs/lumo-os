@@ -684,12 +684,14 @@ pub fn cursor_custom_surface_elements(
     surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
     output_scale: f64,
 ) -> Vec<WaylandSurfaceRenderElement<GlesRenderer>> {
-    use smithay::input::pointer::CursorImageSurfaceData;
+    use smithay::input::pointer::CursorImageAttributes;
     use smithay::wayland::compositor as wl_compositor;
+    // Smithay armazena CursorImageAttributes em Mutex<...> no data_map.
+    // hotspot lido sob lock.
     let hotspot: Point<i32, Logical> = wl_compositor::with_states(surface, |states| {
         states
             .data_map
-            .get::<std::sync::Mutex<CursorImageSurfaceData>>()
+            .get::<std::sync::Mutex<CursorImageAttributes>>()
             .and_then(|m| m.lock().ok().map(|d| d.hotspot))
             .unwrap_or_default()
     });
@@ -1106,7 +1108,29 @@ pub fn collect_drm_elements(
     }
 
     // 1. Cursor primeiro (mais alto na pilha visual).
-    if let Some(elem) = cursor_xcursor_element(
+    // Prefer custom surface (Chrome I-beam etc) sobre xcursor sistema.
+    if let Some(surf) = cursor_custom_surface {
+        let elements = cursor_custom_surface_elements(
+            renderer,
+            inputs.pointer_location,
+            surf,
+            1.0,
+        );
+        if !elements.is_empty() {
+            for el in elements {
+                let space_wrap = smithay::desktop::space::SpaceRenderElements::Surface(el);
+                out.push(LumoCustomElement::Space(space_wrap));
+            }
+        } else if let Some(elem) = cursor_xcursor_element(
+            renderer,
+            inputs.pointer_location,
+            inputs.cursor,
+            inputs.cursor_buffer,
+            1.0,
+        ) {
+            out.push(LumoCustomElement::Memory(elem));
+        }
+    } else if let Some(elem) = cursor_xcursor_element(
         renderer,
         inputs.pointer_location,
         inputs.cursor,
@@ -1311,15 +1335,9 @@ pub fn build_winit_elements(
         return out;
     }
 
-    // 1. Cursor primeiro (mais alto). Prefer custom surface (Chrome
-    // I-beam etc) sobre xcursor sistema. Cliente passou hotspot via
-    // wl_pointer.set_cursor; sem isso clicks erravam alvos pequenos.
-    if let Some(surf) = cursor_custom_surface {
-        for el in cursor_custom_surface_elements(renderer, inputs.pointer_location, surf, 1.0) {
-            let space_wrap = smithay::desktop::space::SpaceRenderElements::Surface(el);
-            out.push(LumoCustomElement::Space(space_wrap));
-        }
-    } else if let Some(elem) = cursor_xcursor_element(
+    // 1. Cursor primeiro (mais alto). Winit path = no custom surface
+    // support por enquanto (dev/lab; real path = drm).
+    if let Some(elem) = cursor_xcursor_element(
         renderer,
         inputs.pointer_location,
         inputs.cursor,
