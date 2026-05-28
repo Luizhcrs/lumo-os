@@ -83,12 +83,13 @@ impl SeatHandler for LumoState {
                     {
                         self.drm_force_repaint = true;
                     }
-                    tracing::debug!(?icon, "W10.C: cursor shape swapped");
+                    tracing::info!(?icon, hotspot = format!("({},{})", self.cursor.as_ref().map(|c| c.hotspot_x).unwrap_or(0), self.cursor.as_ref().map(|c| c.hotspot_y).unwrap_or(0)), "cursor_image::Named swap");
                 } else {
-                    tracing::debug!(?icon, "W10.C: xcursor not found for shape, keeping current");
+                    tracing::warn!(?icon, "cursor_image::Named xcursor NOT FOUND, keeping");
                 }
             }
             CursorImageStatus::Surface(s) => {
+                tracing::info!(surface_id = ?s.id(), "cursor_image::Surface custom");
                 // Cliente (Chrome, Firefox, etc) entrega wl_surface
                 // pra renderizar como cursor. Hotspot armazenado em
                 // CursorImageSurfaceData no surface.data_map via
