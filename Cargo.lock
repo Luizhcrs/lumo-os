@@ -4798,6 +4798,7 @@ dependencies = [
 name = "lumo-notif"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "lumo-animation",
  "lumo-error",
  "lumo-foundation",
