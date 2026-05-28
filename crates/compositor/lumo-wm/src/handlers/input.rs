@@ -230,8 +230,8 @@ impl LumoState {
                 // fixo -> winit dev + touch/tablet caiam o cursor a ~66% da
                 // tela, hit-test de botoes errava).
                 let (ow, oh) = self.output_dimensions();
-                let x = event.x_transformed(ow as u32);
-                let y = event.y_transformed(oh as u32);
+                let x = event.x_transformed(ow);
+                let y = event.y_transformed(oh);
                 self.pointer_location = (x, y).into();
 
                 let serial = SERIAL_COUNTER.next_serial();
