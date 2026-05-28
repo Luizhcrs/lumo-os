@@ -24,7 +24,7 @@ use smithay_client_toolkit::{
 };
 use tiny_skia::{Color, Paint, PixmapMut, Rect, Transform};
 
-use crate::history::ClipEntry;
+use lumo_clip::history::ClipEntry;
 use lumo_foundation::LumoColors;
 
 pub const PICKER_W: u32 = 480;

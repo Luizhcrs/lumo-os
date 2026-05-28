@@ -88,6 +88,8 @@ pub enum KeyAction {
     /// F1.5-D1: Jump pra N-th window do workspace (Super+1..9).
     /// N=0 reserva pra "show all" futuro.
     JumpToWindow(u8),
+    /// F1.5-C2: Clipboard history picker (Super+Shift+V).
+    ClipboardHistory,
 }
 
 /// Keysym como u32 pra serde.
@@ -268,6 +270,9 @@ pub fn default_bindings() -> Vec<KeyBinding> {
         KeyBinding::new(ss(), Keysym::_9, KeyAction::MoveToWorkspace(9)),
         // SUPER+Shift+Tab -> Cycle anterior
         KeyBinding::new(ss(), Keysym::Tab, KeyAction::CycleWindow(-1)),
+        // F1.5-C2: SUPER+Shift+V -> clipboard history picker (lumo-clip).
+        KeyBinding::new(ss(), Keysym::v, KeyAction::ClipboardHistory),
+        KeyBinding::new(ss(), Keysym::V, KeyAction::ClipboardHistory),
         // Ctrl+Alt+Backspace -> Quit
         KeyBinding::new(ca(), Keysym::BackSpace, KeyAction::Quit),
         // Ctrl+Alt+F1..F6 -> VT switch
@@ -285,4 +290,43 @@ pub fn default_bindings() -> Vec<KeyBinding> {
         KeyBinding::new(ca(), Keysym::XF86_Switch_VT_5, KeyAction::SwitchVt(5)),
         KeyBinding::new(ca(), Keysym::XF86_Switch_VT_6, KeyAction::SwitchVt(6)),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lookup(cfg: &KeyboardConfig, mods: ModifiersMask, sym: Keysym) -> Option<KeyAction> {
+        cfg.bindings
+            .iter()
+            .find(|b| b.mods == mods && b.key.as_keysym() == sym)
+            .map(|b| b.action.clone())
+    }
+
+    #[test]
+    fn super_shift_v_bound_to_clipboard_history() {
+        let cfg = KeyboardConfig::default();
+        let ss = ModifiersMask::super_shift();
+        assert_eq!(
+            lookup(&cfg, ss, Keysym::v),
+            Some(KeyAction::ClipboardHistory)
+        );
+    }
+
+    #[test]
+    fn super_shift_v_uppercase_also_bound() {
+        let cfg = KeyboardConfig::default();
+        let ss = ModifiersMask::super_shift();
+        assert_eq!(
+            lookup(&cfg, ss, Keysym::V),
+            Some(KeyAction::ClipboardHistory)
+        );
+    }
+
+    #[test]
+    fn plain_super_v_not_clipboard_history() {
+        let cfg = KeyboardConfig::default();
+        let s = ModifiersMask::super_only();
+        assert_ne!(lookup(&cfg, s, Keysym::v), Some(KeyAction::ClipboardHistory));
+    }
 }

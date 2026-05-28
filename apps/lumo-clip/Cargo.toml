@@ -4,19 +4,27 @@ version = "0.1.0"
 edition = "2021"
 description = "Lumo Clip -- clipboard history daemon + SUPER+V picker overlay (W11.B)."
 
+[lib]
+name = "lumo_clip"
+path = "src/lib.rs"
+
 [[bin]]
 name = "lumo-clip"
 path = "src/main.rs"
 
 [dependencies]
+# Deps cross-platform (lib + tests rodam Windows pra "sistema blindado").
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+
+[target.'cfg(unix)'.dependencies]
+# Deps Wayland/Unix: so o bin target precisa.
 smithay-client-toolkit = "0.19"
 tiny-skia = "0.11"
 tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros", "fs"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 nix = { version = "0.30", features = ["poll"] }
 libc = "0.2"
-tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
 lumo-error = { path = "../../crates/foundation/lumo-error" }

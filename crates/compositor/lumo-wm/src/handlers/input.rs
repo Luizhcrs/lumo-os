@@ -955,6 +955,11 @@ impl LumoState {
                     }
                 }
             }
+            KeyAction::ClipboardHistory => {
+                // F1.5-C2: Super+Shift+V abre lumo-clip picker.
+                tracing::info!("F1.5-C2: ClipboardHistory spawn lumo-clip");
+                self.spawn_cmd("lumo-clip");
+            }
         }
     }
 

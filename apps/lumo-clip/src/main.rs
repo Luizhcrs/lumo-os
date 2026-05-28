@@ -7,10 +7,9 @@
 //! Hotkey SUPER+V: lumo-wm envia sinal SIGUSR1 ao pid do daemon.
 //! Daemon recebe sinal, abre picker, cola entrada selecionada.
 
-mod history;
 mod picker;
 
-use history::{ClipEntry, ClipHistory};
+use lumo_clip::history::{self, ClipEntry, ClipHistory};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
