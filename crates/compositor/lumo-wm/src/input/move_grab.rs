@@ -155,21 +155,36 @@ impl PointerGrab<LumoState> for MoveSurfaceGrab {
             && event.state == smithay::backend::input::ButtonState::Released
         {
             if let Some(zone) = data.snap_preview.take() {
-                let usable = data.usable_geometry();
-                let (sx, sy, sw, sh) =
-                    zone.layout_usable(usable.loc.x, usable.loc.y, usable.size.w, usable.size.h);
-                if let Some(tl) = self.window.toplevel() {
-                    tl.with_pending_state(|state| {
-                        state.size = Some(Size::from((sw, sh)));
-                    });
-                    let _ = tl.send_configure();
+                // Maximize (drag-up): rota canonica set_window_maximized
+                // (reserva SSD titlebar + casa com clamp do commit). Antes
+                // setava size=usable cheio e mapeava em usable.loc -> titlebar
+                // sobrepunha a bar + conteudo vazava no rodape + clamp empurrava
+                // (bug "maximiza errado / comida do lado").
+                if zone == SnapZone::Maximize {
+                    let win = self.window.clone();
+                    data.set_window_maximized(&win, true);
+                    tracing::info!("W9.B: snap Maximize -> helper canonico");
+                } else {
+                    let usable = data.usable_geometry();
+                    let (sx, sy, sw, sh) = zone.layout_usable(
+                        usable.loc.x,
+                        usable.loc.y,
+                        usable.size.w,
+                        usable.size.h,
+                    );
+                    if let Some(tl) = self.window.toplevel() {
+                        tl.with_pending_state(|state| {
+                            state.size = Some(Size::from((sw, sh)));
+                        });
+                        let _ = tl.send_configure();
+                    }
+                    data.space.map_element(
+                        self.window.clone(),
+                        smithay::utils::Point::<i32, smithay::utils::Logical>::from((sx, sy)),
+                        true,
+                    );
+                    tracing::info!(?zone, sx, sy, sw, sh, "W9.B: snap applied");
                 }
-                data.space.map_element(
-                    self.window.clone(),
-                    smithay::utils::Point::<i32, smithay::utils::Logical>::from((sx, sy)),
-                    true,
-                );
-                tracing::info!(?zone, sx, sy, sw, sh, "W9.B: snap applied");
             } else {
                 data.snap_preview = None;
             }

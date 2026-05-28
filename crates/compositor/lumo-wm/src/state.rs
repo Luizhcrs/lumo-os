@@ -1094,25 +1094,36 @@ impl LumoState {
 
     /// Rotina canonica de maximize. `on=true` -> cobre a area UTIL
     /// (usable_geometry, preserva a bar), mantem SSD. `on=false` -> limpa.
+    ///
+    /// Reserva SSD_TITLEBAR_H no topo: a titlebar SSD e desenhada ACIMA da
+    /// janela (em window.y - TITLEBAR_H). Pra a titlebar + conteudo caberem
+    /// dentro da area util sem overflow no rodape nem sobrepor a bar:
+    ///   pos.y   = usable.y + TITLEBAR_H   (titlebar ocupa [usable.y, pos.y])
+    ///   size.h  = usable.h - TITLEBAR_H
+    /// Isso casa com o min_y do clamp em compositor.rs (= usable.y + TITLEBAR_H),
+    /// entao o clamp nao empurra a janela. Antes cada path (botao SSD, snap
+    /// drag-up, protocolo) usava geometria diferente -> "maximiza errado".
     pub fn set_window_maximized(&mut self, window: &smithay::desktop::Window, on: bool) {
         use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
         use smithay::utils::{Point, Size};
+        const SSD_TITLEBAR_H: i32 = 30;
         let Some(tl) = window.toplevel().cloned() else {
             return;
         };
         if on {
             let usable = self.usable_geometry();
+            let w = usable.size.w;
+            let h = (usable.size.h - SSD_TITLEBAR_H).max(64);
+            let x = usable.loc.x;
+            let y = usable.loc.y + SSD_TITLEBAR_H;
             tl.with_pending_state(|st| {
                 st.states.set(XdgState::Maximized);
                 st.states.unset(XdgState::Fullscreen);
-                st.size = Some(Size::from((usable.size.w, usable.size.h)));
+                st.size = Some(Size::from((w, h)));
             });
             tl.send_configure();
-            self.space.map_element(
-                window.clone(),
-                Point::from((usable.loc.x, usable.loc.y)),
-                true,
-            );
+            self.space
+                .map_element(window.clone(), Point::from((x, y)), true);
         } else {
             tl.with_pending_state(|st| {
                 st.states.unset(XdgState::Maximized);
@@ -1125,6 +1136,19 @@ impl LumoState {
         {
             self.drm_force_repaint = true;
         }
+    }
+
+    /// True se o toplevel da window esta Maximized (pending ou current).
+    pub fn window_is_maximized(&self, window: &smithay::desktop::Window) -> bool {
+        use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
+        window
+            .toplevel()
+            .map(|tl| {
+                let cur = tl.current_state().states.contains(XdgState::Maximized);
+                let pend = tl.with_pending_state(|s| s.states.contains(XdgState::Maximized));
+                cur || pend
+            })
+            .unwrap_or(false)
     }
 
     /// True se o toplevel da window esta em estado Fullscreen (pending ou current).

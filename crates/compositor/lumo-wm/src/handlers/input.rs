@@ -426,43 +426,14 @@ impl LumoState {
                                 ssd_handled = true;
                                 break;
                             }
-                            // W17.1 + W37.4: maximize button (verde) toggle Maximized.
-                            // Antes usava Fullscreen sem size -> client mantinha tamanho
-                            // anterior (bug: maximizada parecia snap-half).
-                            // Agora: Maximized + size = (out_w, out_h - BAR_HEIGHT).
+                            // Maximize button (verde): toggle via helper canonico
+                            // set_window_maximized (mesma geometria do snap drag-up
+                            // e do protocolo; reserva SSD titlebar + casa com clamp).
                             if button == 0x110 && max_rect.contains(ptr_pos) {
-                                if let Some(tl) = window.toplevel() {
-                                    use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
-                                    use smithay::utils::{Point, Size};
-                                    let is_max =
-                                        tl.current_state().states.contains(XdgState::Maximized);
-                                    let (ow, oh) = self.output_dimensions();
-                                    let geom = crate::tiling::maximized_geometry(ow, oh);
-                                    let win_clone = window.clone();
-                                    tl.with_pending_state(|st| {
-                                        if is_max {
-                                            st.states.unset(XdgState::Maximized);
-                                            st.size = None;
-                                        } else {
-                                            st.states.set(XdgState::Maximized);
-                                            st.size = Some(Size::from((geom.w, geom.h)));
-                                        }
-                                    });
-                                    tl.send_configure();
-                                    if !is_max {
-                                        self.space.map_element(
-                                            win_clone,
-                                            Point::from((geom.x, geom.y)),
-                                            true,
-                                        );
-                                    }
-                                    tracing::trace!(
-                                        was_max = is_max,
-                                        out_w = ow,
-                                        out_h = oh,
-                                        "W37.4: maximize toggle"
-                                    );
-                                }
+                                let win = window.clone();
+                                let is_max = self.window_is_maximized(&win);
+                                self.set_window_maximized(&win, !is_max);
+                                tracing::trace!(was_max = is_max, "W37.4: maximize toggle (helper)");
                                 ssd_handled = true;
                                 break;
                             }
