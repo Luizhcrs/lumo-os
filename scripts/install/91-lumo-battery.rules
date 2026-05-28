@@ -1,9 +1,0 @@
-# Lumo OS: grupo power pode escrever charge_control_end_threshold (limite
-# de carga da bateria, toggle no lumo-power).
-#
-# Substitui o antigo lumo-bat.tmpfiles.conf: o tmpfiles roda no early pass
-# (systemd-tmpfiles-setup-dev) onde o nss/group db ainda nao resolve o nome
-# 'power' -> boot acusa "Failed to resolve group 'power': Unknown group".
-# Regra udev dispara no device-add do power_supply (root real, group db
-# pronto), entao resolve sem erro.
-ACTION=="add|change", SUBSYSTEM=="power_supply", KERNEL=="BAT*", RUN+="/bin/chgrp power /sys/class/power_supply/%k/charge_control_end_threshold", RUN+="/bin/chmod 0664 /sys/class/power_supply/%k/charge_control_end_threshold"

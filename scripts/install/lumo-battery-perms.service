@@ -1,0 +1,20 @@
+[Unit]
+Description=Lumo OS: permissoes de escrita no charge_control_end_threshold da bateria
+# Roda no root real (apos /usr montado e group db pronto). Resolve os dois
+# bugs das tentativas anteriores:
+#   - udev RUN+="/bin/chgrp" falhava no initramfs (/usr nao montado, BAT
+#     enumera cedo): "Failed to find and pin callout binary /bin/chgrp".
+#   - tmpfiles com group 'power' falhava no early pass (nss nao resolvia nome).
+# systemd oneshot pos-boot tem binarios e group db garantidos.
+After=multi-user.target
+ConditionPathExistsGlob=/sys/class/power_supply/BAT*/charge_control_end_threshold
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Falha tolerada (SuccessExitStatus) se a bateria nao expoe o atributo.
+ExecStart=/bin/sh -c 'for f in /sys/class/power_supply/BAT*/charge_control_end_threshold; do chgrp power "$f" && chmod 0664 "$f"; done'
+SuccessExitStatus=0 1
+
+[Install]
+WantedBy=multi-user.target

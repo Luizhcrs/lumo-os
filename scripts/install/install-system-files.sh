@@ -37,9 +37,6 @@ echo "[udev] regras de device -> /etc/udev/rules.d/"
 # early boot/initramfs onde /usr nao esta montado).
 install_file 90-lumo-backlight.rules /etc/udev/rules.d/90-lumo-backlight.rules 0644
 install_file 99-lumo-leds.rules      /etc/udev/rules.d/99-lumo-leds.rules      0644
-# Bateria charge limit: udev no device-add (substitui lumo-bat.tmpfiles.conf,
-# que falhava resolver group 'power' no early tmpfiles pass).
-install_file 91-lumo-battery.rules   /etc/udev/rules.d/91-lumo-battery.rules   0644
 
 echo "[grupo power] necessario pra escrita do charge_control_end_threshold"
 if ! getent group power >/dev/null; then
@@ -48,13 +45,18 @@ if ! getent group power >/dev/null; then
 fi
 gpasswd -a "$USER_NAME" power >/dev/null || true
 
+echo "[battery perms] systemd oneshot pos-boot (sysfs attr nao aceita"
+echo "  GROUP/MODE nativo do udev, e RUN+=/bin/chgrp falha no initramfs)"
+install_file lumo-battery-perms.service /etc/systemd/system/lumo-battery-perms.service 0644
+# Limpa abordagens antigas que davam erro de boot.
+rm -f /etc/udev/rules.d/91-lumo-battery.rules /etc/tmpfiles.d/lumo-bat.conf
+
 echo "[tmpfiles] -> /etc/tmpfiles.d/"
 install_file lumo-leds.tmpfiles.conf /etc/tmpfiles.d/lumo-leds.conf 0644
-# lumo-bat.tmpfiles.conf REMOVIDO: virou 91-lumo-battery.rules (udev).
-rm -f /etc/tmpfiles.d/lumo-bat.conf
 
-echo "[reload] udev"
+echo "[reload]"
 udevadm control --reload-rules
-udevadm trigger --subsystem-match=power_supply --subsystem-match=backlight 2>/dev/null || true
+systemctl daemon-reload
+systemctl enable --now lumo-battery-perms.service 2>/dev/null || true
 
 echo "OK. Polkit recarrega sozinho (polkitd observa o dir)."
