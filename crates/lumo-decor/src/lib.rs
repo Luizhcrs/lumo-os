@@ -25,6 +25,17 @@ pub const BTN_CLOSE: u32 = 0xE74C3C; // vermelho
 pub const BTN_MIN: u32 = 0xF1C40F; // amarelo
 pub const BTN_MAX: u32 = 0x2ECC71; // verde
 
+/// F1-1: hover state colors — sync com draw.h.
+pub const BTN_CLOSE_HOVER: u32 = 0xFF6B5B;
+pub const BTN_MIN_HOVER: u32 = 0xFFD93D;
+pub const BTN_MAX_HOVER: u32 = 0x52E08C;
+
+/// F1-1: hover index (-1 = none, 0..=2 botoes).
+pub const HOVER_NONE: i8 = -1;
+pub const HOVER_CLOSE: i8 = 0;
+pub const HOVER_MIN: i8 = 1;
+pub const HOVER_MAX: i8 = 2;
+
 /// Detecta button index pela posicao relativa do click. Pura, testavel.
 /// content_w = largura total da titlebar. x = pixel x relativo a titlebar.
 /// Retorna 0=close, 1=min, 2=max, ou None.
@@ -43,6 +54,30 @@ pub fn hit_test_button(content_w: i32, x: i32, y: i32) -> Option<u8> {
         }
     }
     None
+}
+
+/// F1-1: center x do botao N (0=close, 1=min, 2=max).
+pub fn button_center_x(content_w: i32, btn_index: u8) -> i32 {
+    let total_btns_w = BUTTON_SIZE * 3 + BUTTON_GAP * 2;
+    let start_x = content_w - BUTTON_MARGIN_RIGHT - total_btns_w;
+    let radius = BUTTON_SIZE / 2;
+    start_x + (BUTTON_SIZE + BUTTON_GAP) * btn_index as i32 + radius
+}
+
+/// F1-1: cor pra botao N em estado normal/hover/inactive.
+pub fn button_color(btn_index: u8, active: bool, hover: bool) -> u32 {
+    if !active {
+        return 0x555555;
+    }
+    match (btn_index, hover) {
+        (0, false) => BTN_CLOSE,
+        (0, true) => BTN_CLOSE_HOVER,
+        (1, false) => BTN_MIN,
+        (1, true) => BTN_MIN_HOVER,
+        (2, false) => BTN_MAX,
+        (2, true) => BTN_MAX_HOVER,
+        _ => 0x555555,
+    }
 }
 
 #[cfg(test)]
@@ -111,5 +146,72 @@ mod tests {
         assert_eq!(BTN_CLOSE & 0xFF0000, 0xE70000 & 0xFF0000);
         assert_eq!(BTN_MIN & 0xFF0000, 0xF10000 & 0xFF0000);
         assert_eq!(BTN_MAX & 0xFF0000, 0x2E0000 & 0xFF0000);
+    }
+
+    // F1-1: hover state + center calc + color helpers
+
+    #[test]
+    fn button_center_x_matches_hit_test() {
+        // Centro do botao deve estar dentro do range hit_test.
+        for i in 0..3u8 {
+            let cx = button_center_x(800, i);
+            let cy = TITLEBAR_HEIGHT / 2;
+            assert_eq!(hit_test_button(800, cx, cy), Some(i));
+        }
+    }
+
+    #[test]
+    fn button_color_normal() {
+        assert_eq!(button_color(0, true, false), BTN_CLOSE);
+        assert_eq!(button_color(1, true, false), BTN_MIN);
+        assert_eq!(button_color(2, true, false), BTN_MAX);
+    }
+
+    #[test]
+    fn button_color_hover_brighter() {
+        // Hover colors devem ter mais brilho que base.
+        assert_eq!(button_color(0, true, true), BTN_CLOSE_HOVER);
+        assert_eq!(button_color(1, true, true), BTN_MIN_HOVER);
+        assert_eq!(button_color(2, true, true), BTN_MAX_HOVER);
+    }
+
+    #[test]
+    fn button_color_inactive_is_gray() {
+        for i in 0..3u8 {
+            assert_eq!(button_color(i, false, false), 0x555555);
+            assert_eq!(button_color(i, false, true), 0x555555);
+        }
+    }
+
+    #[test]
+    fn button_color_unknown_index_safe() {
+        assert_eq!(button_color(99, true, true), 0x555555);
+    }
+
+    #[test]
+    fn hover_constants_match_indices() {
+        assert_eq!(HOVER_CLOSE, 0);
+        assert_eq!(HOVER_MIN, 1);
+        assert_eq!(HOVER_MAX, 2);
+        assert_eq!(HOVER_NONE, -1);
+    }
+
+    #[test]
+    fn hover_colors_distinct_from_base() {
+        assert_ne!(BTN_CLOSE_HOVER, BTN_CLOSE & 0xFFFFFF);
+        assert_ne!(BTN_MIN_HOVER, BTN_MIN & 0xFFFFFF);
+        assert_ne!(BTN_MAX_HOVER, BTN_MAX & 0xFFFFFF);
+    }
+
+    #[test]
+    fn button_centers_are_distinct() {
+        let c0 = button_center_x(800, 0);
+        let c1 = button_center_x(800, 1);
+        let c2 = button_center_x(800, 2);
+        assert!(c0 < c1);
+        assert!(c1 < c2);
+        // Gap entre centros = BUTTON_SIZE + BUTTON_GAP.
+        assert_eq!(c1 - c0, BUTTON_SIZE + BUTTON_GAP);
+        assert_eq!(c2 - c1, BUTTON_SIZE + BUTTON_GAP);
     }
 }

@@ -18,16 +18,29 @@
 #define LUMO_BTN_MIN 0xFFF1C40F
 #define LUMO_BTN_MAX 0xFF2ECC71
 
+// F1-1 review: hover state colors (highlight no botao com cursor em cima).
+#define LUMO_BTN_CLOSE_HOVER 0xFFFF6B5B
+#define LUMO_BTN_MIN_HOVER 0xFFFFD93D
+#define LUMO_BTN_MAX_HOVER 0xFF52E08C
+
+// Hover index: -1 = nenhum, 0 = close, 1 = min, 2 = max.
+#define LUMO_HOVER_NONE -1
+#define LUMO_HOVER_CLOSE 0
+#define LUMO_HOVER_MIN 1
+#define LUMO_HOVER_MAX 2
+
 // Paint titlebar em buffer ARGB8888 (wl_shm).
 // data = pointer to first pixel (linear, stride = width * 4)
 // width, height = buffer dims (height >= LUMO_TITLEBAR_HEIGHT)
 // title = utf-8 nul-terminated, pode ser NULL
 // active = 1 quando window has focus (titlebar bg + colored btns)
 //          0 quando inactive (greyed out)
+// hover_btn = LUMO_HOVER_NONE / _CLOSE / _MIN / _MAX
 void lumo_paint_titlebar(uint32_t *data,
                          int width,
                          int height,
                          const char *title,
-                         int active);
+                         int active,
+                         int hover_btn);
 
 #endif // LUMO_DECOR_DRAW_H

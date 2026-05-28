@@ -39,9 +39,7 @@ members = [
     "apps/lumo-apps",
     "apps/lumo-appsd",
     "apps/lumo-appctl",
-    "apps/lumo-osd-locks",
-    "apps/lumo-osd-brightness",
-    "apps/lumo-osd-volume",
+    "apps/lumo-osd",
 ]
 
 [profile.release]

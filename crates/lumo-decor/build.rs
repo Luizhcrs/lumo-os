@@ -10,6 +10,12 @@ fn main() {
     println!("cargo:rerun-if-changed=c-src/draw.c");
     println!("cargo:rerun-if-changed=c-src/draw.h");
 
+    // Plugin libdecor so build em Linux/unix. Em Windows/CI cross, skip pra
+    // permitir `cargo test` dos helpers Rust puros (geometria/cores).
+    if !cfg!(target_os = "linux") {
+        return;
+    }
+
     let wayland = pkg_config::probe_library("wayland-client").expect("wayland-client missing");
     let libdecor = pkg_config::probe_library("libdecor-0").expect("libdecor-0 missing");
 

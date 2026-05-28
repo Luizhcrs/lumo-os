@@ -9,7 +9,7 @@
 //!
 //! Tests usam tmpdir custom em vez de /sys real.
 
-use crate::lock_state::{LockKind, LockState};
+use super::lock_state::{LockKind, LockState};
 use std::fs;
 use std::path::{Path, PathBuf};
 

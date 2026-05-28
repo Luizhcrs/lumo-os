@@ -4810,12 +4810,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "lumo-osd-brightness"
+name = "lumo-osd"
 version = "0.1.0"
 dependencies = [
  "lumo-error",
  "lumo-foundation",
  "lumo-osd-framework",
+ "serde",
  "smithay-client-toolkit 0.19.2",
  "tiny-skia",
  "tracing",
@@ -4829,32 +4830,6 @@ dependencies = [
  "lumo-animation",
  "lumo-foundation",
  "tiny-skia",
-]
-
-[[package]]
-name = "lumo-osd-locks"
-version = "0.1.0"
-dependencies = [
- "lumo-error",
- "lumo-foundation",
- "lumo-osd-framework",
- "smithay-client-toolkit 0.19.2",
- "tiny-skia",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "lumo-osd-volume"
-version = "0.1.0"
-dependencies = [
- "lumo-error",
- "lumo-foundation",
- "lumo-osd-framework",
- "smithay-client-toolkit 0.19.2",
- "tiny-skia",
- "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
