@@ -673,6 +673,40 @@ pub fn cursor_xcursor_element(
     .ok()
 }
 
+/// Renderiza wl_surface entregue pelo cliente via wl_pointer.set_cursor.
+/// Hotspot armazenado em CursorImageSurfaceData no surface data_map.
+/// Chrome/Firefox usam pra I-beam, hand, resize handles.
+/// Sem isso compositor usa xcursor sistema com hotspot errado = clicks
+/// erravam alvos pequenos (bug user 2026-05).
+pub fn cursor_custom_surface_elements(
+    renderer: &mut GlesRenderer,
+    pointer_location: Point<f64, Logical>,
+    surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+    output_scale: f64,
+) -> Vec<WaylandSurfaceRenderElement<GlesRenderer>> {
+    use smithay::input::pointer::CursorImageSurfaceData;
+    use smithay::wayland::compositor as wl_compositor;
+    let hotspot: Point<i32, Logical> = wl_compositor::with_states(surface, |states| {
+        states
+            .data_map
+            .get::<std::sync::Mutex<CursorImageSurfaceData>>()
+            .and_then(|m| m.lock().ok().map(|d| d.hotspot))
+            .unwrap_or_default()
+    });
+    let phys_loc: Point<i32, Physical> = Point::from((
+        ((pointer_location.x - hotspot.x as f64) * output_scale).round() as i32,
+        ((pointer_location.y - hotspot.y as f64) * output_scale).round() as i32,
+    ));
+    smithay::backend::renderer::element::surface::render_elements_from_surface_tree(
+        renderer,
+        surface,
+        phys_loc,
+        smithay::utils::Scale::from(output_scale),
+        1.0,
+        Kind::Cursor,
+    )
+}
+
 /// Quatro quads cobrindo os cantos do output, pintados na MESMA cor do
 /// clear background (theme-aware). Simula corner radius sem custom
 /// shader. A14: theme-aware (era preto fixo).
@@ -1034,6 +1068,7 @@ pub struct DrmCollectInputs<'a> {
 pub fn collect_drm_elements(
     renderer: &mut GlesRenderer,
     inputs: &DrmCollectInputs<'_>,
+    cursor_custom_surface: Option<&smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
 ) -> Vec<LumoCustomElement> {
     let mut out: Vec<LumoCustomElement> = Vec::with_capacity(64);
 
@@ -1276,8 +1311,15 @@ pub fn build_winit_elements(
         return out;
     }
 
-    // 1. Cursor primeiro (mais alto).
-    if let Some(elem) = cursor_xcursor_element(
+    // 1. Cursor primeiro (mais alto). Prefer custom surface (Chrome
+    // I-beam etc) sobre xcursor sistema. Cliente passou hotspot via
+    // wl_pointer.set_cursor; sem isso clicks erravam alvos pequenos.
+    if let Some(surf) = cursor_custom_surface {
+        for el in cursor_custom_surface_elements(renderer, inputs.pointer_location, surf, 1.0) {
+            let space_wrap = smithay::desktop::space::SpaceRenderElements::Surface(el);
+            out.push(LumoCustomElement::Space(space_wrap));
+        }
+    } else if let Some(elem) = cursor_xcursor_element(
         renderer,
         inputs.pointer_location,
         inputs.cursor,

@@ -141,6 +141,12 @@ pub struct LumoState {
     /// auto-spawnados (notif, update dialog, helper popup) roubavam
     /// foco do app que user esta usando.
     pub last_user_gesture_ts: std::time::Instant,
+    /// Custom cursor surface enviada pelo cliente via wl_pointer.set_cursor.
+    /// Quando Some, compositor renderiza essa surface no lugar do xcursor
+    /// sistema. Hotspot vem do wl_pointer.set_cursor request (smithay
+    /// armazena em CursorImageSurfaceData no surface data_map).
+    /// Chrome/Firefox usam pra I-beam, hand pointer, resize handles.
+    pub cursor_custom_surface: Option<WlSurface>,
 
     // B2: keybindings configuracao carregada de TOML.
     pub keyboard_config: KeyboardConfig,
@@ -369,6 +375,7 @@ impl LumoState {
             degraded: crate::degraded::DegradedTracker::new(),
             freeze: crate::freeze::FreezeTracker::new(),
             last_user_gesture_ts: Instant::now(),
+            cursor_custom_surface: None,
             compositor_state,
             xdg_shell_state,
             xdg_decoration_state: None,

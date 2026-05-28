@@ -386,7 +386,11 @@ fn arm_and_refresh_now(state: &mut LumoState) {
     };
 
     let all_elements =
-        crate::backend::render_common::collect_drm_elements(&mut backend.renderer, &inputs);
+        crate::backend::render_common::collect_drm_elements(
+            &mut backend.renderer,
+            &inputs,
+            state.cursor_custom_surface.as_ref(),
+        );
 
     let clear = crate::backend::render_common::clear_color_linear();
     if let Err(err) = cache.refresh(&mut backend.renderer, &surface.output, &all_elements, clear) {

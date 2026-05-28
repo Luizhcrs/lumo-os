@@ -75,6 +75,8 @@ impl SeatHandler for LumoState {
                     );
                     self.cursor = Some(loaded);
                     self.cursor_buffer = Some(buf);
+                    // Cliente trocou pra Named = sair de custom surface mode.
+                    self.cursor_custom_surface = None;
                     // W19.4: forca repaint imediato pra cursor icon mudar
                     // no proximo frame (sem esperar vsync pending_flip).
                     #[cfg(feature = "drm-backend")]
@@ -86,13 +88,28 @@ impl SeatHandler for LumoState {
                     tracing::debug!(?icon, "W10.C: xcursor not found for shape, keeping current");
                 }
             }
-            CursorImageStatus::Surface(_) => {
-                // Client provides custom cursor surface — handled by render pipeline.
-                tracing::trace!("cursor_image: Surface (custom)");
+            CursorImageStatus::Surface(s) => {
+                // Cliente (Chrome, Firefox, etc) entrega wl_surface
+                // pra renderizar como cursor. Hotspot armazenado em
+                // CursorImageSurfaceData no surface.data_map via
+                // wl_pointer.set_cursor. Render path compose surface
+                // em pointer_location ajustado pelo hotspot.
+                // Antes: comment "handled by render pipeline" era falso —
+                // render path NAO usava custom surface, mantinha xcursor.
+                // Causa mismatch hotspot (Chrome I-beam vs left_ptr) =
+                // clicks erravam alvos pequenos.
+                self.cursor_custom_surface = Some(s.clone());
+                self.cursor_buffer = None;
+                #[cfg(feature = "drm-backend")]
+                {
+                    self.drm_force_repaint = true;
+                }
+                tracing::debug!("cursor_image: Surface custom adoptada");
             }
             CursorImageStatus::Hidden => {
-                // Hide cursor — clear buffer.
+                // Hide cursor — clear todos buffers.
                 self.cursor_buffer = None;
+                self.cursor_custom_surface = None;
                 tracing::debug!("cursor_image: Hidden");
             }
         }

@@ -1068,6 +1068,7 @@ fn render_drm(state: &mut LumoState) {
         frame_counter,
         ref mut ipc,
         ref mut degraded,
+        ref cursor_custom_surface,
         ..
     } = *state;
     let splash_alpha_val = splash_alpha;
@@ -1146,7 +1147,11 @@ fn render_drm(state: &mut LumoState) {
     // move. DrmCompositor 0.7 ja detecta Kind::Cursor em lista completa +
     // faz cursor HW plane atomic-async sem re-render primary plane.
     let _ = (cursor_moved, boot_curtain_alpha, splash_alpha_val);
-    let all_elements = collect_drm_elements(&mut backend.renderer, &collect_inputs);
+    let all_elements = collect_drm_elements(
+        &mut backend.renderer,
+        &collect_inputs,
+        cursor_custom_surface.as_ref(),
+    );
 
     // W3.P4: damage merge heuristica antes de queue_frame.
     // Computa damage rects dos elementos e merge se lista complexa.
