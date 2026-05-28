@@ -1,5 +1,8 @@
 //! lumo-launcher - overlay fullscreen fuzzy XDG app launcher.
 
+// Logic puro extraido pra crate lumo-launcher-core (testavel sem Wayland).
+pub use lumo_launcher_core::{convert, files_search, settings_index};
+
 mod desktop;
 mod fuzzy;
 mod math;

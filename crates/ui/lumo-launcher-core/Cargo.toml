@@ -1,0 +1,10 @@
+[package]
+name = "lumo-launcher-core"
+version = "0.1.0"
+edition = "2021"
+description = "Logic pura do Lumo Launcher (Spotlight): math eval, unit conversion, settings index, files search."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

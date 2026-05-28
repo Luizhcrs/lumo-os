@@ -4737,6 +4737,7 @@ dependencies = [
  "lumo-animation",
  "lumo-error",
  "lumo-foundation",
+ "lumo-launcher-core",
  "meval",
  "nix 0.30.1",
  "serde",
@@ -4744,6 +4745,10 @@ dependencies = [
  "tiny-skia",
  "toml 0.8.23",
 ]
+
+[[package]]
+name = "lumo-launcher-core"
+version = "0.1.0"
 
 [[package]]
 name = "lumo-lock"
