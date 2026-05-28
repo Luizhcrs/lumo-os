@@ -1112,10 +1112,18 @@ impl LumoState {
         };
         if on {
             let usable = self.usable_geometry();
+            // Reserva os 30px do titlebar SO se a janela tem SSD (Iced/Qt/term).
+            // Apps CSD (Chromium/GTK4) desenham a propria decoracao -> sem SSD
+            // Lumo -> reservar deixaria um gap escuro entre a bar e a janela.
+            let has_ssd = window
+                .wl_surface()
+                .map(|s| self.ssd_windows.contains(&*s))
+                .unwrap_or(false);
+            let reserve = if has_ssd { SSD_TITLEBAR_H } else { 0 };
             let w = usable.size.w;
-            let h = (usable.size.h - SSD_TITLEBAR_H).max(64);
+            let h = (usable.size.h - reserve).max(64);
             let x = usable.loc.x;
-            let y = usable.loc.y + SSD_TITLEBAR_H;
+            let y = usable.loc.y + reserve;
             tl.with_pending_state(|st| {
                 st.states.set(XdgState::Maximized);
                 st.states.unset(XdgState::Fullscreen);
