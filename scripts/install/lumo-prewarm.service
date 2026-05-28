@@ -8,8 +8,15 @@ After=basic.target
 Type=oneshot
 # RemainAfterExit=yes pra systemd reconhecer como "active" pos-execucao.
 RemainAfterExit=yes
-# Caminho absoluto ao binary do script. Requer install na home do user.
-ExecStart=%h/Projects/lumo-shell/scripts/install/lumo-prewarm.sh
+# User obrigatorio: service de sistema roda como root por padrao, e %h
+# resolveria /root (script vive na home do user). Sem isso o boot mostra
+# "Failed at step EXEC ... /root/Projects/...: No such file or directory".
+User=luizhcrds
+Group=luizhcrds
+# Path absoluto: %h em system unit resolve /root mesmo com User= (gotcha
+# systemd — %h = home do manager=root, nao do User=). Hardcode pra home
+# do user dono do repo. Bug boot: status 203/EXEC em /root/Projects/...
+ExecStart=/home/luizhcrds/Projects/lumo-shell/scripts/install/lumo-prewarm.sh
 # Nao falhar a sessao se wallpaper nao existe.
 SuccessExitStatus=0 1
 StandardOutput=journal
