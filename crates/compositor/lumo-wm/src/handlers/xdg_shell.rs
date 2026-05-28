@@ -128,9 +128,11 @@ impl XdgShellHandler for LumoState {
                 .map(|s| s.into_owned())
         });
         let next_surface: Option<WlSurface> = prev_alive.or_else(|| {
+            // .last() = topmost (topo do stack), nao .next() (fundo). Fechar a
+            // janela ativa deve focar a de cima visivel, nao a mais antiga.
             self.space
                 .elements()
-                .next()
+                .last()
                 .and_then(|w| w.wl_surface())
                 .map(|s| s.into_owned())
         });
@@ -178,6 +180,50 @@ impl XdgShellHandler for LumoState {
             state.positioner = positioner;
         });
         surface.send_repositioned(token);
+    }
+
+    /// Cliente pediu fullscreen (Chrome F11, player de video, jogo).
+    /// Antes: default smithay = send_configure SEM size/state -> Chrome
+    /// continuava janelado 1024x768. Agora delega ao helper canonico.
+    fn fullscreen_request(
+        &mut self,
+        surface: ToplevelSurface,
+        _output: Option<smithay::reexports::wayland_server::protocol::wl_output::WlOutput>,
+    ) {
+        if let Some(window) = self.window_for_toplevel(&surface) {
+            self.set_window_fullscreen(&window, true);
+            tracing::info!("fullscreen_request: cliente -> fullscreen (helper)");
+        } else {
+            let _ = surface.send_configure();
+        }
+    }
+
+    fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
+        if let Some(window) = self.window_for_toplevel(&surface) {
+            self.set_window_fullscreen(&window, false);
+            tracing::info!("unfullscreen_request: cliente -> windowed (helper)");
+        } else {
+            let _ = surface.send_configure();
+        }
+    }
+
+    /// Cliente pediu maximize (botao maximizar nativo GTK/Qt/Chromium).
+    fn maximize_request(&mut self, surface: ToplevelSurface) {
+        if let Some(window) = self.window_for_toplevel(&surface) {
+            self.set_window_maximized(&window, true);
+            tracing::info!("maximize_request: cliente -> maximized (helper)");
+        } else {
+            let _ = surface.send_configure();
+        }
+    }
+
+    fn unmaximize_request(&mut self, surface: ToplevelSurface) {
+        if let Some(window) = self.window_for_toplevel(&surface) {
+            self.set_window_maximized(&window, false);
+            tracing::info!("unmaximize_request: cliente -> restored (helper)");
+        } else {
+            let _ = surface.send_configure();
+        }
     }
 
     fn move_request(&mut self, surface: ToplevelSurface, _seat: WlSeat, serial: Serial) {

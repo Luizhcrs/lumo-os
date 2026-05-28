@@ -52,10 +52,23 @@ impl CompositorHandler for LumoState {
             if let Some(window) = window {
                 window.on_commit();
 
+                // Fullscreen: NAO clampar pra usable. A janela cobre o output
+                // inteiro (0,0)+(ow,oh); o clamp floating empurraria abaixo da
+                // bar e encolheria -> fullscreen nunca cobriria a tela (bug
+                // Chrome F11). set_window_fullscreen ja posicionou em (0,0).
+                let is_fullscreen = window
+                    .toplevel()
+                    .map(|tl| {
+                        tl.current_state().states.contains(
+                            smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State::Fullscreen,
+                        )
+                    })
+                    .unwrap_or(false);
+
                 // LIMITES DE GEOMETRIA: Respeite a usable_geometry() do compositor.
                 // Janelas flutuantes nao devem abrir maiores que o espaco util da tela
                 // nem transborde para fora dos limites.
-                if self.tiling_mode == crate::tiling::TilingMode::Floating {
+                if !is_fullscreen && self.tiling_mode == crate::tiling::TilingMode::Floating {
                     let usable = self.usable_geometry();
                     let geo = window.geometry();
                     let mut size_changed = false;

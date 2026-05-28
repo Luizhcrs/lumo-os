@@ -709,8 +709,8 @@ impl LumoState {
                 self.handle_synthetic_key_combo(&keys);
             }
             LumoCommand::ToggleMaximize => {
-                // W17.1: toggle fullscreen no toplevel focado.
-                use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
+                // W17.1: toggle fullscreen no toplevel focado, via helper canonico
+                // (seta size=output + suprime SSD, antes so setava o bit -> bug).
                 use smithay::wayland::seat::WaylandFocus;
                 let kb = self.keyboard.clone();
                 if let Some(focused) = kb.current_focus() {
@@ -720,18 +720,9 @@ impl LumoState {
                         .find(|w| w.wl_surface().map(|s| *s == focused).unwrap_or(false))
                         .cloned();
                     if let Some(w) = win {
-                        if let Some(tl) = w.toplevel() {
-                            let is_fs = tl.current_state().states.contains(XdgState::Fullscreen);
-                            tl.with_pending_state(|st| {
-                                if is_fs {
-                                    st.states.unset(XdgState::Fullscreen);
-                                } else {
-                                    st.states.set(XdgState::Fullscreen);
-                                }
-                            });
-                            tl.send_configure();
-                            tracing::info!(was_fs = is_fs, "W17.1: ToggleMaximize IPC");
-                        }
+                        let is_fs = self.window_is_fullscreen(&w);
+                        self.set_window_fullscreen(&w, !is_fs);
+                        tracing::info!(was_fs = is_fs, "W17.1: ToggleMaximize IPC (helper)");
                     }
                 }
             }
@@ -987,6 +978,34 @@ impl LumoState {
         self.active_workspace = to;
         tracing::info!(prev, current = to, "switch workspace W8.B");
 
+        // P0 fix: resetar foco de teclado pra uma janela do workspace destino.
+        // Antes o teclado ficava preso na janela do workspace anterior (agora
+        // oculta) -> digitacao sumia/ia pro lugar errado. Foca a topmost do
+        // destino (last = topo do stack), ou None se vazio.
+        {
+            use smithay::wayland::seat::WaylandFocus;
+            let target = self
+                .space
+                .elements()
+                .last()
+                .and_then(|w| w.wl_surface())
+                .map(|s| s.into_owned());
+            let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+            let kb = self.keyboard.clone();
+            let had_target = target.is_some();
+            // close_toplevel(Some) seta foco; close_toplevel(None) limpa.
+            let new_focus = self.focus_manager.close_toplevel(target);
+            kb.set_focus(self, new_focus, serial);
+            if !had_target {
+                // Sem janela no destino: limpa appmenu da bar.
+                self.ipc.broadcast(&lumo_ipc::LumoEvent::ActiveApp {
+                    app_id: String::new(),
+                    title: String::new(),
+                    pid: 0,
+                });
+            }
+        }
+
         // Inicia animacao de slide (W8.B).
         self.workspace_transition = Some(crate::workspace::WorkspaceTransition::new(
             prev, to, duration,
@@ -994,6 +1013,14 @@ impl LumoState {
 
         let ev = IpcServer::workspaces_event(self.active_workspace, MAX_WORKSPACES);
         self.ipc.broadcast(&ev);
+
+        // P1 fix: forcar repaint. Trocar workspace via IPC/bar nao setava
+        // should_render -> tela presa no workspace antigo ate proximo evento.
+        self.should_render = true;
+        #[cfg(feature = "drm-backend")]
+        {
+            self.drm_force_repaint = true;
+        }
     }
 
     /// W12.A: returns output dimensions (w, h) in logical pixels.
@@ -1007,6 +1034,106 @@ impl LumoState {
                 Some((mode.size.w, mode.size.h))
             })
             .unwrap_or((1920, 1080))
+    }
+
+    /// Localiza a Window no space dado o toplevel ToplevelSurface.
+    pub fn window_for_toplevel(
+        &self,
+        surface: &smithay::wayland::shell::xdg::ToplevelSurface,
+    ) -> Option<smithay::desktop::Window> {
+        self.space
+            .elements()
+            .find(|w| w.toplevel().map(|t| t == surface).unwrap_or(false))
+            .cloned()
+    }
+
+    /// Rotina canonica de fullscreen. `on=true` -> cobre o OUTPUT INTEIRO
+    /// (sem reservar a bar), suprime SSD (remove de ssd_windows), mapeia em
+    /// (0,0). `on=false` -> limpa estado, size=None (cliente re-escolhe),
+    /// restaura SSD. Usado por: protocolo (fullscreen_request), Super+F,
+    /// IPC, menu titlebar. Antes cada caminho setava Fullscreen sem size
+    /// -> janela marcada fullscreen mas tamanho inalterado (bug Chrome F11).
+    pub fn set_window_fullscreen(&mut self, window: &smithay::desktop::Window, on: bool) {
+        use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
+        use smithay::utils::{Point, Size};
+        use smithay::wayland::seat::WaylandFocus;
+        let Some(tl) = window.toplevel().cloned() else {
+            return;
+        };
+        let (ow, oh) = self.output_dimensions();
+        if on {
+            tl.with_pending_state(|st| {
+                st.states.set(XdgState::Fullscreen);
+                st.states.unset(XdgState::Maximized);
+                st.size = Some(Size::from((ow, oh)));
+            });
+            tl.send_configure();
+            self.space
+                .map_element(window.clone(), Point::from((0, 0)), true);
+            // Suprime titlebar SSD em fullscreen (modo imersivo).
+            if let Some(s) = window.wl_surface() {
+                self.ssd_windows.remove(&*s);
+            }
+        } else {
+            tl.with_pending_state(|st| {
+                st.states.unset(XdgState::Fullscreen);
+                st.size = None;
+            });
+            tl.send_configure();
+            // Restaura SSD ao sair de fullscreen.
+            if let Some(s) = window.wl_surface() {
+                self.ssd_windows.insert(s.into_owned());
+            }
+        }
+        self.should_render = true;
+        #[cfg(feature = "drm-backend")]
+        {
+            self.drm_force_repaint = true;
+        }
+    }
+
+    /// Rotina canonica de maximize. `on=true` -> cobre a area UTIL
+    /// (usable_geometry, preserva a bar), mantem SSD. `on=false` -> limpa.
+    pub fn set_window_maximized(&mut self, window: &smithay::desktop::Window, on: bool) {
+        use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
+        use smithay::utils::{Point, Size};
+        let Some(tl) = window.toplevel().cloned() else {
+            return;
+        };
+        if on {
+            let usable = self.usable_geometry();
+            tl.with_pending_state(|st| {
+                st.states.set(XdgState::Maximized);
+                st.states.unset(XdgState::Fullscreen);
+                st.size = Some(Size::from((usable.size.w, usable.size.h)));
+            });
+            tl.send_configure();
+            self.space.map_element(
+                window.clone(),
+                Point::from((usable.loc.x, usable.loc.y)),
+                true,
+            );
+        } else {
+            tl.with_pending_state(|st| {
+                st.states.unset(XdgState::Maximized);
+                st.size = None;
+            });
+            tl.send_configure();
+        }
+        self.should_render = true;
+        #[cfg(feature = "drm-backend")]
+        {
+            self.drm_force_repaint = true;
+        }
+    }
+
+    /// True se o toplevel da window esta em estado Fullscreen (pending ou current).
+    pub fn window_is_fullscreen(&self, window: &smithay::desktop::Window) -> bool {
+        use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
+        window
+            .toplevel()
+            .map(|tl| tl.current_state().states.contains(XdgState::Fullscreen))
+            .unwrap_or(false)
     }
 
     /// W8.B: move toplevel focado para workspace `to`.

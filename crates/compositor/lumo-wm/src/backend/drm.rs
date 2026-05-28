@@ -998,6 +998,27 @@ fn render_drm(state: &mut LumoState) {
         }
     }
 
+    // P0 fix (Chrome/Firefox congelam): enviar frame callbacks pros clientes
+    // TODO tick (throttle 16ms), ANTES da damage-gate e do pending_flip return.
+    // Um cliente que pediu wl_surface.frame (animacao/video/scroll) so desenha
+    // o proximo frame apos receber o callback. Antes, o loop send_frame ficava
+    // no FIM do render path (so alcancado em render completo); quando o
+    // compositor estava idle (damage-gate retornava cedo) ou em pending_flip,
+    // o callback nunca era enviado -> cliente renderizava 1 frame e congelava
+    // ate o mouse forcar repaint. Aqui o callback flui sempre; clientes idle
+    // (sem frame request pendente) nao sao acordados (send_frame e no-op pra
+    // eles), entao nao desperdica energia.
+    {
+        if let Some(output) = state.space.outputs().next().cloned() {
+            let elapsed = state.start_time.elapsed();
+            let throttle = Some(Duration::from_millis(16));
+            let windows: Vec<_> = state.space.elements().cloned().collect();
+            for window in &windows {
+                window.send_frame(&output, elapsed, throttle, |_, _| Some(output.clone()));
+            }
+        }
+    }
+
     // W22: damage-gating. Skip render se nada mudou desde ultimo frame.
     // should_render set true por: commit surface, cursor move, anim tick,
     // focus change, decoration change. drm_force_repaint bypass gating.
@@ -1089,7 +1110,9 @@ fn render_drm(state: &mut LumoState) {
     }
 
     let pointer_location = *pointer_location;
-    let start_time_elapsed = start_time.elapsed();
+    // start_time mantido no destructure pra outros usos; frame callbacks
+    // agora usam state.start_time no topo da fn (pre-damage-gate).
+    let _ = start_time;
     if std::env::var("LUMO_TRACE_POINTER").as_deref() == Ok("1") {
         eprintln!(
             "[trace] render cursor pos=({:.1},{:.1})",
@@ -1350,14 +1373,10 @@ fn render_drm(state: &mut LumoState) {
             } else if trace {
                 tracing::trace!(frame = frame_counter, "no damage skip");
             }
-
-            // Envia frame callbacks pros toplevels (mesmo sem render).
-            let throttle = Some(Duration::from_millis(16));
-            for window in space.elements() {
-                window.send_frame(&surface.output, start_time_elapsed, throttle, |_, _| {
-                    Some(surface.output.clone())
-                });
-            }
+            // P0 fix: frame callbacks agora despachados no topo de render_drm
+            // (todo tick, antes da damage-gate/pending_flip), nao mais so aqui
+            // no fim do render path. Removido pra evitar logica duplicada;
+            // o throttle de 16ms ja garante pacing correto.
         }
         Err(err) => {
             tracing::warn!(?err, "render_frame falhou");

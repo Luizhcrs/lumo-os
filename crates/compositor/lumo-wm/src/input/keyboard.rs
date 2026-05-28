@@ -218,16 +218,12 @@ pub fn default_bindings() -> Vec<KeyBinding> {
         // F1.5-D1: Cmd+/ shortcut help overlay.
         KeyBinding::new(s(), Keysym::slash, KeyAction::ShortcutHelp),
         KeyBinding::new(s(), Keysym::question, KeyAction::ShortcutHelp),
-        // F1.5-D1: Super+1..9 jump pra N-th window.
-        KeyBinding::new(s(), Keysym::_1, KeyAction::JumpToWindow(1)),
-        KeyBinding::new(s(), Keysym::_2, KeyAction::JumpToWindow(2)),
-        KeyBinding::new(s(), Keysym::_3, KeyAction::JumpToWindow(3)),
-        KeyBinding::new(s(), Keysym::_4, KeyAction::JumpToWindow(4)),
-        KeyBinding::new(s(), Keysym::_5, KeyAction::JumpToWindow(5)),
-        KeyBinding::new(s(), Keysym::_6, KeyAction::JumpToWindow(6)),
-        KeyBinding::new(s(), Keysym::_7, KeyAction::JumpToWindow(7)),
-        KeyBinding::new(s(), Keysym::_8, KeyAction::JumpToWindow(8)),
-        KeyBinding::new(s(), Keysym::_9, KeyAction::JumpToWindow(9)),
+        // Super+1..9 = trocar workspace (padrao GNOME/KDE/i3). Os bindings
+        // JumpToWindow(1..9) foram REMOVIDOS: colidiam com Workspace(1..9)
+        // (mesmo mods+key) e match_binding pegava o primeiro -> JumpToWindow
+        // vencia e a troca de workspace por teclado ficava morta. Workspace
+        // definido mais abaixo (mantido). JumpToWindow continua acessivel
+        // via codigo/IPC se necessario, sem acelerador conflitante.
         KeyBinding::new(s(), Keysym::space, KeyAction::Launcher),
         KeyBinding::new(s(), Keysym::Return, KeyAction::Spawn("foot".to_string())),
         KeyBinding::new(s(), Keysym::Tab, KeyAction::StackPicker),
@@ -331,5 +327,56 @@ mod tests {
         let cfg = KeyboardConfig::default();
         let s = ModifiersMask::super_only();
         assert_ne!(lookup(&cfg, s, Keysym::v), Some(KeyAction::ClipboardHistory));
+    }
+
+    // Super+1..9 deve trocar workspace (nao JumpToWindow). Regressao do bug
+    // de binding duplicado onde JumpToWindow vencia o match.
+    #[test]
+    fn super_digits_bound_to_workspace() {
+        let cfg = KeyboardConfig::default();
+        let s = ModifiersMask::super_only();
+        let digits = [
+            Keysym::_1,
+            Keysym::_2,
+            Keysym::_3,
+            Keysym::_4,
+            Keysym::_5,
+            Keysym::_6,
+            Keysym::_7,
+            Keysym::_8,
+            Keysym::_9,
+        ];
+        for (i, k) in digits.iter().enumerate() {
+            let n = (i + 1) as u8;
+            assert_eq!(
+                lookup(&cfg, s, *k),
+                Some(KeyAction::Workspace(n)),
+                "Super+{n} deve ser Workspace({n}), nao JumpToWindow"
+            );
+        }
+    }
+
+    // Blindagem: nenhum (mods,key) pode aparecer 2x em default_bindings.
+    // match_binding pega o primeiro -> duplicata = binding morto silencioso.
+    #[test]
+    fn no_duplicate_accelerators() {
+        use std::collections::HashSet;
+        let cfg = KeyboardConfig::default();
+        let mut seen: HashSet<(bool, bool, bool, bool, u32)> = HashSet::new();
+        for b in &cfg.bindings {
+            let key = (
+                b.mods.ctrl,
+                b.mods.alt,
+                b.mods.shift,
+                b.mods.logo,
+                b.key.0,
+            );
+            assert!(
+                seen.insert(key),
+                "acelerador duplicado: mods={:?} key={:?}",
+                b.mods,
+                b.key.0
+            );
+        }
     }
 }

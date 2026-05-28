@@ -171,8 +171,14 @@ impl LumoState {
                 }
                 let dx = event.delta_x();
                 let dy = event.delta_y();
-                let new_x = (self.pointer_location.x + dx).clamp(0.0, 1919.0);
-                let new_y = (self.pointer_location.y + dy).clamp(0.0, 1079.0);
+                // Clamp pelas dimensoes REAIS do output (antes: 1919x1079 fixo
+                // -> em painel != 1080p o cursor ficava preso numa caixa e as
+                // bordas direita/inferior eram inalcancaveis).
+                let (ow, oh) = self.output_dimensions();
+                let max_x = (ow as f64 - 1.0).max(0.0);
+                let max_y = (oh as f64 - 1.0).max(0.0);
+                let new_x = (self.pointer_location.x + dx).clamp(0.0, max_x);
+                let new_y = (self.pointer_location.y + dy).clamp(0.0, max_y);
                 self.pointer_location = (new_x, new_y).into();
 
                 let serial = SERIAL_COUNTER.next_serial();
@@ -220,8 +226,12 @@ impl LumoState {
             InputEvent::PointerMotionAbsolute { event } => {
                 self.should_render = true;
                 self.cursor_last_motion_ts = Some(std::time::Instant::now());
-                let x = event.x_transformed(1280);
-                let y = event.y_transformed(720);
+                // Transform pelas dimensoes REAIS do output (antes: 1280x720
+                // fixo -> winit dev + touch/tablet caiam o cursor a ~66% da
+                // tela, hit-test de botoes errava).
+                let (ow, oh) = self.output_dimensions();
+                let x = event.x_transformed(ow as u32);
+                let y = event.y_transformed(oh as u32);
                 self.pointer_location = (x, y).into();
 
                 let serial = SERIAL_COUNTER.next_serial();
