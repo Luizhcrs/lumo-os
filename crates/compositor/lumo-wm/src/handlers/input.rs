@@ -36,6 +36,10 @@ impl LumoState {
                 let state = event.state();
                 let keyboard = self.keyboard.clone();
                 let press = state == KeyState::Pressed;
+                // Windows-style focus steal protection: key press marca gesto.
+                if press {
+                    self.record_user_gesture();
+                }
 
                 // A40: Cell pra capturar sym calculado dentro do closure.
                 let last_sym_for_a40 =
@@ -268,6 +272,8 @@ impl LumoState {
                     );
                     lumo_telemetry::record_event(EventKind::Click, meta);
                     self.last_input_ts = Some(std::time::Instant::now());
+                    // Windows-style focus steal protection: marca gesto user.
+                    self.record_user_gesture();
                 }
 
                 if state == ButtonState::Pressed {

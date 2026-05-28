@@ -52,12 +52,26 @@ impl XdgShellHandler for LumoState {
         let _ = surface.send_configure();
 
         // L1: FocusManager gerencia foco na nova janela.
+        // Windows-style focus steal protection: novo toplevel SO ganha
+        // foco se chega dentro da janela de gesto user (~500ms apos
+        // ultimo click/key). Fora disso = app spawn em background, NAO
+        // rouba foco do app atual. Analogo a SetForegroundWindow lock
+        // do Windows que pisca taskbar em vez de raise.
         if let Some(wl) = window.wl_surface() {
             let serial = smithay::utils::SERIAL_COUNTER.next_serial();
             let surf: WlSurface = wl.into_owned();
             let kb = self.keyboard.clone();
-            let new_focus = self.focus_manager.new_toplevel(surf);
-            kb.set_focus(self, new_focus, serial);
+            if self.should_block_focus_steal() {
+                tracing::info!(
+                    elapsed_ms = self.last_user_gesture_ts.elapsed().as_millis(),
+                    "new_toplevel: focus steal BLOCKED (fora da janela gesto user)"
+                );
+                // Mantem foco anterior. Apenas registra prev_focus pra
+                // close_toplevel poder voltar foco caso seja fechada.
+            } else {
+                let new_focus = self.focus_manager.new_toplevel(surf);
+                kb.set_focus(self, new_focus, serial);
+            }
         }
 
         // UX3: registra toplevel no freeze tracker pra ping/pong.

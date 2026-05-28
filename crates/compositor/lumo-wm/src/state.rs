@@ -135,6 +135,12 @@ pub struct LumoState {
     pub degraded: crate::degraded::DegradedTracker,
     /// UX3: tracker de freeze por ping/pong.
     pub freeze: crate::freeze::FreezeTracker,
+    /// Windows-style focus steal protection: timestamp do ultimo
+    /// gesto user real (pointer click ou key press). new_toplevel
+    /// so rouba foco se gesto < FOCUS_STEAL_WINDOW. Sem isso apps
+    /// auto-spawnados (notif, update dialog, helper popup) roubavam
+    /// foco do app que user esta usando.
+    pub last_user_gesture_ts: std::time::Instant,
 
     // B2: keybindings configuracao carregada de TOML.
     pub keyboard_config: KeyboardConfig,
@@ -362,6 +368,7 @@ impl LumoState {
             clock,
             degraded: crate::degraded::DegradedTracker::new(),
             freeze: crate::freeze::FreezeTracker::new(),
+            last_user_gesture_ts: Instant::now(),
             compositor_state,
             xdg_shell_state,
             xdg_decoration_state: None,
@@ -850,6 +857,26 @@ impl LumoState {
         }
     }
 
+    /// Windows-style focus steal protection window.
+    /// New toplevels que chegam dentro deste delta apos user gesture
+    /// (click/key) sao considerados intencionais e ganham foco.
+    /// Fora disso = compositor mantem foco do app atual + app novo
+    /// fica behind sem roubar (analogo a SetForegroundWindow restrictions).
+    pub fn user_gesture_window() -> std::time::Duration {
+        std::time::Duration::from_millis(500)
+    }
+
+    /// True se ja passou da janela de gesto user. new_toplevel usa
+    /// pra decidir se rouba foco.
+    pub fn should_block_focus_steal(&self) -> bool {
+        block_focus_steal_now(self.last_user_gesture_ts, std::time::Instant::now())
+    }
+
+    /// Atualiza timestamp gesto user. Chamado em pointer click + key press.
+    pub fn record_user_gesture(&mut self) {
+        self.last_user_gesture_ts = std::time::Instant::now();
+    }
+
     /// UX3 (atalho /proc): varre pid_app_cache e checa /proc/<pid>/status.
     /// State == 'T' (SIGSTOP) ou 'D' (uninterruptible) = freeze.
     /// Bypassa ping/pong xdg (scheduler nao integrado ainda).
@@ -1283,5 +1310,56 @@ pub fn tick_splash(state: &mut LumoState, dt: f32) {
         _ => {
             // done: nada a fazer.
         }
+    }
+}
+
+/// Windows-style focus steal protection: pure helper testavel.
+/// True = block (gesto antigo, app novo nao rouba foco).
+/// False = allow (gesto recente, focus steal e intencional).
+pub fn block_focus_steal_now(
+    last_user_gesture_ts: std::time::Instant,
+    now: std::time::Instant,
+) -> bool {
+    let elapsed = now.duration_since(last_user_gesture_ts);
+    elapsed > std::time::Duration::from_millis(500)
+}
+
+#[cfg(test)]
+mod focus_steal_tests {
+    use super::block_focus_steal_now;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn within_window_allows_focus_steal() {
+        let now = Instant::now();
+        let gesture = now - Duration::from_millis(100);
+        assert!(!block_focus_steal_now(gesture, now), "100ms < 500ms = allow");
+    }
+
+    #[test]
+    fn at_boundary_allows_focus_steal() {
+        let now = Instant::now();
+        let gesture = now - Duration::from_millis(499);
+        assert!(!block_focus_steal_now(gesture, now));
+    }
+
+    #[test]
+    fn beyond_window_blocks_focus_steal() {
+        let now = Instant::now();
+        let gesture = now - Duration::from_millis(700);
+        assert!(block_focus_steal_now(gesture, now), "700ms > 500ms = block");
+    }
+
+    #[test]
+    fn long_idle_blocks_focus_steal() {
+        let now = Instant::now();
+        let gesture = now - Duration::from_secs(60);
+        assert!(block_focus_steal_now(gesture, now));
+    }
+
+    #[test]
+    fn same_instant_allows() {
+        let now = Instant::now();
+        assert!(!block_focus_steal_now(now, now));
     }
 }
