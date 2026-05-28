@@ -318,6 +318,91 @@ F3 + F4 paralelos. F5 espera F3 + F4. F6 final.
 - **Sprint completed**: PR merged + tests pass + doc updated + demo internal
 - **Fase completed**: criterio saida atingido
 
+## Apendice — Features que usuarios amam (pesquisa 2026-05-27)
+
+Pesquisa web sobre o que power users de macOS/Windows mais usam +
+pain points Linux. Mapeado pra fases Lumo.
+
+### macOS — features que pessoal AMA
+
+| Feature | Fase Lumo | Status |
+|---|---|---|
+| Spotlight (Cmd+Space universal: apps, files, calc, conversion) | F1.5 | Planejado |
+| Mission Control (visao todas janelas + workspaces) | F1 | Falta |
+| Hot Corners (acoes nos 4 cantos + modifiers = 8 acoes) | F1.5 | Falta |
+| Spaces (workspaces customizaveis com nome) | F2 | Basico done |
+| Quick Look (Space preview file sem abrir app) | F3 | Falta |
+| Stacks (desktop auto-organize por tipo/data) | F3 | Falta |
+| Dock magnification (hover zoom icons) | F1.5 | Falta |
+| Genie/scale window animations (minimize/open) | F1.5 | Falta |
+| Finder tags + smart folders | F3 | Falta |
+| Time Machine backup auto (snapshot rolling) | F3 | Falta |
+| Force Touch trackpad (pressure → deep press action) | F1.5 | Haptic backlog |
+| Continuity: Handoff (tasks cross-device) | F6 | Backlog |
+| Universal Clipboard (Cmd+C iPhone → Cmd+V Mac) | F6 | Backlog |
+| AirDrop (file send sem internet) | F6 | Backlog |
+| Sidecar (iPad como segunda tela) | F6 | Backlog |
+
+### Windows 11 — features que pessoal AMA
+
+| Feature | Fase Lumo | Status |
+|---|---|---|
+| Snap Layouts (hover maximize → grid 2/3/4 columns) | F1 | Falta |
+| FancyZones PowerToys (custom layout zones) | F2 | Basico tiling done |
+| PowerToys Run (Alt+Space launcher) | F1.5 | Overlap Spotlight |
+| Clipboard History (Win+V multi-item + pin) | F1.5 | Falta |
+| Virtual Desktops com nome customizavel | F2 | Basico done |
+| Focus Sessions (Pomodoro built-in DND + ambient sounds) | F3 | Falta |
+| Live Captions (audio → text overlay auto) | F3 | Backlog A11y |
+| Text Extractor OCR (screen region → clipboard text) | F3 | Falta |
+| Screen Recording built-in (Win+G overlay) | F3 | Falta |
+| Snipping tool (region screenshot + annotate) | F3 | Backlog |
+| Touch keyboard customizavel | F6 | Hardware-dep |
+| Widgets panel (cards) | F1 | Bar dropdowns ja |
+
+### Linux — pain points que pessoal RECLAMA
+
+| Pain point | Fase Lumo | Plano |
+|---|---|---|
+| HiDPI fractional scaling quebrado | F0 + F1 | Fractional scale protocol full support |
+| HDR signaling ausente | F5 | wp-color-manager-v1 reabilitar quando smithay fix |
+| Anti-cheat games (EAC/BattlEye) | nunca | Fora escopo |
+| Sleep/suspend confiavel | F2 | systemd-suspend hooks + DRM resume |
+| Bluetooth pairing/reconnect quebrado | F2 | bluez UI + auto-reconnect logic |
+| Color mgmt end-to-end | F5 | ICC profile per output + apps |
+| Drivers proprietarios complicado | F4 | Driver opt-in via PKGBUILD |
+| Setup complexity inicial | F4 | First-run wizard cobre 90% |
+| App ecosystem (apps nativos faltam) | F3 | Apps Lumo Iced cobrem core |
+| Multi-monitor flaky | F0 | Hot-plug robusto |
+| Wayland fragmentation | aceito | Lumo = single compositor |
+| Audio (PipeWire setup) | F2 | wireplumber profiles |
+
+### Patterns gerais power users (cross-OS)
+
+- **Atalhos memorizaveis** (consistente: Cmd/Ctrl + letra mnemonica)
+- **Discoverability** (Cmd+/ mostra todos atalhos do app)
+- **Reversibilidade** (Undo Cmd+Z funciona em TUDO incluindo OS actions)
+- **Sem modal interruptivo** (notif side-toast, nao popup central)
+- **Latencia <100ms** click → response (>100ms = perceptivel lag)
+- **Animations duracao 100-300ms** (curto = imperceptivel; longo = artificial)
+- **Cores moderadas** (sem saturacao alta exceto accent)
+- **Densidade media** (Mac mais espacoso, Win mais compacto; Lumo target = entre)
+- **Typography legivel** (16-18px UI body, 13-14px secondary)
+- **Touch-friendly** (alvos clique >= 36px square mesmo em mouse)
+
+### Decisoes design Lumo derivadas
+
+1. **Spotlight = Cmd+Space** (Mac padrao, evita conflito com PowerToys Alt+Space)
+2. **Mission Control = F3 ou trackpad swipe up** (Mac padrao)
+3. **Snap Layouts = hover maximize + Super+arrow** (Win padrao + Mac compatible)
+4. **Hot Corners = config opcional** (off default, geek-tier feature)
+5. **Clipboard History = Cmd+Shift+V** (Mac Cmd+V single; Shift+V = history)
+6. **Screen Recording = Cmd+Shift+5** (Mac padrao)
+7. **Quick Look = Space em selected file** (Mac padrao)
+8. **Stacks = desktop opcao "group by"** (default off, Mac padrao quando on)
+9. **Touch gestures = 3-finger workspace + 4-finger Mission Control** (Mac padrao)
+10. **Notification = side-toast top-right + center expand** (hibrido Mac+Win)
+
 ## Reavaliacao
 
 Atualizar este doc no fim de cada sprint:
