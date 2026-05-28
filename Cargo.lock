@@ -4804,6 +4804,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumo-osd-framework"
+version = "0.1.0"
+dependencies = [
+ "lumo-animation",
+ "lumo-foundation",
+ "tiny-skia",
+]
+
+[[package]]
 name = "lumo-sensors"
 version = "0.1.0"
 dependencies = [

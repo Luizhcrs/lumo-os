@@ -1,0 +1,13 @@
+[package]
+name = "lumo-osd-framework"
+version = "0.1.0"
+edition = "2021"
+description = "Framework compartilhado OSDs Lumo OS (Caps/Num lock, Brightness, Volume, etc)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+tiny-skia = "0.11"
+lumo-foundation = { path = "../../foundation/lumo-foundation" }
+lumo-animation = { path = "../../graphics/lumo-animation" }

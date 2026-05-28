@@ -13,6 +13,7 @@ members = [
     "crates/graphics/lumo-animation",
     "crates/ui/lumo-input",
     "crates/ui/lumo-kit",
+    "crates/ui/lumo-osd-framework",
     "crates/compositor/lumo-wm",
     "crates/compositor/lumo-ipc",
     "crates/lumo-gfx-core",
