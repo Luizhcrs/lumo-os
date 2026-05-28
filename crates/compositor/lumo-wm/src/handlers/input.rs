@@ -379,6 +379,31 @@ impl LumoState {
                             }
                             let loc = self.space.element_location(window).unwrap_or_default();
                             let geo = window.geometry();
+                            // Bug user (2026-05): clicar no CONTEUDO da janela da
+                            // frente onde o titlebar de uma janela de tras esta
+                            // (atras, ocluso) ativava a de tras (pulava pra frente).
+                            // Guard de oclusao: se qualquer janela mais ao topo
+                            // (depois desta em windows, que e back-to-front) cobre
+                            // o ponto com seu conteudo, o titlebar desta esta ocluso
+                            // -> ignora. So a janela topmost no ponto recebe acao SSD.
+                            let cur_idx =
+                                windows.iter().position(|w| w == window).unwrap_or(0);
+                            let occluded = windows[cur_idx + 1..].iter().any(|higher| {
+                                let hloc =
+                                    self.space.element_location(higher).unwrap_or_default();
+                                let hgeo = higher.geometry();
+                                smithay::utils::Rectangle::new(
+                                    smithay::utils::Point::from((
+                                        hloc.x + hgeo.loc.x,
+                                        hloc.y + hgeo.loc.y,
+                                    )),
+                                    hgeo.size,
+                                )
+                                .contains(ptr_pos)
+                            });
+                            if occluded {
+                                continue;
+                            }
                             let close_rect = ssd_close_btn_rect_logical(loc, geo.size.w);
                             let max_rect = ssd_max_btn_rect_logical(loc, geo.size.w);
                             let min_rect = ssd_min_btn_rect_logical(loc, geo.size.w);
@@ -1241,6 +1266,23 @@ impl LumoState {
                 }
                 let loc = self.space.element_location(window).unwrap_or_default();
                 let geo = window.geometry();
+                // Guard de oclusao (mesmo bug do loop de pointer real): so a
+                // janela topmost no ponto recebe acao SSD. Janela mais ao topo
+                // (depois desta em windows, back-to-front) cobrindo o ponto com
+                // conteudo oclui o titlebar desta.
+                let cur_idx = windows.iter().position(|w| w == window).unwrap_or(0);
+                let occluded = windows[cur_idx + 1..].iter().any(|higher| {
+                    let hloc = self.space.element_location(higher).unwrap_or_default();
+                    let hgeo = higher.geometry();
+                    smithay::utils::Rectangle::new(
+                        smithay::utils::Point::from((hloc.x + hgeo.loc.x, hloc.y + hgeo.loc.y)),
+                        hgeo.size,
+                    )
+                    .contains(ptr_pos)
+                });
+                if occluded {
+                    continue;
+                }
                 let close_rect = ssd_close_btn_rect_logical(loc, geo.size.w);
                 let max_rect = ssd_max_btn_rect_logical(loc, geo.size.w);
                 let min_rect = ssd_min_btn_rect_logical(loc, geo.size.w);
