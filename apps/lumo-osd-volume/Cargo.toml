@@ -1,0 +1,20 @@
+[package]
+name = "lumo-osd-volume"
+version = "0.1.0"
+edition = "2021"
+description = "OSD overlay pra ajuste de volume + mute toggle no Lumo OS."
+
+[[bin]]
+name = "lumo-osd-volume"
+path = "src/main.rs"
+
+[dependencies]
+lumo-osd-framework = { path = "../../crates/ui/lumo-osd-framework" }
+lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
+lumo-error = { path = "../../crates/foundation/lumo-error" }
+tiny-skia = "0.11"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[target.'cfg(unix)'.dependencies]
+smithay-client-toolkit = "0.19"

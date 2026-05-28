@@ -4839,6 +4839,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "lumo-osd-volume"
+version = "0.1.0"
+dependencies = [
+ "lumo-error",
+ "lumo-foundation",
+ "lumo-osd-framework",
+ "smithay-client-toolkit 0.19.2",
+ "tiny-skia",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "lumo-sensors"
 version = "0.1.0"
 dependencies = [
