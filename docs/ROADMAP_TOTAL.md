@@ -72,6 +72,105 @@ Sprint 4:
 
 **Saida criterio**: Screenshot 5 apps (Mousepad, Kate, Firefox, Chrome, lumo-files) com identidade visual identica.
 
+## Fase 1.5 — System UX Polish (transversal F1+F2+F3)
+
+**Saida**: Sistema "sente" Lumo. Cada detalhe ajustado, OSDs/toasts uniformes, feedback imediato.
+
+OSDs (overlay layer-shell, fade 4s, centro top):
+- Caps Lock ON/OFF popup
+- Num Lock ON/OFF popup
+- Scroll Lock ON/OFF popup
+- Brightness adjust (slider visual + porcentagem)
+- Volume adjust + Mute toggle (slider + icon)
+- Mic mute toggle
+- Keyboard layout switch (PT-BR / US)
+- Display profile (HDMI conectado / desconectado)
+
+Toasts (notification side, fade 3s, top-right):
+- Battery low <15% warning
+- Battery critical <5% (force suspend warning)
+- Charging plug in/out (icone + status)
+- Power profile changed (Performance/Balanced/Power saver)
+- Network conectado/desconectado (SSID)
+- Bluetooth pair request + paired
+- USB device plug-in (name + mount path)
+- Screenshot taken (preview thumb + copy/edit/open)
+- Clipboard sync (when bridge cross-device futuro)
+- App update available
+- Update applied (reboot required)
+
+Sistema feedback:
+- Workspace switch animation (slide horizontal smooth)
+- Window snap zones (highlight Half/Quarter/Full preview)
+- App spawn dock bouncing icon (Mac-style indica loading)
+- Cursor wait spinner durante app launch
+- Drag-drop visual ghost + drop zone highlight
+- Selection rubber-band desktop com cor accent
+- Tooltip hover 400ms delay + fade-in
+- Context menu radius + shadow uniforme (ja parcial W37)
+- Window minimize genie/scale animation
+- Focus ring 2px accent ao redor input focused
+- Hover highlight subtle em pills/buttons (ja parcial)
+
+Sound design (opcional, off por default):
+- Boot chime curto
+- Click sounds (volume baixo)
+- Error beep
+- Notification ding
+- Lock/unlock sound
+- USB plug
+
+Acessibilidade:
+- Reduced motion toggle (skip animations)
+- High contrast mode
+- Cursor size opcional (24/32/48px)
+- Screen magnifier (compositor zoom)
+- Screen reader integration (orca via dbus)
+- Sticky keys / slow keys
+- Mouse keys (numpad navega cursor)
+
+Color/Display:
+- Color temperature day/night auto (gamma shift, redshift-style)
+- Color profile per output (icc)
+- Dark/Light mode auto sunset/sunrise
+- Per-app theme override (settings panel)
+
+Inputs:
+- Touchpad haptic feedback (forcetouch event simulation)
+- Tap to click + drag config
+- Natural scroll toggle
+- Two-finger gestures: scroll, zoom (web), back/forward (browser)
+- Three-finger gestures: workspace switch, mission control
+- Four-finger gestures: app switcher
+- Pen pressure curve (Galaxy Book S Pen futuro)
+
+Search & Quick actions:
+- Cmd+Space universal launcher (apps + files + settings + calc)
+- Cmd+/ shortcut help overlay
+- Cmd+H hide window
+- Cmd+M minimize
+- Cmd+W close
+- Super+Tab cycle apps (ja parcial)
+- Super+number jump to app N
+
+Lockscreen + Login:
+- Clock animation (smooth digit transitions)
+- Blur background wallpaper
+- Live wallpaper opcional (gif/mp4 loop)
+- User avatar circular
+- Date+weather widget (lock screen)
+- PIN keypad opcional alem de password
+
+Implementacao distribuida por sprint:
+- Sprint 3 (F1): OSDs basicos (caps/num/scroll, brightness, volume)
+- Sprint 4 (F1): Toasts criticos (battery low, charging, network)
+- Sprint 5 (F2): Login + Lock screen animations
+- Sprint 6 (F2): Acessibilidade (reduced motion, contrast, screen reader)
+- Sprint 7 (F3): Search universal + quick actions
+- Sprint 8 (F3): Sound design + color temperature
+
+**Saida criterio**: Luiz usa 1 semana e diz "parece macOS feel" sem reclamar de falta de feedback.
+
 ## Fase 2 — Sessao Production
 
 **Saida**: Boot → login → sessao persistente → suspend/resume → logout limpo.
@@ -169,10 +268,12 @@ Sprint 14:
 
 ```
 F0 → F1 → F2 → F3 ─┐
-                   ├→ F5 → F6
-              F4 ──┘
+       ↕            ├→ F5 → F6
+      F1.5 (UX)     │
+       ↕       F4 ──┘
 ```
 
+F1.5 (UX Polish) e **transversal** — items distribuidos por sprint dentro F1/F2/F3.
 F3 + F4 paralelos. F5 espera F3 + F4. F6 final.
 
 ## Cadencia
