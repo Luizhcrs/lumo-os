@@ -138,23 +138,10 @@ mod tests {
     use super::*;
     use std::fs;
 
-    fn tmp(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "crash-watcher-{}-{}-{}",
-            name,
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ))
-    }
-
     #[test]
     fn read_report_extracts_fields() {
-        let dir = tmp("extract");
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("crash.json");
+        let dir = lumo_testkit::tempdir();
+        let path = dir.path().join("crash.json");
         let json = serde_json::json!({
             "binary": "lumo-files",
             "code": "PANIC-001",
@@ -167,65 +154,48 @@ mod tests {
         assert!(body.contains("PANIC-001"));
         assert!(body.contains("main"));
         assert!(body.contains("boom"));
-        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn read_report_invalid_json_returns_none() {
-        let dir = tmp("invalid");
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("bad.json");
+        let dir = lumo_testkit::tempdir();
+        let path = dir.path().join("bad.json");
         fs::write(&path, "not json").unwrap();
         assert!(read_report(&path).is_none());
-        fs::remove_dir_all(&dir).ok();
     }
 
-    // M1: oversize file rejeitado
     #[test]
     fn read_safe_rejects_oversize_file() {
-        let dir = tmp("oversize");
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("big.json");
+        let dir = lumo_testkit::tempdir();
+        let path = dir.path().join("big.json");
         let huge = vec![b'a'; (MAX_CRASH_FILE_BYTES + 1) as usize];
         fs::write(&path, &huge).unwrap();
-        assert!(read_safe(&path).is_none(), "arquivo grande deve ser rejeitado");
-        fs::remove_dir_all(&dir).ok();
+        assert!(read_safe(&path).is_none());
     }
 
     #[test]
     fn read_safe_accepts_normal_file() {
-        let dir = tmp("normal");
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("ok.json");
+        let dir = lumo_testkit::tempdir();
+        let path = dir.path().join("ok.json");
         fs::write(&path, b"{}").unwrap();
         assert!(read_safe(&path).is_some());
-        fs::remove_dir_all(&dir).ok();
     }
 
-    // L2: try_crash_dir respeita HOME unset
     #[test]
     fn try_crash_dir_none_without_home() {
-        let old = std::env::var("HOME").ok();
-        std::env::remove_var("HOME");
+        let _g = lumo_testkit::EnvVarGuard::unset("HOME");
         assert!(try_crash_dir().is_none());
-        if let Some(h) = old {
-            std::env::set_var("HOME", h);
-        }
     }
 
-    // M1: symlink rejeitado em Unix
     #[cfg(unix)]
     #[test]
     fn read_safe_refuses_symlink() {
         use std::os::unix::fs::symlink;
-        let dir = tmp("symlink");
-        fs::create_dir_all(&dir).unwrap();
-        let real = dir.join("real.json");
+        let dir = lumo_testkit::tempdir();
+        let real = dir.path().join("real.json");
         fs::write(&real, b"{}").unwrap();
-        let link = dir.join("link.json");
+        let link = dir.path().join("link.json");
         symlink(&real, &link).unwrap();
-        // O_NOFOLLOW: abrir link deve falhar.
         assert!(read_safe(&link).is_none());
-        fs::remove_dir_all(&dir).ok();
     }
 }

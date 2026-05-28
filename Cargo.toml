@@ -6,6 +6,7 @@ members = [
     "crates/foundation/lumo-style",
     "crates/foundation/lumo-telemetry",
     "crates/foundation/lumo-error",
+    "crates/testing/lumo-testkit",
     "crates/lumo-decor",
     "crates/graphics/lumo-beam",
     "crates/graphics/lumo-graphics",

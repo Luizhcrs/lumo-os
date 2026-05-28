@@ -4570,6 +4570,7 @@ dependencies = [
  "lumo-animation",
  "lumo-error",
  "lumo-foundation",
+ "lumo-testkit",
  "nix 0.30.1",
  "serde",
  "serde_json",
@@ -4800,6 +4801,7 @@ dependencies = [
  "lumo-animation",
  "lumo-error",
  "lumo-foundation",
+ "lumo-testkit",
  "nix 0.30.1",
  "serde",
  "serde_json",
@@ -4816,6 +4818,7 @@ dependencies = [
  "lumo-error",
  "lumo-foundation",
  "lumo-osd-framework",
+ "lumo-testkit",
  "serde",
  "smithay-client-toolkit 0.19.2",
  "tiny-skia",
@@ -4917,6 +4920,13 @@ name = "lumo-term"
 version = "0.1.0"
 dependencies = [
  "lumo-error",
+]
+
+[[package]]
+name = "lumo-testkit"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
 ]
 
 [[package]]

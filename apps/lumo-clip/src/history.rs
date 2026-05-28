@@ -196,15 +196,18 @@ fn atomic_write(tmp: &std::path::Path, dst: &std::path::Path, bytes: &[u8]) -> s
     Ok(())
 }
 
+/// Test-only factory pra ClipEntry::Text. Public(crate) so dev tests acessam.
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn t(s: &str) -> ClipEntry {
-        ClipEntry::Text {
-            content: s.into(),
-        }
+pub(crate) fn text_entry(s: &str) -> ClipEntry {
+    ClipEntry::Text {
+        content: s.into(),
     }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use super::text_entry as t;
 
     #[test]
     fn push_deduplicates_consecutive() {
@@ -376,22 +379,16 @@ mod tests {
         assert!(ClipHistory::default().picker_list().is_empty());
     }
 
-    // L2: HOME fallback safety
+    // L2: HOME fallback safety (env race-free via EnvVarGuard).
     #[test]
     fn try_path_fails_without_home() {
-        let old = std::env::var("HOME").ok();
-        // Use a unique env var name pra evitar race com outros tests.
-        std::env::remove_var("HOME");
-        let r = ClipHistory::try_path();
-        assert!(r.is_err());
-        if let Some(h) = old {
-            std::env::set_var("HOME", h);
-        }
+        let _g = lumo_testkit::EnvVarGuard::unset("HOME");
+        assert!(ClipHistory::try_path().is_err());
     }
 
     #[test]
     fn try_path_returns_path_with_home() {
-        std::env::set_var("HOME", "/home/test-user");
+        let _g = lumo_testkit::EnvVarGuard::set("HOME", "/home/test-user");
         let r = ClipHistory::try_path().unwrap();
         assert!(r.to_string_lossy().contains("test-user"));
         assert!(r.to_string_lossy().contains("clipboard-history.json"));
@@ -419,39 +416,28 @@ mod tests {
         assert_eq!(t, p);
     }
 
-    // H1 + C1: atomic write + perms
+    // H1 + C1: atomic write + perms (tempfile cleanup auto).
     #[cfg(unix)]
     #[test]
     fn atomic_write_creates_file_with_0600() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!(
-            "lumo-clip-perm-test-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let dst = dir.join("hist.json");
-        let tmp = dir.join("hist.json.tmp");
+        let dir = lumo_testkit::tempdir();
+        let dst = dir.path().join("hist.json");
+        let tmp = dir.path().join("hist.json.tmp");
         atomic_write(&tmp, &dst, b"{}").unwrap();
-        let meta = std::fs::metadata(&dst).unwrap();
-        let mode = meta.permissions().mode() & 0o777;
+        let mode = std::fs::metadata(&dst).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, PRIVATE_FILE_MODE);
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
     fn atomic_write_overwrites_existing() {
-        let dir = std::env::temp_dir().join(format!(
-            "lumo-clip-atomic-test-{}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let dst = dir.join("h.json");
-        let tmp = dir.join("h.json.tmp");
+        let dir = lumo_testkit::tempdir();
+        let dst = dir.path().join("h.json");
+        let tmp = dir.path().join("h.json.tmp");
         std::fs::write(&dst, b"old").unwrap();
         atomic_write(&tmp, &dst, b"new").unwrap();
         assert_eq!(std::fs::read(&dst).unwrap(), b"new");
-        assert!(!tmp.exists(), "tmp deve ser renomeado, nao deixado");
-        std::fs::remove_dir_all(&dir).ok();
+        assert!(!tmp.exists());
     }
 
     // Serde roundtrip pinned

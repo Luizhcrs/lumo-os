@@ -1279,3 +1279,6 @@ pub use i18n::I18n;
 // A3 review: Urgency enum compartilhado entre lumo-notif e lumo-osd-framework.
 pub mod urgency;
 pub use urgency::Urgency;
+
+// Util compartilhado (clamp, markup_escape, safe_lock, rate_limit_check).
+pub mod util;

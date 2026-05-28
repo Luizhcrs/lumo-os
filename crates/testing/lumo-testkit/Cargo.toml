@@ -1,0 +1,11 @@
+[package]
+name = "lumo-testkit"
+version = "0.1.0"
+edition = "2021"
+description = "Fixtures + helpers compartilhados pra tests do workspace Lumo (tmpdir, env guard, factories)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+tempfile = "3"

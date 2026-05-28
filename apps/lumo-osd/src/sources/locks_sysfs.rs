@@ -56,17 +56,6 @@ mod tests {
     use super::*;
     use std::fs;
 
-    fn tmp() -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "lumo-osd-locks-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ))
-    }
-
     fn mk_led(root: &Path, name: &str, brightness: &str) {
         let dir = root.join(name);
         fs::create_dir_all(&dir).unwrap();
@@ -75,98 +64,71 @@ mod tests {
 
     #[test]
     fn read_lock_zero_returns_false() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        let dir = t.join("k0_capslock");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("brightness"), "0").unwrap();
-        assert_eq!(read_lock(&dir), Some(false));
-        fs::remove_dir_all(&t).ok();
+        let t = lumo_testkit::tempdir();
+        mk_led(t.path(), "k0_capslock", "0");
+        assert_eq!(read_lock(&t.path().join("k0_capslock")), Some(false));
     }
 
     #[test]
     fn read_lock_one_returns_true() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        let dir = t.join("k0_capslock");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("brightness"), "1").unwrap();
-        assert_eq!(read_lock(&dir), Some(true));
-        fs::remove_dir_all(&t).ok();
+        let t = lumo_testkit::tempdir();
+        mk_led(t.path(), "k0_capslock", "1");
+        assert_eq!(read_lock(&t.path().join("k0_capslock")), Some(true));
     }
 
     #[test]
     fn read_lock_nonzero_returns_true() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        let dir = t.join("k0_capslock");
-        fs::create_dir_all(&dir).unwrap();
-        // Algumas teclas reportam 2/3 — qualquer != 0 = ON.
-        fs::write(dir.join("brightness"), "2").unwrap();
-        assert_eq!(read_lock(&dir), Some(true));
-        fs::remove_dir_all(&t).ok();
+        let t = lumo_testkit::tempdir();
+        mk_led(t.path(), "k0_capslock", "2");
+        assert_eq!(read_lock(&t.path().join("k0_capslock")), Some(true));
     }
 
     #[test]
     fn read_lock_missing_returns_none() {
-        let t = tmp();
-        let dir = t.join("does-not-exist");
-        assert_eq!(read_lock(&dir), None);
+        let t = lumo_testkit::tempdir();
+        assert_eq!(read_lock(&t.path().join("does-not-exist")), None);
     }
 
     #[test]
     fn read_all_empty_dir_default_state() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        let s = read_all(&t);
-        assert_eq!(s, LockState::default());
-        fs::remove_dir_all(&t).ok();
+        let t = lumo_testkit::tempdir();
+        assert_eq!(read_all(t.path()), LockState::default());
     }
 
     #[test]
     fn read_all_caps_on() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        mk_led(&t, "k0_capslock", "1");
-        let s = read_all(&t);
+        let t = lumo_testkit::tempdir();
+        mk_led(t.path(), "k0_capslock", "1");
+        let s = read_all(t.path());
         assert!(s.caps);
         assert!(!s.num);
         assert!(!s.scroll);
-        fs::remove_dir_all(&t).ok();
     }
 
     #[test]
     fn read_all_multi_keyboard_or_aggregation() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        mk_led(&t, "k0_capslock", "0");
-        mk_led(&t, "k1_capslock", "1");
-        let s = read_all(&t);
-        assert!(s.caps, "OR aggregation: 1 kb on = state on");
-        fs::remove_dir_all(&t).ok();
+        let t = lumo_testkit::tempdir();
+        mk_led(t.path(), "k0_capslock", "0");
+        mk_led(t.path(), "k1_capslock", "1");
+        assert!(read_all(t.path()).caps);
     }
 
     #[test]
     fn read_all_all_three_locks() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        mk_led(&t, "k0_capslock", "1");
-        mk_led(&t, "k0_numlock", "1");
-        mk_led(&t, "k0_scrolllock", "1");
-        let s = read_all(&t);
+        let t = lumo_testkit::tempdir();
+        mk_led(t.path(), "k0_capslock", "1");
+        mk_led(t.path(), "k0_numlock", "1");
+        mk_led(t.path(), "k0_scrolllock", "1");
+        let s = read_all(t.path());
         assert!(s.caps && s.num && s.scroll);
-        fs::remove_dir_all(&t).ok();
     }
 
     #[test]
     fn read_all_ignores_unrelated_leds() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        mk_led(&t, "k0_wlan-led", "1");
-        mk_led(&t, "k0_backlight", "1");
-        let s = read_all(&t);
-        assert_eq!(s, LockState::default());
-        fs::remove_dir_all(&t).ok();
+        let t = lumo_testkit::tempdir();
+        mk_led(t.path(), "k0_wlan-led", "1");
+        mk_led(t.path(), "k0_backlight", "1");
+        assert_eq!(read_all(t.path()), LockState::default());
     }
 
     #[test]

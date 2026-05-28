@@ -18,6 +18,9 @@ serde = { version = "1", features = ["derive"] }
 tracing = "0.1"
 lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
 
+[dev-dependencies]
+lumo-testkit = { path = "../../crates/testing/lumo-testkit" }
+
 [target.'cfg(unix)'.dependencies]
 lumo-osd-framework = { path = "../../crates/ui/lumo-osd-framework" }
 lumo-error = { path = "../../crates/foundation/lumo-error" }

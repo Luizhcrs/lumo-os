@@ -62,17 +62,6 @@ pub fn read_first(root: &Path) -> Option<BacklightState> {
 mod tests {
     use super::*;
 
-    fn tmp() -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "lumo-osd-bl-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ))
-    }
-
     fn mk(root: &Path, name: &str, current: &str, max: &str) {
         let d = root.join(name);
         fs::create_dir_all(&d).unwrap();
@@ -119,44 +108,32 @@ mod tests {
 
     #[test]
     fn read_one_returns_state() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        let d = t.join("intel_backlight");
-        fs::create_dir_all(&d).unwrap();
-        fs::write(d.join("brightness"), "120").unwrap();
-        fs::write(d.join("max_brightness"), "255").unwrap();
-        let s = read_one(&d).expect("read");
+        let t = lumo_testkit::tempdir();
+        mk(t.path(), "intel_backlight", "120", "255");
+        let s = read_one(&t.path().join("intel_backlight")).expect("read");
         assert_eq!(s.current, 120);
         assert_eq!(s.max, 255);
-        fs::remove_dir_all(&t).ok();
     }
 
     #[test]
     fn read_one_missing_returns_none() {
-        let t = tmp();
-        assert!(read_one(&t.join("nope")).is_none());
+        let t = lumo_testkit::tempdir();
+        assert!(read_one(&t.path().join("nope")).is_none());
     }
 
     #[test]
     fn read_one_invalid_number_returns_none() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        let d = t.join("bad");
-        fs::create_dir_all(&d).unwrap();
-        fs::write(d.join("brightness"), "not-a-number").unwrap();
-        fs::write(d.join("max_brightness"), "255").unwrap();
-        assert!(read_one(&d).is_none());
-        fs::remove_dir_all(&t).ok();
+        let t = lumo_testkit::tempdir();
+        mk(t.path(), "bad", "not-a-number", "255");
+        assert!(read_one(&t.path().join("bad")).is_none());
     }
 
     #[test]
     fn read_first_returns_one_when_present() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        mk(&t, "intel_backlight", "50", "100");
-        let s = read_first(&t).expect("first");
+        let t = lumo_testkit::tempdir();
+        mk(t.path(), "intel_backlight", "50", "100");
+        let s = read_first(t.path()).expect("first");
         assert_eq!(s.current, 50);
-        fs::remove_dir_all(&t).ok();
     }
 
     #[test]
@@ -166,24 +143,16 @@ mod tests {
 
     #[test]
     fn read_first_empty_root_none() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        assert!(read_first(&t).is_none());
-        fs::remove_dir_all(&t).ok();
+        let t = lumo_testkit::tempdir();
+        assert!(read_first(t.path()).is_none());
     }
 
     #[test]
     fn read_first_skips_invalid_picks_valid() {
-        let t = tmp();
-        fs::create_dir_all(&t).unwrap();
-        let bad = t.join("bad");
-        fs::create_dir_all(&bad).unwrap();
-        fs::write(bad.join("brightness"), "garbage").unwrap();
-        fs::write(bad.join("max_brightness"), "x").unwrap();
-        mk(&t, "good", "200", "1000");
-        let s = read_first(&t).expect("first valid");
-        // Como read_dir ordem nao garantida, so verifica que pegou algum valido.
+        let t = lumo_testkit::tempdir();
+        mk(t.path(), "bad", "garbage", "x");
+        mk(t.path(), "good", "200", "1000");
+        let s = read_first(t.path()).expect("first valid");
         assert!(s.current == 200 || s.max == 1000);
-        fs::remove_dir_all(&t).ok();
     }
 }
