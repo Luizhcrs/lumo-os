@@ -115,18 +115,20 @@ impl NotifState {
     ) {
         self.toasts.retain(|t| t.id != id);
         if self.toasts.len() >= MAX_TOASTS {
-            // F1.5-B1: criticals nao podem ser deslocados por nao-criticais.
-            // Se entrando um critical, busca slot nao-critical pra evict.
-            // Se entrando nao-critical e fila so tem critical, dismiss oldest mesmo assim.
+            // F1.5-B1 + M3 review fix:
+            //   - Critical entrando: dismiss primeiro nao-critical; se fila so
+            //     tem critical, NAO desloca (push alem do max — overflow critical
+            //     visivel e melhor que perder critical antigo).
+            //   - Nao-critical entrando: dismiss primeiro nao-critical disponivel;
+            //     se so ha critical na fila, NAO desloca critical, push alem do max.
             let urgencies: Vec<_> = self.toasts.iter().map(|t| t.urgency).collect();
-            let idx = if matches!(urgency, Urgency::Critical) {
-                slot_to_evict_for_critical(&urgencies).unwrap_or(0)
-            } else {
-                0
-            };
-            if let Some(t) = self.toasts.get_mut(idx) {
-                t.dismiss();
+            if let Some(idx) = slot_to_evict_for_critical(&urgencies) {
+                if let Some(t) = self.toasts.get_mut(idx) {
+                    t.dismiss();
+                }
             }
+            // None: fila so tem critical -> nao desloca, push overflow consciente.
+            let _ = urgency; // (urgency atual nao influencia: critical-fila preserva sempre)
         }
         let ms = effective_timeout_ms(timeout_ms, urgency);
         self.toasts.push_back(Toast::new(

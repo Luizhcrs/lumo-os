@@ -7,6 +7,11 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Default timeouts em ms por urgency. L4 review: fora de magic numbers inline.
+pub const LOW_TIMEOUT_MS: u64 = 4000;
+pub const NORMAL_TIMEOUT_MS: u64 = 5000;
+pub const CRITICAL_TIMEOUT_MS: u64 = 0; // 0 = sticky
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Urgency {
     Low,
@@ -42,9 +47,9 @@ impl Urgency {
     /// Critical retorna 0 (sticky); outros usam timeout normal.
     pub fn default_timeout_ms(self) -> u64 {
         match self {
-            Urgency::Low => 4000,
-            Urgency::Normal => 5000,
-            Urgency::Critical => 0, // 0 = sticky
+            Urgency::Low => LOW_TIMEOUT_MS,
+            Urgency::Normal => NORMAL_TIMEOUT_MS,
+            Urgency::Critical => CRITICAL_TIMEOUT_MS,
         }
     }
 }

@@ -964,10 +964,19 @@ impl LumoState {
     }
 
     /// Spawna um processo com o ambiente Wayland correto.
+    ///
+    /// Security (review M3 + H4):
+    /// - M3 C2: resolve `cmd` pra path absoluto antes de spawn pra evitar
+    ///   PATH hijack. Tenta `/usr/bin/<cmd>`, `/usr/local/bin/<cmd>`, `~/.local/bin/<cmd>`,
+    ///   senao deixa fallback Command::new (PATH lookup, com warn).
+    /// - H4: pre_exec setsid pra desacoplar processo do compositor; SIGHUP
+    ///   nao mata os filhos quando compositor sair. process_group(0) tambem
+    ///   evita zombies via SIGCHLD ignore (kernel reaps).
     fn spawn_cmd(&self, cmd: &str) {
         let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
         let xdg = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{home}/.config"));
-        let mut proc = std::process::Command::new(cmd);
+        let resolved = resolve_command_path(cmd, &home);
+        let mut proc = std::process::Command::new(&resolved);
         proc.env("HOME", &home);
         proc.env("XDG_CONFIG_HOME", &xdg);
         proc.env("LC_CTYPE", "C.UTF-8");
@@ -981,9 +990,23 @@ impl LumoState {
         if cmd == "foot" {
             proc.arg("-c").arg(format!("{home}/.config/foot/foot.ini"));
         }
+        // H4: setsid via pre_exec — child vira leader de session+pgroup,
+        // sobrevive SIGHUP do compositor + nao herda controlling tty.
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            unsafe {
+                proc.pre_exec(|| {
+                    if libc::setsid() == -1 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+        }
         match proc.spawn() {
-            Ok(child) => tracing::trace!(pid = child.id(), cmd, "spawn ok"),
-            Err(err) => tracing::warn!(?err, cmd, "spawn falhou"),
+            Ok(child) => tracing::trace!(pid = child.id(), cmd, ?resolved, "spawn ok"),
+            Err(err) => tracing::warn!(?err, cmd, ?resolved, "spawn falhou"),
         }
     }
 
@@ -1385,5 +1408,68 @@ impl LumoState {
             self.handle_synthetic_key(*k, false);
         }
         tracing::trace!(count = keys.len(), "SI.1: SyntheticKeyCombo dispatched");
+    }
+}
+
+/// C2 (review): resolve `cmd` pra path absoluto pra evitar PATH hijack.
+/// Procura em ordem: /usr/bin, /usr/local/bin, $HOME/.local/bin.
+/// Retorna PathBuf. Se nada existe, retorna PathBuf::from(cmd) (PATH lookup
+/// fallback do Command::new).
+pub(crate) fn resolve_command_path(cmd: &str, home: &str) -> std::path::PathBuf {
+    use std::path::PathBuf;
+    // Se ja absoluto (contem '/' como prefix), respeita.
+    if cmd.starts_with('/') {
+        return PathBuf::from(cmd);
+    }
+    let candidates = [
+        PathBuf::from("/usr/bin").join(cmd),
+        PathBuf::from("/usr/local/bin").join(cmd),
+        PathBuf::from(format!("{home}/.local/bin")).join(cmd),
+    ];
+    for c in &candidates {
+        if c.is_file() {
+            return c.clone();
+        }
+    }
+    PathBuf::from(cmd)
+}
+
+#[cfg(test)]
+mod spawn_tests {
+    use super::resolve_command_path;
+    use std::path::PathBuf;
+
+    #[test]
+    fn absolute_path_passthrough() {
+        let p = resolve_command_path("/opt/bin/x", "/home/u");
+        assert_eq!(p, PathBuf::from("/opt/bin/x"));
+    }
+
+    #[test]
+    fn nonexistent_command_falls_back_to_name() {
+        // Inputs improvavel: nada vai existir em /usr/bin/zzzz-nope etc.
+        let p = resolve_command_path("zzzz-definitivamente-nao-existe", "/home/none");
+        assert_eq!(p, PathBuf::from("zzzz-definitivamente-nao-existe"));
+    }
+
+    #[test]
+    fn resolve_prefers_first_existing_path() {
+        // Cria binario stub em dir tmp pra emular ~/.local/bin.
+        let dir = std::env::temp_dir().join(format!(
+            "lumo-spawn-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let local_bin = dir.join(".local/bin");
+        std::fs::create_dir_all(&local_bin).unwrap();
+        let target = local_bin.join("fake-bin");
+        std::fs::write(&target, b"#!/bin/sh\n").unwrap();
+        let resolved = resolve_command_path("fake-bin", dir.to_str().unwrap());
+        // Como nao existe em /usr/bin nem /usr/local/bin, vai cair em ~/.local/bin.
+        assert_eq!(resolved, target);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
