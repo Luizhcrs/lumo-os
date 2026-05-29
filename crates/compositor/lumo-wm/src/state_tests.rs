@@ -79,3 +79,43 @@ fn test_tick_splash_cycle() {
     assert_eq!(state.splash_phase, 1);
     assert_eq!(state.splash_alpha, 1.0);
 }
+
+// Decoracao: app CSD conhecido suprime SSD (modelo Windows).
+#[test]
+fn csd_apps_detected() {
+    use super::state::app_prefers_csd_with;
+    let none: Vec<String> = vec![];
+    // libadwaita/GNOME = CSD.
+    assert!(app_prefers_csd_with("org.gnome.TextEditor", &none));
+    assert!(app_prefers_csd_with("org.gnome.Nautilus", &none));
+    // GTK3 mousepad.
+    assert!(app_prefers_csd_with("org.xfce.mousepad", &none));
+    assert!(app_prefers_csd_with("Mousepad", &none));
+}
+
+#[test]
+fn lumo_and_neutral_apps_keep_ssd() {
+    use super::state::app_prefers_csd_with;
+    let none: Vec<String> = vec![];
+    // Apps Lumo (Iced) + term + Chrome (negocia separado) NAO sao CSD-list.
+    assert!(!app_prefers_csd_with("lumo-calc", &none));
+    assert!(!app_prefers_csd_with("foot", &none));
+    assert!(!app_prefers_csd_with("org.kde.konsole", &none));
+    assert!(!app_prefers_csd_with("", &none));
+}
+
+#[test]
+fn csd_override_from_config_matches() {
+    use super::state::app_prefers_csd_with;
+    let extra = vec!["com.example.weirdapp".to_string()];
+    assert!(app_prefers_csd_with("com.example.WeirdApp", &extra));
+    assert!(!app_prefers_csd_with("com.example.other", &extra));
+}
+
+#[test]
+fn app_should_have_ssd_inverse() {
+    use super::state::app_should_have_ssd;
+    // Sem config override (env HOME pode nao ter o arquivo) os defaults valem.
+    assert!(!app_should_have_ssd("org.gnome.TextEditor"));
+    assert!(app_should_have_ssd("lumo-files"));
+}

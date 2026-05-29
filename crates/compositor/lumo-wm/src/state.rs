@@ -1222,6 +1222,46 @@ pub fn decide_decoration_mode(requested: Mode) -> Mode {
     }
 }
 
+/// Apps que forcam CSD propria (libadwaita/GTK3/GTK4) e IGNORAM o SSD do
+/// compositor -> 2 titlebars empilhadas. Pra esses suprimimos o SSD (modelo
+/// Windows: app que desenha a propria decoracao nao recebe a do sistema).
+/// Match por substring no app_id (case-insensitive). `extra` = overrides de
+/// ~/.config/lumo/csd-apps.toml. Pure -> testavel.
+pub fn app_prefers_csd_with(app_id: &str, extra: &[String]) -> bool {
+    // libadwaita/GNOME = CSD sempre; GTK3 teimosos conhecidos.
+    const DEFAULTS: &[&str] = &[
+        "org.gnome.",
+        "mousepad",
+        "org.xfce.mousepad",
+        "libadwaita",
+    ];
+    let id = app_id.to_ascii_lowercase();
+    DEFAULTS.iter().any(|p| id.contains(*p))
+        || extra.iter().any(|p| id.contains(&p.to_ascii_lowercase()))
+}
+
+/// Le a lista extra de ~/.config/lumo/csd-apps.toml (1 substring por linha,
+/// ou TOML array `apps = [...]`). Falha silenciosa -> so defaults.
+pub fn load_csd_app_overrides() -> Vec<String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let path = format!("{home}/.config/lumo/csd-apps.toml");
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    // Aceita linhas simples (substr por linha, ignora # comments) OU array toml.
+    raw.lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.starts_with('#') && !l.contains('='))
+        .map(|l| l.trim_matches(['"', ',', ' ']).to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Decide se a surface deve ter SSD do Lumo dado seu app_id.
+pub fn app_should_have_ssd(app_id: &str) -> bool {
+    !app_prefers_csd_with(app_id, &load_csd_app_overrides())
+}
+
 impl XdgDecorationHandler for LumoState {
     fn new_decoration(&mut self, toplevel: ToplevelSurface) {
         // W37.8: default ServerSide. Cliente pode pedir ClientSide via request_mode.

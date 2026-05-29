@@ -93,11 +93,40 @@ impl XdgShellHandler for LumoState {
         }
     }
 
-    fn app_id_changed(&mut self, _surface: ToplevelSurface) {
-        // W37.9: heuristic app_prefers_csd revertida. CSD agora suprimido
-        // na origem via gtk3-nocsd LD_PRELOAD + GTK_CSD=0 em
-        // scripts/lumo-launch.sh. SSD do Lumo permanece em TODAS apps
-        // (identidade visual unica em qualquer app).
+    fn app_id_changed(&mut self, surface: ToplevelSurface) {
+        // Modelo Windows: app que desenha a propria decoracao (libadwaita/GTK
+        // que ignoram SSD) NAO recebe a titlebar do sistema -> evita 2
+        // titlebars. Le app_id agora disponivel; se for app CSD conhecido,
+        // suprime o SSD Lumo (remove de ssd_windows + decoration ClientSide).
+        use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
+        let app_id: String = smithay::wayland::compositor::with_states(
+            surface.wl_surface(),
+            |states| {
+                states
+                    .data_map
+                    .get::<XdgToplevelSurfaceData>()
+                    .and_then(|d| d.lock().ok().and_then(|g| g.app_id.clone()))
+                    .unwrap_or_default()
+            },
+        );
+        if app_id.is_empty() {
+            return;
+        }
+        if !crate::state::app_should_have_ssd(&app_id) {
+            self.ssd_windows.remove(surface.wl_surface());
+            surface.with_pending_state(|st| {
+                st.decoration_mode = Some(
+                    smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode::ClientSide,
+                );
+            });
+            let _ = surface.send_configure();
+            self.should_render = true;
+            #[cfg(feature = "drm-backend")]
+            {
+                self.drm_force_repaint = true;
+            }
+            tracing::info!(app_id, "app_id_changed: app CSD conhecido -> SSD suprimido");
+        }
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
