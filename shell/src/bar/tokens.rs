@@ -30,16 +30,16 @@ pub const BAR_HEIGHT: u32 = 40;
 // Margens = 0 (colada). exclusive_zone = BAR_HEIGHT + ISLAND_GAP_TO_WORK.
 // Nomes mantidos (ISLAND_*) pra minimizar churn; semantica = bar attached.
 
-/// Margem lateral da bar = ALINHADA com o card (mesma CARD_MARGIN do
-/// compositor = 6). Bar e card tem a mesma largura/posicao lateral.
-pub const ISLAND_MARGIN_X: f32 = 6.0;
-/// Margem topo da bar (respiro fino ate a borda da tela).
-pub const ISLAND_MARGIN_TOP: f32 = 6.0;
-/// Gap extra no exclusive_zone. 0: o gap bar<->card vem do CARD_GAP no
-/// compositor (usable_geometry recua + CARD_GAP).
+/// Margem 0: a bar e PARTE do fundo preto do topo (full width, colada, sem
+/// separacao). Pedido Luiz: "a bar faz parte do fundo preto + blur obsidian
+/// black". Nao e ilha flutuante; funde com a moldura preta do compositor.
+pub const ISLAND_MARGIN_X: f32 = 0.0;
+pub const ISLAND_MARGIN_TOP: f32 = 0.0;
+/// Gap no exclusive_zone (0; gap bar<->card vem do CARD_GAP no compositor).
 pub const ISLAND_GAP_TO_WORK: u32 = 0;
-/// Border-radius da bar (strip flutuante, todos os cantos). Igual CARD_RADIUS.
-pub const ISLAND_RADIUS: f32 = 14.0;
+/// Border-radius da bar. 0 = retangulo full-width (parte do topo preto; os
+/// cantos externos da tela sao arredondados pelo compositor).
+pub const ISLAND_RADIUS: f32 = 0.0;
 
 /// Altura de cada pill. 28px = compact responsivo touch.
 pub const PILL_H: f32 = 28.0;

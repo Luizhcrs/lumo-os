@@ -145,21 +145,19 @@ fn draw_island_panel(pixmap: &mut Pixmap, snap: &BarSnapshot, backdrop: Option<&
     if let Some(bd) = backdrop {
         bd.paint_panel(&mut canvas, 0.0, 0.0, w, h, rt, rb, ISLAND_MARGIN_X, ISLAND_MARGIN_TOP);
     }
+    let _ = snap.theme; // bar e obsidian black nos dois temas (pedido Luiz).
 
-    // Tint translucido por cima. Com blur: leve (deixa o wallpaper aparecer).
-    // Sem blur: mais opaco (vira painel solido legivel). Theme-aware.
-    let (tint_rgb, tint_a) = match snap.theme {
-        LumoTheme::Dark => (0x0E0E12u32, if has_blur { 0x6E } else { 0xD8 }),
-        LumoTheme::Light => (0xF4F4F7u32, if has_blur { 0x66 } else { 0xD0 }),
-    };
+    // OBSIDIAN BLACK frosted: tint preto-obsidiana PESADO por cima. Com blur:
+    // ~90% obsidian, deixando so um hint frosted do wallpaper borrado pra dar
+    // profundidade de vidro escuro (nao cor). Sem blur: solido. A bar funde
+    // com a moldura preta do topo (sem separacao).
+    let tint_rgb = 0x08080Bu32;
+    let tint_a = if has_blur { 0xE8 } else { 0xFF };
     fill_rrect_tb(&mut canvas, 0.0, 0.0, w, h, rt, rb, rgba_hex(tint_rgb, tint_a));
 
-    // Borda de vidro: highlight sutil so na base curva (1px). Dark = branco
-    // baixo alpha; Light = preto baixo alpha.
-    let border = match snap.theme {
-        LumoTheme::Dark => rgba_hex(0xFFFFFF, 0x1A),
-        LumoTheme::Light => rgba_hex(0x000000, 0x14),
-    };
+    // Sheen de vidro: highlight branco MUITO sutil so na borda de baixo (1px)
+    // pra separar a bar do conteudo sem virar linha dura.
+    let border = rgba_hex(0xFFFFFF, 0x12);
     stroke_rrect_tb(&mut canvas, 0.5, 0.5, w - 1.0, h - 1.0, rt, rb, border, 1.0);
 }
 
