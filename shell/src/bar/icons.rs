@@ -217,23 +217,89 @@ pub fn stroke_arc(
     canvas.stroke_path(&path, &p, &st, Transform::identity(), None);
 }
 
+/// W38: stroke rrect com round cap/join (One UI soft corners). O stroke_rrect
+/// existente nao seta line_join, deixando cantos secos (miter). Esta variante
+/// usa LineJoin::Round pro look squircle/friendly da familia de icones.
+fn stroke_rrect_round(
+    canvas: &mut PixmapMut,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    r: f32,
+    color: Color,
+    sw: f32,
+) {
+    let r = r.min(w / 2.0).min(h / 2.0);
+    let mut pb = PathBuilder::new();
+    pb.move_to(x + r, y);
+    pb.line_to(x + w - r, y);
+    pb.quad_to(x + w, y, x + w, y + r);
+    pb.line_to(x + w, y + h - r);
+    pb.quad_to(x + w, y + h, x + w - r, y + h);
+    pb.line_to(x + r, y + h);
+    pb.quad_to(x, y + h, x, y + h - r);
+    pb.line_to(x, y + r);
+    pb.quad_to(x, y, x + r, y);
+    pb.close();
+    let path = match pb.finish() {
+        Some(p) => p,
+        None => return,
+    };
+    let mut p = Paint::default();
+    p.set_color(color);
+    p.anti_alias = true;
+    let st = Stroke {
+        width: sw,
+        line_cap: tiny_skia::LineCap::Round,
+        line_join: tiny_skia::LineJoin::Round,
+        ..Default::default()
+    };
+    canvas.stroke_path(&path, &p, &st, Transform::identity(), None);
+}
+
 // ============================================================
 // Wifi glyph (compact 16px).
 // ============================================================
 pub fn draw_wifi(canvas: &mut PixmapMut, x: f32, y: f32, on: bool, fg: Color, fg_subtle: Color) {
+    // W38 One UI: leque (setor de disco) solido apontando pra cima, vertice
+    // arredondado. Span 90 graus (+-45 da vertical), boca ~1.15:1 vs altura.
+    // Fill solido + stroke round por cima (squircle friendly), nao 3 arcos.
     let color = if on { fg } else { fg_subtle };
     let s = WIFI_SIZE;
-    let cx = x + s / 2.0;
-    let cy = y + s * 0.78;
-    let arcs = [
-        (s * 0.46, s * 0.085),
-        (s * 0.30, s * 0.075),
-        (s * 0.155, s * 0.07),
-    ];
-    for (radius, sw) in arcs {
-        stroke_arc(canvas, cx, cy, radius, -135.0, -45.0, color, sw);
+    let cx = (x + s / 2.0).round() + 0.5; // meio-pixel = simetria nitida
+    let apex_y = y + s * 0.80; // vertice perto da base do box
+    let reach = s * 0.56; // raio do leque (vertice -> topo)
+
+    let half = 45.0_f32.to_radians();
+    let sin = half.sin();
+    let cos = half.cos();
+    let lx = cx - reach * sin;
+    let rx = cx + reach * sin;
+    let top_y = apex_y - reach * cos;
+    // Controle do quad eleva pra casar a curvatura do circulo de raio reach.
+    let ctl_y = apex_y - reach / cos;
+
+    let mut pb = PathBuilder::new();
+    pb.move_to(cx, apex_y); // vertice
+    pb.line_to(lx, top_y); // borda esquerda
+    pb.quad_to(cx, ctl_y, rx, top_y); // arco superior concavo
+    pb.line_to(cx, apex_y); // borda direita de volta ao vertice
+    pb.close();
+
+    if let Some(path) = pb.finish() {
+        let mut p = Paint::default();
+        p.set_color(color);
+        p.anti_alias = true;
+        canvas.fill_path(&path, &p, FillRule::Winding, Transform::identity(), None);
+        let st = Stroke {
+            width: s * 0.085,
+            line_cap: tiny_skia::LineCap::Round,
+            line_join: tiny_skia::LineJoin::Round,
+            ..Default::default()
+        };
+        canvas.stroke_path(&path, &p, &st, Transform::identity(), None);
     }
-    fill_circle(canvas, cx, cy, s * 0.06, color);
 }
 
 // ============================================================
@@ -248,61 +314,74 @@ pub fn draw_battery(
     fg: Color,
     accent: Color,
 ) {
+    // W38 One UI: pilula horizontal. Corpo full-round (r = h/2), outline
+    // encorpado com round join. Nub arredondado fora do corpo. Fill de nivel
+    // inset com gap ~1px. Cores de nivel preservadas + bolt charging.
     let body_w = BAT_BODY_W;
     let body_h = BAT_BODY_H;
-    stroke_rrect(
-        canvas,
-        x + 0.5,
-        y + 0.5,
-        body_w - 1.0,
-        body_h - 1.0,
-        2.2,
-        fg,
-        1.2,
-    );
+    let sw = 1.4f32; // stroke da familia de icones
+    let half = sw / 2.0;
+    // Corpo (inset de meio-stroke pra borda nao vazar do box).
+    let bx = x + half;
+    let by = y + half;
+    let bw = body_w - sw;
+    let bh = body_h - sw;
+    let r_out = bh / 2.0; // full-round => pilula
+    stroke_rrect_round(canvas, bx, by, bw, bh, r_out, fg, sw);
+
+    // Nub (polo +): mamilo arredondado a direita, ~42% da altura, FORA do corpo
+    // (encostado na cap curva sem flutuar).
+    let nub_w = 1.6f32;
+    let nub_h = body_h * 0.42;
     fill_rrect(
         canvas,
-        x + body_w + 0.8,
-        y + body_h * 0.28,
-        2.0,
-        body_h * 0.44,
-        0.8,
+        x + body_w + 0.6,
+        y + (body_h - nub_h) / 2.0,
+        nub_w,
+        nub_h,
+        nub_w / 2.0,
         fg,
     );
-    // A19.14: bateria Mac-style refinada (22x11 body, inset 2px = fill cheio e centralizado)
-    let inset_x = 2.0f32;
-    let inset_y = 2.0f32;
-    let inner_w = body_w - inset_x * 2.0;
-    let inner_h = body_h - inset_y * 2.0;
+
+    // Fill de carga: rrect inset (stroke + gap ~1px) do interior, mesmo raio.
+    let gap = 1.0f32;
+    let inset = half + gap;
+    let inner_x = x + inset;
+    let inner_y = y + inset;
+    let inner_w = body_w - inset * 2.0;
+    let inner_h = body_h - inset * 2.0;
+    let r_in = (inner_h / 2.0).max(0.0);
     let fw = (pct as f32 / 100.0).clamp(0.0, 1.0) * inner_w;
-    if fw > 0.5 {
+    if fw > 0.8 {
         let fill_color = if pct >= 50 {
-            opaque(0xF5F5F7) // branco pearl Mac cheio
+            opaque(0xF5F5F7) // claro cheio
         } else if pct >= 20 {
-            opaque(0xFB923C) // orange-400 medio
+            opaque(0xFB923C) // laranja medio
         } else {
-            opaque(0xEF4444) // red-500 baixo
+            opaque(0xEF4444) // vermelho baixo
         };
         let _ = accent;
+        // Clamp anti-colapso: fw nunca menor que o diametro do raio (senao o
+        // fill_rrect vira losango minusculo em pct muito baixo).
         fill_rrect(
             canvas,
-            x + inset_x,
-            y + inset_y,
-            fw,
+            inner_x,
+            inner_y,
+            fw.max(r_in * 2.0),
             inner_h,
-            1.2,
+            r_in,
             fill_color,
         );
     }
-    // A30: bolt charging icone centralizado no body. Branco (#FFFFFF) pra contraste
-    // com qualquer fill (verde/laranja/vermelho). ~6px altura, body inner 18x7.
+
+    // Bolt charging centralizado, branco pra contraste com qualquer fill.
     if charging {
         draw_bolt(
             canvas,
             x + body_w / 2.0,
             y + body_h / 2.0,
-            4.4,
-            6.6,
+            4.2,
+            6.4,
             opaque(0xFFFFFF),
         );
     }
@@ -364,28 +443,43 @@ pub fn draw_brightness_sun(
     color: Color,
     _accent: Color,
 ) {
-    use tiny_skia::{Paint, PathBuilder, Stroke, Transform};
-
-    let alpha = ((pct as f32 / 100.0) * 0.7 + 0.3).clamp(0.0, 1.0);
+    // W38 One UI: miolo solido gordo + 8 raios curtos grossos com round cap.
+    // pct modula alpha (dim quando baixo). 1:1 radialmente simetrico.
+    let alpha = ((pct as f32 / 100.0) * 0.65 + 0.35).clamp(0.0, 1.0);
     let mut c = color;
     c.set_alpha(alpha);
 
-    // Inner circle radius 3.
-    fill_circle(canvas, cx, cy, 3.0, c);
+    // Centro INTEIRO: fill_circle re-arredonda o centro pra inteiro internamente.
+    // Se passasse .5 aqui, o disco viraria inteiro mas os raios (stroke_path, sem
+    // rounding) ficariam em .5 -> disco e raios 0.5px fora de fase. Inteiro nos
+    // dois mantem disco e raios alinhados.
+    let cx = cx.round();
+    let cy = cy.round();
 
-    // 4 rays (N/S/E/W), from r=5 to r=7.
-    let offsets: [(f32, f32); 4] = [(0.0, -1.0), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0)];
+    // Miolo solido (~40% do box de 16 -> r ~3.2).
+    let disc_r = 3.2f32;
+    fill_circle(canvas, cx, cy, disc_r, c);
+
+    // 8 raios a cada 45deg. Curtos: gap ~1.4 da borda, comprimento ~2.3.
+    let r_in = disc_r + 1.4;
+    let r_out = r_in + 2.3;
     let mut pb = PathBuilder::new();
-    for (dx, dy) in offsets {
-        pb.move_to(cx + dx * 5.0, cy + dy * 5.0);
-        pb.line_to(cx + dx * 7.0, cy + dy * 7.0);
+    let mut a = 0.0f32;
+    while a < 360.0 {
+        let rad = a.to_radians();
+        let (s, co) = rad.sin_cos();
+        pb.move_to(cx + co * r_in, cy + s * r_in);
+        pb.line_to(cx + co * r_out, cy + s * r_out);
+        a += 45.0;
     }
     if let Some(path) = pb.finish() {
         let mut p = Paint::default();
         p.set_color(c);
         p.anti_alias = true;
         let stroke = Stroke {
-            width: 1.5,
+            width: 1.4,
+            line_cap: tiny_skia::LineCap::Round,
+            line_join: tiny_skia::LineJoin::Round,
             ..Default::default()
         };
         canvas.stroke_path(&path, &p, &stroke, Transform::identity(), None);
