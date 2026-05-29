@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libwayland-dev libxkbcommon-dev libegl1-mesa-dev \
     libdrm-dev libgbm-dev libinput-dev libseat-dev libudev-dev \
     libsystemd-dev libdbus-1-dev libdisplay-info-dev libpixman-1-dev \
+    libfontconfig1-dev libfreetype6-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rustup component add clippy

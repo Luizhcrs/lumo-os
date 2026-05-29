@@ -31,7 +31,8 @@ jobs:
             build-essential pkg-config \
             libwayland-dev libxkbcommon-dev libegl1-mesa-dev \
             libdrm-dev libgbm-dev libinput-dev libseat-dev libudev-dev \
-            libsystemd-dev libdbus-1-dev libdisplay-info-dev libpixman-1-dev
+            libsystemd-dev libdbus-1-dev libdisplay-info-dev libpixman-1-dev \
+            libfontconfig1-dev libfreetype6-dev
 
       - uses: dtolnay/rust-toolchain@stable
         with:
