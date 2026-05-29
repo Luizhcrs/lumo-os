@@ -349,7 +349,7 @@ mod tests {
         for (i, k) in digits.iter().enumerate() {
             let n = (i + 1) as u8;
             assert_eq!(
-                lookup(&cfg, s, *k),
+                lookup(&cfg, s.clone(), *k),
                 Some(KeyAction::Workspace(n)),
                 "Super+{n} deve ser Workspace({n}), nao JumpToWindow"
             );

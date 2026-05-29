@@ -590,11 +590,16 @@ impl LumoState {
     /// Excludes layer-shell exclusive zones (bar Top, dock Bottom, etc).
     /// Fallback (1920x1080) se sem output.
     pub fn usable_geometry(&self) -> smithay::utils::Rectangle<i32, smithay::utils::Logical> {
+        use crate::backend::render_common::{CARD_GAP, CARD_MARGIN};
         use smithay::desktop::layer_map_for_output;
-        if let Some(output) = self.space.outputs().next() {
+        // Card recuado (pedido Luiz): a area util e RECUADA da zona nao-
+        // exclusiva (abaixo da bar) por CARD_MARGIN nos lados/baixo + CARD_GAP
+        // no topo. Janelas/maximize vivem dentro do card; a moldura preta
+        // (work_area_frame_elements) pinta as margens. Fullscreen ignora isto
+        // (cobre output inteiro via set_window_fullscreen).
+        let base = if let Some(output) = self.space.outputs().next() {
             let map = layer_map_for_output(output);
             let zone = map.non_exclusive_zone();
-            // W24.5: Garante que a zona util nao seja negativa ou absurda.
             smithay::utils::Rectangle::new(
                 zone.loc,
                 smithay::utils::Size::from((
@@ -607,7 +612,15 @@ impl LumoState {
                 smithay::utils::Point::from((0, 0)),
                 smithay::utils::Size::from((1920, 1080)),
             )
-        }
+        };
+        let nx = base.loc.x + CARD_MARGIN;
+        let ny = base.loc.y + CARD_GAP;
+        let nw = (base.size.w - 2 * CARD_MARGIN).max(64);
+        let nh = (base.size.h - CARD_GAP - CARD_MARGIN).max(64);
+        smithay::utils::Rectangle::new(
+            smithay::utils::Point::from((nx, ny)),
+            smithay::utils::Size::from((nw, nh)),
+        )
     }
 
     pub fn next_tile_position(&self) -> Point<i32, Logical> {

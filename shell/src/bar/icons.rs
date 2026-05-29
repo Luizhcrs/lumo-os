@@ -49,6 +49,90 @@ pub fn fill_rrect(canvas: &mut PixmapMut, x: f32, y: f32, w: f32, h: f32, r: f32
     canvas.fill_path(&path, &p, FillRule::Winding, Transform::identity(), None);
 }
 
+/// Path de rrect com raios independentes topo/baixo (rt = cantos de cima,
+/// rb = cantos de baixo). Usado pela bar colada: topo reto (rt=0), base
+/// curva (rb>0).
+fn rrect_tb_path(x: f32, y: f32, w: f32, h: f32, rt: f32, rb: f32) -> Option<tiny_skia::Path> {
+    let x = x.round();
+    let y = y.round();
+    let half = (w / 2.0).min(h / 2.0);
+    let rt = rt.clamp(0.0, half);
+    let rb = rb.clamp(0.0, half);
+    let mut pb = PathBuilder::new();
+    pb.move_to(x + rt, y);
+    pb.line_to(x + w - rt, y);
+    if rt > 0.0 {
+        pb.quad_to(x + w, y, x + w, y + rt);
+    } else {
+        pb.line_to(x + w, y);
+    }
+    pb.line_to(x + w, y + h - rb);
+    if rb > 0.0 {
+        pb.quad_to(x + w, y + h, x + w - rb, y + h);
+    } else {
+        pb.line_to(x + w, y + h);
+    }
+    pb.line_to(x + rb, y + h);
+    if rb > 0.0 {
+        pb.quad_to(x, y + h, x, y + h - rb);
+    } else {
+        pb.line_to(x, y + h);
+    }
+    pb.line_to(x, y + rt);
+    if rt > 0.0 {
+        pb.quad_to(x, y, x + rt, y);
+    } else {
+        pb.line_to(x, y);
+    }
+    pb.close();
+    pb.finish()
+}
+
+/// fill rrect com raios independentes topo/baixo.
+pub fn fill_rrect_tb(
+    canvas: &mut PixmapMut,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    rt: f32,
+    rb: f32,
+    color: Color,
+) {
+    let Some(path) = rrect_tb_path(x, y, w, h, rt, rb) else {
+        return;
+    };
+    let mut p = Paint::default();
+    p.set_color(color);
+    p.anti_alias = true;
+    canvas.fill_path(&path, &p, FillRule::Winding, Transform::identity(), None);
+}
+
+/// stroke rrect com raios independentes topo/baixo.
+pub fn stroke_rrect_tb(
+    canvas: &mut PixmapMut,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    rt: f32,
+    rb: f32,
+    color: Color,
+    sw: f32,
+) {
+    let Some(path) = rrect_tb_path(x, y, w, h, rt, rb) else {
+        return;
+    };
+    let mut p = Paint::default();
+    p.set_color(color);
+    p.anti_alias = true;
+    let st = Stroke {
+        width: sw,
+        ..Default::default()
+    };
+    canvas.stroke_path(&path, &p, &st, Transform::identity(), None);
+}
+
 pub fn stroke_rrect(
     canvas: &mut PixmapMut,
     x: f32,

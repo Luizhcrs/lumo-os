@@ -526,7 +526,7 @@ pub fn ssd_corner_masks(
 /// Raio dos cantos arredondados da TELA (output). Efeito "screen round
 /// corner" (pedido Luiz, ref Hyprland): a area de trabalho inteira vira um
 /// cartao de cantos suaves, coerente com a ilha flutuante da bar.
-pub const SCREEN_CORNER_RADIUS: f32 = 12.0;
+pub const SCREEN_CORNER_RADIUS: f32 = 16.0;
 
 /// W-island: mascara SDF preta AA nos 4 cantos do OUTPUT, arredondando a
 /// tela inteira. Reusa CornerMaskShader (mesmo dos cantos de janela): pinta
@@ -573,6 +573,103 @@ pub fn output_corner_masks(
         ));
     }
     out
+}
+
+/// Card recuado (pedido Luiz, mockup): a area de trabalho abaixo da bar vira
+/// um RETANGULO ARREDONDADO RECUADO com moldura preta em volta. Margem
+/// lateral/inferior + gap abaixo da bar.
+pub const CARD_MARGIN: i32 = 12;
+pub const CARD_GAP: i32 = 8;
+pub const CARD_RADIUS: f32 = 16.0;
+
+/// Moldura preta da area de trabalho (card recuado). Pinta PRETO em tudo
+/// abaixo da bar EXCETO dentro do `card` (rounded rect), criando a ilusao de
+/// um cartao recuado. Retorna (rects pretos retos, mascaras de canto AA).
+/// Inserir ENTRE a bar (upper_layers) e as janelas: a moldura mascara
+/// janelas/wallpaper nas margens mas fica atras da bar.
+///
+/// `card` = retangulo da area util (= usable_geometry, ja recuado). bar_bottom
+/// = card.y - CARD_GAP. As mascaras de canto usam CornerMaskShader (preto AA
+/// fora da curva, transparente dentro -> arredonda os 4 cantos do card).
+pub fn work_area_frame_elements(
+    output_w: i32,
+    output_h: i32,
+    card: Rectangle<i32, smithay::utils::Logical>,
+    mask_shader: Option<&CornerMaskShader>,
+) -> (Vec<SolidColorRenderElement>, Vec<PixelShaderElement>) {
+    let mut solids = Vec::new();
+    let mut masks = Vec::new();
+    let cx = card.loc.x;
+    let cy = card.loc.y;
+    let cw = card.size.w;
+    let ch = card.size.h;
+    if cw <= 0 || ch <= 0 {
+        return (solids, masks);
+    }
+    let bar_bottom = (cy - CARD_GAP).max(0);
+    let black = Color32F::new(0.0, 0.0, 0.0, 1.0);
+
+    // Rects pretos retos (gap acima, margens esq/dir/baixo). NAO cobrem os
+    // quadrados de canto do card (esses ficam pras mascaras AA).
+    let rects: [(i32, i32, i32, i32); 4] = [
+        // gap full-width entre bar e card
+        (0, bar_bottom, output_w, cy - bar_bottom),
+        // esquerda do card
+        (0, cy, cx, ch),
+        // direita do card
+        (cx + cw, cy, output_w - (cx + cw), ch),
+        // abaixo do card
+        (0, cy + ch, output_w, output_h - (cy + ch)),
+    ];
+    for (x, y, w, h) in rects {
+        if w > 0 && h > 0 {
+            let geo: Rectangle<i32, Physical> = Rectangle::new(
+                Point::from((x, y)).to_physical_precise_round(1.0),
+                (w, h).into(),
+            );
+            solids.push(SolidColorRenderElement::new(
+                Id::new(),
+                geo,
+                0,
+                black,
+                Kind::Unspecified,
+            ));
+        }
+    }
+
+    // Cantos arredondados do card (preto AA fora da curva, transparente
+    // dentro -> revela wallpaper/janela com canto round).
+    if let Some(shader) = mask_shader {
+        let r = CARD_RADIUS;
+        let sz = r.ceil() as i32;
+        if cw >= sz * 2 && ch >= sz * 2 {
+            let corners: [((i32, i32), (f32, f32)); 4] = [
+                ((cx, cy), (1.0, 1.0)),                       // TL
+                ((cx + cw - sz, cy), (0.0, 1.0)),             // TR
+                ((cx, cy + ch - sz), (1.0, 0.0)),             // BL
+                ((cx + cw - sz, cy + ch - sz), (0.0, 0.0)),   // BR
+            ];
+            for ((mx, my), (ax, ay)) in corners {
+                let area: Rectangle<i32, smithay::utils::Logical> =
+                    Rectangle::new(Point::from((mx, my)), (sz, sz).into());
+                let uniforms = vec![
+                    smithay::backend::renderer::gles::Uniform::new("u_anchor", (ax, ay))
+                        .into_owned(),
+                    smithay::backend::renderer::gles::Uniform::new("u_radius", r).into_owned(),
+                ];
+                masks.push(PixelShaderElement::new(
+                    shader.program.clone(),
+                    area,
+                    None,
+                    1.0,
+                    uniforms,
+                    Kind::Unspecified,
+                ));
+            }
+        }
+    }
+
+    (solids, masks)
 }
 
 /// T1.1: gera elementos SolidColor para o menu popup de titlebar SSD.
@@ -1084,6 +1181,9 @@ pub struct DrmCollectInputs<'a> {
     pub cursor_buffer: Option<&'a MemoryRenderBuffer>,
     pub output_w: i32,
     pub output_h: i32,
+    /// Card recuado: area util (= usable_geometry, ja recuada). Usada pra
+    /// moldura preta da area de trabalho (work_area_frame_elements).
+    pub work_area: Rectangle<i32, smithay::utils::Logical>,
     /// A38: corner shader opcional.
     pub corner_shader: Option<&'a CornerShader>,
     /// A19: wallpaper opcional (vide OverlayInputs).
@@ -1306,6 +1406,25 @@ pub fn collect_drm_elements(
     //   3. Window content via window.render_elements
     // Resultado: focal window block frente do bg window block. Focal content
     // cobre bg btns+bg+content em overlap area cross-window.
+    // Card recuado: moldura preta da area de trabalho. Vai AQUI -- atras da
+    // bar/overlays (ja pushed) e na FRENTE das janelas/wallpaper (pushed
+    // abaixo) -> mascara janelas+wallpaper nas margens, deixando o card
+    // arredondado. Skip em fullscreen (janela imersiva cobre tudo).
+    if !has_fullscreen {
+        let (frame_solids, frame_masks) = work_area_frame_elements(
+            inputs.output_w,
+            inputs.output_h,
+            inputs.work_area,
+            inputs.corner_mask_shader,
+        );
+        for s in frame_solids {
+            out.push(LumoCustomElement::Solid(s));
+        }
+        for m in frame_masks {
+            out.push(LumoCustomElement::Pixel(m));
+        }
+    }
+
     let windows: Vec<&Window> = inputs.space.elements().rev().collect();
     for window in windows.iter().copied() {
         // SSD btns

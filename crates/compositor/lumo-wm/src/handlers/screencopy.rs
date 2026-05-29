@@ -299,6 +299,8 @@ fn arm_and_refresh_now(state: &mut LumoState) {
     let splash_alpha_val = state.splash_alpha;
     let boot_curtain_alpha = state.boot_curtain_alpha;
     let _ = start_time_elapsed;
+    // Card recuado: area util ANTES do destructure (Copy).
+    let work_area = state.usable_geometry();
 
     let LumoState {
         ref mut drm_backend,
@@ -310,6 +312,7 @@ fn arm_and_refresh_now(state: &mut LumoState) {
         ref titlebar_bg_shader,
         ref ssd_windows,
         ref splash_buffer,
+        ref corner_mask_shader,
         ..
     } = *state;
 
@@ -371,7 +374,7 @@ fn arm_and_refresh_now(state: &mut LumoState) {
         ssd_windows,
         titlebar_menu: titlebar_menu_opt,
         snap_preview,
-        corner_mask_shader: None,
+        corner_mask_shader: corner_mask_shader.as_ref(),
         titlebar_bg_shader: titlebar_bg_shader.as_ref(),
         overview_elements,
         picker_elements,
@@ -383,6 +386,7 @@ fn arm_and_refresh_now(state: &mut LumoState) {
         cursor_buffer: cursor_buffer.as_ref(),
         output_w: ow,
         output_h: oh,
+        work_area,
     };
 
     let all_elements =

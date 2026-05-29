@@ -18,27 +18,26 @@ use crate::menu;
 pub const BAR_HEIGHT: u32 = 40;
 
 // ============================================================
-// Floating island (F-island): bar destacada da area de trabalho.
+// Bar colada no topo + base arredondada (pedido Luiz 2026-05).
 // ============================================================
 //
-// A bar deixa de ser uma faixa edge-to-edge colada na borda e vira uma
-// ILHA flutuante: margem lateral + topo + cantos arredondados + fundo
-// frosted (wallpaper borrado) + gap antes do conteudo. Implementado via
-// `set_margin` no layer-shell (compositor desloca a surface) -> coords das
-// pills/dropdowns/hit-rects ficam INALTERADAS relativas a surface.
+// A bar e COLADA no topo da tela (full width, flush) -- parece parte da
+// tela ("vem da tela"). O fundo e frosted (wallpaper borrado). A PROPRIA
+// BASE da bar curva: cantos de CIMA retos (seguem o canto da tela, que o
+// compositor arredonda), cantos de BAIXO arredondados (ISLAND_RADIUS) ->
+// a bar desce com curva direto pro conteudo, sem respiro.
 //
-// Reserva total no topo = ISLAND_MARGIN_TOP + exclusive_zone, onde
-// exclusive_zone = BAR_HEIGHT + ISLAND_GAP_TO_WORK (vide smithay arrange:
-// anchor TOP|LEFT|RIGHT reserva exclusive + margin.top).
+// Margens = 0 (colada). exclusive_zone = BAR_HEIGHT + ISLAND_GAP_TO_WORK.
+// Nomes mantidos (ISLAND_*) pra minimizar churn; semantica = bar attached.
 
-/// Margem lateral da ilha (gap esquerda/direita ate a borda da tela).
-pub const ISLAND_MARGIN_X: f32 = 8.0;
-/// Margem topo da ilha (gap topo ate a borda da tela).
-pub const ISLAND_MARGIN_TOP: f32 = 6.0;
-/// Gap entre a base da ilha e o topo do conteudo (janelas). Soma ao
-/// exclusive_zone pra "dividir" a bar da area de trabalho.
-pub const ISLAND_GAP_TO_WORK: u32 = 8;
-/// Border-radius da ilha (cantos do painel frosted).
+/// Margem lateral (0 = bar colada nas bordas, full width).
+pub const ISLAND_MARGIN_X: f32 = 0.0;
+/// Margem topo (0 = bar colada no topo da tela).
+pub const ISLAND_MARGIN_TOP: f32 = 0.0;
+/// Gap entre a base da bar e o conteudo. 0 = conteudo flush sob a curva
+/// da bar (pedido: "sem respiro, colada na curva").
+pub const ISLAND_GAP_TO_WORK: u32 = 0;
+/// Border-radius dos cantos de BAIXO da bar (a base que curva).
 pub const ISLAND_RADIUS: f32 = 16.0;
 
 /// Altura de cada pill. 28px = compact responsivo touch.

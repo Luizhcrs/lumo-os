@@ -1061,6 +1061,9 @@ fn render_drm(state: &mut LumoState) {
         }
     }
     let boot_curtain_alpha = state.boot_curtain_alpha;
+    // Card recuado: calcula a area util ANTES do destructure (usable_geometry
+    // pega &state inteiro; depois do split-borrow nao da). Rectangle e Copy.
+    let work_area = state.usable_geometry();
 
     // R1: calcular cursor_moved ANTES do destructure pra evitar borrow conflict.
     // Bypass pending_flip quando cursor se moveu = elimina delay visual.
@@ -1164,6 +1167,8 @@ fn render_drm(state: &mut LumoState) {
         cursor_buffer: cursor_buffer.as_ref(),
         output_w: ow,
         output_h: oh,
+        // Card recuado: area util (ja recuada por usable_geometry) p/ moldura.
+        work_area,
     };
     // R1.fix3 flicker: cursor_only path REMOVIDO. queue_frame com lista
     // contendo SO cursor limpa primary plane = flicker visivel quando mouse

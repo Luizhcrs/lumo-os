@@ -86,10 +86,11 @@ impl Backdrop {
         Some(Backdrop { strip })
     }
 
-    /// Pinta a faixa borrada clipada ao painel arredondado (px,py,w,h,radius)
-    /// no `canvas`. (src_off_x, src_off_y) = posicao screen-space do canto
-    /// top-left do painel (= margens da ilha) pra amostrar o trecho certo do
-    /// wallpaper.
+    /// Pinta a faixa borrada clipada ao painel (px,py,w,h) com raios
+    /// independentes topo (rt) / baixo (rb) no `canvas`. (src_off_x,
+    /// src_off_y) = posicao screen-space do canto top-left do painel pra
+    /// amostrar o trecho certo do wallpaper.
+    #[allow(clippy::too_many_arguments)]
     pub fn paint_panel(
         &self,
         canvas: &mut PixmapMut,
@@ -97,7 +98,8 @@ impl Backdrop {
         py: f32,
         w: f32,
         h: f32,
-        radius: f32,
+        rt: f32,
+        rb: f32,
         src_off_x: f32,
         src_off_y: f32,
     ) {
@@ -106,7 +108,7 @@ impl Backdrop {
         let Some(mut mask) = Mask::new(cw, chh) else {
             return;
         };
-        let Some(path) = rounded_rect_path(px, py, w, h, radius) else {
+        let Some(path) = rounded_rect_path(px, py, w, h, rt, rb) else {
             return;
         };
         mask.fill_path(&path, FillRule::Winding, true, Transform::identity());
@@ -155,21 +157,40 @@ fn read_cache() -> Option<(Vec<u8>, u32, u32)> {
     Some((pixels, w, h))
 }
 
-/// Path de retangulo arredondado (mesma construcao de icons::fill_rrect).
-fn rounded_rect_path(x: f32, y: f32, w: f32, h: f32, r: f32) -> Option<tiny_skia::Path> {
+/// Path de retangulo com raios independentes topo (rt) / baixo (rb). A bar
+/// colada usa rt=0 (topo reto) + rb>0 (base curva).
+fn rounded_rect_path(x: f32, y: f32, w: f32, h: f32, rt: f32, rb: f32) -> Option<tiny_skia::Path> {
     let x = x.round();
     let y = y.round();
-    let r = r.min(w / 2.0).min(h / 2.0).max(0.0);
+    let half = (w / 2.0).min(h / 2.0);
+    let rt = rt.clamp(0.0, half);
+    let rb = rb.clamp(0.0, half);
     let mut pb = PathBuilder::new();
-    pb.move_to(x + r, y);
-    pb.line_to(x + w - r, y);
-    pb.quad_to(x + w, y, x + w, y + r);
-    pb.line_to(x + w, y + h - r);
-    pb.quad_to(x + w, y + h, x + w - r, y + h);
-    pb.line_to(x + r, y + h);
-    pb.quad_to(x, y + h, x, y + h - r);
-    pb.line_to(x, y + r);
-    pb.quad_to(x, y, x + r, y);
+    pb.move_to(x + rt, y);
+    pb.line_to(x + w - rt, y);
+    if rt > 0.0 {
+        pb.quad_to(x + w, y, x + w, y + rt);
+    } else {
+        pb.line_to(x + w, y);
+    }
+    pb.line_to(x + w, y + h - rb);
+    if rb > 0.0 {
+        pb.quad_to(x + w, y + h, x + w - rb, y + h);
+    } else {
+        pb.line_to(x + w, y + h);
+    }
+    pb.line_to(x + rb, y + h);
+    if rb > 0.0 {
+        pb.quad_to(x, y + h, x, y + h - rb);
+    } else {
+        pb.line_to(x, y + h);
+    }
+    pb.line_to(x, y + rt);
+    if rt > 0.0 {
+        pb.quad_to(x, y, x + rt, y);
+    } else {
+        pb.line_to(x, y);
+    }
     pb.close();
     pb.finish()
 }
@@ -279,9 +300,12 @@ mod tests {
     /// panico. (Nao escreve arquivo; so valida o guard de tamanho.)
     #[test]
     fn rounded_rect_path_builds() {
-        assert!(rounded_rect_path(0.0, 0.0, 100.0, 40.0, 16.0).is_some());
+        // Topo reto + base curva (formato da bar colada).
+        assert!(rounded_rect_path(0.0, 0.0, 100.0, 40.0, 0.0, 16.0).is_some());
+        // Todos cantos curvos.
+        assert!(rounded_rect_path(0.0, 0.0, 100.0, 40.0, 16.0, 16.0).is_some());
         // Degenerado (w/h zero) nao deve dar panico.
-        let _ = rounded_rect_path(0.0, 0.0, 0.0, 0.0, 16.0);
+        let _ = rounded_rect_path(0.0, 0.0, 0.0, 0.0, 0.0, 16.0);
     }
 
     /// Edge: radius MAIOR que a dimensao da faixa. A janela deslizante

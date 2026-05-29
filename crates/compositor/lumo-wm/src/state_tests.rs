@@ -49,11 +49,15 @@ fn test_next_tile_position_is_deterministic() {
 
 #[test]
 fn test_usable_geometry_fallback() {
+    use crate::backend::render_common::{CARD_GAP, CARD_MARGIN};
     let (state, _) = setup();
     let geom = state.usable_geometry();
-    // Sem outputs, deve retornar fallback 1920x1080.
-    assert_eq!(geom.size.w, 1920);
-    assert_eq!(geom.size.h, 1080);
+    // Sem outputs, fallback 1920x1080 RECUADO pelo card (margem lados/baixo
+    // + gap topo). Janela do card vive recuada da borda.
+    assert_eq!(geom.size.w, 1920 - 2 * CARD_MARGIN);
+    assert_eq!(geom.size.h, 1080 - CARD_GAP - CARD_MARGIN);
+    assert_eq!(geom.loc.x, CARD_MARGIN);
+    assert_eq!(geom.loc.y, CARD_GAP);
 }
 
 #[test]

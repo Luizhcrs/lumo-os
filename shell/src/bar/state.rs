@@ -33,7 +33,7 @@ use crate::bar::fonts::{
 use crate::bar::backdrop::Backdrop;
 use crate::bar::icons::{
     battery_total_width, draw_battery, draw_brand_dot, draw_brightness_sun, draw_wifi, fill_circle,
-    fill_rrect, stroke_rrect,
+    fill_rrect_tb, stroke_rrect_tb,
 };
 use crate::bar::password_modal::{draw_password_modal, PasswordModalHits, PasswordModalState};
 use crate::bar::pills::draw_pill_bg;
@@ -126,20 +126,25 @@ pub(crate) struct PaintResult {
 // paint_frame: pinta as 2 pills sobre fundo transparente.
 // ============================================================
 
-/// F-island: desenha o painel frosted da ilha flutuante. Ordem:
-///   1. wallpaper borrado clipado ao rrect (se backdrop disponivel);
+/// Painel frosted da bar COLADA no topo (full width). Topo reto (rt=0,
+/// segue o canto da tela que o compositor arredonda), base curva
+/// (rb=ISLAND_RADIUS) -> a bar desce com curva pro conteudo. Ordem:
+///   1. wallpaper borrado clipado ao path (se backdrop disponivel);
 ///   2. tint translucido (contraste/legibilidade, theme-aware);
 ///   3. borda sutil (vidro).
 /// Sem backdrop -> so tint solido mais opaco (degradacao graciosa).
+/// src_off = (ISLAND_MARGIN_X, ISLAND_MARGIN_TOP) = (0,0) agora (bar colada),
+/// entao a faixa borrada casa pixel-a-pixel com o wallpaper sob a surface.
 fn draw_island_panel(pixmap: &mut Pixmap, snap: &BarSnapshot, backdrop: Option<&Backdrop>) {
     let w = snap.width as f32;
     let h = BAR_HEIGHT as f32;
-    let r = ISLAND_RADIUS;
+    let rt = 0.0; // topo reto (colado na borda da tela)
+    let rb = ISLAND_RADIUS; // base curva
     let mut canvas = pixmap.as_mut();
 
     let has_blur = backdrop.is_some();
     if let Some(bd) = backdrop {
-        bd.paint_panel(&mut canvas, 0.0, 0.0, w, h, r, ISLAND_MARGIN_X, ISLAND_MARGIN_TOP);
+        bd.paint_panel(&mut canvas, 0.0, 0.0, w, h, rt, rb, ISLAND_MARGIN_X, ISLAND_MARGIN_TOP);
     }
 
     // Tint translucido por cima. Com blur: leve (deixa o wallpaper aparecer).
@@ -148,15 +153,15 @@ fn draw_island_panel(pixmap: &mut Pixmap, snap: &BarSnapshot, backdrop: Option<&
         LumoTheme::Dark => (0x0E0E12u32, if has_blur { 0x6E } else { 0xD8 }),
         LumoTheme::Light => (0xF4F4F7u32, if has_blur { 0x66 } else { 0xD0 }),
     };
-    fill_rrect(&mut canvas, 0.0, 0.0, w, h, r, rgba_hex(tint_rgb, tint_a));
+    fill_rrect_tb(&mut canvas, 0.0, 0.0, w, h, rt, rb, rgba_hex(tint_rgb, tint_a));
 
-    // Borda de vidro: highlight sutil na borda (1px). Dark = branco baixo
-    // alpha; Light = preto baixo alpha.
+    // Borda de vidro: highlight sutil so na base curva (1px). Dark = branco
+    // baixo alpha; Light = preto baixo alpha.
     let border = match snap.theme {
         LumoTheme::Dark => rgba_hex(0xFFFFFF, 0x1A),
         LumoTheme::Light => rgba_hex(0x000000, 0x14),
     };
-    stroke_rrect(&mut canvas, 0.5, 0.5, w - 1.0, h - 1.0, r, border, 1.0);
+    stroke_rrect_tb(&mut canvas, 0.5, 0.5, w - 1.0, h - 1.0, rt, rb, border, 1.0);
 }
 
 pub(crate) fn paint_frame(
