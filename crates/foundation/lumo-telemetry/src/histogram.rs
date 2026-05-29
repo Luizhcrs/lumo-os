@@ -87,11 +87,15 @@ mod tests {
     #[test]
     fn record_above_bound_saturates_no_panic() {
         let mut h = LumoHistogram::new();
-        // 60s = 60_000_000us = bound max. Acima satura.
+        // 60s = 60_000_000us = bound max. Acima satura (clamp no record).
         h.record(999_999_999_999);
         let s = h.snapshot();
         assert_eq!(s.count, 1);
-        assert!(s.max <= 60_000_000);
+        // hdr guarda em buckets de 3 sig-figs; max() retorna o TETO do bucket
+        // que contem 60_000_000 (passa de 60M por ~0.1%). Saturou = max dentro
+        // do bucket-equivalente do bound, nao o valor cru gigante.
+        assert!(s.max <= h.inner.highest_equivalent(60_000_000));
+        assert!(s.max < 999_999_999_999);
     }
 
     #[test]
