@@ -523,6 +523,58 @@ pub fn ssd_corner_masks(
     out
 }
 
+/// Raio dos cantos arredondados da TELA (output). Efeito "screen round
+/// corner" (pedido Luiz, ref Hyprland): a area de trabalho inteira vira um
+/// cartao de cantos suaves, coerente com a ilha flutuante da bar.
+pub const SCREEN_CORNER_RADIUS: f32 = 12.0;
+
+/// W-island: mascara SDF preta AA nos 4 cantos do OUTPUT, arredondando a
+/// tela inteira. Reusa CornerMaskShader (mesmo dos cantos de janela): pinta
+/// preto premultiplicado FORA da curva, transparente dentro -> os pixels do
+/// canto viram preto com anti-alias (sem staircase, sem quadrado branco do
+/// bug A19.6 que usava cor solida). Inserir na FRENTE de tudo (corta por
+/// cima de bar/janelas/cursor).
+pub fn output_corner_masks(
+    output_w: i32,
+    output_h: i32,
+    mask_shader: Option<&CornerMaskShader>,
+) -> Vec<PixelShaderElement> {
+    let mut out = Vec::new();
+    let Some(shader) = mask_shader else {
+        return out;
+    };
+    let r = SCREEN_CORNER_RADIUS;
+    let sz = r.ceil() as i32;
+    if output_w < sz * 2 || output_h < sz * 2 {
+        return out;
+    }
+    // (canto top-left da rect de mascara, anchor da curva [0..1]). anchor
+    // aponta pro lado INTERNO da tela; o preto cai no canto fisico.
+    let corners: [((i32, i32), (f32, f32)); 4] = [
+        ((0, 0), (1.0, 1.0)),                         // TL
+        ((output_w - sz, 0), (0.0, 1.0)),             // TR
+        ((0, output_h - sz), (1.0, 0.0)),             // BL
+        ((output_w - sz, output_h - sz), (0.0, 0.0)), // BR
+    ];
+    for ((cx, cy), (ax, ay)) in corners {
+        let area: Rectangle<i32, smithay::utils::Logical> =
+            Rectangle::new(smithay::utils::Point::from((cx, cy)), (sz, sz).into());
+        let uniforms = vec![
+            smithay::backend::renderer::gles::Uniform::new("u_anchor", (ax, ay)).into_owned(),
+            smithay::backend::renderer::gles::Uniform::new("u_radius", r).into_owned(),
+        ];
+        out.push(PixelShaderElement::new(
+            shader.program.clone(),
+            area,
+            None,
+            1.0,
+            uniforms,
+            Kind::Unspecified,
+        ));
+    }
+    out
+}
+
 /// T1.1: gera elementos SolidColor para o menu popup de titlebar SSD.
 /// menu_pos = canto top-left do menu em coordenadas logicas.
 /// hover_idx = item em hover (usize::MAX = nenhum).
@@ -957,6 +1009,12 @@ pub fn build_overlay(
         return overlay;
     }
 
+    // 0. Screen round corners: mascara preta AA nos 4 cantos do output, na
+    // FRENTE de tudo. Mesmo efeito do path DRM.
+    for elem in output_corner_masks(inputs.output_w, inputs.output_h, inputs.corner_mask_shader) {
+        overlay.push(LumoCustomElement::Pixel(elem));
+    }
+
     // 1. Cursor (em cima).
     if let Some(elem) = cursor_xcursor_element(
         renderer,
@@ -1105,6 +1163,13 @@ pub fn collect_drm_elements(
             }
         }
         return out;
+    }
+
+    // 0. Screen round corners: mascara preta AA nos 4 cantos do output, na
+    // FRENTE de tudo (corta bar/janelas/cursor). Efeito "area de trabalho
+    // arredondada" (pedido Luiz).
+    for elem in output_corner_masks(inputs.output_w, inputs.output_h, inputs.corner_mask_shader) {
+        out.push(LumoCustomElement::Pixel(elem));
     }
 
     // 1. Cursor primeiro (mais alto na pilha visual).
