@@ -118,18 +118,29 @@ impl CompositorHandler for LumoState {
                     let mut new_y = current_loc.y;
 
                     const SSD_TITLEBAR_H: i32 = 30;
-                    
-                    let min_x = usable.loc.x;
-                    let min_y = usable.loc.y + SSD_TITLEBAR_H;
-                    let max_x = (usable.loc.x + usable.size.w - new_w).max(min_x);
-                    let max_y = (usable.loc.y + usable.size.h - new_h).max(min_y);
+                    // Margem minima visivel (px). A janela PODE sair da tela
+                    // (mover pra baixo/lados) desde que sobre MARGIN pra reagarrar
+                    // -- estilo Win/macOS. Antes o clamp forcava a janela INTEIRA
+                    // na area util em todo commit -> brigava com o drag (user nao
+                    // conseguia mover pra baixo nem pra fora).
+                    const MARGIN: i32 = 80;
+                    let (ow, oh) = self.output_dimensions();
 
-                    new_x = new_x.clamp(min_x, max_x.max(min_x));
-                    new_y = new_y.clamp(min_y, max_y.max(min_y));
+                    // Horizontal: pode ir pros lados ate sobrar MARGIN visivel.
+                    let min_x = MARGIN - new_w;
+                    let max_x = (ow - MARGIN).max(min_x);
+                    // Vertical: topo nunca acima da bar (titlebar reachable);
+                    // pode descer ate sobrar MARGIN no topo da janela.
+                    let min_y = usable.loc.y;
+                    let max_y = (oh - MARGIN).max(min_y);
+
+                    new_x = new_x.clamp(min_x, max_x);
+                    new_y = new_y.clamp(min_y, max_y);
 
                     if new_x != current_loc.x || new_y != current_loc.y {
                         self.space.map_element(window.clone(), (new_x, new_y), true);
                     }
+                    let _ = SSD_TITLEBAR_H;
                 }
             }
 

@@ -1222,34 +1222,33 @@ pub fn decide_decoration_mode(requested: Mode) -> Mode {
     }
 }
 
-/// Apps que forcam CSD propria (libadwaita/GTK3/GTK4) e IGNORAM o SSD do
-/// compositor -> 2 titlebars empilhadas. Pra esses suprimimos o SSD (modelo
-/// Windows: app que desenha a propria decoracao nao recebe a do sistema).
-/// Match por substring no app_id (case-insensitive). `extra` = overrides de
-/// ~/.config/lumo/csd-apps.toml. Pure -> testavel.
-pub fn app_prefers_csd_with(app_id: &str, extra: &[String]) -> bool {
-    // SO apps GTK4/libadwaita: desenham headerbar COMPLETA propria (min/max/
-    // close) e IGNORAM SSD -> double. Suprimir SSD deixa a headerbar deles.
-    //
-    // NAO incluir apps GTK3 (mousepad/gedit): o gtk3-nocsd (LD_PRELOAD em
-    // lumo-csd.conf) ja TIRA a CSD deles -> eles PRECISAM do SSD Lumo, senao
-    // ficam sem barra nenhuma (so um X remanescente). nocsd nao funciona em
-    // GTK4, por isso GTK4/libadwaita ficam na lista.
-    const DEFAULTS: &[&str] = &["org.gnome.", "libadwaita"];
+/// Decisao de decoracao (regra do Luiz 2026-05): app que desenha a PROPRIA
+/// decoracao (GTK/Qt/Chrome/Electron) usa a DELE; SSD do Lumo SO pra apps que
+/// NAO desenham titlebar — apps Lumo nativos (Iced) e terminais.
+///
+/// Match por app_id (case-insensitive). `extra` = SSD-allowlist adicional de
+/// ~/.config/lumo/ssd-apps.toml. Pure -> testavel.
+pub fn app_should_have_ssd_with(app_id: &str, extra: &[String]) -> bool {
+    // SSD-allowlist: apps SEM decoracao propria.
+    //  - Lumo (Iced): lumo-* / org.lumo.*  -> sem titlebar propria, precisam SSD.
+    //  - Terminais: foot/alacritty/kitty/xterm/st -> sem titlebar, precisam SSD.
+    // Tudo o resto (GTK headerbar, Qt, Chrome, Electron) desenha a propria -> CSD.
+    const SSD_ALLOWLIST: &[&str] = &[
+        "lumo-", "lumo.", "org.lumo.", "foot", "alacritty", "kitty", "xterm", "st-",
+    ];
     let id = app_id.to_ascii_lowercase();
-    DEFAULTS.iter().any(|p| id.contains(*p))
-        || extra.iter().any(|p| id.contains(&p.to_ascii_lowercase()))
+    let hit = |p: &str| id == p || id.starts_with(p) || id.contains(p);
+    SSD_ALLOWLIST.iter().any(|p| hit(p)) || extra.iter().any(|p| hit(&p.to_ascii_lowercase()))
 }
 
-/// Le a lista extra de ~/.config/lumo/csd-apps.toml (1 substring por linha,
-/// ou TOML array `apps = [...]`). Falha silenciosa -> so defaults.
-pub fn load_csd_app_overrides() -> Vec<String> {
+/// Le SSD-allowlist extra de ~/.config/lumo/ssd-apps.toml (1 substring/linha,
+/// ignora # comments e linhas com =). Falha silenciosa -> so defaults.
+pub fn load_ssd_app_overrides() -> Vec<String> {
     let home = std::env::var("HOME").unwrap_or_default();
-    let path = format!("{home}/.config/lumo/csd-apps.toml");
+    let path = format!("{home}/.config/lumo/ssd-apps.toml");
     let Ok(raw) = std::fs::read_to_string(&path) else {
         return Vec::new();
     };
-    // Aceita linhas simples (substr por linha, ignora # comments) OU array toml.
     raw.lines()
         .map(|l| l.trim())
         .filter(|l| !l.is_empty() && !l.starts_with('#') && !l.contains('='))
@@ -1260,7 +1259,7 @@ pub fn load_csd_app_overrides() -> Vec<String> {
 
 /// Decide se a surface deve ter SSD do Lumo dado seu app_id.
 pub fn app_should_have_ssd(app_id: &str) -> bool {
-    !app_prefers_csd_with(app_id, &load_csd_app_overrides())
+    app_should_have_ssd_with(app_id, &load_ssd_app_overrides())
 }
 
 impl XdgDecorationHandler for LumoState {

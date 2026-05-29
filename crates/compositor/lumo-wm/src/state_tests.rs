@@ -80,42 +80,35 @@ fn test_tick_splash_cycle() {
     assert_eq!(state.splash_alpha, 1.0);
 }
 
-// Decoracao: SO GTK4/libadwaita suprime SSD. GTK3 (nocsd) mantem.
+// Decoracao (regra Luiz): SSD so pra apps SEM decoracao propria (Lumo+term).
 #[test]
-fn gtk4_libadwaita_apps_detected_csd() {
-    use super::state::app_prefers_csd_with;
+fn lumo_and_terminals_get_ssd() {
+    use super::state::app_should_have_ssd_with;
     let none: Vec<String> = vec![];
-    assert!(app_prefers_csd_with("org.gnome.TextEditor", &none));
-    assert!(app_prefers_csd_with("org.gnome.Nautilus", &none));
+    assert!(app_should_have_ssd_with("lumo-calc", &none));
+    assert!(app_should_have_ssd_with("lumo-files", &none));
+    assert!(app_should_have_ssd_with("org.lumo.Editor", &none));
+    assert!(app_should_have_ssd_with("foot", &none));
+    assert!(app_should_have_ssd_with("alacritty", &none));
+    assert!(app_should_have_ssd_with("kitty", &none));
 }
 
 #[test]
-fn gtk3_and_lumo_apps_keep_ssd() {
-    use super::state::app_prefers_csd_with;
+fn apps_with_own_decoration_no_ssd() {
+    use super::state::app_should_have_ssd_with;
     let none: Vec<String> = vec![];
-    // GTK3 (mousepad): gtk3-nocsd tira a CSD -> PRECISA do SSD Lumo (senao
-    // fica so com um X). Por isso NAO esta na lista de supressao.
-    assert!(!app_prefers_csd_with("org.xfce.mousepad", &none));
-    assert!(!app_prefers_csd_with("Mousepad", &none));
-    // Apps Lumo (Iced) + term + Qt + Chrome (negocia separado) mantem SSD.
-    assert!(!app_prefers_csd_with("lumo-calc", &none));
-    assert!(!app_prefers_csd_with("foot", &none));
-    assert!(!app_prefers_csd_with("org.kde.konsole", &none));
-    assert!(!app_prefers_csd_with("", &none));
+    // GTK3/GTK4/Qt/Chrome/Electron desenham a propria -> sem SSD Lumo.
+    assert!(!app_should_have_ssd_with("org.xfce.mousepad", &none));
+    assert!(!app_should_have_ssd_with("org.gnome.TextEditor", &none));
+    assert!(!app_should_have_ssd_with("org.kde.konsole", &none));
+    assert!(!app_should_have_ssd_with("chromium", &none));
+    assert!(!app_should_have_ssd_with("code", &none));
 }
 
 #[test]
-fn csd_override_from_config_matches() {
-    use super::state::app_prefers_csd_with;
-    let extra = vec!["com.example.weirdapp".to_string()];
-    assert!(app_prefers_csd_with("com.example.WeirdApp", &extra));
-    assert!(!app_prefers_csd_with("com.example.other", &extra));
-}
-
-#[test]
-fn app_should_have_ssd_inverse() {
-    use super::state::app_should_have_ssd;
-    // Sem config override (env HOME pode nao ter o arquivo) os defaults valem.
-    assert!(!app_should_have_ssd("org.gnome.TextEditor"));
-    assert!(app_should_have_ssd("lumo-files"));
+fn ssd_override_from_config_adds() {
+    use super::state::app_should_have_ssd_with;
+    let extra = vec!["com.example.bareapp".to_string()];
+    assert!(app_should_have_ssd_with("com.example.BareApp", &extra));
+    assert!(!app_should_have_ssd_with("com.example.other", &extra));
 }
