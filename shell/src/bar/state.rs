@@ -147,12 +147,11 @@ fn draw_island_panel(pixmap: &mut Pixmap, snap: &BarSnapshot, backdrop: Option<&
     }
     let _ = snap.theme; // bar e obsidian black nos dois temas (pedido Luiz).
 
-    // OBSIDIAN BLACK frosted: tint preto-obsidiana PESADO por cima. Com blur:
-    // ~90% obsidian, deixando so um hint frosted do wallpaper borrado pra dar
-    // profundidade de vidro escuro (nao cor). Sem blur: solido. A bar funde
-    // com a moldura preta do topo (sem separacao).
-    let tint_rgb = 0x08080Bu32;
-    let tint_a = if has_blur { 0xE8 } else { 0xFF };
+    // OBSIDIAN BLACK: a bar E a parte preta do topo (pedido Luiz). Tint
+    // obsidiana quase opaco -> preto dominante, so um sussurro (~3%) de glass
+    // depth do wallpaper borrado. Sem blur: solido.
+    let tint_rgb = 0x070709u32;
+    let tint_a = if has_blur { 0xF6 } else { 0xFF };
     fill_rrect_tb(&mut canvas, 0.0, 0.0, w, h, rt, rb, rgba_hex(tint_rgb, tint_a));
 
     // Sheen de vidro: highlight branco MUITO sutil so na borda de baixo (1px)
