@@ -54,6 +54,17 @@ rm -f /etc/udev/rules.d/91-lumo-battery.rules /etc/tmpfiles.d/lumo-bat.conf
 echo "[tmpfiles] -> /etc/tmpfiles.d/"
 install_file lumo-leds.tmpfiles.conf /etc/tmpfiles.d/lumo-leds.conf 0644
 
+echo "[gtk decoration] apps CSD (GTK) com min/max/close (nao so o X)"
+# Layout dos botoes da headerbar GTK. Sem GNOME settings-daemon o GTK usa
+# 'appmenu:close' (so X). Forcar via gsettings (dconf) + settings.ini.
+USER_HOME_REAL="$(getent passwd "$USER_NAME" | cut -d: -f6)"
+install -D -m 0644 "$HERE/gtk-settings.ini" "$USER_HOME_REAL/.config/gtk-3.0/settings.ini"
+install -D -m 0644 "$HERE/gtk-settings.ini" "$USER_HOME_REAL/.config/gtk-4.0/settings.ini"
+chown -R "$USER_NAME:$USER_NAME" "$USER_HOME_REAL/.config/gtk-3.0" "$USER_HOME_REAL/.config/gtk-4.0" 2>/dev/null || true
+# gsettings precisa rodar como o user (dconf por-user).
+sudo -u "$USER_NAME" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u "$USER_NAME")/bus" \
+    gsettings set org.gnome.desktop.wm.preferences button-layout ':minimize,maximize,close' 2>/dev/null || true
+
 echo "[reload]"
 udevadm control --reload-rules
 systemctl daemon-reload
