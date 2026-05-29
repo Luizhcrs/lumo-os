@@ -274,15 +274,18 @@ fn main() -> Result<()> {
         }
     }
 
-    // WAYLAND_DISPLAY exportado pra clients filhos (foot, lumo-bar) que
-    // herdam env. Setado antes do dispatch porque DRM bloqueia.
-    if let Some(s) = socket_name.as_ref() {
-        std::env::set_var("WAYLAND_DISPLAY", s);
-    }
-
-    // A12 Frente 1: autostart so no path DRM (full TTY session).
-    // Em winit nested, host ja tem a bar -- evitar duplicar.
+    // WAYLAND_DISPLAY: exporta o socket NESTED pra clients filhos.
+    // DRM: setar ANTES do dispatch (drm::run bloqueia; autostart herda o env).
+    // WINIT: NAO setar antes -- winit::init() conecta no compositor HOST via
+    // WAYLAND_DISPLAY; clobbar pro socket nested faz o winit tentar conectar
+    // EM SI MESMO (deadlock, 0% CPU, sem janela). No winit o set_var vai
+    // DEPOIS do init (match abaixo). Bug dev-nested 2026-05.
     if backend == BackendChoice::Drm {
+        if let Some(s) = socket_name.as_ref() {
+            std::env::set_var("WAYLAND_DISPLAY", s);
+        }
+        // A12 Frente 1: autostart so no path DRM (full TTY session).
+        // Em winit nested, host ja tem a bar -- evitar duplicar.
         if let Some(s) = socket_name.as_deref() {
             spawn_autostart(s);
         } else {
@@ -315,6 +318,11 @@ fn main() -> Result<()> {
     match backend {
         BackendChoice::Winit => {
             let _winit_data = lumo_wm::backend::winit::init(event_loop.handle(), &mut state)?;
+            // Host display ja capturado por winit::init -> agora seguro expor
+            // o socket NESTED pra clients (lumo-bar/desktop) lancados depois.
+            if let Some(s) = socket_name.as_ref() {
+                std::env::set_var("WAYLAND_DISPLAY", s);
+            }
         }
         BackendChoice::Drm => {
             #[cfg(feature = "drm-backend")]
