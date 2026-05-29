@@ -982,11 +982,11 @@ impl BarLayout {
     /// Valores identicos aos hardcoded em tokens.rs -- zero regressao visual.
     pub fn default_layout() -> Self {
         Self {
-            height: 40,
+            height: 28,
             padding_x: 14.0,
             pill_gap: 8.0,
             pill_radius: 14.0,
-            margin_top: 6.0,
+            margin_top: 2.0,
             margin_x: 14.0,
             left_pills: vec![
                 PillSpec::with_width("brand", 88.0),

@@ -13,9 +13,9 @@ use crate::menu;
 // Layout constants (lapidado: cada valor justificado).
 // ============================================================
 
-/// Altura total da bar (layer-shell exclusive zone).
-/// 40px = 28px pill + 6px margin topo + 6px margem inferior (sombra cabe).
-pub const BAR_HEIGHT: u32 = 40;
+/// Altura total da bar (layer-shell exclusive zone). 28px compacto: a faixa
+/// preta do topo (onde fica "Lumo"/status) menor (pills sem bg = so texto).
+pub const BAR_HEIGHT: u32 = 28;
 
 // ============================================================
 // Bar colada no topo + base arredondada (pedido Luiz 2026-05).
