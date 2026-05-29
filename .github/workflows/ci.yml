@@ -33,7 +33,7 @@ jobs:
             libdrm-dev libgbm-dev libinput-dev libseat-dev libudev-dev \
             libsystemd-dev libdbus-1-dev libdisplay-info-dev libpixman-1-dev \
             libfontconfig1-dev libfreetype6-dev \
-            clang libclang-dev cmake libpam0g-dev
+            clang libclang-dev cmake libpam0g-dev libdecor-0-dev
 
       - uses: dtolnay/rust-toolchain@stable
         with:
