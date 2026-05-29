@@ -578,7 +578,7 @@ pub fn output_corner_masks(
 /// Card recuado (pedido Luiz, mockup): a area de trabalho abaixo da bar vira
 /// um RETANGULO ARREDONDADO RECUADO com moldura preta em volta. Margem
 /// lateral/inferior + gap abaixo da bar.
-pub const CARD_MARGIN: i32 = 6;
+pub const CARD_MARGIN: i32 = 4;
 pub const CARD_GAP: i32 = 6;
 pub const CARD_RADIUS: f32 = 14.0;
 
