@@ -80,24 +80,24 @@ fn test_tick_splash_cycle() {
     assert_eq!(state.splash_alpha, 1.0);
 }
 
-// Decoracao: app CSD conhecido suprime SSD (modelo Windows).
+// Decoracao: SO GTK4/libadwaita suprime SSD. GTK3 (nocsd) mantem.
 #[test]
-fn csd_apps_detected() {
+fn gtk4_libadwaita_apps_detected_csd() {
     use super::state::app_prefers_csd_with;
     let none: Vec<String> = vec![];
-    // libadwaita/GNOME = CSD.
     assert!(app_prefers_csd_with("org.gnome.TextEditor", &none));
     assert!(app_prefers_csd_with("org.gnome.Nautilus", &none));
-    // GTK3 mousepad.
-    assert!(app_prefers_csd_with("org.xfce.mousepad", &none));
-    assert!(app_prefers_csd_with("Mousepad", &none));
 }
 
 #[test]
-fn lumo_and_neutral_apps_keep_ssd() {
+fn gtk3_and_lumo_apps_keep_ssd() {
     use super::state::app_prefers_csd_with;
     let none: Vec<String> = vec![];
-    // Apps Lumo (Iced) + term + Chrome (negocia separado) NAO sao CSD-list.
+    // GTK3 (mousepad): gtk3-nocsd tira a CSD -> PRECISA do SSD Lumo (senao
+    // fica so com um X). Por isso NAO esta na lista de supressao.
+    assert!(!app_prefers_csd_with("org.xfce.mousepad", &none));
+    assert!(!app_prefers_csd_with("Mousepad", &none));
+    // Apps Lumo (Iced) + term + Qt + Chrome (negocia separado) mantem SSD.
     assert!(!app_prefers_csd_with("lumo-calc", &none));
     assert!(!app_prefers_csd_with("foot", &none));
     assert!(!app_prefers_csd_with("org.kde.konsole", &none));

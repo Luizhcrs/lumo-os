@@ -1228,13 +1228,14 @@ pub fn decide_decoration_mode(requested: Mode) -> Mode {
 /// Match por substring no app_id (case-insensitive). `extra` = overrides de
 /// ~/.config/lumo/csd-apps.toml. Pure -> testavel.
 pub fn app_prefers_csd_with(app_id: &str, extra: &[String]) -> bool {
-    // libadwaita/GNOME = CSD sempre; GTK3 teimosos conhecidos.
-    const DEFAULTS: &[&str] = &[
-        "org.gnome.",
-        "mousepad",
-        "org.xfce.mousepad",
-        "libadwaita",
-    ];
+    // SO apps GTK4/libadwaita: desenham headerbar COMPLETA propria (min/max/
+    // close) e IGNORAM SSD -> double. Suprimir SSD deixa a headerbar deles.
+    //
+    // NAO incluir apps GTK3 (mousepad/gedit): o gtk3-nocsd (LD_PRELOAD em
+    // lumo-csd.conf) ja TIRA a CSD deles -> eles PRECISAM do SSD Lumo, senao
+    // ficam sem barra nenhuma (so um X remanescente). nocsd nao funciona em
+    // GTK4, por isso GTK4/libadwaita ficam na lista.
+    const DEFAULTS: &[&str] = &["org.gnome.", "libadwaita"];
     let id = app_id.to_ascii_lowercase();
     DEFAULTS.iter().any(|p| id.contains(*p))
         || extra.iter().any(|p| id.contains(&p.to_ascii_lowercase()))
