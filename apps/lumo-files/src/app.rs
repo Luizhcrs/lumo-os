@@ -111,6 +111,10 @@ pub enum Message {
         shift: bool,
     },
     ItemDoubleClicked(usize),
+    /// W38: right-click sobre item -> seleciona idx + abre menu Item na pos do
+    /// cursor. Antes o right-click so lia file_list.selected (vazio = menu Area
+    /// com ops greyed), por isso "bugava" sobre arquivo.
+    ItemRightClicked(usize),
     ClearSelection,
 
     // Contexto
@@ -441,6 +445,16 @@ impl App {
                 } else {
                     Task::none()
                 }
+            }
+
+            Message::ItemRightClicked(idx) => {
+                // W38: seleciona o item sob o cursor (single-select) e abre o
+                // menu Item na posicao do cursor. Reusa file_list.click(idx).
+                self.current_tab_mut().file_list.click(idx);
+                self.last_item_click = None;
+                let pos = self.last_cursor_pos;
+                self.context_menu = Some(ContextMenu::Item { x: pos.x, y: pos.y });
+                Task::none()
             }
 
             Message::ClearSelection => {
@@ -1039,15 +1053,16 @@ impl App {
                     // W36: right-click abre context menu na posicao do cursor.
                     // Distingue area vazia vs item selecionado pelo hit-test.
                     iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) => {
-                        let pos = self.last_cursor_pos;
-                        let has_selection = !self.current_tab().file_list.selected.is_empty();
-                        let ctx = if has_selection {
-                            ContextMenu::Item { x: pos.x, y: pos.y }
-                        } else {
-                            ContextMenu::Area { x: pos.x, y: pos.y }
-                        };
-                        eprintln!("[hit] RightClick ctx={:?} x={} y={}", ctx, pos.x, pos.y);
-                        self.context_menu = Some(ctx);
+                        // W38: este branch (listen_raw global) cobre o right-click
+                        // em AREA VAZIA. Sobre item, mouse_area.on_right_press ->
+                        // ItemRightClicked seta o menu Item. Guard ordering-indep:
+                        // so abre Area se nenhum menu foi setado neste frame (Item
+                        // vence independente da ordem de entrega das mensagens).
+                        if self.context_menu.is_none() {
+                            let pos = self.last_cursor_pos;
+                            self.context_menu =
+                                Some(ContextMenu::Area { x: pos.x, y: pos.y });
+                        }
                     }
                     iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                         // W37: left-click. Se menu aberto e click FORA do rect
@@ -1743,7 +1758,12 @@ impl App {
                 })
                 .padding(0);
 
-                r = r.push(cell);
+                // W38: mouse_area captura right-press por celula -> seleciona o
+                // item e abre menu Item (left-press continua no button interno).
+                r = r.push(
+                    iced::widget::mouse_area(cell)
+                        .on_right_press(Message::ItemRightClicked(idx)),
+                );
             }
             grid_rows.push(r.into());
         }
@@ -1980,7 +2000,12 @@ impl App {
             .padding(0)
             .width(Length::Fill);
 
-            rows.push(row_btn.into());
+            // W38: right-press por linha -> seleciona + menu Item.
+            rows.push(
+                iced::widget::mouse_area(row_btn)
+                    .on_right_press(Message::ItemRightClicked(idx))
+                    .into(),
+            );
         }
 
         container(scrollable(column(rows).spacing(0)).height(Length::Fill))
@@ -2211,7 +2236,12 @@ impl App {
                 .padding(0)
                 .width(Length::Fill);
 
-                items.push(row_btn.into());
+                // W38: right-press por item (col view) -> seleciona + menu Item.
+                items.push(
+                    iced::widget::mouse_area(row_btn)
+                        .on_right_press(Message::ItemRightClicked(idx))
+                        .into(),
+                );
             }
 
             if items.is_empty() {

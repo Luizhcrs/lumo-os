@@ -1020,10 +1020,13 @@ fn wrap_space_elements_rounded(
         .into_iter()
         .map(|el| match el {
             SpaceRenderElements::Element(_) => {
+                // W38: winit path (dev nested) nao tem SSD info por elemento;
+                // apps Lumo sao CSD -> round_top=true. SSD em dev e raro.
                 LumoCustomElement::Rounded(RoundedSurfaceElement::new(
                     el,
                     corner_shader.program.clone(),
                     CORNER_RADIUS_WINDOW as f32,
+                    true,
                 ))
             }
             _ => LumoCustomElement::Space(el),
@@ -1456,6 +1459,13 @@ pub fn collect_drm_elements(
                 1.0,
             );
         if let Some(cs) = inputs.corner_shader {
+            // W38: SSD => topo reto (TitlebarBgShader arredonda o topo). CSD =>
+            // arredonda topo tambem (a superficie inclui a propria titlebar).
+            let is_ssd = window
+                .wl_surface()
+                .map(|s| inputs.ssd_windows.contains(&*s))
+                .unwrap_or(false);
+            let round_top = !is_ssd;
             // Wrap content em RoundedSurfaceElement
             for el in content_elems {
                 let space_wrap = smithay::desktop::space::SpaceRenderElements::Surface(el);
@@ -1463,6 +1473,7 @@ pub fn collect_drm_elements(
                     space_wrap,
                     cs.program.clone(),
                     CORNER_RADIUS_WINDOW as f32,
+                    round_top,
                 )));
             }
         } else {

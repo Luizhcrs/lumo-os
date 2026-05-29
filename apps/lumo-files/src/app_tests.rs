@@ -144,6 +144,47 @@ async fn test_search_toggle_clears_query() {
         assert!(matches!(app.context_menu, Some(ContextMenu::Item { .. })));
     }
 
+    // W38: right-click sobre item seleciona o item E abre menu Item (antes so
+    // lia selecao previa -> vazio -> menu Area com ops greyed = "bugado").
+    #[tokio::test]
+    async fn test_right_click_item_seleciona_e_abre_menu_item() {
+        use crate::app::ContextMenu;
+        let temp = tempfile::tempdir().unwrap();
+        let (mut app, _) = App::new_with_dir(temp.path().to_path_buf());
+
+        // Sem selecao previa: right-click sobre idx 3 deve selecionar idx 3.
+        assert!(app.current_tab().file_list.selected.is_empty());
+        let _ = app.update(Message::ItemRightClicked(3));
+
+        assert!(
+            matches!(app.context_menu, Some(ContextMenu::Item { .. })),
+            "right-click em item deve abrir menu Item, nao Area"
+        );
+        assert!(
+            app.current_tab().file_list.selected.contains(&3),
+            "right-click deve selecionar o item sob o cursor"
+        );
+        assert_eq!(
+            app.current_tab().file_list.selected.len(),
+            1,
+            "right-click e single-select"
+        );
+    }
+
+    // W38: right-click sobre item B troca a selecao (nao opera no A anterior).
+    #[tokio::test]
+    async fn test_right_click_item_troca_selecao_anterior() {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut app, _) = App::new_with_dir(temp.path().to_path_buf());
+
+        let _ = app.update(Message::ItemClicked { idx: 1, ctrl: false, shift: false });
+        assert!(app.current_tab().file_list.selected.contains(&1));
+
+        let _ = app.update(Message::ItemRightClicked(5));
+        assert!(app.current_tab().file_list.selected.contains(&5));
+        assert!(!app.current_tab().file_list.selected.contains(&1));
+    }
+
     #[tokio::test]
     async fn test_context_menu_close_message() {
         use crate::app::ContextMenu;
