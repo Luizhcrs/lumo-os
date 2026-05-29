@@ -75,18 +75,17 @@ fn event_round_trip_close_desktop_menu() {
 
 #[test]
 fn drain_partial_line_no_panic() {
-    // Unit variant (ActiveAppCleared) serializa como STRING bare
-    // ("ActiveAppCleared"), nao objeto {"ActiveAppCleared":null}. Roundtrip
-    // garante o formato real sem JSON hardcoded que fica stale (era o bug:
-    // o teste antigo assertava parse de {"ActiveAppCleared":null} -> Err).
+    // LumoEvent e internally-tagged + snake_case (#[serde(tag="type",
+    // rename_all="snake_case")]) -> ActiveAppCleared vira
+    // {"type":"active_app_cleared"}. NAO hardcodar o formato (vira stale, foi
+    // o bug original); roundtrip serialize->deserialize garante consistencia.
     let ev = LumoEvent::ActiveAppCleared;
     let json = serde_json::to_string(&ev).unwrap();
-    assert_eq!(json, "\"ActiveAppCleared\"");
-    let back: Result<LumoEvent, _> = serde_json::from_str(&json);
-    assert!(matches!(back, Ok(LumoEvent::ActiveAppCleared)));
+    let back: LumoEvent = serde_json::from_str(&json).unwrap();
+    assert!(matches!(back, LumoEvent::ActiveAppCleared));
     // Linha PARCIAL (JSON nao fechado) deve dar Err, nunca panic: o cliente
     // bufera e espera mais bytes / o \n antes de parsear.
-    let partial = r#"{"ActiveApp":{"app_id":"foo""#;
+    let partial = r#"{"type":"active_app"#;
     assert!(serde_json::from_str::<LumoEvent>(partial).is_err());
 }
 
