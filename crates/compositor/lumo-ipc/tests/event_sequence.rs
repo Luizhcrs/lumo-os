@@ -75,15 +75,19 @@ fn event_round_trip_close_desktop_menu() {
 
 #[test]
 fn drain_partial_line_no_panic() {
-    // Buffer com linha incompleta (sem \n final). Cliente DEVE aguardar
-    // mais bytes, nao parsear linha parcial.
-    let partial = r#"{"ActiveAppCleared":null}"#;
-    // Sem \n: cliente normalmente buffera. Testar que serde aceita string
-    // como evento valido apenas se completa.
-    let result: Result<LumoEvent, _> = serde_json::from_str(partial);
-    // Pode parse OK pq JSON valido tem que estar fechado. Mas em streaming
-    // cliente espera \n antes de parsear. Aqui validamos so o serde.
-    assert!(result.is_ok());
+    // Unit variant (ActiveAppCleared) serializa como STRING bare
+    // ("ActiveAppCleared"), nao objeto {"ActiveAppCleared":null}. Roundtrip
+    // garante o formato real sem JSON hardcoded que fica stale (era o bug:
+    // o teste antigo assertava parse de {"ActiveAppCleared":null} -> Err).
+    let ev = LumoEvent::ActiveAppCleared;
+    let json = serde_json::to_string(&ev).unwrap();
+    assert_eq!(json, "\"ActiveAppCleared\"");
+    let back: Result<LumoEvent, _> = serde_json::from_str(&json);
+    assert!(matches!(back, Ok(LumoEvent::ActiveAppCleared)));
+    // Linha PARCIAL (JSON nao fechado) deve dar Err, nunca panic: o cliente
+    // bufera e espera mais bytes / o \n antes de parsear.
+    let partial = r#"{"ActiveApp":{"app_id":"foo""#;
+    assert!(serde_json::from_str::<LumoEvent>(partial).is_err());
 }
 
 #[test]
