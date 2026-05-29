@@ -1,0 +1,72 @@
+name: ci
+
+# Mata "commit cego": valida build + testes do Lumo num runner Linux a cada
+# push/PR, ja que o dev nem sempre tem o Galaxy (hardware DRM) por perto.
+# Espelha 1:1 a lista de deps do CI oficial do smithay.
+# Backend winit compila sem GPU; drm-backend COMPILA sem /dev/dri (DRM so e
+# exigido em runtime) -> CI cobre os dois cfg. Validacao VISUAL nao roda aqui
+# (winit precisa de display); isso fica pro WSLg/hardware (vide
+# docs/guides/dev-without-galaxy.md).
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Deps de sistema (verbatim do CI do smithay master + pixman p/ testes).
+      - name: apt deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libwayland-dev libxkbcommon-dev libegl1-mesa-dev \
+            libdrm-dev libgbm-dev libinput-dev libseat-dev libudev-dev \
+            libsystemd-dev libdbus-1-dev libdisplay-info-dev libpixman-1-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Backend winit (default): compila workspace inteiro.
+      - name: build workspace (winit default)
+        run: cargo build --workspace
+
+      # Backend DRM: COMPILA sem hardware (DRM so e aberto em runtime).
+      - name: build lumo-wm (drm-backend)
+        run: cargo build -p lumo-wm --features drm-backend
+
+      # Testes headless (sem display/GPU; confirmado vs CI do smithay).
+      - name: test workspace (winit default)
+        run: cargo test --workspace
+
+      # Suite drm e superset (mod drm e cfg-gated); roda so com a feature.
+      - name: test lumo-wm (drm-backend)
+        run: cargo test -p lumo-wm --features drm-backend
+
+      # Clippy informativo (NAO -D warnings ainda: ha warnings legados).
+      # Quando o codigo estiver limpo, trocar pra `-- -D warnings`.
+      - name: clippy (informativo)
+        run: cargo clippy --workspace --all-targets || true
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo audit
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit || true

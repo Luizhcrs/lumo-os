@@ -1,0 +1,21 @@
+# Dockerfile.dev — espelho do ambiente de BUILD/TEST do Lumo (sem GPU/display).
+# Build + cargo test + clippy + audit rodam aqui. NAO roda a UI (winit precisa
+# de display; use WSLg ou hardware). Vide docs/guides/dev-without-galaxy.md.
+#
+#   docker build -f Dockerfile.dev -t lumo-dev .
+#   docker run --rm -v lumo-target:/work/target -v "$PWD":/work -w /work lumo-dev \
+#     cargo test --workspace
+# (use volume NOMEADO pro target/ — bind mount NTFS no Docker Desktop e lento)
+
+FROM rust:1-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential pkg-config \
+    libwayland-dev libxkbcommon-dev libegl1-mesa-dev \
+    libdrm-dev libgbm-dev libinput-dev libseat-dev libudev-dev \
+    libsystemd-dev libdbus-1-dev libdisplay-info-dev libpixman-1-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup component add clippy
+
+WORKDIR /work

@@ -1,0 +1,15 @@
+{
+  "name": "lumo-dev",
+  "build": { "dockerfile": "../Dockerfile.dev", "context": ".." },
+  "workspaceFolder": "/work",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/work,type=bind",
+  "mounts": [
+    "source=lumo-target,target=/work/target,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": ["rust-lang.rust-analyzer", "tamasfe.even-better-toml"]
+    }
+  },
+  "remoteUser": "root"
+}
