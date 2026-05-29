@@ -134,30 +134,11 @@ pub(crate) struct PaintResult {
 /// Sem backdrop -> so tint solido mais opaco (degradacao graciosa).
 /// src_off = (ISLAND_MARGIN_X, ISLAND_MARGIN_TOP), entao a faixa borrada casa
 /// pixel-a-pixel com o wallpaper sob a surface deslocada.
-fn draw_island_panel(pixmap: &mut Pixmap, snap: &BarSnapshot, backdrop: Option<&Backdrop>) {
-    let w = snap.width as f32;
-    let h = BAR_HEIGHT as f32;
-    let rt = ISLAND_RADIUS; // strip flutuante: cantos de cima tambem redondos
-    let rb = ISLAND_RADIUS;
-    let mut canvas = pixmap.as_mut();
-
-    let has_blur = backdrop.is_some();
-    if let Some(bd) = backdrop {
-        bd.paint_panel(&mut canvas, 0.0, 0.0, w, h, rt, rb, ISLAND_MARGIN_X, ISLAND_MARGIN_TOP);
-    }
-    let _ = snap.theme; // bar e obsidian black nos dois temas (pedido Luiz).
-
-    // OBSIDIAN BLACK: a bar E a parte preta do topo (pedido Luiz). Tint
-    // obsidiana quase opaco -> preto dominante, so um sussurro (~3%) de glass
-    // depth do wallpaper borrado. Sem blur: solido.
-    let tint_rgb = 0x070709u32;
-    let tint_a = if has_blur { 0xF6 } else { 0xFF };
-    fill_rrect_tb(&mut canvas, 0.0, 0.0, w, h, rt, rb, rgba_hex(tint_rgb, tint_a));
-
-    // Sheen de vidro: highlight branco MUITO sutil so na borda de baixo (1px)
-    // pra separar a bar do conteudo sem virar linha dura.
-    let border = rgba_hex(0xFFFFFF, 0x12);
-    stroke_rrect_tb(&mut canvas, 0.5, 0.5, w - 1.0, h - 1.0, rt, rb, border, 1.0);
+fn draw_island_panel(_pixmap: &mut Pixmap, _snap: &BarSnapshot, _backdrop: Option<&Backdrop>) {
+    // SEM BG (pedido Luiz): a bar nao desenha fundo nem borda. So os pills/
+    // texto/icones flutuam sobre o preto do topo que o compositor ja pinta
+    // (work_area_frame_elements). Surface transparente.
+    let _ = (ISLAND_MARGIN_X, ISLAND_MARGIN_TOP, ISLAND_RADIUS);
 }
 
 pub(crate) fn paint_frame(
