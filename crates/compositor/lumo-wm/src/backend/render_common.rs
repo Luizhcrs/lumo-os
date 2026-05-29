@@ -578,9 +578,9 @@ pub fn output_corner_masks(
 /// Card recuado (pedido Luiz, mockup): a area de trabalho abaixo da bar vira
 /// um RETANGULO ARREDONDADO RECUADO com moldura preta em volta. Margem
 /// lateral/inferior + gap abaixo da bar.
-pub const CARD_MARGIN: i32 = 12;
-pub const CARD_GAP: i32 = 8;
-pub const CARD_RADIUS: f32 = 16.0;
+pub const CARD_MARGIN: i32 = 6;
+pub const CARD_GAP: i32 = 6;
+pub const CARD_RADIUS: f32 = 14.0;
 
 /// Moldura preta da area de trabalho (card recuado). Pinta PRETO em tudo
 /// abaixo da bar EXCETO dentro do `card` (rounded rect), criando a ilusao de
@@ -588,9 +588,10 @@ pub const CARD_RADIUS: f32 = 16.0;
 /// Inserir ENTRE a bar (upper_layers) e as janelas: a moldura mascara
 /// janelas/wallpaper nas margens mas fica atras da bar.
 ///
-/// `card` = retangulo da area util (= usable_geometry, ja recuado). bar_bottom
-/// = card.y - CARD_GAP. As mascaras de canto usam CornerMaskShader (preto AA
-/// fora da curva, transparente dentro -> arredonda os 4 cantos do card).
+/// `card` = retangulo da area util (= usable_geometry, ja recuado). O preto
+/// cobre TUDO menos o card (topo full-width incl. ao redor da bar flutuante,
+/// + margens). As mascaras de canto usam CornerMaskShader (preto AA fora da
+/// curva, transparente dentro -> arredonda os 4 cantos do card).
 pub fn work_area_frame_elements(
     output_w: i32,
     output_h: i32,
@@ -606,14 +607,15 @@ pub fn work_area_frame_elements(
     if cw <= 0 || ch <= 0 {
         return (solids, masks);
     }
-    let bar_bottom = (cy - CARD_GAP).max(0);
     let black = Color32F::new(0.0, 0.0, 0.0, 1.0);
 
-    // Rects pretos retos (gap acima, margens esq/dir/baixo). NAO cobrem os
-    // quadrados de canto do card (esses ficam pras mascaras AA).
+    // Rects pretos = TUDO menos o card. Topo full-width (0..cy) cobre acima do
+    // card incl. a area ao redor da bar flutuante (a bar e desenhada por cima).
+    // Lados/baixo = margens do card. NAO cobrem os quadrados de canto (mascaras
+    // AA cuidam do arredondamento).
     let rects: [(i32, i32, i32, i32); 4] = [
-        // gap full-width entre bar e card
-        (0, bar_bottom, output_w, cy - bar_bottom),
+        // topo full-width (acima do card; bar flutua por cima)
+        (0, 0, output_w, cy),
         // esquerda do card
         (0, cy, cx, ch),
         // direita do card

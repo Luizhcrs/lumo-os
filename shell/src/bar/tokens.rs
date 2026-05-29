@@ -30,15 +30,16 @@ pub const BAR_HEIGHT: u32 = 40;
 // Margens = 0 (colada). exclusive_zone = BAR_HEIGHT + ISLAND_GAP_TO_WORK.
 // Nomes mantidos (ISLAND_*) pra minimizar churn; semantica = bar attached.
 
-/// Margem lateral (0 = bar colada nas bordas, full width).
-pub const ISLAND_MARGIN_X: f32 = 0.0;
-/// Margem topo (0 = bar colada no topo da tela).
-pub const ISLAND_MARGIN_TOP: f32 = 0.0;
-/// Gap entre a base da bar e o conteudo. 0 = conteudo flush sob a curva
-/// da bar (pedido: "sem respiro, colada na curva").
+/// Margem lateral da bar = ALINHADA com o card (mesma CARD_MARGIN do
+/// compositor = 6). Bar e card tem a mesma largura/posicao lateral.
+pub const ISLAND_MARGIN_X: f32 = 6.0;
+/// Margem topo da bar (respiro fino ate a borda da tela).
+pub const ISLAND_MARGIN_TOP: f32 = 6.0;
+/// Gap extra no exclusive_zone. 0: o gap bar<->card vem do CARD_GAP no
+/// compositor (usable_geometry recua + CARD_GAP).
 pub const ISLAND_GAP_TO_WORK: u32 = 0;
-/// Border-radius dos cantos de BAIXO da bar (a base que curva).
-pub const ISLAND_RADIUS: f32 = 16.0;
+/// Border-radius da bar (strip flutuante, todos os cantos). Igual CARD_RADIUS.
+pub const ISLAND_RADIUS: f32 = 14.0;
 
 /// Altura de cada pill. 28px = compact responsivo touch.
 pub const PILL_H: f32 = 28.0;

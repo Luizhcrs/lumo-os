@@ -126,20 +126,19 @@ pub(crate) struct PaintResult {
 // paint_frame: pinta as 2 pills sobre fundo transparente.
 // ============================================================
 
-/// Painel frosted da bar COLADA no topo (full width). Topo reto (rt=0,
-/// segue o canto da tela que o compositor arredonda), base curva
-/// (rb=ISLAND_RADIUS) -> a bar desce com curva pro conteudo. Ordem:
+/// Painel frosted da bar = STRIP flutuante alinhada com o card (mesma margem
+/// lateral). Todos os cantos arredondados (rt=rb=ISLAND_RADIUS). Ordem:
 ///   1. wallpaper borrado clipado ao path (se backdrop disponivel);
 ///   2. tint translucido (contraste/legibilidade, theme-aware);
 ///   3. borda sutil (vidro).
 /// Sem backdrop -> so tint solido mais opaco (degradacao graciosa).
-/// src_off = (ISLAND_MARGIN_X, ISLAND_MARGIN_TOP) = (0,0) agora (bar colada),
-/// entao a faixa borrada casa pixel-a-pixel com o wallpaper sob a surface.
+/// src_off = (ISLAND_MARGIN_X, ISLAND_MARGIN_TOP), entao a faixa borrada casa
+/// pixel-a-pixel com o wallpaper sob a surface deslocada.
 fn draw_island_panel(pixmap: &mut Pixmap, snap: &BarSnapshot, backdrop: Option<&Backdrop>) {
     let w = snap.width as f32;
     let h = BAR_HEIGHT as f32;
-    let rt = 0.0; // topo reto (colado na borda da tela)
-    let rb = ISLAND_RADIUS; // base curva
+    let rt = ISLAND_RADIUS; // strip flutuante: cantos de cima tambem redondos
+    let rb = ISLAND_RADIUS;
     let mut canvas = pixmap.as_mut();
 
     let has_blur = backdrop.is_some();
