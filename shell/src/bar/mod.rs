@@ -18,6 +18,7 @@
 //! -> ipc -> main_loop (entry).
 
 pub mod appmenu;
+pub mod backdrop;
 pub mod dropdowns;
 pub mod fonts;
 pub mod handlers;

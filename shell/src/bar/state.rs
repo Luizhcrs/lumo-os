@@ -30,8 +30,10 @@ use crate::bar::dropdowns::DropdownActive;
 use crate::bar::fonts::{
     draw_text, draw_text_mono, measure_text, measure_text_mono, opaque, rgba_hex,
 };
+use crate::bar::backdrop::Backdrop;
 use crate::bar::icons::{
     battery_total_width, draw_battery, draw_brand_dot, draw_brightness_sun, draw_wifi, fill_circle,
+    fill_rrect, stroke_rrect,
 };
 use crate::bar::password_modal::{draw_password_modal, PasswordModalHits, PasswordModalState};
 use crate::bar::pills::draw_pill_bg;
@@ -124,10 +126,53 @@ pub(crate) struct PaintResult {
 // paint_frame: pinta as 2 pills sobre fundo transparente.
 // ============================================================
 
-pub(crate) fn paint_frame(pixmap: &mut Pixmap, snap: &BarSnapshot) -> PaintResult {
+/// F-island: desenha o painel frosted da ilha flutuante. Ordem:
+///   1. wallpaper borrado clipado ao rrect (se backdrop disponivel);
+///   2. tint translucido (contraste/legibilidade, theme-aware);
+///   3. borda sutil (vidro).
+/// Sem backdrop -> so tint solido mais opaco (degradacao graciosa).
+fn draw_island_panel(pixmap: &mut Pixmap, snap: &BarSnapshot, backdrop: Option<&Backdrop>) {
+    let w = snap.width as f32;
+    let h = BAR_HEIGHT as f32;
+    let r = ISLAND_RADIUS;
+    let mut canvas = pixmap.as_mut();
+
+    let has_blur = backdrop.is_some();
+    if let Some(bd) = backdrop {
+        bd.paint_panel(&mut canvas, 0.0, 0.0, w, h, r, ISLAND_MARGIN_X, ISLAND_MARGIN_TOP);
+    }
+
+    // Tint translucido por cima. Com blur: leve (deixa o wallpaper aparecer).
+    // Sem blur: mais opaco (vira painel solido legivel). Theme-aware.
+    let (tint_rgb, tint_a) = match snap.theme {
+        LumoTheme::Dark => (0x0E0E12u32, if has_blur { 0x6E } else { 0xD8 }),
+        LumoTheme::Light => (0xF4F4F7u32, if has_blur { 0x66 } else { 0xD0 }),
+    };
+    fill_rrect(&mut canvas, 0.0, 0.0, w, h, r, rgba_hex(tint_rgb, tint_a));
+
+    // Borda de vidro: highlight sutil na borda (1px). Dark = branco baixo
+    // alpha; Light = preto baixo alpha.
+    let border = match snap.theme {
+        LumoTheme::Dark => rgba_hex(0xFFFFFF, 0x1A),
+        LumoTheme::Light => rgba_hex(0x000000, 0x14),
+    };
+    stroke_rrect(&mut canvas, 0.5, 0.5, w - 1.0, h - 1.0, r, border, 1.0);
+}
+
+pub(crate) fn paint_frame(
+    pixmap: &mut Pixmap,
+    snap: &BarSnapshot,
+    backdrop: Option<&Backdrop>,
+) -> PaintResult {
     let palette = &snap.palette;
     // BAR BACKGROUND TRANSPARENTE (A18 - alpha 0). Compositor pinta atras.
     pixmap.fill(Color::TRANSPARENT);
+
+    // F-island: painel frosted (wallpaper borrado + tint) ANTES das pills.
+    // Surface ja deslocada por set_margin -> (0,0) surface-local = canto da
+    // ilha. Painel cobre so a faixa BAR_HEIGHT (resto da surface fica
+    // transparente p/ dropdowns).
+    draw_island_panel(pixmap, snap, backdrop);
 
     let mut result = PaintResult::default();
     let h = snap.height as f32;
@@ -985,4 +1030,7 @@ pub(crate) struct LumoBar {
     pub degraded: std::collections::BTreeMap<String, String>,
     /// UX3: apps em freeze. pid -> app_id.
     pub frozen: std::collections::BTreeMap<u32, String>,
+    /// F-island: wallpaper borrado pro painel frosted. None = cache ausente
+    /// (painel cai no tint solido). Carregado uma vez no startup.
+    pub backdrop: Option<Backdrop>,
 }

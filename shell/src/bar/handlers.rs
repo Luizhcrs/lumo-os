@@ -212,7 +212,7 @@ impl LumoBar {
         };
 
         if let Some(mut px) = Pixmap::new(self.width, self.height) {
-            let paint_result = paint_frame(&mut px, &snap);
+            let paint_result = paint_frame(&mut px, &snap, self.backdrop.as_ref());
             self.bat_hit_rect = paint_result.bat_hit_rect;
             self.wifi_hit_rect = paint_result.wifi_hit_rect; // A23
             self.datetime_hit_rect = paint_result.datetime_hit_rect; // A24
@@ -342,16 +342,23 @@ impl LayerShellHandler for LumoBar {
         _: u32,
     ) {
         let (w, h) = cfg.new_size;
-        // A19.13: forca 1920 sempre (compositor passa width parcial as vezes)
-        self.width = 1920;
+        // F-island: a surface agora flutua com set_margin, entao o compositor
+        // configura width = output - 2*ISLAND_MARGIN_X (ex: 1904). Usa o
+        // valor configurado (clamp sane); fallback 1920-2*margin se 0
+        // (configure parcial historico A19.13).
+        self.width = if w > 0 {
+            (w as u32).clamp(320, 1920)
+        } else {
+            1920 - 2 * ISLAND_MARGIN_X as u32
+        };
         // A20.11 + A24 + A27: altura max cobre maior dropdown.
         let lumo_menu_h = menu::menu_height(MENU_LUMO_ITEMS) as u32;
         let max_drop = DROPDOWN_H.max(DROPDOWN_DATETIME_H).max(lumo_menu_h as f32) as u32;
         self.height = BAR_HEIGHT + DROPDOWN_GAP as u32 + max_drop + 8;
         self.first_configured = true;
         eprintln!(
-            "[lumo-bar] configured cfg_size=({},{}) FORCED width=1920 height={}",
-            w, h, self.height
+            "[lumo-bar] configured cfg_size=({},{}) island width={} height={}",
+            w, h, self.width, self.height
         );
         self.refresh();
         self.redraw(qh);

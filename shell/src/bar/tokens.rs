@@ -17,6 +17,30 @@ use crate::menu;
 /// 40px = 28px pill + 6px margin topo + 6px margem inferior (sombra cabe).
 pub const BAR_HEIGHT: u32 = 40;
 
+// ============================================================
+// Floating island (F-island): bar destacada da area de trabalho.
+// ============================================================
+//
+// A bar deixa de ser uma faixa edge-to-edge colada na borda e vira uma
+// ILHA flutuante: margem lateral + topo + cantos arredondados + fundo
+// frosted (wallpaper borrado) + gap antes do conteudo. Implementado via
+// `set_margin` no layer-shell (compositor desloca a surface) -> coords das
+// pills/dropdowns/hit-rects ficam INALTERADAS relativas a surface.
+//
+// Reserva total no topo = ISLAND_MARGIN_TOP + exclusive_zone, onde
+// exclusive_zone = BAR_HEIGHT + ISLAND_GAP_TO_WORK (vide smithay arrange:
+// anchor TOP|LEFT|RIGHT reserva exclusive + margin.top).
+
+/// Margem lateral da ilha (gap esquerda/direita ate a borda da tela).
+pub const ISLAND_MARGIN_X: f32 = 8.0;
+/// Margem topo da ilha (gap topo ate a borda da tela).
+pub const ISLAND_MARGIN_TOP: f32 = 6.0;
+/// Gap entre a base da ilha e o topo do conteudo (janelas). Soma ao
+/// exclusive_zone pra "dividir" a bar da area de trabalho.
+pub const ISLAND_GAP_TO_WORK: u32 = 8;
+/// Border-radius da ilha (cantos do painel frosted).
+pub const ISLAND_RADIUS: f32 = 16.0;
+
 /// Altura de cada pill. 28px = compact responsivo touch.
 pub const PILL_H: f32 = 28.0;
 

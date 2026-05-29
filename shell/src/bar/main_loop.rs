@@ -94,9 +94,29 @@ pub fn run() {
             .max(lumo_menu_h_main as f32) as u32
         + 8;
     layer.set_size(1920, surface_max_h);
-    layer.set_exclusive_zone(BAR_HEIGHT as i32);
+    // F-island: bar flutuante. margin (top,right,bottom,left) desloca a
+    // surface; o compositor encolhe a width pra output-2*margin_x. anchor
+    // TOP|LEFT|RIGHT => reserva = exclusive_zone + margin.top (smithay
+    // arrange). exclusive = BAR_HEIGHT + GAP_TO_WORK => janelas comecam em
+    // margin_top + BAR_HEIGHT + gap, deixando a ilha destacada + gap.
+    layer.set_margin(
+        ISLAND_MARGIN_TOP as i32,
+        ISLAND_MARGIN_X as i32,
+        0,
+        ISLAND_MARGIN_X as i32,
+    );
+    layer.set_exclusive_zone((BAR_HEIGHT + ISLAND_GAP_TO_WORK) as i32);
     layer.set_keyboard_interactivity(KeyboardInteractivity::None);
     layer.commit();
+
+    // F-island: carrega wallpaper borrado pro painel frosted (uma vez).
+    // Faixa screen-space cobre margin_top + bar. None se cache ausente
+    // (painel cai no tint solido).
+    let backdrop = crate::bar::backdrop::Backdrop::load(
+        1920,
+        1080,
+        ISLAND_MARGIN_TOP as u32 + BAR_HEIGHT + 16,
+    );
 
     let pool = SlotPool::new(1920 * surface_max_h as usize * 4 * 2, &shm).expect("[SHELL-INIT-006] SlotPool alloc");
     let active_workspace = Arc::new(AtomicU8::new(1));
@@ -112,7 +132,7 @@ pub fn run() {
         current_input_region: None,
         layer,
         pool,
-        width: 1920,
+        width: 1920 - 2 * ISLAND_MARGIN_X as u32,
         height: BAR_HEIGHT,
         active_workspace: active_workspace.clone(),
         battery_pct: 100,
@@ -220,6 +240,7 @@ pub fn run() {
         nm_connect_rx: None,
         degraded: std::collections::BTreeMap::new(),
         frozen: std::collections::BTreeMap::new(),
+        backdrop,
     };
 
     let mut last_tick = Instant::now();
