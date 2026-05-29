@@ -1282,3 +1282,7 @@ pub use urgency::Urgency;
 
 // Util compartilhado (clamp, markup_escape, safe_lock, rate_limit_check).
 pub mod util;
+
+// Lookup de icones freedesktop (pure, sem deps de imagem).
+pub mod icons;
+pub use icons::{icon_for_path, icon_name_for_path, icon_theme_dirs, lookup_icon};

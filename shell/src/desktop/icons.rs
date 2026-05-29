@@ -13,7 +13,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
-use tiny_skia::{Color, FillRule, Paint, PathBuilder, PixmapMut, Stroke, Transform};
+use tiny_skia::{Color, FillRule, Paint, PathBuilder, Pixmap, PixmapMut, PixmapPaint, Transform};
 
 use crate::desktop::state::{draw_text, fill_rrect, OUTPUT_H, OUTPUT_W};
 
@@ -167,6 +167,9 @@ pub struct IconsState {
     /// Context menu de icon: (icon_idx, menu_x, menu_y).
     pub ctx_menu: Option<(usize, f32, f32)>,
     pub ctx_hover: usize,
+    /// Cache de pixmaps renderizados por SVG path string.
+    /// None = SVG falhou ou icone nao encontrado (usa fallback vetorial).
+    pub icon_cache: HashMap<String, Option<Pixmap>>,
 }
 
 impl IconsState {
@@ -180,6 +183,7 @@ impl IconsState {
             last_click: None,
             ctx_menu: None,
             ctx_hover: usize::MAX,
+            icon_cache: HashMap::new(),
         };
         s.scan();
         s
@@ -232,6 +236,7 @@ impl IconsState {
             .collect();
 
         self.recalc_positions(OUTPUT_W, OUTPUT_H);
+        self.populate_icon_cache();
     }
 
     pub fn recalc_positions(&mut self, surf_w: u32, surf_h: u32) {
@@ -250,6 +255,28 @@ impl IconsState {
             let y = GRID_MARGIN_TOP + row as f32 * CELL_H;
             icon.screen_x = x;
             icon.screen_y = y;
+        }
+    }
+
+    /// Para cada icone que ainda nao esta no cache, resolve o SVG via
+    /// lumo_foundation::icon_for_path e renderiza num Pixmap 64x64.
+    /// Icones ja cached (pelo nome) sao ignorados (preserva o Pixmap existente).
+    fn populate_icon_cache(&mut self) {
+        // Coleta pares (name, path) de icones novos antes de mutar o cache
+        // para evitar conflito de borrow imutavel/mutavel em self.
+        let new_icons: Vec<(String, PathBuf)> = self
+            .icons
+            .iter()
+            .filter(|icon| !self.icon_cache.contains_key(&icon.name))
+            .map(|icon| (icon.name.clone(), icon.path.clone()))
+            .collect();
+
+        for (name, path) in new_icons {
+            let svg_path = lumo_foundation::icon_for_path(&path, ICON_SIZE as u32);
+            let pixmap = svg_path
+                .as_deref()
+                .and_then(|p| render_svg_icon(p, ICON_SIZE as u32));
+            self.icon_cache.insert(name, pixmap);
         }
     }
 
@@ -398,13 +425,36 @@ fn resolve_lumo_bin(name: &str) -> String {
 // Render
 // ============================================================
 
+/// Carrega e renderiza um SVG em um Pixmap `size x size`.
+/// Escala o SVG para caber na area pedida preservando proporcao.
+/// Retorna None se o arquivo nao existir, nao for SVG valido, ou
+/// se o Pixmap nao puder ser alocado.
+fn render_svg_icon(path: &std::path::Path, size: u32) -> Option<Pixmap> {
+    let data = std::fs::read(path).ok()?;
+    let opts = usvg::Options::default();
+    let tree = usvg::Tree::from_data(&data, &opts).ok()?;
+    let svg_size = tree.size();
+    let sx = size as f32 / svg_size.width();
+    let sy = size as f32 / svg_size.height();
+    let scale = sx.min(sy);
+    let mut pixmap = Pixmap::new(size, size)?;
+    let transform = Transform::from_scale(scale, scale);
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+    Some(pixmap)
+}
+
 pub fn paint_icons(canvas: &mut PixmapMut, state: &IconsState, accent_hex: u32) {
     for icon in &state.icons {
-        paint_icon(canvas, icon, accent_hex);
+        paint_icon(canvas, icon, accent_hex, &state.icon_cache);
     }
 }
 
-fn paint_icon(canvas: &mut PixmapMut, icon: &DesktopIcon, accent_hex: u32) {
+fn paint_icon(
+    canvas: &mut PixmapMut,
+    icon: &DesktopIcon,
+    accent_hex: u32,
+    cache: &HashMap<String, Option<Pixmap>>,
+) {
     let x = icon.screen_x;
     let y = icon.screen_y;
 
@@ -427,13 +477,26 @@ fn paint_icon(canvas: &mut PixmapMut, icon: &DesktopIcon, accent_hex: u32) {
     let ix = x + ICON_PAD_X;
     let iy = y + ICON_PAD_Y;
 
-    let shad = shadow_color();
-    if icon.is_dir {
-        paint_folder_icon(canvas, ix + 2.0, iy + 2.0, shad);
-        paint_folder_icon(canvas, ix, iy, folder_color());
+    // Tenta usar o icone Papirus do cache. Se nao disponivel, usa fallback vetorial.
+    let cached = cache.get(&icon.name).and_then(|opt| opt.as_ref());
+    if let Some(pixmap) = cached {
+        canvas.draw_pixmap(
+            ix as i32,
+            iy as i32,
+            pixmap.as_ref(),
+            &PixmapPaint::default(),
+            Transform::identity(),
+            None,
+        );
     } else {
-        paint_file_icon(canvas, ix + 2.0, iy + 2.0, shad);
-        paint_file_icon(canvas, ix, iy, file_color());
+        let shad = shadow_color();
+        if icon.is_dir {
+            paint_folder_icon(canvas, ix + 2.0, iy + 2.0, shad);
+            paint_folder_icon(canvas, ix, iy, folder_color());
+        } else {
+            paint_file_icon(canvas, ix + 2.0, iy + 2.0, shad);
+            paint_file_icon(canvas, ix, iy, file_color());
+        }
     }
 
     let label = truncate_label(&icon.name, 14);
@@ -565,6 +628,7 @@ mod tests {
             last_click: None,
             ctx_menu: None,
             ctx_hover: usize::MAX,
+            icon_cache: HashMap::new(),
         }
     }
 
@@ -749,5 +813,33 @@ mod tests {
         assert!((y - 200.0).abs() < 1e-5);
         assert!((w - CELL_W).abs() < 1e-5);
         assert!((h - CELL_H).abs() < 1e-5);
+    }
+
+    // T19: render_svg_icon retorna None pra path inexistente (fallback seguro).
+    #[test]
+    fn render_svg_icon_nonexistent_returns_none() {
+        let result = super::render_svg_icon(
+            std::path::Path::new("/tmp/__lumo_nonexistent_icon_xyz__.svg"),
+            64,
+        );
+        assert!(result.is_none());
+    }
+
+    // T20: icon_cache em make_state comeca vazio (paint usa fallback vetorial).
+    #[test]
+    fn icon_cache_starts_empty_in_make_state() {
+        let state = make_state(vec![make_icon("test.txt", 0.0, 0.0)]);
+        assert!(state.icon_cache.is_empty());
+    }
+
+    // T21: paint_icon usa fallback vetorial quando cache nao tem entrada pra icone.
+    // Verifica que paint nao paniqueou com cache vazio.
+    #[test]
+    fn paint_icon_with_empty_cache_no_panic() {
+        let mut pixmap = tiny_skia::Pixmap::new(200, 200).unwrap();
+        let icon = make_icon("test.txt", 10.0, 10.0);
+        let cache = HashMap::new();
+        super::paint_icon(&mut pixmap.as_mut(), &icon, 0x3B82F6, &cache);
+        // Se chegou aqui sem panic, o fallback vetorial funcionou.
     }
 }

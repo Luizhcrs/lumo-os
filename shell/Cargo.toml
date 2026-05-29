@@ -22,6 +22,8 @@ lumo-sensors = { path = "../crates/system/lumo-sensors" }
 zbus = { version = "5", default-features = false, features = ["blocking-api"] }
 cosmic-text = "0.12"
 fontdb = "0.18"
+resvg = "0.42"
+usvg = "0.42"
 
 # Refactor A-REFACTOR: expoe lib crate `lumo_shell` consumida pelos bins.
 # bar/desktop foram quebrados em modulos por feature (memory

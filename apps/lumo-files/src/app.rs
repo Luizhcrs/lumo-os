@@ -20,6 +20,7 @@ use crate::ctxmenu;
 use crate::filelist::{FileList, SortBy};
 use crate::icons;
 use crate::icons::{icon_for_path, IconKind};
+use crate::mime_icon::MimeIconCache;
 use crate::ops;
 use crate::sidebar::{build_sidebar, SidebarItem, SidebarKind};
 use crate::statusbar;
@@ -67,7 +68,7 @@ pub struct PropertiesState {
 }
 
 // ThumbCache: use crate::thumbs::ThumbCache (canonical source)
-use crate::thumbs::ThumbCache;
+use crate::thumbs::{ThumbCache, THUMB_SIZE};
 
 // ---------------------------------------------------------------------------
 // Clipboard state (path ops)
@@ -169,8 +170,18 @@ pub enum Message {
     ThumbLoaded {
         path: PathBuf,
         key: String,
+        /// Bytes RGBA brutos (THUMB_SIZE * THUMB_SIZE * 4 bytes).
         data: Vec<u8>,
     },
+    /// Icone Papirus rasterizado para um nome de icone freedesktop.
+    MimeIconLoaded {
+        /// Nome de icone freedesktop (ex: "folder", "image-x-generic").
+        icon_name: String,
+        /// Bytes RGBA (ICON_SIZE * ICON_SIZE * 4 bytes), ou None se nao encontrado.
+        data: Option<Vec<u8>>,
+    },
+    /// Tamanho da janela atualizado (para clamp do context menu).
+    WindowResized { width: f32, height: f32 },
 
     // Teclado
     KeyPressed(Key, Modifiers),
@@ -235,6 +246,14 @@ pub struct App {
     pub home_subdirs: Vec<PathBuf>,
     /// Manual hit-test: ultima posicao do cursor (window-relative).
     pub last_cursor_pos: iced::Point,
+    /// Double-click: (idx, instante) do ultimo ItemClicked. Iced button nao
+    /// tem double-click nativo -> detectamos por tempo (mesmo idx < 400ms).
+    pub last_item_click: Option<(usize, Instant)>,
+    /// Cache de icones Papirus rasterizados para mime types.
+    pub mime_cache: MimeIconCache,
+    /// Tamanho atual da janela (atualizado via WindowResized / RawEvent).
+    /// Usado para clamp do context menu.
+    pub window_size: (f32, f32),
 }
 
 impl App {
@@ -293,6 +312,9 @@ impl App {
             expanded: std::collections::HashSet::new(),
             home_subdirs: load_immediate_subdirs(&home),
             last_cursor_pos: iced::Point::ORIGIN,
+            last_item_click: None,
+            mime_cache: MimeIconCache::new(),
+            window_size: (1366.0, 768.0),
         };
         // Task::none(): dados ja carregados sincronamente acima.
         // Breadcrumb e grid corretos desde o primeiro frame.
@@ -381,10 +403,23 @@ impl App {
             Message::ItemClicked { idx, ctrl, shift } => {
                 if shift {
                     self.current_tab_mut().file_list.shift_click(idx);
+                    self.last_item_click = None;
                 } else if ctrl {
                     self.current_tab_mut().file_list.ctrl_click(idx);
+                    self.last_item_click = None;
                 } else {
+                    // Double-click manual: mesmo idx < 400ms abre o item (Iced
+                    // button so emite on_press; sem double-click nativo).
+                    let dbl = matches!(
+                        self.last_item_click,
+                        Some((li, t)) if li == idx && t.elapsed() < Duration::from_millis(400)
+                    );
+                    if dbl {
+                        self.last_item_click = None;
+                        return self.update(Message::ItemDoubleClicked(idx));
+                    }
                     self.current_tab_mut().file_list.click(idx);
+                    self.last_item_click = Some((idx, Instant::now()));
                 }
                 Task::none()
             }
@@ -682,6 +717,46 @@ impl App {
                             },
                         ));
                     }
+
+                    // Mime icons: rasteriza Papirus SVGs para arquivos/pastas
+                    // que nao tem thumbnail proprio. Deduplica por icon_name para
+                    // nao lançar multiplas tasks para o mesmo icone (ex: todas
+                    // as pastas usam "folder").
+                    let mut seen_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+                    let non_image_paths: Vec<_> = self.tabs[self.active_tab]
+                        .file_list
+                        .entries
+                        .iter()
+                        .filter(|p| !crate::thumbs::is_image(p))
+                        .cloned()
+                        .collect();
+                    for p in non_image_paths {
+                        // icon_name_for_path e puro (sem IO exceto is_dir()).
+                        let icon_name = lumo_foundation::icon_name_for_path(&p).to_string();
+                        // Pula se ja esta no cache ou ja spawnamos esta sessao.
+                        if self.mime_cache.contains(&icon_name) {
+                            continue;
+                        }
+                        if !seen_names.insert(icon_name.clone()) {
+                            continue;
+                        }
+                        tasks.push(Task::perform(
+                            tokio::task::spawn_blocking(move || {
+                                crate::mime_icon::render_mime_icon_by_name(&icon_name)
+                            }),
+                            |r| match r {
+                                Ok(result) => Message::MimeIconLoaded {
+                                    icon_name: result.icon_name,
+                                    data: result.data,
+                                },
+                                // JoinError: ignora, sem icone Papirus.
+                                Err(_) => Message::MimeIconLoaded {
+                                    icon_name: String::new(),
+                                    data: None,
+                                },
+                            },
+                        ));
+                    }
                 }
 
                 if tasks.is_empty() {
@@ -782,7 +857,21 @@ impl App {
             }
 
             Message::ThumbLoaded { path: _, key, data } => {
+                // data sao bytes RGBA brutos (THUMB_SIZE * THUMB_SIZE * 4).
                 self.thumb_cache.insert(key, data);
+                Task::none()
+            }
+
+            Message::MimeIconLoaded { icon_name, data } => {
+                // Ignora entries com nome vazio (JoinError path).
+                if !icon_name.is_empty() {
+                    self.mime_cache.insert(icon_name, data);
+                }
+                Task::none()
+            }
+
+            Message::WindowResized { width, height } => {
+                self.window_size = (width, height);
                 Task::none()
             }
 
@@ -941,6 +1030,9 @@ impl App {
             // disparamos mensagens corretas manualmente no ButtonPressed.
             Message::RawEvent(event) => {
                 match &event {
+                    iced::Event::Window(iced::window::Event::Resized(size)) => {
+                        self.window_size = (size.width, size.height);
+                    }
                     iced::Event::Mouse(mouse::Event::CursorMoved { position }) => {
                         self.last_cursor_pos = *position;
                     }
@@ -1559,15 +1651,17 @@ impl App {
                     Color::TRANSPARENT
                 };
 
-                let svg_icon = Svg::new(SvgHandle::from_memory(icons::svg_bytes_for_kind(&kind)))
-                    .width(Length::Fixed(56.0))
-                    .height(Length::Fixed(56.0))
-                    .style(move |_, _| iced::widget::svg::Style {
-                        color: Some(icon_color),
-                    });
-
                 let cell_content: Element<Message> =
                     if self.current_tab().file_list.renaming == Some(idx) {
+                        // Renaming inline: usa SVG embutido simples.
+                        let svg_icon = Svg::new(SvgHandle::from_memory(
+                            icons::svg_bytes_for_kind(&kind),
+                        ))
+                        .width(Length::Fixed(56.0))
+                        .height(Length::Fixed(56.0))
+                        .style(move |_, _| iced::widget::svg::Style {
+                            color: Some(icon_color),
+                        });
                         column![
                             container(svg_icon)
                                 .width(Length::Fixed(56.0))
@@ -1584,38 +1678,28 @@ impl App {
                     } else if matches!(kind, IconKind::Image) {
                         let thumb_key = crate::thumbs::cache_key(path);
                         if let Some(bytes) = self.thumb_cache.get(&thumb_key) {
+                            // bytes sao RGBA brutos: THUMB_SIZE x THUMB_SIZE x 4.
+                            let handle = iced::widget::image::Handle::from_rgba(
+                                THUMB_SIZE,
+                                THUMB_SIZE,
+                                bytes.clone(),
+                            );
                             column![
-                                iced::widget::image::Image::new(
-                                    iced::widget::image::Handle::from_bytes(bytes.clone())
-                                )
-                                .width(Length::Fixed(80.0))
-                                .height(Length::Fixed(80.0)),
+                                iced::widget::image::Image::new(handle)
+                                    .width(Length::Fixed(80.0))
+                                    .height(Length::Fixed(80.0)),
                                 text(name).size(11).color(fg),
                             ]
                             .spacing(8)
                             .align_x(Alignment::Center)
                             .into()
                         } else {
-                            column![
-                                container(svg_icon)
-                                    .width(Length::Fixed(56.0))
-                                    .height(Length::Fixed(56.0)),
-                                text(name).size(11).color(fg),
-                            ]
-                            .spacing(8)
-                            .align_x(Alignment::Center)
-                            .into()
+                            // Thumb ainda nao carregado: mostra icone mime enquanto aguarda.
+                            self.cell_with_mime_or_svg(path, &kind, icon_color, &name, fg)
                         }
                     } else {
-                        column![
-                            container(svg_icon)
-                                .width(Length::Fixed(56.0))
-                                .height(Length::Fixed(56.0)),
-                            text(name).size(11).color(fg),
-                        ]
-                        .spacing(8)
-                        .align_x(Alignment::Center)
-                        .into()
+                        // Nao e imagem: tenta icone Papirus do cache.
+                        self.cell_with_mime_or_svg(path, &kind, icon_color, &name, fg)
                     };
 
                 let panel_hi_local = th.bg_subtle;
@@ -2289,9 +2373,8 @@ impl App {
         // = ~260 altura.
         let menu_w = 240.0_f32;
         let menu_h = 260.0_f32;
-        // Fallback resolucao Galaxy Book 4 (1920x1080 scaled).
-        let win_w = 1366.0_f32;
-        let win_h = 768.0_f32;
+        // Usa tamanho real da janela (atualizado via RawEvent::WindowResized).
+        let (win_w, win_h) = self.window_size;
         let px = mx.min(win_w - menu_w - 4.0).max(0.0);
         let py = my.min(win_h - menu_h - 4.0).max(0.0);
 
@@ -2326,6 +2409,61 @@ impl App {
     // -----------------------------------------------------------------------
     // Helpers internos
     // -----------------------------------------------------------------------
+
+    /// Retorna o elemento de celula do grid tentando usar icone Papirus do cache.
+    /// Fallback para SVG embutido (kind + icon_color) se o icone Papirus nao
+    /// estiver disponivel ou o sistema nao tiver Papirus instalado.
+    fn cell_with_mime_or_svg<'a>(
+        &'a self,
+        path: &std::path::Path,
+        kind: &IconKind,
+        icon_color: Color,
+        name: &str,
+        fg: Color,
+    ) -> Element<'a, Message> {
+        use crate::mime_icon::ICON_SIZE;
+
+        // Lookup por icon_name (puro, zero IO por frame).
+        // icon_name_for_path so chama is_dir() uma vez.
+        let icon_name = lumo_foundation::icon_name_for_path(path);
+        let maybe_papirus: Option<iced::widget::image::Handle> = self
+            .mime_cache
+            .get(icon_name)
+            .and_then(|opt| opt)
+            .map(|bytes| {
+                iced::widget::image::Handle::from_rgba(
+                    ICON_SIZE,
+                    ICON_SIZE,
+                    bytes.as_ref().to_vec(),
+                )
+            });
+
+        let icon_elem: Element<Message> = if let Some(handle) = maybe_papirus {
+            // Icone Papirus rasterizado disponivel.
+            iced::widget::image::Image::new(handle)
+                .width(Length::Fixed(56.0))
+                .height(Length::Fixed(56.0))
+                .into()
+        } else {
+            // Fallback: SVG embutido com cor aplicada via currentColor.
+            let svg_icon = Svg::new(SvgHandle::from_memory(icons::svg_bytes_for_kind(kind)))
+                .width(Length::Fixed(56.0))
+                .height(Length::Fixed(56.0))
+                .style(move |_, _| iced::widget::svg::Style {
+                    color: Some(icon_color),
+                });
+            container(svg_icon)
+                .width(Length::Fixed(56.0))
+                .height(Length::Fixed(56.0))
+                .into()
+        };
+
+        // text() OWNS a String -> nao prende 'a ao &name local do caller (E0515).
+        column![icon_elem, text(name.to_string()).size(11).color(fg),]
+            .spacing(8)
+            .align_x(Alignment::Center)
+            .into()
+    }
 
     // -----------------------------------------------------------------------
     // Manual hit-test (workaround: Iced widget handlers nao disparam no
@@ -2548,6 +2686,9 @@ mod tests {
             expanded: std::collections::HashSet::new(),
             home_subdirs: Vec::new(),
             last_cursor_pos: iced::Point::ORIGIN,
+            last_item_click: None,
+            mime_cache: MimeIconCache::new(),
+            window_size: (1366.0, 768.0),
         }
     }
 

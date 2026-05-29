@@ -11,6 +11,7 @@ pub mod sidebar;
 pub mod statusbar;
 pub mod tabs;
 pub mod theme;
+pub mod mime_icon;
 pub mod thumbs;
 pub mod toast;
 pub mod toolbar;
