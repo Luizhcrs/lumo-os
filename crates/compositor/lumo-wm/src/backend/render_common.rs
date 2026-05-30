@@ -1020,12 +1020,13 @@ fn wrap_space_elements_rounded(
         .into_iter()
         .map(|el| match el {
             SpaceRenderElements::Element(_) => {
-                // W38: winit path (dev nested) nao tem SSD info por elemento;
-                // apps Lumo sao CSD -> round_top=true. SSD em dev e raro.
+                // W38: winit path (dev nested) processa lista flat sem agrupar
+                // por janela; arredonda os 4 cantos de cada elemento. Dev-only.
                 LumoCustomElement::Rounded(RoundedSurfaceElement::new(
                     el,
                     corner_shader.program.clone(),
                     CORNER_RADIUS_WINDOW as f32,
+                    true,
                     true,
                 ))
             }
@@ -1459,21 +1460,29 @@ pub fn collect_drm_elements(
                 1.0,
             );
         if let Some(cs) = inputs.corner_shader {
-            // W38: arredonda os 4 cantos da superficie de conteudo sempre. Apps
-            // Lumo (SSD) desenham a propria toolbar ate o topo da janela -> o
-            // topo VISIVEL e o conteudo, que precisa curvar pra casar o bottom
-            // (ja arredondado). Em SSD com titlebar bg separada, o canto curvo do
-            // topo revela a titlebar full-width atras (mesma cor), sem gap com o
-            // wallpaper -> seguro. Era !is_ssd, mas deixava lumo-files quadrado.
-            let round_top = true;
-            // Wrap content em RoundedSurfaceElement
-            for el in content_elems {
+            // W38: apps Lumo desenham a janela em MULTIPLOS subsurfaces (ex.
+            // titlebar + content + status bar). Arredondar o topo de CADA um
+            // gerava curva dupla feia (titlebar redonda + content redondo logo
+            // abaixo). Solucao: arredondar so a borda que coincide com a borda
+            // da JANELA -- topo do subsurface mais alto, base do mais baixo.
+            // Bordas internas (entre subsurfaces) ficam retas. Single-surface =
+            // 1 elemento toca topo E base -> 4 cantos. Extremos vem das proprias
+            // geometrias dos elementos (robusto, sem depender de window.geometry).
+            use smithay::backend::renderer::element::Element as _;
+            let scale = smithay::utils::Scale::from(1.0);
+            let geos: Vec<_> = content_elems.iter().map(|el| el.geometry(scale)).collect();
+            let win_top = geos.iter().map(|g| g.loc.y).min().unwrap_or(0);
+            let win_bottom = geos.iter().map(|g| g.loc.y + g.size.h).max().unwrap_or(0);
+            for (el, geo) in content_elems.into_iter().zip(geos) {
+                let round_top = geo.loc.y <= win_top + 2;
+                let round_bottom = (geo.loc.y + geo.size.h) >= win_bottom - 2;
                 let space_wrap = smithay::desktop::space::SpaceRenderElements::Surface(el);
                 out.push(LumoCustomElement::Rounded(RoundedSurfaceElement::new(
                     space_wrap,
                     cs.program.clone(),
                     CORNER_RADIUS_WINDOW as f32,
                     round_top,
+                    round_bottom,
                 )));
             }
         } else {

@@ -39,10 +39,12 @@ varying vec2 v_coords;
 
 uniform vec2 u_surf_size;
 uniform float u_corner_radius;
-// W38: 1.0 = arredonda tambem os cantos de CIMA (apps CSD desenham a propria
-// titlebar, entao a superficie inteira deve curvar). 0.0 = bottom-only (SSD:
-// TitlebarBgShader arredonda o topo separadamente).
+// W38: arredondamento por-borda. 1.0 = arredonda os cantos daquela borda.
+// Setado por-elemento: so a borda que coincide com a borda da JANELA curva
+// (topo do subsurface mais alto = titlebar; base do mais baixo = status bar).
+// Bordas internas (entre subsurfaces empilhados) ficam retas -> sem curva dupla.
 uniform float u_round_top;
+uniform float u_round_bottom;
 
 #if defined(DEBUG_FLAGS)
 uniform float tint;
@@ -74,9 +76,11 @@ void main() {
         float d = sdf_rounded_rect(px - center, half_size, u_corner_radius);
         float aa = 1.0;
         float mask = 1.0 - smoothstep(-aa, aa, d);
-        // W38: bottom half sempre arredondado. Top half so quando u_round_top
-        // (CSD). SSD mantem topo reto -- TitlebarBgShader cuida do canto de cima.
-        if (px.y >= center.y || u_round_top > 0.5) {
+        // W38: cada metade so arredonda se a flag da borda estiver setada. Assim
+        // um subsurface no meio da janela (borda interna) nao curva, evitando
+        // curva dupla. Topo curva so no subsurface do topo da janela; base idem.
+        bool top_half = px.y < center.y;
+        if ((top_half && u_round_top > 0.5) || (!top_half && u_round_bottom > 0.5)) {
             color.a *= mask;
         }
     }
@@ -107,6 +111,7 @@ impl CornerShader {
                 UniformName::new("u_surf_size", UniformType::_2f),
                 UniformName::new("u_corner_radius", UniformType::_1f),
                 UniformName::new("u_round_top", UniformType::_1f),
+                UniformName::new("u_round_bottom", UniformType::_1f),
             ],
         )?;
         Ok(CornerShader { program })
@@ -122,6 +127,7 @@ pub struct RoundedSurfaceElement {
     corner_program: GlesTexProgram,
     corner_radius: f32,
     round_top: f32,
+    round_bottom: f32,
 }
 
 impl RoundedSurfaceElement {
@@ -130,6 +136,7 @@ impl RoundedSurfaceElement {
         corner_program: GlesTexProgram,
         corner_radius: f32,
         round_top: bool,
+        round_bottom: bool,
     ) -> Self {
         let geo = elem.geometry(Scale::from(1.0));
         RoundedSurfaceElement {
@@ -139,6 +146,7 @@ impl RoundedSurfaceElement {
             corner_program,
             corner_radius,
             round_top: if round_top { 1.0 } else { 0.0 },
+            round_bottom: if round_bottom { 1.0 } else { 0.0 },
         }
     }
 }
@@ -207,6 +215,7 @@ impl RenderElement<GlesRenderer> for RoundedSurfaceElement {
             Uniform::new("u_surf_size", (w, h)).into_owned(),
             Uniform::new("u_corner_radius", self.corner_radius).into_owned(),
             Uniform::new("u_round_top", self.round_top).into_owned(),
+            Uniform::new("u_round_bottom", self.round_bottom).into_owned(),
         ];
         frame.override_default_tex_program(self.corner_program.clone(), uniforms);
         let res = RenderElement::<GlesRenderer>::draw(
