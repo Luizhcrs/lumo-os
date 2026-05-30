@@ -1186,14 +1186,34 @@ impl LumoState {
             .unwrap_or(false)
     }
 
-    /// W38: minimiza uma janela -- desmapeia do space (some da tela) e guarda
-    /// a loc pra restaurar. NAO destroi a surface. Restauracao via Alt-Tab
-    /// (StackPicker inclui minimized) -> restore_window.
+    /// W38: minimiza uma janela. Com anim, seta Minimizing (janela fica mapeada
+    /// encolhendo+fade ~180ms) e o unmap real acontece em finish_minimize quando
+    /// a anim termina (hard-cap garante que sempre termina). reduced_motion ou
+    /// sem anim -> unmap imediato. NAO destroi a surface (restore via Alt-Tab).
     pub fn minimize_window(&mut self, window: &smithay::desktop::Window) {
-        // Ja minimizada? no-op (evita duplicar).
+        use smithay::wayland::seat::WaylandFocus;
         if self.is_minimized(window) {
             return;
         }
+        let reduced = lumo_foundation::A11yTokens::load_from_disk().reduced_motion;
+        if let Some(surf) = window.wl_surface() {
+            self.window_anim.insert_minimizing(&surf, reduced);
+        }
+        if reduced {
+            self.do_minimize_unmap(window);
+        } else {
+            // anim roda; finish_minimize (tick) faz o unmap ao terminar.
+            self.should_render = true;
+            #[cfg(feature = "drm-backend")]
+            {
+                self.drm_force_repaint = true;
+            }
+        }
+    }
+
+    /// W38: unmap real + guarda em minimized_windows (chamado direto se sem anim,
+    /// ou por finish_minimize ao fim da anim).
+    fn do_minimize_unmap(&mut self, window: &smithay::desktop::Window) {
         let loc = self.space.element_location(window).unwrap_or_default();
         self.space.unmap_elem(window);
         self.minimized_windows.push((window.clone(), loc));
@@ -1202,7 +1222,26 @@ impl LumoState {
         {
             self.drm_force_repaint = true;
         }
-        tracing::info!("W38: minimize_window (unmapped, {} minimizadas)", self.minimized_windows.len());
+        tracing::info!("W38: minimize unmap ({} minimizadas)", self.minimized_windows.len());
+    }
+
+    /// W38: chamado pelo tick quando a anim de minimizar termina (MinimizeDone).
+    /// Acha a janela pelo protocol_id da surface e faz o unmap.
+    pub fn finish_minimize(&mut self, surface_id: u32) {
+        use smithay::reexports::wayland_server::Resource;
+        use smithay::wayland::seat::WaylandFocus;
+        let win = self
+            .space
+            .elements()
+            .find(|w| {
+                w.wl_surface()
+                    .map(|s| s.id().protocol_id() == surface_id)
+                    .unwrap_or(false)
+            })
+            .cloned();
+        if let Some(w) = win {
+            self.do_minimize_unmap(&w);
+        }
     }
 
     /// W38: restaura uma janela minimizada no lugar onde estava + foca/raise.

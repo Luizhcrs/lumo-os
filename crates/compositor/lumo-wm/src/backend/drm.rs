@@ -1057,6 +1057,11 @@ fn render_drm(state: &mut LumoState) {
         // (senao o damage-gate em render_drm retorna sem renderizar a animacao).
         if state.window_anim.is_active() {
             state.window_anim.tick_all(dt);
+            // W38: janelas que terminaram de minimizar -> unmap + guarda.
+            let min_done = state.window_anim.drain_minimize_done();
+            for id in min_done {
+                state.finish_minimize(id);
+            }
             state.window_anim.prune_settled();
             state.should_render = true;
             state.drm_force_repaint = true;

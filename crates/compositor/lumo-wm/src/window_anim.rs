@@ -22,8 +22,13 @@ const MAX_ANIM_S: f32 = 0.18;
 pub enum WindowAnimState {
     Opening { progress: f32, velocity: f32, elapsed: f32 },
     Closing { progress: f32, velocity: f32, elapsed: f32 },
+    /// W38: minimizar -- encolhe+fade in-place (progress 1->0). A janela fica
+    /// mapeada/viva durante a anim; ao terminar (MinimizeDone) e desmapeada +
+    /// guardada em minimized_windows pra restaurar (sem use-after-free).
+    Minimizing { progress: f32, velocity: f32, elapsed: f32 },
     Idle,
     CloseDone,
+    MinimizeDone,
 }
 
 impl WindowAnimState {
@@ -41,6 +46,14 @@ impl WindowAnimState {
             WindowAnimState::CloseDone
         } else {
             WindowAnimState::Closing { progress: 1.0, velocity: 0.0, elapsed: 0.0 }
+        }
+    }
+
+    pub fn new_minimizing(reduced_motion: bool) -> Self {
+        if reduced_motion {
+            WindowAnimState::MinimizeDone
+        } else {
+            WindowAnimState::Minimizing { progress: 1.0, velocity: 0.0, elapsed: 0.0 }
         }
     }
 
@@ -63,7 +76,18 @@ impl WindowAnimState {
                     return true;
                 }
             }
-            WindowAnimState::Idle | WindowAnimState::CloseDone => return true,
+            WindowAnimState::Minimizing { progress, velocity, elapsed } => {
+                spring_step(progress, velocity, 0.0, dt);
+                *elapsed += dt;
+                if *progress <= 0.05 || *elapsed >= MAX_ANIM_S {
+                    *progress = 0.0;
+                    *self = WindowAnimState::MinimizeDone;
+                    return true;
+                }
+            }
+            WindowAnimState::Idle
+            | WindowAnimState::CloseDone
+            | WindowAnimState::MinimizeDone => return true,
         }
         false
     }
@@ -72,14 +96,19 @@ impl WindowAnimState {
         match self {
             WindowAnimState::Opening { progress, .. } => *progress,
             WindowAnimState::Closing { progress, .. } => *progress,
+            WindowAnimState::Minimizing { progress, .. } => *progress,
             WindowAnimState::Idle => 1.0,
-            WindowAnimState::CloseDone => 0.0,
+            WindowAnimState::CloseDone | WindowAnimState::MinimizeDone => 0.0,
         }
     }
 
-    /// Scale lerp 0.9..1.0
+    /// Scale: open 0.9..1.0; minimize encolhe mais (1.0..0.25) pra leitura de
+    /// "sumindo". Demais = 0.9+0.1*progress.
     pub fn scale(&self) -> f32 {
-        0.9 + 0.1 * self.visual_progress()
+        match self {
+            WindowAnimState::Minimizing { progress, .. } => 0.25 + 0.75 * progress,
+            _ => 0.9 + 0.1 * self.visual_progress(),
+        }
     }
     pub fn alpha(&self) -> f32 {
         self.visual_progress()
@@ -87,10 +116,15 @@ impl WindowAnimState {
     pub fn is_close_done(&self) -> bool {
         matches!(self, WindowAnimState::CloseDone)
     }
+    pub fn is_minimize_done(&self) -> bool {
+        matches!(self, WindowAnimState::MinimizeDone)
+    }
     pub fn is_animating(&self) -> bool {
         matches!(
             self,
-            WindowAnimState::Opening { .. } | WindowAnimState::Closing { .. }
+            WindowAnimState::Opening { .. }
+                | WindowAnimState::Closing { .. }
+                | WindowAnimState::Minimizing { .. }
         )
     }
 }
@@ -132,6 +166,28 @@ impl WindowAnimRegistry {
             Self::key(surface),
             WindowAnimState::new_closing(reduced_motion),
         );
+    }
+
+    pub fn insert_minimizing(&mut self, surface: &WlSurface, reduced_motion: bool) {
+        self.states.insert(
+            Self::key(surface),
+            WindowAnimState::new_minimizing(reduced_motion),
+        );
+    }
+
+    /// W38: drena (remove + retorna) as janelas que terminaram de minimizar.
+    /// O caller faz o unmap + guarda em minimized_windows pra cada id.
+    pub fn drain_minimize_done(&mut self) -> Vec<u32> {
+        let done: Vec<u32> = self
+            .states
+            .iter()
+            .filter(|(_, s)| s.is_minimize_done())
+            .map(|(k, _)| *k)
+            .collect();
+        for k in &done {
+            self.states.remove(k);
+        }
+        done
     }
 
     pub fn get(&self, surface: &WlSurface) -> Option<&WindowAnimState> {
