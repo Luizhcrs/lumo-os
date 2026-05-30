@@ -365,7 +365,11 @@ fn arm_and_refresh_now(state: &mut LumoState) {
         .map(|p| crate::stack_picker::picker_elements(p, ow, oh))
         .unwrap_or_default();
 
+    // W38: screencopy/screenshot mostra o estado FINAL (sem anim de open).
+    // Registry vazio -> nenhuma janela animando -> scale/alpha 1.0.
+    let empty_anim = crate::window_anim::WindowAnimRegistry::new();
     let inputs = crate::backend::render_common::DrmCollectInputs {
+        window_anim: &empty_anim,
         boot_curtain_alpha,
         splash_alpha: splash_alpha_val,
         splash_buffer: splash_buffer.as_ref(),
