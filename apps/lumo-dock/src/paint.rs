@@ -282,13 +282,15 @@ pub fn paint_dock(
         slot_rects.push((pill_x + i as f32 * slot_w, slot_w));
     }
     let sep_cx = pill_x + n as f32 * slot_w + ICON_MARGIN;
+    // W38: separador 1.5px claro (pearl ~28% alpha) -- o 1px muted antigo sumia
+    // sobre o frosted blur. Linha clara le melhor que escura no vidro.
     fill_rect(
         canvas,
         sep_cx,
         cy - SEPARATOR_H * 0.5,
-        SEPARATOR_W,
+        1.5,
         SEPARATOR_H,
-        muted,
+        rgba(0xf5f5f7, 0x47),
     );
     let ti = n;
     let ts = scales.get(ti).map(|s| s.value).unwrap_or(1.0);
