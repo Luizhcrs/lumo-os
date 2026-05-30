@@ -24,17 +24,21 @@ pub struct DockConfig {
 }
 
 fn default_slots() -> Vec<SlotConfig> {
+    // W38: so apps que EXISTEM de fato (binarios Lumo em target/release ou no
+    // PATH do sistema). Antes referenciava galculator/firefox/lumo-calendar que
+    // nao existem no Galaxy -> click sem efeito. `process` = nome real em
+    // /proc/<pid>/comm pra acender o dot de "app aberto".
     vec![
         SlotConfig {
-            label: "Home".into(),
+            label: "Files".into(),
             exec: "lumo-files".into(),
             process: "lumo-files".into(),
             icon: "home".into(),
         },
         SlotConfig {
             label: "Calculator".into(),
-            exec: "galculator".into(),
-            process: "galculator".into(),
+            exec: "lumo-calc".into(),
+            process: "lumo-calc".into(),
             icon: "calc".into(),
         },
         SlotConfig {
@@ -45,8 +49,8 @@ fn default_slots() -> Vec<SlotConfig> {
         },
         SlotConfig {
             label: "Browser".into(),
-            exec: "firefox".into(),
-            process: "firefox".into(),
+            exec: "chromium".into(),
+            process: "chromium".into(),
             icon: "browser".into(),
         },
         SlotConfig {
@@ -56,9 +60,9 @@ fn default_slots() -> Vec<SlotConfig> {
             icon: "term".into(),
         },
         SlotConfig {
-            label: "Calendar".into(),
-            exec: "lumo-calendar".into(),
-            process: "lumo-calendar".into(),
+            label: "Notes".into(),
+            exec: "lumo-notes".into(),
+            process: "lumo-notes".into(),
             icon: "calendar".into(),
         },
     ]

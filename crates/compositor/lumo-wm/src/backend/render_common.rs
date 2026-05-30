@@ -620,9 +620,16 @@ pub fn work_area_frame_elements(
         (0, cy, cx, ch),
         // direita do card
         (cx + cw, cy, output_w - (cx + cw), ch),
-        // abaixo do card
-        (0, cy + ch, output_w, output_h - (cy + ch)),
+        // abaixo do card: SO a faixa da margem (CARD_MARGIN), parando no topo
+        // da zona exclusiva inferior (ex. lumo-dock). Antes ia ate output_h e
+        // tapava o dock -- Layer::Bottom vive em lower_layers, empurrado DEPOIS
+        // (z-order atras) desta moldura, entao a faixa preta cobria o dock.
+        // card.bottom = non_exclusive_bottom - CARD_MARGIN, logo a faixa de
+        // CARD_MARGIN alcanca exatamente o topo da zona reservada (sem dock vai
+        // ate output_h, identico ao anterior; com dock para no topo dele).
+        (0, cy + ch, output_w, CARD_MARGIN),
     ];
+    let _ = output_h;
     for (x, y, w, h) in rects {
         if w > 0 && h > 0 {
             let geo: Rectangle<i32, Physical> = Rectangle::new(

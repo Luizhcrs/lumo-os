@@ -1,0 +1,23 @@
+[Unit]
+Description=Lumo dock (barra inferior layer-shell client)
+# Aguarda WAYLAND_DISPLAY via lumo-wm ou socket disponivel.
+# Sem After=lumo-wm pois lumo-wm pode nao rodar via systemd.
+After=graphical-session-pre.target
+
+[Service]
+Type=simple
+# Espera WAYLAND_DISPLAY estar disponivel antes de exec.
+ExecStartPre=/bin/bash -c 'until [ -n "${WAYLAND_DISPLAY}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ]; do sleep 0.05; done'
+# PATH inclui target/release: o dock lanca apps por nome (Command::new), e os
+# binarios lumo-* vivem em target/release, nao no PATH padrao. chromium/alacritty
+# vem do /usr/bin do sistema.
+ExecStart=/bin/bash -c 'export PATH="%h/Projects/lumo-shell/target/release:${PATH}"; exec %h/Projects/lumo-shell/target/release/lumo-dock'
+Restart=on-failure
+RestartSec=1
+StandardOutput=journal
+StandardError=journal
+# Env de sessao Wayland (herdado de loginctl/PAM).
+PassEnvironment=WAYLAND_DISPLAY XDG_RUNTIME_DIR HOME XDG_CONFIG_HOME DISPLAY
+
+[Install]
+WantedBy=default.target
