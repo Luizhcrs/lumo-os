@@ -834,6 +834,7 @@ pub fn run(
                 || state.boot_curtain_alpha > 0.001
                 || state.splash_alpha > 0.001
                 || state.overview.is_some()
+                || state.window_anim.is_active()
                 || recent_input;
             let timeout_ms = if active { 16 } else { 33 };
             TimeoutAction::ToDuration(Duration::from_millis(timeout_ms))
@@ -875,6 +876,7 @@ pub fn run(
                 || state.boot_curtain_alpha > 0.001
                 || state.splash_alpha > 0.001
                 || state.overview.is_some()
+                || state.window_anim.is_active()
                 || recent_input;
             let dispatch_ms = if active { 4 } else { 8 };
             TimeoutAction::ToDuration(Duration::from_millis(dispatch_ms))
@@ -1051,6 +1053,14 @@ fn render_drm(state: &mut LumoState) {
         if let Some(ov) = state.overview.as_mut() {
             ov.tick(dt);
         }
+        // W38: tick window open anim (scale+fade). Forca repaint enquanto ativo
+        // (senao o damage-gate em render_drm retorna sem renderizar a animacao).
+        if state.window_anim.is_active() {
+            state.window_anim.tick_all(dt);
+            state.window_anim.prune_settled();
+            state.should_render = true;
+            state.drm_force_repaint = true;
+        }
         if state
             .overview
             .as_ref()
@@ -1169,6 +1179,8 @@ fn render_drm(state: &mut LumoState) {
         output_h: oh,
         // Card recuado: area util (ja recuada por usable_geometry) p/ moldura.
         work_area,
+        // W38: anim open/close por janela (scale+alpha).
+        window_anim: &state.window_anim,
     };
     // R1.fix3 flicker: cursor_only path REMOVIDO. queue_frame com lista
     // contendo SO cursor limpa primary plane = flicker visivel quando mouse

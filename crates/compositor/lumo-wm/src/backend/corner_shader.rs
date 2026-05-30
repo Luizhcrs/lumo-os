@@ -128,6 +128,10 @@ pub struct RoundedSurfaceElement {
     corner_radius: f32,
     round_top: f32,
     round_bottom: f32,
+    /// W38: animacao open/close. scale 0.9..1.0 (encolhe dst), alpha 0..1 (fade).
+    /// 1.0/1.0 = sem animacao (default).
+    anim_scale: f32,
+    anim_alpha: f32,
 }
 
 impl RoundedSurfaceElement {
@@ -147,7 +151,17 @@ impl RoundedSurfaceElement {
             corner_radius,
             round_top: if round_top { 1.0 } else { 0.0 },
             round_bottom: if round_bottom { 1.0 } else { 0.0 },
+            anim_scale: 1.0,
+            anim_alpha: 1.0,
         }
+    }
+
+    /// W38: aplica scale+alpha de animacao de janela (open/close). scale encolhe
+    /// o dst em torno do centro; alpha multiplica o alpha do elemento (fade).
+    pub fn with_anim(mut self, scale: f32, alpha: f32) -> Self {
+        self.anim_scale = scale.clamp(0.0, 1.0);
+        self.anim_alpha = alpha.clamp(0.0, 1.0);
+        self
     }
 }
 
@@ -182,7 +196,7 @@ impl Element for RoundedSurfaceElement {
         OpaqueRegions::default()
     }
     fn alpha(&self) -> f32 {
-        self.inner.alpha()
+        self.inner.alpha() * self.anim_alpha
     }
     fn kind(&self) -> Kind {
         self.inner.kind()
@@ -218,12 +232,27 @@ impl RenderElement<GlesRenderer> for RoundedSurfaceElement {
             Uniform::new("u_round_bottom", self.round_bottom).into_owned(),
         ];
         frame.override_default_tex_program(self.corner_program.clone(), uniforms);
+        // W38: anim scale -> encolhe o dst em torno do centro (smithay reamostra
+        // a textura; o SDF acompanha pq usa dst.size). 1.0 = sem mudanca.
+        let (dst_a, damage_a): (Rectangle<i32, Physical>, Vec<Rectangle<i32, Physical>>) =
+            if (self.anim_scale - 1.0).abs() > 0.001 {
+                let nw = (w * self.anim_scale).round() as i32;
+                let nh = (h * self.anim_scale).round() as i32;
+                let nx = dst.loc.x + (dst.size.w - nw) / 2;
+                let ny = dst.loc.y + (dst.size.h - nh) / 2;
+                let scaled = Rectangle::new((nx, ny).into(), (nw.max(1), nh.max(1)).into());
+                // Damage = o dst original (cobre o frame anterior maior); evita
+                // rastro ao encolher.
+                (scaled, vec![dst])
+            } else {
+                (dst, damage.to_vec())
+            };
         let res = RenderElement::<GlesRenderer>::draw(
             &self.inner,
             frame,
             src,
-            dst,
-            damage,
+            dst_a,
+            &damage_a,
             opaque_regions,
         );
         frame.clear_tex_program_override();

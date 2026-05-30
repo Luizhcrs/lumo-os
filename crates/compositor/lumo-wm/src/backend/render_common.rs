@@ -1218,6 +1218,8 @@ pub struct DrmCollectInputs<'a> {
     pub overview_elements: Vec<smithay::backend::renderer::element::solid::SolidColorRenderElement>,
     /// W12.C: stack picker elements.
     pub picker_elements: Vec<smithay::backend::renderer::element::solid::SolidColorRenderElement>,
+    /// W38: registry de animacao open/close (scale+alpha por janela).
+    pub window_anim: &'a crate::window_anim::WindowAnimRegistry,
 }
 
 /// Coleta TODOS elementos pra render direto no DrmCompositor: chrome
@@ -1475,21 +1477,30 @@ pub fn collect_drm_elements(
             // visivel e a titlebar (acima do conteudo). Arredondar o topo do
             // conteudo criava curva no meio da janela ("arredondou o app").
             use smithay::backend::renderer::element::Element as _;
+            use smithay::wayland::seat::WaylandFocus;
             let scale = smithay::utils::Scale::from(1.0);
             let geos: Vec<_> = content_elems.iter().map(|el| el.geometry(scale)).collect();
             let win_top = geos.iter().map(|g| g.loc.y).min().unwrap_or(0);
             let win_bottom = geos.iter().map(|g| g.loc.y + g.size.h).max().unwrap_or(0);
+            // W38: scale+alpha de animacao open desta janela (1.0/1.0 = sem anim).
+            let (anim_scale, anim_alpha) = window
+                .wl_surface()
+                .and_then(|s| inputs.window_anim.get(&s).map(|a| (a.scale(), a.alpha())))
+                .unwrap_or((1.0, 1.0));
             for (el, geo) in content_elems.into_iter().zip(geos) {
                 let round_top = !is_ssd && geo.loc.y <= win_top + 2;
                 let round_bottom = (geo.loc.y + geo.size.h) >= win_bottom - 2;
                 let space_wrap = smithay::desktop::space::SpaceRenderElements::Surface(el);
-                out.push(LumoCustomElement::Rounded(RoundedSurfaceElement::new(
-                    space_wrap,
-                    cs.program.clone(),
-                    CORNER_RADIUS_WINDOW as f32,
-                    round_top,
-                    round_bottom,
-                )));
+                out.push(LumoCustomElement::Rounded(
+                    RoundedSurfaceElement::new(
+                        space_wrap,
+                        cs.program.clone(),
+                        CORNER_RADIUS_WINDOW as f32,
+                        round_top,
+                        round_bottom,
+                    )
+                    .with_anim(anim_scale, anim_alpha),
+                ));
             }
         } else {
             for el in content_elems {

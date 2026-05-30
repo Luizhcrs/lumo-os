@@ -9,42 +9,55 @@ use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use std::collections::HashMap;
 
 const SPRING_MASS: f32 = 1.0;
-const SPRING_STIFFNESS: f32 = 400.0;
-const SPRING_DAMPING: f32 = 38.0;
+// W38: curva RAPIDA (anti "demora" do feedback W32.4). Stiffness alto + bem
+// amortecido = pop vivo que assenta em ~150ms. Hard-cap de 180ms garante que
+// nunca arrasta mesmo com dt irregular.
+const SPRING_STIFFNESS: f32 = 550.0;
+const SPRING_DAMPING: f32 = 42.0;
+/// Duracao maxima absoluta (s). Passou disso -> forca done (sem "demora").
+const MAX_ANIM_S: f32 = 0.18;
 
 /// Per-window animation state.
 #[derive(Debug, Clone)]
 pub enum WindowAnimState {
-    Opening { progress: f32, velocity: f32 },
-    Closing { progress: f32, velocity: f32 },
+    Opening { progress: f32, velocity: f32, elapsed: f32 },
+    Closing { progress: f32, velocity: f32, elapsed: f32 },
     Idle,
     CloseDone,
 }
 
 impl WindowAnimState {
-    pub fn new_opening(_reduced_motion: bool) -> Self {
-        // W32.4: anim window open desativada (instant). User reclamou demora.
-        WindowAnimState::Idle
+    pub fn new_opening(reduced_motion: bool) -> Self {
+        // W38: reativada (curva rapida + hard-cap). reduced_motion = instant.
+        if reduced_motion {
+            WindowAnimState::Idle
+        } else {
+            WindowAnimState::Opening { progress: 0.0, velocity: 0.0, elapsed: 0.0 }
+        }
     }
 
-    pub fn new_closing(_reduced_motion: bool) -> Self {
-        // W32.4: anim window close desativada (instant).
-        WindowAnimState::CloseDone
+    pub fn new_closing(reduced_motion: bool) -> Self {
+        if reduced_motion {
+            WindowAnimState::CloseDone
+        } else {
+            WindowAnimState::Closing { progress: 1.0, velocity: 0.0, elapsed: 0.0 }
+        }
     }
 
     pub fn tick(&mut self, dt: f32) -> bool {
         match self {
-            WindowAnimState::Opening { progress, velocity } => {
+            WindowAnimState::Opening { progress, velocity, elapsed } => {
                 spring_step(progress, velocity, 1.0, dt);
-                if *progress >= 0.985 {
-                    *progress = 1.0;
+                *elapsed += dt;
+                if *progress >= 0.97 || *elapsed >= MAX_ANIM_S {
                     *self = WindowAnimState::Idle;
                     return true;
                 }
             }
-            WindowAnimState::Closing { progress, velocity } => {
+            WindowAnimState::Closing { progress, velocity, elapsed } => {
                 spring_step(progress, velocity, 0.0, dt);
-                if *progress <= 0.015 {
+                *elapsed += dt;
+                if *progress <= 0.03 || *elapsed >= MAX_ANIM_S {
                     *progress = 0.0;
                     *self = WindowAnimState::CloseDone;
                     return true;
@@ -140,6 +153,19 @@ impl WindowAnimRegistry {
             .collect()
     }
 
+    /// W38: true se alguma janela esta animando (Opening/Closing). Usado pra
+    /// (a) decidir tickar + forcar repaint, (b) manter o adaptive timer rapido.
+    pub fn is_active(&self) -> bool {
+        self.states.values().any(|s| s.is_animating())
+    }
+
+    /// W38: remove estados ja assentados (Idle/CloseDone) -- evita acumular
+    /// entradas mortas no registry. Chamado apos tick_all.
+    pub fn prune_settled(&mut self) {
+        self.states
+            .retain(|_, s| matches!(s, WindowAnimState::Opening { .. } | WindowAnimState::Closing { .. }));
+    }
+
     pub fn drain_close_done(&mut self) -> Vec<u32> {
         let done: Vec<u32> = self
             .states
@@ -174,19 +200,40 @@ mod tests {
         assert_eq!(s.visual_progress(), 0.0);
     }
 
-    // W32.4: animacao desativada (instant). Testes atualizados.
+    // W38: animacao REATIVADA (curva rapida + hard-cap). Sem reduced_motion,
+    // open comeca animando em progress 0; close em progress 1.
     #[test]
-    fn opening_is_instant_idle() {
+    fn opening_starts_animating() {
         let s = WindowAnimState::new_opening(false);
-        assert!(matches!(s, WindowAnimState::Idle));
-        assert_eq!(s.visual_progress(), 1.0);
+        assert!(matches!(s, WindowAnimState::Opening { .. }));
+        assert!(s.is_animating());
+        assert!(s.visual_progress() < 0.1);
     }
 
     #[test]
-    fn closing_is_instant_done() {
+    fn closing_starts_animating() {
         let s = WindowAnimState::new_closing(false);
-        assert!(s.is_close_done());
-        assert_eq!(s.visual_progress(), 0.0);
+        assert!(matches!(s, WindowAnimState::Closing { .. }));
+        assert!(s.is_animating());
+        assert!(s.visual_progress() > 0.9);
+    }
+
+    // W38: hard-cap 180ms -- nunca arrasta (anti "demora").
+    #[test]
+    fn anim_never_exceeds_180ms() {
+        let mut s = WindowAnimState::new_opening(false);
+        let mut t = 0.0f32;
+        let mut done = false;
+        // dt irregular 16ms; deve terminar em <= ~180ms (12 ticks).
+        for _ in 0..20 {
+            if s.tick(0.016) {
+                done = true;
+                break;
+            }
+            t += 0.016;
+        }
+        assert!(done, "anim nao terminou");
+        assert!(t <= 0.18 + 0.016, "anim passou de 180ms: {t}");
     }
 
     #[test]
