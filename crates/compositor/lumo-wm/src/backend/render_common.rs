@@ -649,11 +649,14 @@ pub fn work_area_frame_elements(
         let r = CARD_RADIUS;
         let sz = r.ceil() as i32;
         if cw >= sz * 2 && ch >= sz * 2 {
-            let corners: [((i32, i32), (f32, f32)); 4] = [
-                ((cx, cy), (1.0, 1.0)),                       // TL
-                ((cx + cw - sz, cy), (0.0, 1.0)),             // TR
-                ((cx, cy + ch - sz), (1.0, 0.0)),             // BL
-                ((cx + cw - sz, cy + ch - sz), (0.0, 0.0)),   // BR
+            // W38: SO os cantos de CIMA (TL/TR). Os de baixo (BL/BR) viravam
+            // entalhes pretos orfaos sobre o wallpaper apos remover a faixa
+            // preta inferior (pro dock flutuar) -- o "bug de divisao nos cantos
+            // da tela" reportado. Sem moldura preta embaixo, nao ha o que
+            // arredondar nos cantos de baixo do card.
+            let corners: [((i32, i32), (f32, f32)); 2] = [
+                ((cx, cy), (1.0, 1.0)),           // TL
+                ((cx + cw - sz, cy), (0.0, 1.0)), // TR
             ];
             for ((mx, my), (ax, ay)) in corners {
                 let area: Rectangle<i32, smithay::utils::Logical> =
