@@ -311,7 +311,19 @@ impl PointerHandler for LumoDock {
                 }
                 PointerEventKind::Press { button, .. } => {
                     if button == 0x110 {
-                        crate::input::handle_click(self.hover_idx, &self.cfg.slots);
+                        // W38: hit-test na coord do PROPRIO clique (ev.position),
+                        // nao self.hover_idx. Com mouse real o Wayland pode
+                        // entregar Enter+Button sem Motion antes -> hover_idx=-1
+                        // e handle_click engolia o clique ("nada acontece").
+                        // ev.position existe em todo evento de pointer.
+                        let px = ev.position.0 as f32;
+                        self.pointer_x = px;
+                        let idx = crate::input::hit_test_slot(
+                            px,
+                            &self.slot_rects,
+                            self.trash_rect,
+                        );
+                        crate::input::handle_click(idx, &self.cfg.slots);
                     }
                 }
                 _ => {}
