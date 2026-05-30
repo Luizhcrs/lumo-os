@@ -262,43 +262,19 @@ fn stroke_rrect_round(
 // Wifi glyph (compact 16px).
 // ============================================================
 pub fn draw_wifi(canvas: &mut PixmapMut, x: f32, y: f32, on: bool, fg: Color, fg_subtle: Color) {
-    // W38 One UI: leque (setor de disco) solido apontando pra cima, vertice
-    // arredondado. Span 90 graus (+-45 da vertical), boca ~1.15:1 vs altura.
-    // Fill solido + stroke round por cima (squircle friendly), nao 3 arcos.
+    // W38: wifi classico = dot + 3 arcos aninhados acima, leque ~90deg apontando
+    // pra cima. Strokes grossos uniformes + cap redondo (stroke_arc) = look One UI
+    // limpo. (O setor solido virava diamante a 16px; arcos sao inequivocos.)
     let color = if on { fg } else { fg_subtle };
     let s = WIFI_SIZE;
-    let cx = (x + s / 2.0).round() + 0.5; // meio-pixel = simetria nitida
-    let apex_y = y + s * 0.80; // vertice perto da base do box
-    let reach = s * 0.56; // raio do leque (vertice -> topo)
-
-    let half = 45.0_f32.to_radians();
-    let sin = half.sin();
-    let cos = half.cos();
-    let lx = cx - reach * sin;
-    let rx = cx + reach * sin;
-    let top_y = apex_y - reach * cos;
-    // Controle do quad eleva pra casar a curvatura do circulo de raio reach.
-    let ctl_y = apex_y - reach / cos;
-
-    let mut pb = PathBuilder::new();
-    pb.move_to(cx, apex_y); // vertice
-    pb.line_to(lx, top_y); // borda esquerda
-    pb.quad_to(cx, ctl_y, rx, top_y); // arco superior concavo
-    pb.line_to(cx, apex_y); // borda direita de volta ao vertice
-    pb.close();
-
-    if let Some(path) = pb.finish() {
-        let mut p = Paint::default();
-        p.set_color(color);
-        p.anti_alias = true;
-        canvas.fill_path(&path, &p, FillRule::Winding, Transform::identity(), None);
-        let st = Stroke {
-            width: s * 0.085,
-            line_cap: tiny_skia::LineCap::Round,
-            line_join: tiny_skia::LineJoin::Round,
-            ..Default::default()
-        };
-        canvas.stroke_path(&path, &p, &st, Transform::identity(), None);
+    let cx = x + s / 2.0;
+    let cy = y + s * 0.74; // origem (dot) perto da base
+    // Dot da base.
+    fill_circle(canvas, cx, cy, s * 0.075, color);
+    // 3 arcos concentricos, espessura uniforme grossa, leque de 90deg (-135..-45).
+    let sw = s * 0.10;
+    for radius in [s * 0.21, s * 0.35, s * 0.49] {
+        stroke_arc(canvas, cx, cy, radius, -135.0, -45.0, color, sw);
     }
 }
 

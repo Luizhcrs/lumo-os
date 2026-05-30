@@ -1459,13 +1459,13 @@ pub fn collect_drm_elements(
                 1.0,
             );
         if let Some(cs) = inputs.corner_shader {
-            // W38: SSD => topo reto (TitlebarBgShader arredonda o topo). CSD =>
-            // arredonda topo tambem (a superficie inclui a propria titlebar).
-            let is_ssd = window
-                .wl_surface()
-                .map(|s| inputs.ssd_windows.contains(&*s))
-                .unwrap_or(false);
-            let round_top = !is_ssd;
+            // W38: arredonda os 4 cantos da superficie de conteudo sempre. Apps
+            // Lumo (SSD) desenham a propria toolbar ate o topo da janela -> o
+            // topo VISIVEL e o conteudo, que precisa curvar pra casar o bottom
+            // (ja arredondado). Em SSD com titlebar bg separada, o canto curvo do
+            // topo revela a titlebar full-width atras (mesma cor), sem gap com o
+            // wallpaper -> seguro. Era !is_ssd, mas deixava lumo-files quadrado.
+            let round_top = true;
             // Wrap content em RoundedSurfaceElement
             for el in content_elems {
                 let space_wrap = smithay::desktop::space::SpaceRenderElements::Surface(el);

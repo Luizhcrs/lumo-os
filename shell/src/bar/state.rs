@@ -404,7 +404,10 @@ pub(crate) fn paint_frame(
         draw_wifi(
             &mut canvas,
             cx,
-            pill_cy - wifi_icon_w / 2.0,
+            // W38: offset vertical pela ALTURA do icone (WIFI_SIZE), nao por
+            // wifi_icon_w (que e a LARGURA de layout/hit, as vezes overrideada
+            // maior -> empurrava o wifi pra cima desalinhando dos vizinhos).
+            pill_cy - WIFI_SIZE / 2.0,
             snap.wifi_on,
             pill_fg,
             pill_fg_subtle,
