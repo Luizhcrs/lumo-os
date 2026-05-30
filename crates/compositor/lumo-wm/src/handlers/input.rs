@@ -116,13 +116,17 @@ impl LumoState {
                     if !press && (release_sym == Keysym::Super_L || release_sym == Keysym::Super_R)
                     {
                         if let Some(picker) = self.stack_picker.take() {
-                            if let Some(win) = picker.selected_window() {
-                                if let Some(surf) = win.wl_surface() {
+                            if let Some(win) = picker.selected_window().cloned() {
+                                // W38: se a janela selecionada esta minimizada,
+                                // restaura (map + foca); restore_window ja foca/raise.
+                                if self.is_minimized(&win) {
+                                    self.restore_window(&win);
+                                } else if let Some(surf) = win.wl_surface() {
                                     let owned = surf.into_owned();
                                     let serial = smithay::utils::SERIAL_COUNTER.next_serial();
                                     self.focus_manager.click_toplevel(owned.clone());
                                     let kb3 = self.keyboard.clone();
-                                    self.space.raise_element(win, true);
+                                    self.space.raise_element(&win, true);
                                     kb3.set_focus(self, Some(owned), serial);
                                     tracing::trace!(
                                         "W12.C: picker activated window on SUPER release"
@@ -342,7 +346,9 @@ impl LumoState {
                                         }
                                     }
                                     2 => {
-                                        tracing::trace!("T1.1 menu: Minimizar (stub)");
+                                        // W38: menu Minimizar -> desmapeia (Alt-Tab restaura).
+                                        let win = menu_win.clone();
+                                        self.minimize_window(&win);
                                     }
                                     3 => { /* separator */ }
                                     4 => {
@@ -418,11 +424,11 @@ impl LumoState {
                             let max_rect = ssd_max_btn_rect_logical(loc, geo.size.w);
                             let min_rect = ssd_min_btn_rect_logical(loc, geo.size.w);
 
-                            // W17.1: minimize button (amarelo) -- stub log ate iconify protocol.
+                            // W38: minimize button (amarelo) -- desmapeia a janela
+                            // (restaura via Alt-Tab). Antes era stub no-op.
                             if button == 0x110 && min_rect.contains(ptr_pos) {
-                                tracing::trace!(
-                                    "W17.1: minimize click (stub, no Wayland iconify protocol)"
-                                );
+                                let win = window.clone();
+                                self.minimize_window(&win);
                                 ssd_handled = true;
                                 break;
                             }
@@ -908,8 +914,14 @@ impl LumoState {
                 } else {
                     let kb = self.keyboard.clone();
                     let focused = kb.current_focus();
-                    let picker =
-                        crate::stack_picker::StackPickerState::new(&self.space, focused.as_ref());
+                    let picker = crate::stack_picker::StackPickerState::new(
+                        &self.space,
+                        focused.as_ref(),
+                        &self.minimized_windows
+                            .iter()
+                            .map(|(w, _)| w.clone())
+                            .collect::<Vec<_>>(),
+                    );
                     if !picker.is_empty() {
                         self.stack_picker = Some(picker);
                         tracing::trace!("W12.C: stack picker opened");
@@ -924,7 +936,8 @@ impl LumoState {
                 self.toggle_fullscreen_focused();
             }
             KeyAction::Minimize => {
-                tracing::trace!("minimize pendente (sem iconify protocol)");
+                // W38: minimiza a janela focada (Super+M). Restaura via Alt-Tab.
+                self.minimize_focused();
             }
             KeyAction::Quit => {
                 tracing::trace!("Ctrl+Alt+Backspace -> sair");
@@ -1294,7 +1307,9 @@ impl LumoState {
                 let min_rect = ssd_min_btn_rect_logical(loc, geo.size.w);
 
                 if button == 0x110 && min_rect.contains(ptr_pos) {
-                    tracing::trace!("SI.2: synthetic minimize click (stub)");
+                    // W38: synthetic minimize -> desmapeia (restaura via Alt-Tab).
+                    let win = window.clone();
+                    self.minimize_window(&win);
                     ssd_handled = true;
                     break;
                 }

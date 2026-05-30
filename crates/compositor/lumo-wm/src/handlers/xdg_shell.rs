@@ -145,6 +145,10 @@ impl XdgShellHandler for LumoState {
         if let Some(window) = to_remove {
             self.space.unmap_elem(&window);
         }
+        // W38: limpa a janela da lista de minimizadas (evita vazar Window se
+        // fechada enquanto minimizada).
+        self.minimized_windows
+            .retain(|(w, _)| w.toplevel().map(|t| t != &surface).unwrap_or(true));
         // T1.5: N5 MRU -- ao fechar toplevel, tenta focar a surface que
         // estava focada antes (prev_focus), se ainda viva no space.
         // Fallback: primeiro toplevel restante. Sem toplevels -> None.
@@ -252,6 +256,14 @@ impl XdgShellHandler for LumoState {
             tracing::info!("unmaximize_request: cliente -> restored (helper)");
         } else {
             let _ = surface.send_configure();
+        }
+    }
+
+    fn minimize_request(&mut self, surface: ToplevelSurface) {
+        // W38: cliente pediu set_minimized -> desmapeia (restaura via Alt-Tab).
+        if let Some(window) = self.window_for_toplevel(&surface) {
+            self.minimize_window(&window);
+            tracing::info!("minimize_request: cliente -> minimized");
         }
     }
 

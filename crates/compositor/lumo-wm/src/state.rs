@@ -225,6 +225,9 @@ pub struct LumoState {
     pub gesture: crate::input::TouchpadGestureState,
     /// W9.A: per-window open/close spring animation registry.
     pub window_anim: crate::window_anim::WindowAnimRegistry,
+    /// W38: janelas minimizadas (desmapeadas do space) + a loc onde estavam,
+    /// pra restaurar no mesmo lugar. Restauracao via Alt-Tab (StackPicker).
+    pub minimized_windows: Vec<(smithay::desktop::Window, Point<i32, Logical>)>,
     /// W9.B: active snap zone preview during window drag. None = no preview.
     pub snap_preview: Option<crate::input::move_grab::SnapZone>,
     // W12.A: tiling layout mode. Default = Floating.
@@ -438,6 +441,7 @@ impl LumoState {
             titlebar_menu: None,
             gesture: Default::default(),
             window_anim: crate::window_anim::WindowAnimRegistry::new(),
+            minimized_windows: Vec::new(),
             snap_preview: None,
             tiling_mode: crate::tiling::TilingMode::Floating,
             overview: None,
@@ -747,8 +751,10 @@ impl LumoState {
                 }
             }
             LumoCommand::MinimizeFocused => {
-                // W17.1: stub. Sem iconify protocol Wayland estavel; loga apenas.
-                tracing::info!("W17.1: MinimizeFocused IPC (stub, no protocol)");
+                // W38: minimiza a janela focada (desmapeia + guarda loc; restaura
+                // via Alt-Tab). Minimizar e decisao local do compositor, nao
+                // precisa de iconify protocol.
+                self.minimize_focused();
             }
             LumoCommand::AppActivated { app_id, title, pid } => {
                 // W34.10: lumo-appsd notificou abertura de app Lumo. Iced 0.13 nao
@@ -1178,6 +1184,76 @@ impl LumoState {
                 cur || pend
             })
             .unwrap_or(false)
+    }
+
+    /// W38: minimiza uma janela -- desmapeia do space (some da tela) e guarda
+    /// a loc pra restaurar. NAO destroi a surface. Restauracao via Alt-Tab
+    /// (StackPicker inclui minimized) -> restore_window.
+    pub fn minimize_window(&mut self, window: &smithay::desktop::Window) {
+        // Ja minimizada? no-op (evita duplicar).
+        if self.is_minimized(window) {
+            return;
+        }
+        let loc = self.space.element_location(window).unwrap_or_default();
+        self.space.unmap_elem(window);
+        self.minimized_windows.push((window.clone(), loc));
+        self.should_render = true;
+        #[cfg(feature = "drm-backend")]
+        {
+            self.drm_force_repaint = true;
+        }
+        tracing::info!("W38: minimize_window (unmapped, {} minimizadas)", self.minimized_windows.len());
+    }
+
+    /// W38: restaura uma janela minimizada no lugar onde estava + foca/raise.
+    /// Retorna true se restaurou (estava minimizada).
+    pub fn restore_window(&mut self, window: &smithay::desktop::Window) -> bool {
+        use smithay::wayland::seat::WaylandFocus;
+        let Some(idx) = self
+            .minimized_windows
+            .iter()
+            .position(|(w, _)| w == window)
+        else {
+            return false;
+        };
+        let (win, loc) = self.minimized_windows.remove(idx);
+        self.space.map_element(win.clone(), loc, true);
+        if let Some(surf) = win.wl_surface() {
+            let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+            let owned = surf.into_owned();
+            self.focus_manager.click_toplevel(owned.clone());
+            self.space.raise_element(&win, true);
+            let kb = self.keyboard.clone();
+            kb.set_focus(self, Some(owned), serial);
+        }
+        self.should_render = true;
+        #[cfg(feature = "drm-backend")]
+        {
+            self.drm_force_repaint = true;
+        }
+        tracing::info!("W38: restore_window ({} minimizadas restantes)", self.minimized_windows.len());
+        true
+    }
+
+    /// W38: true se a window esta na lista de minimizadas.
+    pub fn is_minimized(&self, window: &smithay::desktop::Window) -> bool {
+        self.minimized_windows.iter().any(|(w, _)| w == window)
+    }
+
+    /// W38: minimiza a janela com foco de teclado (keybind Super+M / IPC).
+    pub fn minimize_focused(&mut self) {
+        use smithay::wayland::seat::WaylandFocus;
+        let kb = self.keyboard.clone();
+        if let Some(focused) = kb.current_focus() {
+            let win = self
+                .space
+                .elements()
+                .find(|w| w.wl_surface().map(|s| *s == focused).unwrap_or(false))
+                .cloned();
+            if let Some(w) = win {
+                self.minimize_window(&w);
+            }
+        }
     }
 
     /// True se o toplevel da window esta em estado Fullscreen (pending ou current).

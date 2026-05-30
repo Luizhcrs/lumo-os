@@ -46,9 +46,14 @@ impl StackPickerState {
     pub fn new(
         space: &Space<Window>,
         focused: Option<&smithay::reexports::wayland_server::protocol::wl_surface::WlSurface>,
+        minimized: &[Window],
     ) -> Self {
         use smithay::wayland::seat::WaylandFocus;
-        let windows: Vec<Window> = space.elements().cloned().take(MAX_CELLS).collect();
+        // W38: inclui janelas minimizadas (desmapeadas, fora do space) pra serem
+        // restauraveis via Alt-Tab -- sem isso, minimizar = "sumiu pra sempre".
+        let mut windows: Vec<Window> = space.elements().cloned().collect();
+        windows.extend(minimized.iter().cloned());
+        windows.truncate(MAX_CELLS);
         // Start selection at next window (Tab cycles forward on first press).
         let focused_idx = focused.and_then(|s| {
             windows
