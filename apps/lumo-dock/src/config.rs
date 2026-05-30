@@ -108,12 +108,12 @@ mod tests {
     fn default_slots_have_known_apps() {
         let c = DockConfig::default();
         let labels: Vec<&str> = c.slots.iter().map(|s| s.label.as_str()).collect();
-        assert!(labels.contains(&"Home"));
+        assert!(labels.contains(&"Files"));
         assert!(labels.contains(&"Calculator"));
         assert!(labels.contains(&"Settings"));
         assert!(labels.contains(&"Browser"));
         assert!(labels.contains(&"Terminal"));
-        assert!(labels.contains(&"Calendar"));
+        assert!(labels.contains(&"Notes"));
     }
 
     #[test]

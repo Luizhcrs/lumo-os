@@ -112,7 +112,11 @@ pub fn view<'a>(th: &ThemeSnapshot, tabs: &'a [Tab], active: usize) -> Element<'
         .width(Length::Fill)
         .padding([4, 8])
         .style({
-            let bg = th.bg_subtle;
+            // W38: tab bar usa th.bg (cor do CONTEUDO), nao bg_subtle. Antes
+            // toolbar(bg_subtle) + tab_bar(bg_subtle) empilhavam duas faixas
+            // cinza identicas = "faixa dupla" no topo. Agora a tab bar funde com
+            // o conteudo abaixo + hairline no topo separa da toolbar.
+            let bg = th.bg;
             let bd = th.border;
             move |_| iced::widget::container::Style {
                 background: Some(iced::Background::Color(bg)),

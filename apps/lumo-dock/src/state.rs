@@ -294,28 +294,29 @@ impl PointerHandler for LumoDock {
                         self.trash_rect,
                     );
                     if nh != self.hover_idx {
-                        if self.hover_idx >= 0 {
-                            let i = self.hover_idx as usize;
-                            if i < self.scales.len() {
-                                self.scales[i].set_target(1.0);
-                            }
+                        // W38: falloff de magnify nos vizinhos (curva macOS). O
+                        // hover vai a MAGNIFY_MAX, hover+-1 a um nivel intermediario,
+                        // resto a 1.0. Antes so o hover crescia (icone pulava sozinho).
+                        let n = self.scales.len() as i32;
+                        let neighbor = 1.0 + (crate::MAGNIFY_MAX - 1.0) * 0.45;
+                        for i in 0..n {
+                            let t = if i == nh {
+                                crate::MAGNIFY_MAX
+                            } else if nh >= 0 && (i - nh).abs() == 1 {
+                                neighbor
+                            } else {
+                                1.0
+                            };
+                            self.scales[i as usize].set_target(t);
                         }
                         self.hover_idx = nh;
-                        if nh >= 0 {
-                            let i = nh as usize;
-                            if i < self.scales.len() {
-                                self.scales[i].set_target(crate::MAGNIFY_MAX);
-                            }
-                        }
                     }
                     self.redraw(qh);
                 }
                 PointerEventKind::Leave { .. } => {
-                    if self.hover_idx >= 0 {
-                        let i = self.hover_idx as usize;
-                        if i < self.scales.len() {
-                            self.scales[i].set_target(1.0);
-                        }
+                    // W38: reseta TODOS (hover + vizinhos do falloff) a 1.0.
+                    for s in &mut self.scales {
+                        s.set_target(1.0);
                     }
                     self.hover_idx = -1;
                     self.redraw(qh);
