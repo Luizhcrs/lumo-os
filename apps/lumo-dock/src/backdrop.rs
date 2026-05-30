@@ -128,8 +128,9 @@ fn read_cache() -> Option<(Vec<u8>, u32, u32)> {
 }
 
 fn rounded_rect_path(x: f32, y: f32, w: f32, h: f32, r: f32) -> Option<tiny_skia::Path> {
-    let x = x.round();
-    let y = y.round();
+    // W38: NAO arredondar x/y -- o tint (paint.rs fill_rrect) usa coords RAW.
+    // Arredondar aqui desalinhava o mask do blur do tint ate 0.5px, criando
+    // uma "divisao"/seam visivel nos cantos arredondados do pill.
     let r = r.min(w / 2.0).min(h / 2.0);
     let mut pb = PathBuilder::new();
     pb.move_to(x + r, y);
