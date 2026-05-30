@@ -637,11 +637,36 @@ pub fn work_area_frame_elements(
         }
     }
 
-    // W38: sem mascaras de canto do card -- a moldura foi removida (so resta o
-    // fundo preto da bar no topo, sem laterais), entao nao ha cantos de card
-    // pra arredondar. Os cantos da TELA continuam arredondados por
-    // output_corner_masks (separado). mask_shader fica sem uso aqui.
-    let _ = mask_shader;
+    // W38: arredonda os cantos de BAIXO da faixa preta do topo (a "base da bar
+    // curva" -- pedido Luiz: nao remover o canto arredondado superior). Como a
+    // moldura lateral foi removida, a faixa e full-width, entao os cantos vao
+    // nas bordas da tela (x=0 e x=output_w-sz), nao recuados por CARD_MARGIN.
+    // Sem cantos de baixo (sao a zona do dock/wallpaper).
+    if let Some(shader) = mask_shader {
+        let r = CARD_RADIUS;
+        let sz = r.ceil() as i32;
+        let by = cy - sz; // topo do box do canto (a base da bar termina em cy)
+        let corners: [((i32, i32), (f32, f32)); 2] = [
+            ((0, by), (1.0, 0.0)),             // base-esq da bar (curva sob a bar)
+            ((output_w - sz, by), (0.0, 0.0)), // base-dir da bar
+        ];
+        for ((mx, my), (ax, ay)) in corners {
+            let area: Rectangle<i32, smithay::utils::Logical> =
+                Rectangle::new(Point::from((mx, my)), (sz, sz).into());
+            let uniforms = vec![
+                smithay::backend::renderer::gles::Uniform::new("u_anchor", (ax, ay)).into_owned(),
+                smithay::backend::renderer::gles::Uniform::new("u_radius", r).into_owned(),
+            ];
+            masks.push(PixelShaderElement::new(
+                shader.program.clone(),
+                area,
+                None,
+                1.0,
+                uniforms,
+                Kind::Unspecified,
+            ));
+        }
+    }
 
     (solids, masks)
 }
