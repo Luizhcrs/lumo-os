@@ -45,18 +45,21 @@ impl Backdrop {
             return None;
         }
         let mut strip = Pixmap::new(screen_w, strip_h)?;
-        // Desloca o cache escalado pra cima de (screen_h - strip_h): so a faixa
-        // inferior do wallpaper cai nas strip_h linhas do strip.
+        // Desloca o cache escalado pra cima de (screen_h - strip_h) VIA TRANSFORM
+        // (post_translate): so a faixa inferior do wallpaper cai nas strip_h
+        // linhas do strip. (O param (x,y) do draw_pixmap nao desloca de forma
+        // confiavel quando ha transform -- usar a translacao no proprio transform.)
+        let dy = -((screen_h - strip_h) as f32);
         strip.draw_pixmap(
             0,
-            -((screen_h - strip_h) as i32),
+            0,
             cache_px.as_ref(),
             &PixmapPaint {
                 blend_mode: BlendMode::Source,
                 opacity: 1.0,
                 quality: FilterQuality::Bilinear,
             },
-            Transform::from_scale(sx, sx),
+            Transform::from_scale(sx, sx).post_translate(0.0, dy),
             None,
         );
         box_blur_rgba(
@@ -114,7 +117,11 @@ fn read_cache() -> Option<(Vec<u8>, u32, u32)> {
     }
     let mut pixels = data[16..].to_vec();
     // Wallpaper opaco: forca alpha=255 (premultiplied == straight no tiny_skia).
+    // Swap R<->B: o cache vem na ordem do wl_shm (Argb8888 = bytes B,G,R,A) que
+    // o compositor consome direto; o tiny_skia Pixmap espera R,G,B,A. Sem o swap
+    // o azul do lago vira marrom. (px[0]<->px[2].)
     for px in pixels.chunks_exact_mut(4) {
+        px.swap(0, 2);
         px[3] = 255;
     }
     Some((pixels, w, h))
