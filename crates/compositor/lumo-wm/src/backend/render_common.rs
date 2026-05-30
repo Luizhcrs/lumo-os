@@ -1438,6 +1438,10 @@ pub fn collect_drm_elements(
             out.push(LumoCustomElement::Solid(btn));
         }
         // SSD bg shader
+        let is_ssd = window
+            .wl_surface()
+            .map(|s| inputs.ssd_windows.contains(&*s))
+            .unwrap_or(false);
         if let Some(bg) = titlebar_bg_for_window(
             window,
             inputs.space,
@@ -1460,21 +1464,19 @@ pub fn collect_drm_elements(
                 1.0,
             );
         if let Some(cs) = inputs.corner_shader {
-            // W38: apps Lumo desenham a janela em MULTIPLOS subsurfaces (ex.
-            // titlebar + content + status bar). Arredondar o topo de CADA um
-            // gerava curva dupla feia (titlebar redonda + content redondo logo
-            // abaixo). Solucao: arredondar so a borda que coincide com a borda
-            // da JANELA -- topo do subsurface mais alto, base do mais baixo.
-            // Bordas internas (entre subsurfaces) ficam retas. Single-surface =
-            // 1 elemento toca topo E base -> 4 cantos. Extremos vem das proprias
-            // geometrias dos elementos (robusto, sem depender de window.geometry).
+            // W38: arredonda so a borda do elemento que coincide com a borda da
+            // JANELA -- topo do mais alto, base do mais baixo. Bordas internas
+            // (entre subsurfaces empilhados) ficam retas, sem curva dupla.
+            // EXCECAO: janelas SSD nao arredondam o topo do conteudo -- o topo
+            // visivel e a titlebar (acima do conteudo). Arredondar o topo do
+            // conteudo criava curva no meio da janela ("arredondou o app").
             use smithay::backend::renderer::element::Element as _;
             let scale = smithay::utils::Scale::from(1.0);
             let geos: Vec<_> = content_elems.iter().map(|el| el.geometry(scale)).collect();
             let win_top = geos.iter().map(|g| g.loc.y).min().unwrap_or(0);
             let win_bottom = geos.iter().map(|g| g.loc.y + g.size.h).max().unwrap_or(0);
             for (el, geo) in content_elems.into_iter().zip(geos) {
-                let round_top = geo.loc.y <= win_top + 2;
+                let round_top = !is_ssd && geo.loc.y <= win_top + 2;
                 let round_bottom = (geo.loc.y + geo.size.h) >= win_bottom - 2;
                 let space_wrap = smithay::desktop::space::SpaceRenderElements::Surface(el);
                 out.push(LumoCustomElement::Rounded(RoundedSurfaceElement::new(
