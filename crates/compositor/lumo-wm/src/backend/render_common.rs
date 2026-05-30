@@ -609,22 +609,16 @@ pub fn work_area_frame_elements(
     }
     let black = Color32F::new(0.0, 0.0, 0.0, 1.0);
 
-    // Rects pretos = TUDO menos o card. Topo full-width (0..cy) cobre acima do
-    // card incl. a area ao redor da bar flutuante (a bar e desenhada por cima).
-    // Lados/baixo = margens do card. NAO cobrem os quadrados de canto (mascaras
-    // AA cuidam do arredondamento).
-    // W38: SEM faixa preta abaixo do card. card.bottom = non_exclusive_bottom -
-    // CARD_MARGIN; uma faixa de CARD_MARGIN ali pintava 4px preto sobre o
-    // wallpaper entre o card e a zona do dock -> "linha preta acima da dock".
-    // Deixamos o wallpaper aparecer nesses 4px (consistente com as laterais do
-    // pill da dock, que ja mostram wallpaper). O dock flutua sobre o wallpaper.
-    let rects: [(i32, i32, i32, i32); 3] = [
-        // topo full-width (acima do card; bar flutua por cima)
+    // W38: MOLDURA REMOVIDA (pedido Luiz: "remove essa moldura ou aplica
+    // embaixo"). A moldura preta nas laterais + topo ficava inconsistente
+    // (sem o lado de baixo, removido pro dock flutuar). So mantemos a faixa
+    // preta do TOPO (full-width 0..cy) que e o FUNDO da bar (a bar tem SEM BG,
+    // pinta so texto/icones por cima). Sem laterais nem baixo -> o conteudo +
+    // dock flutuam sobre o wallpaper, consistente.
+    let _ = (cx, cw, ch);
+    let rects: [(i32, i32, i32, i32); 1] = [
+        // topo full-width = fundo preto da bar
         (0, 0, output_w, cy),
-        // esquerda do card
-        (0, cy, cx, ch),
-        // direita do card
-        (cx + cw, cy, output_w - (cx + cw), ch),
     ];
     let _ = output_h;
     for (x, y, w, h) in rects {
@@ -643,40 +637,11 @@ pub fn work_area_frame_elements(
         }
     }
 
-    // Cantos arredondados do card (preto AA fora da curva, transparente
-    // dentro -> revela wallpaper/janela com canto round).
-    if let Some(shader) = mask_shader {
-        let r = CARD_RADIUS;
-        let sz = r.ceil() as i32;
-        if cw >= sz * 2 && ch >= sz * 2 {
-            // W38: SO os cantos de CIMA (TL/TR). Os de baixo (BL/BR) viravam
-            // entalhes pretos orfaos sobre o wallpaper apos remover a faixa
-            // preta inferior (pro dock flutuar) -- o "bug de divisao nos cantos
-            // da tela" reportado. Sem moldura preta embaixo, nao ha o que
-            // arredondar nos cantos de baixo do card.
-            let corners: [((i32, i32), (f32, f32)); 2] = [
-                ((cx, cy), (1.0, 1.0)),           // TL
-                ((cx + cw - sz, cy), (0.0, 1.0)), // TR
-            ];
-            for ((mx, my), (ax, ay)) in corners {
-                let area: Rectangle<i32, smithay::utils::Logical> =
-                    Rectangle::new(Point::from((mx, my)), (sz, sz).into());
-                let uniforms = vec![
-                    smithay::backend::renderer::gles::Uniform::new("u_anchor", (ax, ay))
-                        .into_owned(),
-                    smithay::backend::renderer::gles::Uniform::new("u_radius", r).into_owned(),
-                ];
-                masks.push(PixelShaderElement::new(
-                    shader.program.clone(),
-                    area,
-                    None,
-                    1.0,
-                    uniforms,
-                    Kind::Unspecified,
-                ));
-            }
-        }
-    }
+    // W38: sem mascaras de canto do card -- a moldura foi removida (so resta o
+    // fundo preto da bar no topo, sem laterais), entao nao ha cantos de card
+    // pra arredondar. Os cantos da TELA continuam arredondados por
+    // output_corner_masks (separado). mask_shader fica sem uso aqui.
+    let _ = mask_shader;
 
     (solids, masks)
 }
