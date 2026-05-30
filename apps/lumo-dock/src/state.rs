@@ -43,6 +43,9 @@ pub struct LumoDock {
     pub pointer_y: f32,
     pub slot_rects: Vec<(f32, f32)>,
     pub trash_rect: Option<(f32, f32)>,
+    /// Frosted backdrop (wallpaper borrado) carregado uma vez apos configure.
+    pub backdrop: Option<crate::backdrop::Backdrop>,
+    pub backdrop_tried: bool,
 }
 
 impl LumoDock {
@@ -80,6 +83,8 @@ impl LumoDock {
             pointer_y: 0.0,
             slot_rects: Vec::new(),
             trash_rect: None,
+            backdrop: None,
+            backdrop_tried: false,
         }
     }
     pub fn animating(&self) -> bool {
@@ -118,6 +123,11 @@ impl LumoDock {
                 return;
             }
         };
+        // Carrega o frosted backdrop uma vez (largura ja conhecida pos-configure).
+        if !self.backdrop_tried {
+            self.backdrop_tried = true;
+            self.backdrop = crate::backdrop::Backdrop::load(self.width, crate::DOCK_H);
+        }
         let mut pm = tiny_skia::PixmapMut::from_bytes(canvas, w as u32, h as u32).expect("pixmap");
         let (sr, tr) = paint::paint_dock(
             &mut pm,
@@ -127,6 +137,7 @@ impl LumoDock {
             &self.scales,
             self.hover_idx,
             &self.running_procs,
+            self.backdrop.as_ref(),
         );
         self.slot_rects = sr;
         self.trash_rect = tr;

@@ -203,6 +203,7 @@ fn draw_icon(canvas: &mut PixmapMut, cx: f32, cy: f32, size: f32, name: &str, fg
     let _ = q;
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn paint_dock(
     canvas: &mut PixmapMut,
     width: u32,
@@ -211,6 +212,7 @@ pub fn paint_dock(
     scales: &[Spring],
     hover_idx: i32,
     running_procs: &HashMap<String, bool>,
+    backdrop: Option<&crate::backdrop::Backdrop>,
 ) -> (Vec<(f32, f32)>, Option<(f32, f32)>) {
     use crate::{DOCK_RADIUS, DOT_R, ICON_MARGIN, ICON_SIZE, SEPARATOR_H, SEPARATOR_W};
     canvas.fill(Color::TRANSPARENT);
@@ -233,15 +235,30 @@ pub fn paint_dock(
             rgba(0x000000, 80u8.saturating_sub(i * 15)),
         );
     }
-    fill_rrect(
-        canvas,
-        pill_x,
-        pill_y,
-        pill_w,
-        pill_h,
-        DOCK_RADIUS,
-        rgba(0x131318, 0xEE),
-    );
+    // Pill bg: frosted (wallpaper borrado clipado) + tint translucido pra
+    // legibilidade/identidade. Sem backdrop (cache ausente) -> solido opaco.
+    if let Some(bd) = backdrop {
+        bd.paint_pill(canvas, pill_x, pill_y, pill_w, pill_h, DOCK_RADIUS);
+        fill_rrect(
+            canvas,
+            pill_x,
+            pill_y,
+            pill_w,
+            pill_h,
+            DOCK_RADIUS,
+            rgba(0x131318, 0x82), // ~51% obsidiano sobre o blur
+        );
+    } else {
+        fill_rrect(
+            canvas,
+            pill_x,
+            pill_y,
+            pill_w,
+            pill_h,
+            DOCK_RADIUS,
+            rgba(0x131318, 0xEE),
+        );
+    }
     let mut slot_rects = Vec::with_capacity(n + 1);
     let cy = height as f32 * 0.5;
     let accent = rgba(0x10b981, 0xFF);

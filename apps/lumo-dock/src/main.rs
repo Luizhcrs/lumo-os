@@ -1,5 +1,6 @@
 //! lumo-dock -- dock layer-shell Bottom com magnify spring.
 
+mod backdrop;
 mod config;
 mod input;
 mod paint;
