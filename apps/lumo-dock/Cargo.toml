@@ -12,9 +12,11 @@ path = "src/main.rs"
 smithay-client-toolkit = "0.19"
 tiny-skia = "0.11"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 toml = { version = "0.8", features = ["parse"] }
 nix = { version = "0.30", features = ["poll"] }
 libc = "0.2"
 lumo-foundation = { path = "../../crates/foundation/lumo-foundation" }
 lumo-error = { path = "../../crates/foundation/lumo-error" }
 lumo-animation = { path = "../../crates/graphics/lumo-animation" }
+lumo-ipc = { path = "../../crates/compositor/lumo-ipc" }

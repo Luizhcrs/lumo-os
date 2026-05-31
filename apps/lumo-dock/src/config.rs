@@ -13,6 +13,10 @@ pub struct SlotConfig {
     /// Ícone: nome (para lookup interno) ou "text:<letra>".
     #[serde(default)]
     pub icon: String,
+    /// F (auditoria 2026-05): xdg app_id pra focar a janela existente via IPC.
+    /// Vazio = usa `process` como fallback (apps Lumo: app_id == binario).
+    #[serde(default)]
+    pub app_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -28,42 +32,50 @@ fn default_slots() -> Vec<SlotConfig> {
     // PATH do sistema). Antes referenciava galculator/firefox/lumo-calendar que
     // nao existem no Galaxy -> click sem efeito. `process` = nome real em
     // /proc/<pid>/comm pra acender o dot de "app aberto".
+    // app_id vazio -> focus_app usa `process` como chave de match (apps Lumo:
+    // app_id == nome do binario). So preencher se o app_id divergir do process.
     vec![
         SlotConfig {
             label: "Files".into(),
             exec: "lumo-files".into(),
             process: "lumo-files".into(),
             icon: "home".into(),
+            app_id: String::new(),
         },
         SlotConfig {
             label: "Calculator".into(),
             exec: "lumo-calc".into(),
             process: "lumo-calc".into(),
             icon: "calc".into(),
+            app_id: String::new(),
         },
         SlotConfig {
             label: "Settings".into(),
             exec: "lumo-settings".into(),
             process: "lumo-settings".into(),
             icon: "settings".into(),
+            app_id: String::new(),
         },
         SlotConfig {
             label: "Browser".into(),
             exec: "chromium".into(),
             process: "chromium".into(),
             icon: "browser".into(),
+            app_id: String::new(),
         },
         SlotConfig {
             label: "Terminal".into(),
             exec: "lumo-term".into(),
             process: "alacritty".into(),
             icon: "term".into(),
+            app_id: String::new(),
         },
         SlotConfig {
             label: "Notes".into(),
             exec: "lumo-notes".into(),
             process: "lumo-notes".into(),
             icon: "calendar".into(),
+            app_id: String::new(),
         },
     ]
 }

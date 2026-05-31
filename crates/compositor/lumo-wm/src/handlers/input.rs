@@ -244,7 +244,7 @@ impl LumoState {
                 let pointer = self.pointer.clone();
                 pointer.motion(
                     self,
-                    under.clone().map(|(s, loc)| (s, loc.to_f64())),
+                    under.map(|(s, loc)| (s, loc.to_f64())),
                     &MotionEvent {
                         location: self.pointer_location,
                         serial,
@@ -253,12 +253,11 @@ impl LumoState {
                 );
                 pointer.frame(self);
 
-                if let Some((surface, _)) = under {
-                    let kb = self.keyboard.clone();
-                    if kb.current_focus().as_ref() != Some(&surface) {
-                        kb.set_focus(self, Some(surface), serial);
-                    }
-                }
+                // W11 (auditoria 2026-05): NAO focar teclado no hover. O modelo do
+                // Lumo e click-to-focus (igual ao path de PointerMotion relativo).
+                // Antes o movimento ABSOLUTO (winit/touch) focava a surface crua
+                // sob o cursor -> focava subsurface (quebrava clicks no Chrome) e
+                // divergia do path relativo. Foco de teclado so muda no click.
             }
 
             InputEvent::PointerButton { event } => {
@@ -327,23 +326,19 @@ impl LumoState {
                                         }
                                         self.space.unmap_elem(&menu_win);
                                         self.should_render = true;
+                                        // Pattern A: re-deriva foco apos close via menu.
+                                        self.refocus_after_unmap();
                                     }
                                     1 => {
-                                        if let Some(tl) = menu_win.toplevel() {
-                                            use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
-                                            let is_fs = tl
-                                                .current_state()
-                                                .states
-                                                .contains(XdgState::Fullscreen);
-                                            tl.with_pending_state(|st| {
-                                                if is_fs {
-                                                    st.states.unset(XdgState::Fullscreen);
-                                                } else {
-                                                    st.states.set(XdgState::Fullscreen);
-                                                }
-                                            });
-                                            tl.send_configure();
-                                        }
+                                        // Pattern B (auditoria 2026-05): linha "maximizar"
+                                        // usa o helper canonico, igual ao botao verde e ao
+                                        // double-click. Antes togglava Fullscreen (escondia
+                                        // a barra, sem titlebar) -> 3 comportamentos
+                                        // diferentes pro mesmo afeto + window_is_maximized
+                                        // nao detectava o estado.
+                                        let win = menu_win.clone();
+                                        let is_max = self.window_is_maximized(&win);
+                                        self.set_window_maximized(&win, !is_max);
                                     }
                                     2 => {
                                         // W38: menu Minimizar -> desmapeia (Alt-Tab restaura).
@@ -420,6 +415,13 @@ impl LumoState {
                             if occluded {
                                 continue;
                             }
+                            // B2 (auditoria 2026-05): o render pula os botoes SSD pra
+                            // janelas < 200px (estado "config inicial pendente"). O
+                            // hit-test precisa do MESMO guard, senao haveria regiao
+                            // clicavel (close/min/max) onde nada e desenhado.
+                            if geo.size.w < 200 {
+                                continue;
+                            }
                             let close_rect = ssd_close_btn_rect_logical(loc, geo.size.w);
                             let max_rect = ssd_max_btn_rect_logical(loc, geo.size.w);
                             let min_rect = ssd_min_btn_rect_logical(loc, geo.size.w);
@@ -454,6 +456,8 @@ impl LumoState {
                                 }
                                 self.space.unmap_elem(&window);
                                 self.should_render = true;
+                                // Pattern A: re-deriva foco apos snap-close.
+                                self.refocus_after_unmap();
                                 ssd_handled = true;
                                 break;
                             }
@@ -914,12 +918,17 @@ impl LumoState {
                 } else {
                     let kb = self.keyboard.clone();
                     let focused = kb.current_focus();
+                    // Pattern C (auditoria 2026-05): so lista minimizadas do
+                    // workspace ATIVO. Antes a lista era global -> janela
+                    // minimizada no ws1 aparecia no Alt-Tab do ws2 e restaurava la.
+                    let active_ws = self.active_workspace;
                     let picker = crate::stack_picker::StackPickerState::new(
                         &self.space,
                         focused.as_ref(),
                         &self.minimized_windows
                             .iter()
-                            .map(|(w, _)| w.clone())
+                            .filter(|(_, _, ws)| *ws == active_ws)
+                            .map(|(w, _, _)| w.clone())
                             .collect::<Vec<_>>(),
                     );
                     if !picker.is_empty() {
@@ -964,8 +973,11 @@ impl LumoState {
             }
             KeyAction::HideWindow => {
                 // F1.5-D1: hide window focused (sem fechar).
-                // Iconify protocol nao tem em xdg-shell core; usar workspace
-                // virtual "hidden" como workaround: unmap from space.
+                // W8 (auditoria 2026-05): antes fazia unmap CRU -> a janela sumia
+                // pra um estado nao-rastreado (nem minimized_windows nem vault),
+                // impossivel de restaurar e com foco preso nela. Agora roteia por
+                // minimize_window: rastreado em minimized_windows (restauravel via
+                // Alt-Tab) + re-deriva o foco. Hide == minimize na pratica.
                 if let Some(focused) = self.keyboard.current_focus() {
                     let win = self
                         .space
@@ -973,8 +985,8 @@ impl LumoState {
                         .find(|w| w.wl_surface().map(|s| *s == focused).unwrap_or(false))
                         .cloned();
                     if let Some(w) = win {
-                        self.space.unmap_elem(&w);
-                        tracing::info!("F1.5-D1: HideWindow unmap focused");
+                        self.minimize_window(&w);
+                        tracing::info!("F1.5-D1: HideWindow -> minimize focused");
                     }
                 }
             }
@@ -1114,6 +1126,8 @@ impl LumoState {
                 }
                 self.space.unmap_elem(&win);
                 self.should_render = true;
+                // Pattern A: re-deriva foco apos snap-close (Super+Q).
+                self.refocus_after_unmap();
             }
         }
     }
@@ -1302,6 +1316,10 @@ impl LumoState {
                 if occluded {
                     continue;
                 }
+                // B2: mesmo guard do render (botoes SSD nao desenhados < 200px).
+                if geo.size.w < 200 {
+                    continue;
+                }
                 let close_rect = ssd_close_btn_rect_logical(loc, geo.size.w);
                 let max_rect = ssd_max_btn_rect_logical(loc, geo.size.w);
                 let min_rect = ssd_min_btn_rect_logical(loc, geo.size.w);
@@ -1314,19 +1332,14 @@ impl LumoState {
                     break;
                 }
                 if button == 0x110 && max_rect.contains(ptr_pos) {
-                    if let Some(tl) = window.toplevel() {
-                        use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel::State as XdgState;
-                        let is_fs = tl.current_state().states.contains(XdgState::Fullscreen);
-                        tl.with_pending_state(|st| {
-                            if is_fs {
-                                st.states.unset(XdgState::Fullscreen);
-                            } else {
-                                st.states.set(XdgState::Fullscreen);
-                            }
-                        });
-                        tl.send_configure();
-                        tracing::trace!(was_fs = is_fs, "SI.2: synthetic maximize toggle");
-                    }
+                    // Pattern B (auditoria 2026-05): path sintetico/IPC do botao verde
+                    // usa o MESMO helper canonico que o pointer real. Antes togglava
+                    // Fullscreen -> estado divergente entre clique real e sintetico
+                    // (e window_is_maximized nao via o estado).
+                    let win = window.clone();
+                    let is_max = self.window_is_maximized(&win);
+                    self.set_window_maximized(&win, !is_max);
+                    tracing::trace!(was_max = is_max, "SI.2: synthetic maximize toggle (helper)");
                     ssd_handled = true;
                     break;
                 }

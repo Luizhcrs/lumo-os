@@ -303,5 +303,98 @@ pub fn paint_dock(
         "trash",
         if hover_idx == ti as i32 { pearl } else { muted },
     );
-    (slot_rects, Some((sep_cx + sep_w * 0.5, slot_w)))
+    // D2 (auditoria 2026-05): hit-rect do trash CENTRADA no icone desenhado
+    // (tcx), nao no centro do separador. Antes a rect comecava em sep_cx+sep_w/2
+    // -> regiao clicavel ~10px deslocada a direita do icone + faixa morta antes.
+    (slot_rects, Some((tcx - slot_w * 0.5, slot_w)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::DockConfig;
+
+    /// D2 (auditoria 2026-05): a hit-rect do trash deve estar CENTRADA no icone
+    /// desenhado. Regressao: antes a rect comecava no centro do separador, ~10px
+    /// deslocada do icone, com faixa morta antes dela.
+    #[test]
+    fn trash_hit_rect_centered_on_drawn_icon() {
+        use crate::{DOCK_H, DOCK_W, ICON_MARGIN, ICON_SIZE, SEPARATOR_W};
+        let cfg = DockConfig::default();
+        let n = cfg.slots.len();
+        let mut pm = tiny_skia::Pixmap::new(DOCK_W, DOCK_H).expect("pixmap");
+        let springs: Vec<Spring> = (0..=n)
+            .map(|_| {
+                let mut s = Spring::snappy();
+                s.snap_to(1.0);
+                s
+            })
+            .collect();
+        let running = HashMap::new();
+        let (slot_rects, trash) = paint_dock(
+            &mut pm.as_mut(),
+            DOCK_W,
+            DOCK_H,
+            &cfg.slots,
+            &springs,
+            -1,
+            &running,
+            None,
+        );
+        assert_eq!(slot_rects.len(), n, "uma rect por slot de app");
+        let (tx, tw) = trash.expect("trash rect presente");
+
+        // Recomputa o centro do icone do trash como paint_dock faz.
+        let slot_w = ICON_SIZE + ICON_MARGIN * 2.0;
+        let sep_w = SEPARATOR_W + ICON_MARGIN * 2.0;
+        let pill_w = slot_w * (n + 1) as f32 + sep_w;
+        let pill_x = (DOCK_W as f32 - pill_w) * 0.5;
+        let sep_cx = pill_x + n as f32 * slot_w + ICON_MARGIN;
+        let tcx = sep_cx + sep_w * 0.5 + ICON_SIZE * 0.5;
+
+        // O icone cai DENTRO da hit-rect.
+        assert!(
+            tcx >= tx && tcx < tx + tw,
+            "centro do icone trash {tcx} fora da hit-rect [{tx}, {})",
+            tx + tw
+        );
+        // A rect esta centrada no icone (nao no separador).
+        let rect_center = tx + tw * 0.5;
+        assert!(
+            (rect_center - tcx).abs() < 0.01,
+            "hit-rect (centro {rect_center}) nao centrada no icone (centro {tcx})"
+        );
+    }
+
+    /// D2: o trash hit-test resolve via crate::input::hit_test_slot no centro
+    /// do icone -> indice == n (slot apos os apps).
+    #[test]
+    fn trash_click_at_icon_center_hits_trash_index() {
+        use crate::{DOCK_H, DOCK_W};
+        let cfg = DockConfig::default();
+        let n = cfg.slots.len();
+        let mut pm = tiny_skia::Pixmap::new(DOCK_W, DOCK_H).expect("pixmap");
+        let springs: Vec<Spring> = (0..=n)
+            .map(|_| {
+                let mut s = Spring::snappy();
+                s.snap_to(1.0);
+                s
+            })
+            .collect();
+        let running = HashMap::new();
+        let (slot_rects, trash) = paint_dock(
+            &mut pm.as_mut(),
+            DOCK_W,
+            DOCK_H,
+            &cfg.slots,
+            &springs,
+            -1,
+            &running,
+            None,
+        );
+        let (tx, tw) = trash.expect("trash rect");
+        let icon_center = tx + tw * 0.5;
+        let hit = crate::input::hit_test_slot(icon_center, &slot_rects, trash);
+        assert_eq!(hit, n as i32, "clique no icone do trash deve resolver pro slot trash");
+    }
 }

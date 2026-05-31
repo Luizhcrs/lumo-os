@@ -476,7 +476,7 @@ pub(crate) fn paint_frame(
             // appmenu nativo + ctx menu desktop/files. Hover accent solido,
             // radius 10, fonte Inter — mesma identidade visual.
             if let Some((rx, ry, rw, rh)) = result.appmenu_fallback_rect {
-                use crate::menu::{draw_menu_dyn, hit_test_dyn, menu_height_dyn};
+                use crate::menu::{self, draw_menu_dyn, menu_height_dyn};
                 let items = crate::bar::status_pills::fallback_menu_items();
                 let items = items.as_slice();
                 let dropdown_w = 200.0f32;
@@ -505,31 +505,23 @@ pub(crate) fn paint_frame(
                             },
                         );
                     }
-                    // Hit-rects via hit_test_dyn pattern — calc rect por item.
+                    // M1 (auditoria 2026-05): hit-rects derivadas do MESMO layout
+                    // que draw_menu_dyn pinta -- MENU_PAD_Y inicial, ROW_H por
+                    // acao, SEPARATOR_BLOCK_H por separador. Antes assumia 28px
+                    // uniforme + pad 4 e IGNORAVA o separador de 9px: "Fechar"
+                    // (depois do separador) tinha hit-rect ~17px deslocada e era
+                    // inclicavel (unica acao funcional do fallback).
                     let mut fb_rects: Vec<(usize, (f32, f32, f32, f32))> = Vec::new();
+                    let mut item_y = menu::MENU_PAD_Y;
                     for (i, item) in items.iter().enumerate() {
-                        if !item.is_clickable() {
-                            continue;
-                        }
-                        if hit_test_dyn(
-                            items,
-                            0.0,
-                            0.0,
-                            dropdown_w,
-                            dropdown_w / 2.0,
-                            4.0 + 28.0 * i as f32 + 14.0,
-                        )
-                        .is_some()
-                        {
+                        if item.is_clickable() {
                             fb_rects.push((
                                 i,
-                                (
-                                    dropdown_x,
-                                    dropdown_y + 4.0 + 28.0 * i as f32,
-                                    dropdown_w,
-                                    28.0,
-                                ),
+                                (dropdown_x, dropdown_y + item_y, dropdown_w, menu::MENU_ROW_H),
                             ));
+                            item_y += menu::MENU_ROW_H;
+                        } else {
+                            item_y += menu::MENU_SEPARATOR_BLOCK_H;
                         }
                     }
                     result.appmenu_fallback_dropdown_rects = fb_rects;
@@ -803,14 +795,14 @@ pub(crate) fn paint_frame(
                             item_y += menu::MENU_SEPARATOR_BLOCK_H;
                             continue;
                         }
+                        // M4 (auditoria 2026-05): hit-rect com LARGURA CHEIA (sub_w),
+                        // igual a convencao do hit_test_dyn. Antes embutia o
+                        // MENU_ROW_HOVER_INSET (4px) na rect -> 4px de borda morta
+                        // de cada lado sobre o fundo visivel do menu. O inset e so
+                        // visual (pill de hover dentro do draw_menu_dyn).
                         submenu_rects.push((
                             sidx,
-                            (
-                                sub_x + menu::MENU_ROW_HOVER_INSET,
-                                sub_y + item_y,
-                                sub_w - menu::MENU_ROW_HOVER_INSET * 2.0,
-                                menu::MENU_ROW_H,
-                            ),
+                            (sub_x, sub_y + item_y, sub_w, menu::MENU_ROW_H),
                         ));
                         item_y += menu::MENU_ROW_H;
                     }

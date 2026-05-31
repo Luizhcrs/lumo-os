@@ -217,6 +217,9 @@ impl IconsState {
             .iter()
             .map(|i| (i.name.clone(), i.selected))
             .collect();
+        // M2 (auditoria 2026-05): snapshot dos nomes ANTES de reconstruir, na
+        // ordem atual, pra detectar mudanca do conjunto.
+        let old_names: Vec<String> = self.icons.iter().map(|i| i.name.clone()).collect();
 
         self.icons = names
             .into_iter()
@@ -234,6 +237,19 @@ impl IconsState {
                 }
             })
             .collect();
+
+        // M2 (auditoria 2026-05): ctx_menu/drag/last_click guardam INDICE
+        // posicional em self.icons. Se o scan (a cada 2s) re-ordena/muda o
+        // conjunto (arquivo criado/removido/renomeado no Desktop), o indice
+        // passa a apontar pra OUTRO icone -> "Abrir"/"Lixeira" agiriam no
+        // arquivo errado. Invalida os refs posicionais quando o conjunto muda.
+        let new_names: Vec<String> = self.icons.iter().map(|i| i.name.clone()).collect();
+        if new_names != old_names {
+            self.ctx_menu = None;
+            self.ctx_hover = usize::MAX;
+            self.drag = None;
+            self.last_click = None;
+        }
 
         self.recalc_positions(OUTPUT_W, OUTPUT_H);
         self.populate_icon_cache();

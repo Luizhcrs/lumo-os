@@ -335,7 +335,7 @@ impl PointerHandler for LumoDock {
                             &self.slot_rects,
                             self.trash_rect,
                         );
-                        crate::input::handle_click(idx, &self.cfg.slots);
+                        crate::input::handle_click(idx, &self.cfg.slots, &self.running_procs);
                     }
                 }
                 _ => {}

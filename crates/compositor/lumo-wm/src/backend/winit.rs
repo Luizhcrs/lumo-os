@@ -277,6 +277,19 @@ fn redraw(
         {
             state.overview = None;
         }
+        // W2 (auditoria 2026-05): pump da animacao de janela TAMBEM no winit.
+        // O DRM ja faz isso (drm.rs); sem este bloco, no backend de dev (winit,
+        // o default) minimize so inseria o estado Minimizing e NUNCA chamava
+        // finish_minimize -> a janela nunca desmapeava (minimize = no-op).
+        if state.window_anim.is_active() {
+            state.window_anim.tick_all(dt);
+            let min_done = state.window_anim.drain_minimize_done();
+            for id in min_done {
+                state.finish_minimize(id);
+            }
+            state.window_anim.prune_settled();
+            state.should_render = true;
+        }
     }
 
     let inputs = OverlayInputs {

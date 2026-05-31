@@ -227,7 +227,14 @@ pub struct LumoState {
     pub window_anim: crate::window_anim::WindowAnimRegistry,
     /// W38: janelas minimizadas (desmapeadas do space) + a loc onde estavam,
     /// pra restaurar no mesmo lugar. Restauracao via Alt-Tab (StackPicker).
-    pub minimized_windows: Vec<(smithay::desktop::Window, Point<i32, Logical>)>,
+    /// Pattern C (auditoria 2026-05): 3o campo = workspace de origem, pra o
+    /// StackPicker so listar minimizadas do workspace ativo (antes vazavam).
+    pub minimized_windows: Vec<(smithay::desktop::Window, Point<i32, Logical>, u8)>,
+    /// W6 (auditoria 2026-05): geometria (loc, size) salva ANTES de maximizar,
+    /// keyed por protocol_id da surface, pra restaurar no unmaximize. Antes o
+    /// unmaximize deixava a janela grudada no canto maximizado.
+    pub maximize_restore:
+        std::collections::HashMap<u32, (Point<i32, Logical>, smithay::utils::Size<i32, Logical>)>,
     /// W9.B: active snap zone preview during window drag. None = no preview.
     pub snap_preview: Option<crate::input::move_grab::SnapZone>,
     // W12.A: tiling layout mode. Default = Floating.
@@ -442,6 +449,7 @@ impl LumoState {
             gesture: Default::default(),
             window_anim: crate::window_anim::WindowAnimRegistry::new(),
             minimized_windows: Vec::new(),
+            maximize_restore: std::collections::HashMap::new(),
             snap_preview: None,
             tiling_mode: crate::tiling::TilingMode::Floating,
             overview: None,
@@ -713,6 +721,8 @@ impl LumoState {
                     }
                     self.space.unmap_elem(&w);
                     self.should_render = true;
+                    // Pattern A: re-deriva foco apos snap-close.
+                    self.refocus_after_unmap();
                 } else {
                     eprintln!("[wm] CloseFocusedToplevel: nenhuma janela pra fechar");
                 }
@@ -755,6 +765,10 @@ impl LumoState {
                 // via Alt-Tab). Minimizar e decisao local do compositor, nao
                 // precisa de iconify protocol.
                 self.minimize_focused();
+            }
+            LumoCommand::FocusApp { app_id } => {
+                // F (auditoria 2026-05): dock pediu pra focar app ja aberto.
+                self.focus_app_by_id(&app_id);
             }
             LumoCommand::AppActivated { app_id, title, pid } => {
                 // W34.10: lumo-appsd notificou abertura de app Lumo. Iced 0.13 nao
@@ -1138,6 +1152,16 @@ impl LumoState {
             return;
         };
         if on {
+            // W6 (auditoria 2026-05): salva loc+size atuais ANTES de maximizar,
+            // pra o unmaximize restaurar a janela onde/como estava. or_insert:
+            // nao sobrescreve se ja maximizada (preserva o floating original).
+            if let Some(surf) = window.wl_surface() {
+                use smithay::reexports::wayland_server::Resource;
+                let id = surf.id().protocol_id();
+                let prev_loc = self.space.element_location(window).unwrap_or_default();
+                let prev_size = window.geometry().size;
+                self.maximize_restore.entry(id).or_insert((prev_loc, prev_size));
+            }
             let usable = self.usable_geometry();
             // Reserva os 30px do titlebar SO se a janela tem SSD (Iced/Qt/term).
             // Apps CSD (Chromium/GTK4) desenham a propria decoracao -> sem SSD
@@ -1160,11 +1184,21 @@ impl LumoState {
             self.space
                 .map_element(window.clone(), Point::from((x, y)), true);
         } else {
+            // W6: restaura a geometria pre-maximize (loc + size). Sem entrada
+            // salva (ex: janela ja veio maximized do cliente) -> size=None
+            // (cliente re-escolhe), comportamento antigo.
+            let restore = window.wl_surface().and_then(|surf| {
+                use smithay::reexports::wayland_server::Resource;
+                self.maximize_restore.remove(&surf.id().protocol_id())
+            });
             tl.with_pending_state(|st| {
                 st.states.unset(XdgState::Maximized);
-                st.size = None;
+                st.size = restore.map(|(_, size)| size);
             });
             tl.send_configure();
+            if let Some((loc, _)) = restore {
+                self.space.map_element(window.clone(), loc, true);
+            }
         }
         self.should_render = true;
         #[cfg(feature = "drm-backend")]
@@ -1216,12 +1250,18 @@ impl LumoState {
     fn do_minimize_unmap(&mut self, window: &smithay::desktop::Window) {
         let loc = self.space.element_location(window).unwrap_or_default();
         self.space.unmap_elem(window);
-        self.minimized_windows.push((window.clone(), loc));
+        // Pattern C: guarda o workspace de origem junto.
+        self.minimized_windows
+            .push((window.clone(), loc, self.active_workspace));
         self.should_render = true;
         #[cfg(feature = "drm-backend")]
         {
             self.drm_force_repaint = true;
         }
+        // Pattern A (auditoria 2026-05): se a janela minimizada detinha o foco
+        // de teclado, transfere pra topmost restante (antes o teclado ficava
+        // preso numa surface invisivel).
+        self.refocus_after_unmap();
         tracing::info!("W38: minimize unmap ({} minimizadas)", self.minimized_windows.len());
     }
 
@@ -1251,11 +1291,11 @@ impl LumoState {
         let Some(idx) = self
             .minimized_windows
             .iter()
-            .position(|(w, _)| w == window)
+            .position(|(w, _, _)| w == window)
         else {
             return false;
         };
-        let (win, loc) = self.minimized_windows.remove(idx);
+        let (win, loc, _ws) = self.minimized_windows.remove(idx);
         self.space.map_element(win.clone(), loc, true);
         if let Some(surf) = win.wl_surface() {
             let serial = smithay::utils::SERIAL_COUNTER.next_serial();
@@ -1276,7 +1316,7 @@ impl LumoState {
 
     /// W38: true se a window esta na lista de minimizadas.
     pub fn is_minimized(&self, window: &smithay::desktop::Window) -> bool {
-        self.minimized_windows.iter().any(|(w, _)| w == window)
+        self.minimized_windows.iter().any(|(w, _, _)| w == window)
     }
 
     /// W38: minimiza a janela com foco de teclado (keybind Super+M / IPC).
@@ -1304,10 +1344,123 @@ impl LumoState {
             .unwrap_or(false)
     }
 
+    /// Pattern A (auditoria 2026-05): apos desmapear uma janela do `space`, se o
+    /// foco de teclado ficou apontando pra uma surface que NAO esta mais mapeada,
+    /// transfere o foco pra topmost restante (ou None) e atualiza FocusManager +
+    /// bar (ActiveApp). Idempotente: no-op se o foco atual ainda esta visivel
+    /// (nao rouba foco ao minimizar uma janela de fundo). Centraliza o que
+    /// set_workspace/toplevel_destroyed ja faziam inline, pros caminhos que
+    /// esqueciam: minimize, move-to-workspace, HideWindow, snap-close.
+    pub fn refocus_after_unmap(&mut self) {
+        use smithay::wayland::seat::WaylandFocus;
+        let kb = self.keyboard.clone();
+        let cur = kb.current_focus();
+        let still_mapped = cur.as_ref().map_or(false, |s| {
+            self.space
+                .elements()
+                .any(|w| w.wl_surface().map(|ws| *ws == *s).unwrap_or(false))
+        });
+        if still_mapped {
+            return;
+        }
+        let target = self
+            .space
+            .elements()
+            .last()
+            .and_then(|w| w.wl_surface())
+            .map(|s| s.into_owned());
+        let had_target = target.is_some();
+        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+        let new_focus = self.focus_manager.close_toplevel(target);
+        kb.set_focus(self, new_focus, serial);
+        if !had_target {
+            // Sem janela visivel: limpa appmenu/pills da bar.
+            self.ipc.broadcast(&lumo_ipc::LumoEvent::ActiveApp {
+                app_id: String::new(),
+                title: String::new(),
+                pid: 0,
+            });
+        }
+        self.should_render = true;
+        #[cfg(feature = "drm-backend")]
+        {
+            self.drm_force_repaint = true;
+        }
+    }
+
+    /// F (auditoria 2026-05): le o xdg app_id de uma Window. Vazio se nao houver
+    /// toplevel/app_id.
+    fn window_app_id(window: &smithay::desktop::Window) -> String {
+        use smithay::wayland::shell::xdg::XdgToplevelSurfaceData;
+        window
+            .toplevel()
+            .map(|tl| {
+                smithay::wayland::compositor::with_states(tl.wl_surface(), |states| {
+                    states
+                        .data_map
+                        .get::<XdgToplevelSurfaceData>()
+                        .and_then(|d| d.lock().ok().and_then(|g| g.app_id.clone()))
+                        .unwrap_or_default()
+                })
+            })
+            .unwrap_or_default()
+    }
+
+    /// F (auditoria 2026-05): foca/levanta a janela do app `app_id` (xdg app_id
+    /// OU substring -- o dock manda o nome do binario). Restaura se minimizada.
+    /// No-op se nenhuma janela do app existe (o dock entao da spawn). Conserta o
+    /// dock que dava spawn de uma 2a instancia mesmo com o app ja aberto.
+    pub fn focus_app_by_id(&mut self, app_id: &str) {
+        use smithay::wayland::seat::WaylandFocus;
+        if app_id.trim().is_empty() {
+            return;
+        }
+        let hit = |w: &smithay::desktop::Window| -> bool {
+            lumo_ipc::app_id_matches(&Self::window_app_id(w), app_id)
+        };
+        // 1) Janela mapeada -> raise + foco de teclado.
+        // Bind ANTES do if-let: em edition 2021 o temporario do iterador
+        // self.space.elements() vive ate o fim do corpo do if-let, segurando
+        // self.space emprestado imutavel e conflitando com raise_element/
+        // set_focus (mutaveis) -> E0502. O let solta o temporario aqui.
+        let mapped = self.space.elements().find(|w| hit(w)).cloned();
+        if let Some(win) = mapped {
+            self.space.raise_element(&win, true);
+            if let Some(surf) = win.wl_surface() {
+                let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+                let owned = surf.into_owned();
+                let new_focus = self.focus_manager.click_toplevel(owned);
+                let kb = self.keyboard.clone();
+                kb.set_focus(self, new_focus, serial);
+            }
+            self.should_render = true;
+            #[cfg(feature = "drm-backend")]
+            {
+                self.drm_force_repaint = true;
+            }
+            return;
+        }
+        // 2) Janela minimizada -> restaura (mapeia + foca; restore_window cuida).
+        let minimized = self
+            .minimized_windows
+            .iter()
+            .find(|(w, _, _)| hit(w))
+            .map(|(w, _, _)| w.clone());
+        if let Some(win) = minimized {
+            self.restore_window(&win);
+        }
+    }
+
     /// W8.B: move toplevel focado para workspace `to`.
     pub fn move_focused_to_workspace(&mut self, to: u8) {
         use smithay::wayland::seat::WaylandFocus;
         if !(1..=MAX_WORKSPACES).contains(&to) {
+            return;
+        }
+        // W3 (auditoria 2026-05): mover pro PROPRIO workspace desmapeava a janela
+        // e a empurrava pro vault do ws ativo -> sumia da tela sem volta (e
+        // hide_workspace depois sobrescrevia o vault, perdendo a entrada de vez).
+        if to == self.active_workspace {
             return;
         }
         let kb = self.keyboard.clone();
@@ -1334,6 +1487,8 @@ impl LumoState {
             .entry(to)
             .or_default()
             .push(entry);
+        // Pattern A: re-deriva o foco (a janela movida saiu do space).
+        self.refocus_after_unmap();
         tracing::info!(to, "W8.B: toplevel movido para workspace");
     }
 }

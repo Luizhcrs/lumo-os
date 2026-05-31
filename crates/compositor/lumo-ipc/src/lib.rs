@@ -145,6 +145,14 @@ pub enum LumoCommand {
     /// W17.1: minimize/iconify (stub) no toplevel com foco. Sem Wayland
     /// iconify protocol estavel; loga info e nao altera estado.
     MinimizeFocused,
+    /// F (auditoria 2026-05): dock pede pra FOCAR/levantar a janela de um app ja
+    /// aberto, em vez de dar spawn de uma 2a instancia. `app_id` = xdg app_id OU
+    /// nome do binario; o WM faz match case-insensitive contra os toplevels
+    /// mapeados e, se a janela estiver minimizada, restaura. No-op se nao houver
+    /// janela do app (o dock entao da spawn normal).
+    FocusApp {
+        app_id: String,
+    },
     /// W34.10: lumo-appsd notifica WM que abriu janela com app_id conhecido.
     /// WM faz broadcast LumoEvent::ActiveApp com esses dados pro bar popular pills.
     /// Bypass Iced 0.13 que nao emite xdg_toplevel.set_app_id antes do focus_changed.
@@ -155,6 +163,25 @@ pub enum LumoCommand {
     },
     /// W34.11: lumo-appsd notifica WM que fechou todas janelas. Limpar pills bar.
     AppDeactivated,
+}
+
+/// F (auditoria 2026-05): predicado de match do FocusApp. O dock manda o nome do
+/// binario (ex "lumo-files"); o xdg app_id da janela pode ser igual, reverse-DNS
+/// (ex "org.alacritty.Alacritty") ou prefixado. Case-insensitive. Vazio nunca
+/// casa. Funcao pura -> testavel sem Wayland.
+///
+/// Casamento (apertado de proposito pra NAO dar falso-positivo em slots custom,
+/// ex "qt" nao deve casar "qt-creator"):
+///   1. exato (cobre apps Lumo: app_id == binario; e chromium/Alacritty ci);
+///   2. ultimo segmento '.'-separado do app_id == want (reverse-DNS, ex
+///      "org.alacritty.Alacritty" ~ "alacritty").
+pub fn app_id_matches(window_app_id: &str, want: &str) -> bool {
+    let a = window_app_id.trim().to_ascii_lowercase();
+    let w = want.trim().to_ascii_lowercase();
+    if a.is_empty() || w.is_empty() {
+        return false;
+    }
+    a == w || a.rsplit('.').next() == Some(w.as_str())
 }
 
 pub fn default_socket_path() -> Option<std::path::PathBuf> {
@@ -387,6 +414,41 @@ mod tests {
         let line = s.trim();
         let back: LumoEvent = serde_json::from_str(line).unwrap();
         assert!(matches!(back, LumoEvent::DegradedFeature { .. }));
+    }
+
+    /// F (auditoria 2026-05): FocusApp faz roundtrip JSON line-delimited e o
+    /// campo `type` vai em snake_case (`focus_app`).
+    #[test]
+    fn focus_app_command_roundtrip() {
+        let cmd = LumoCommand::FocusApp {
+            app_id: "lumo-files".into(),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        assert!(json.contains("focus_app"), "json={json}");
+        let parsed = parse_command(&json).unwrap().unwrap();
+        assert_eq!(parsed, cmd);
+    }
+
+    /// F: app_id_matches -- exato, reverse-DNS (ultimo segmento), prefixo-com-
+    /// separador; rejeita vazio e NAO da falso-positivo por substring solta.
+    #[test]
+    fn app_id_matches_cases() {
+        // 1. exato (case-insensitive) -- caso comum dos apps Lumo.
+        assert!(app_id_matches("Alacritty", "alacritty"));
+        assert!(app_id_matches("lumo-files", "lumo-files"));
+        assert!(app_id_matches("chromium", "chromium"));
+        // 2. reverse-DNS: ultimo segmento == want.
+        assert!(app_id_matches("org.alacritty.Alacritty", "alacritty"));
+        assert!(app_id_matches("org.chromium.Chromium", "chromium"));
+        // NAO casa: substring solta (regressao do matcher antigo bidirecional).
+        assert!(!app_id_matches("qt-creator", "qt"));
+        assert!(!app_id_matches("qtcreator", "qt"));
+        assert!(!app_id_matches("lumo-files", "lumo-calc"));
+        assert!(!app_id_matches("chromium-browser", "chromium")); // sem prefixo-loose
+        // vazio nunca casa.
+        assert!(!app_id_matches("", "lumo-files"));
+        assert!(!app_id_matches("lumo-files", ""));
+        assert!(!app_id_matches("  ", "lumo-files"));
     }
 
     #[test]

@@ -148,7 +148,21 @@ impl XdgShellHandler for LumoState {
         // W38: limpa a janela da lista de minimizadas (evita vazar Window se
         // fechada enquanto minimizada).
         self.minimized_windows
-            .retain(|(w, _)| w.toplevel().map(|t| t != &surface).unwrap_or(true));
+            .retain(|(w, _, _)| w.toplevel().map(|t| t != &surface).unwrap_or(true));
+        // Pattern D (auditoria 2026-05): limpa tambem do workspace_vault. Fechar
+        // uma janela que esta num workspace INATIVO (no vault) deixava a entrada
+        // morta la -> na proxima troca de workspace o show_workspace remapeava
+        // uma surface ja destruida (zumbi). Varre todos os workspaces.
+        for entries in self.workspace_vault.vault.values_mut() {
+            entries.retain(|e| e.window.toplevel().map(|t| t != &surface).unwrap_or(true));
+        }
+        // W6 (review 2026-05): limpa a geometria pre-maximize salva, senao fechar
+        // uma janela maximizada deixa uma entrada orfa no maximize_restore.
+        {
+            use smithay::reexports::wayland_server::Resource;
+            let id = surface.wl_surface().id().protocol_id();
+            self.maximize_restore.remove(&id);
+        }
         // T1.5: N5 MRU -- ao fechar toplevel, tenta focar a surface que
         // estava focada antes (prev_focus), se ainda viva no space.
         // Fallback: primeiro toplevel restante. Sem toplevels -> None.

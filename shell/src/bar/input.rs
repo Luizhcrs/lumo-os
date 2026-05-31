@@ -470,9 +470,18 @@ impl PointerHandler for LumoBar {
                                     ),
                                 }
                             };
+                            // M3 (auditoria 2026-05): indices casam com MENU_LUMO_ITEMS
+                            // (tokens.rs). Antes 1 ("Software Update...") e 7
+                            // ("Suspender") caiam em `_ => {}` -> clicaveis mas
+                            // no-op (so fechavam o menu). Agora todas as Action
+                            // executam a acao rotulada.
                             match idx {
                                 0 => {
                                     spawn_log("lumo-appctl", &["about"]);
+                                }
+                                1 => {
+                                    // Updates vivem na Store; sem updater dedicado ainda.
+                                    spawn_log("lumo-appctl", &["store"]);
                                 }
                                 2 => {
                                     spawn_log("lumo-appctl", &["store"]);
@@ -482,6 +491,9 @@ impl PointerHandler for LumoBar {
                                 }
                                 6 => {
                                     spawn_log("lumo-lock", &[]);
+                                }
+                                7 => {
+                                    spawn_log("systemctl", &["suspend"]);
                                 }
                                 8 => {
                                     spawn_log("reboot", &[]);
